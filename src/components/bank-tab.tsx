@@ -31,6 +31,8 @@ import { DeleteConfirmationDialog } from "./delete-confirmation-dialog"
 import { Checkbox } from "./ui/checkbox"
 import { format, subMonths, addMonths } from "date-fns"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { useIsMobile } from "@/hooks/use-mobile"
+import { Badge } from "./ui/badge"
 
 
 export function BankTab() {
@@ -43,6 +45,7 @@ export function BankTab() {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
+  const isMobile = useIsMobile();
 
   const filteredByMonth = useMemo(() => {
     return bankTransactions.filter(tx => {
@@ -126,6 +129,150 @@ export function BankTab() {
     setCurrentPage(1);
   }
 
+  const renderDesktopView = () => (
+    <div className="overflow-x-auto">
+        <Table>
+        <TableHeader>
+            <TableRow>
+            {isSelectionMode && (
+              <TableHead className="w-[50px]">
+                  <Checkbox 
+                      onCheckedChange={(checked) => handleSelectAll(Boolean(checked))}
+                      checked={selectedTxIds.length === paginatedTransactions.length && paginatedTransactions.length > 0}
+                      aria-label="Select all rows"
+                  />
+              </TableHead>
+            )}
+            <TableHead>Date</TableHead>
+            <TableHead>Description</TableHead>
+            <TableHead>Category</TableHead>
+            <TableHead className="text-right">Amount</TableHead>
+            <TableHead className="text-right">Actions</TableHead>
+            </TableRow>
+        </TableHeader>
+        <TableBody>
+            {paginatedTransactions.length > 0 ? (
+            paginatedTransactions.map((tx: BankTransaction) => (
+                <TableRow key={tx.id} data-state={selectedTxIds.includes(tx.id) && "selected"}>
+                {isSelectionMode && (
+                  <TableCell>
+                      <Checkbox 
+                          onCheckedChange={(checked) => handleSelectRow(tx.id, Boolean(checked))}
+                          checked={selectedTxIds.includes(tx.id)}
+                          aria-label="Select row"
+                      />
+                  </TableCell>
+                )}
+                <TableCell>
+                   <div className="flex items-center gap-2">
+                    <span>{new Date(tx.date).toLocaleDateString()}</span>
+                    {tx.lastEdited && (
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger>
+                            <History className="h-3 w-3 text-muted-foreground" />
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Edited on: {new Date(tx.lastEdited).toLocaleString()}</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    )}
+                  </div>
+                </TableCell>
+                <TableCell className="font-medium">{tx.description}</TableCell>
+                <TableCell>{tx.category}</TableCell>
+                <TableCell className={`text-right font-semibold ${tx.type === 'deposit' ? 'text-accent' : 'text-destructive'}`}>
+                    <div className="flex items-center justify-end gap-2">
+                    {tx.type === 'deposit' ? <ArrowUpCircle /> : <ArrowDownCircle />}
+                    {formatCurrency(tx.amount)}
+                    </div>
+                </TableCell>
+                <TableCell className="text-right">
+                    <div className="flex items-center justify-end gap-2">
+                      <Button variant="ghost" size="icon" onClick={() => handleEditClick(tx)}>
+                          <Pencil className="h-4 w-4" />
+                          <span className="sr-only">Edit</span>
+                      </Button>
+                      <Button variant="ghost" size="icon" onClick={() => handleDeleteClick(tx.id)}>
+                          <Trash2 className="h-4 w-4" />
+                          <span className="sr-only">Delete</span>
+                      </Button>
+                    </div>
+                </TableCell>
+                </TableRow>
+            ))
+            ) : (
+            <TableRow>
+                <TableCell colSpan={isSelectionMode ? 6 : 5} className="text-center h-24">No bank transactions for {format(currentMonth, "MMMM yyyy")}.</TableCell>
+            </TableRow>
+            )}
+        </TableBody>
+        </Table>
+    </div>
+  );
+
+  const renderMobileView = () => (
+    <div className="space-y-4">
+      {paginatedTransactions.length > 0 ? (
+        paginatedTransactions.map((tx: BankTransaction) => (
+          <Card key={tx.id} className="relative">
+             {isSelectionMode && (
+                <Checkbox 
+                    onCheckedChange={(checked) => handleSelectRow(tx.id, Boolean(checked))}
+                    checked={selectedTxIds.includes(tx.id)}
+                    aria-label="Select row"
+                    className="absolute top-4 left-4"
+                />
+              )}
+            <CardContent className="p-4 space-y-2">
+                <div className="flex justify-between items-start">
+                    <div className={`font-semibold text-lg ${tx.type === 'deposit' ? 'text-accent' : 'text-destructive'}`}>
+                        {formatCurrency(tx.amount)}
+                    </div>
+                     <Badge variant={tx.type === 'deposit' ? 'default' : 'destructive'} className="capitalize bg-opacity-20 text-opacity-100">
+                        {tx.type}
+                    </Badge>
+                </div>
+                <div className="font-medium text-base">{tx.description}</div>
+                <div className="text-sm text-muted-foreground">{tx.category}</div>
+
+                <div className="flex justify-between items-center pt-2">
+                    <div className="text-xs text-muted-foreground flex items-center gap-1">
+                        {new Date(tx.date).toLocaleDateString()}
+                        {tx.lastEdited && (
+                           <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger>
+                                <History className="h-3 w-3" />
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>Edited on: {new Date(tx.lastEdited).toLocaleString()}</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        )}
+                    </div>
+                    <div className="flex gap-1">
+                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEditClick(tx)}>
+                            <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleDeleteClick(tx.id)}>
+                            <Trash2 className="h-4 w-4" />
+                        </Button>
+                    </div>
+                </div>
+            </CardContent>
+          </Card>
+        ))
+      ) : (
+        <div className="text-center text-muted-foreground py-12">
+            No bank transactions for {format(currentMonth, "MMMM yyyy")}.
+        </div>
+      )}
+    </div>
+  )
+
   return (
     <>
       <Card>
@@ -137,7 +284,7 @@ export function BankTab() {
             </CardDescription>
           </div>
           <div className="flex w-full flex-col sm:w-auto sm:flex-row items-stretch sm:items-center gap-2">
-            <div className="flex items-center gap-2 self-end">
+            <div className="flex items-center gap-2 self-end sm:self-auto">
               <Button variant="outline" size="icon" onClick={goToPreviousMonth} className="h-9 w-9">
                   <ChevronLeft className="h-4 w-4" />
               </Button>
@@ -148,11 +295,11 @@ export function BankTab() {
             </div>
             <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
               {selectedTxIds.length > 0 && (
-                  <Button size="sm" variant="destructive" onClick={handleMultiDeleteClick}>
+                  <Button size="sm" variant="destructive" onClick={handleMultiDeleteClick} className="w-full sm:w-auto">
                       <Trash2 className="mr-2 h-4 w-4" /> Delete ({selectedTxIds.length})
                   </Button>
               )}
-              <Button size="sm" variant="outline" onClick={toggleSelectionMode}>
+              <Button size="sm" variant="outline" onClick={toggleSelectionMode} className="w-full sm:w-auto">
                   <CheckSquare className="mr-2 h-4 w-4" />
                   {isSelectionMode ? 'Cancel' : 'Select'}
               </Button>
@@ -178,86 +325,7 @@ export function BankTab() {
           </div>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
-              <Table>
-              <TableHeader>
-                  <TableRow>
-                  {isSelectionMode && (
-                    <TableHead className="w-[50px]">
-                        <Checkbox 
-                            onCheckedChange={(checked) => handleSelectAll(Boolean(checked))}
-                            checked={selectedTxIds.length === paginatedTransactions.length && paginatedTransactions.length > 0}
-                            aria-label="Select all rows"
-                        />
-                    </TableHead>
-                  )}
-                  <TableHead>Date</TableHead>
-                  <TableHead>Description</TableHead>
-                  <TableHead>Category</TableHead>
-                  <TableHead className="text-right">Amount</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-              </TableHeader>
-              <TableBody>
-                  {paginatedTransactions.length > 0 ? (
-                  paginatedTransactions.map((tx: BankTransaction) => (
-                      <TableRow key={tx.id} data-state={selectedTxIds.includes(tx.id) && "selected"}>
-                      {isSelectionMode && (
-                        <TableCell>
-                            <Checkbox 
-                                onCheckedChange={(checked) => handleSelectRow(tx.id, Boolean(checked))}
-                                checked={selectedTxIds.includes(tx.id)}
-                                aria-label="Select row"
-                            />
-                        </TableCell>
-                      )}
-                      <TableCell>
-                         <div className="flex items-center gap-2">
-                          <span>{new Date(tx.date).toLocaleDateString()}</span>
-                          {tx.lastEdited && (
-                            <TooltipProvider>
-                              <Tooltip>
-                                <TooltipTrigger>
-                                  <History className="h-3 w-3 text-muted-foreground" />
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                  <p>Edited on: {new Date(tx.lastEdited).toLocaleString()}</p>
-                                </TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell className="font-medium">{tx.description}</TableCell>
-                      <TableCell>{tx.category}</TableCell>
-                      <TableCell className={`text-right font-semibold ${tx.type === 'deposit' ? 'text-accent' : 'text-destructive'}`}>
-                          <div className="flex items-center justify-end gap-2">
-                          {tx.type === 'deposit' ? <ArrowUpCircle /> : <ArrowDownCircle />}
-                          {formatCurrency(tx.amount)}
-                          </div>
-                      </TableCell>
-                      <TableCell className="text-right">
-                          <div className="flex items-center justify-end gap-2">
-                            <Button variant="ghost" size="icon" onClick={() => handleEditClick(tx)}>
-                                <Pencil className="h-4 w-4" />
-                                <span className="sr-only">Edit</span>
-                            </Button>
-                            <Button variant="ghost" size="icon" onClick={() => handleDeleteClick(tx.id)}>
-                                <Trash2 className="h-4 w-4" />
-                                <span className="sr-only">Delete</span>
-                            </Button>
-                          </div>
-                      </TableCell>
-                      </TableRow>
-                  ))
-                  ) : (
-                  <TableRow>
-                      <TableCell colSpan={isSelectionMode ? 6 : 5} className="text-center h-24">No bank transactions for {format(currentMonth, "MMMM yyyy")}.</TableCell>
-                  </TableRow>
-                  )}
-              </TableBody>
-              </Table>
-          </div>
+          {isMobile ? renderMobileView() : renderDesktopView()}
         </CardContent>
         {filteredByMonth.length > 0 && (
           <CardFooter className="flex flex-col sm:flex-row items-center justify-between gap-4">

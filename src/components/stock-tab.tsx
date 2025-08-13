@@ -22,7 +22,8 @@ import { DeleteConfirmationDialog } from "./delete-confirmation-dialog"
 import { Checkbox } from "./ui/checkbox"
 import { format, subMonths, addMonths } from "date-fns"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-
+import { useIsMobile } from "@/hooks/use-mobile"
+import { Badge } from "./ui/badge"
 
 export function StockTab() {
   const { stockItems, stockTransactions, deleteStockTransaction, deleteMultipleStockTransactions, currency } = useAppContext()
@@ -33,6 +34,7 @@ export function StockTab() {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
+  const isMobile = useIsMobile();
 
   const filteredByMonth = useMemo(() => {
     return stockTransactions.filter(tx => {
@@ -123,6 +125,158 @@ export function StockTab() {
     setCurrentPage(1);
   }
 
+  const renderDesktopHistory = () => (
+     <div className="overflow-x-auto">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            {isSelectionMode && (
+                <TableHead className="w-[50px]">
+                    <Checkbox 
+                        onCheckedChange={(checked) => handleSelectAll(Boolean(checked))}
+                        checked={selectedTxIds.length === paginatedTransactions.length && paginatedTransactions.length > 0}
+                        aria-label="Select all rows"
+                    />
+                </TableHead>
+            )}
+            <TableHead>Date</TableHead>
+            <TableHead>Type</TableHead>
+            <TableHead>Item</TableHead>
+            <TableHead>Description</TableHead>
+            <TableHead className="text-right">Weight</TableHead>
+            <TableHead className="text-right">Price/kg</TableHead>
+            <TableHead className="text-right">Total Value</TableHead>
+            <TableHead className="text-right">Actions</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {paginatedTransactions.length > 0 ? (
+            paginatedTransactions.map((tx: StockTransaction) => (
+              <TableRow key={tx.id} data-state={selectedTxIds.includes(tx.id) && "selected"}>
+                {isSelectionMode && (
+                    <TableCell>
+                        <Checkbox 
+                            onCheckedChange={(checked) => handleSelectRow(tx.id, Boolean(checked))}
+                            checked={selectedTxIds.includes(tx.id)}
+                            aria-label="Select row"
+                        />
+                    </TableCell>
+                )}
+                <TableCell>
+                   <div className="flex items-center gap-2">
+                    <span>{new Date(tx.date).toLocaleDateString()}</span>
+                    {tx.lastEdited && (
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger>
+                            <History className="h-3 w-3 text-muted-foreground" />
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Edited on: {new Date(tx.lastEdited).toLocaleString()}</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    )}
+                  </div>
+                </TableCell>
+                <TableCell>
+                  <span className={`capitalize px-2 py-1 text-xs font-semibold rounded-full flex items-center w-fit ${tx.type === 'purchase' ? 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300' : 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300'}`}>
+                    {tx.type === 'purchase' ? <ArrowDownCircle className="mr-1 h-3 w-3" /> : <ArrowUpCircle className="mr-1 h-3 w-3" />}
+                    {tx.type}
+                  </span>
+                </TableCell>
+                <TableCell className="font-medium">{tx.stockItemName}</TableCell>
+                <TableCell>{tx.description}</TableCell>
+                <TableCell className="text-right">{tx.weight.toFixed(2)} kg</TableCell>
+                <TableCell className="text-right">{formatCurrency(tx.pricePerKg)}</TableCell>
+                <TableCell className={`text-right font-semibold ${tx.type === 'purchase' ? 'text-destructive' : 'text-accent'}`}>{formatCurrency(tx.weight * tx.pricePerKg)}</TableCell>
+                <TableCell className="text-right">
+                  <div className="flex items-center justify-end gap-2">
+                    <Button variant="ghost" size="icon" onClick={() => handleEditClick(tx)}>
+                        <Pencil className="h-4 w-4" />
+                        <span className="sr-only">Edit</span>
+                    </Button>
+                     <Button variant="ghost" size="icon" onClick={() => handleDeleteClick(tx.id)}>
+                        <Trash2 className="h-4 w-4" />
+                        <span className="sr-only">Delete</span>
+                    </Button>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))
+          ) : (
+            <TableRow><TableCell colSpan={isSelectionMode ? 9 : 8} className="text-center h-24">No stock transactions for {format(currentMonth, "MMMM yyyy")}.</TableCell></TableRow>
+          )}
+        </TableBody>
+      </Table>
+      </div>
+  );
+
+  const renderMobileHistory = () => (
+    <div className="space-y-4">
+      {paginatedTransactions.length > 0 ? (
+        paginatedTransactions.map((tx: StockTransaction) => (
+            <Card key={tx.id} className="relative">
+                {isSelectionMode && (
+                    <Checkbox 
+                        onCheckedChange={(checked) => handleSelectRow(tx.id, Boolean(checked))}
+                        checked={selectedTxIds.includes(tx.id)}
+                        aria-label="Select row"
+                        className="absolute top-4 left-4"
+                    />
+                )}
+                <CardContent className="p-4 space-y-2">
+                    <div className="flex justify-between items-start">
+                        <div className={`font-semibold text-lg ${tx.type === 'sale' ? 'text-accent' : 'text-destructive'}`}>
+                            {formatCurrency(tx.weight * tx.pricePerKg)}
+                        </div>
+                        <Badge variant={tx.type === 'sale' ? 'default' : 'destructive'} className="capitalize bg-opacity-20 text-opacity-100">
+                          {tx.type}
+                        </Badge>
+                    </div>
+                    <div className="font-medium text-base">{tx.stockItemName}</div>
+                    <p className="text-sm text-muted-foreground">{tx.description}</p>
+                    <div className="flex justify-between text-sm pt-2">
+                        <span>{tx.weight.toFixed(2)} kg</span>
+                        <span>@ {formatCurrency(tx.pricePerKg)}/kg</span>
+                    </div>
+
+                    <div className="flex justify-between items-center pt-2">
+                        <div className="text-xs text-muted-foreground flex items-center gap-1">
+                            {new Date(tx.date).toLocaleDateString()}
+                            {tx.lastEdited && (
+                            <TooltipProvider>
+                                <Tooltip>
+                                <TooltipTrigger>
+                                    <History className="h-3 w-3" />
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                    <p>Edited on: {new Date(tx.lastEdited).toLocaleString()}</p>
+                                </TooltipContent>
+                                </Tooltip>
+                            </TooltipProvider>
+                            )}
+                        </div>
+                        <div className="flex gap-1">
+                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEditClick(tx)}>
+                                <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleDeleteClick(tx.id)}>
+                                <Trash2 className="h-4 w-4" />
+                            </Button>
+                        </div>
+                    </div>
+                </CardContent>
+            </Card>
+        ))
+      ) : (
+        <div className="text-center text-muted-foreground py-12">
+            No stock transactions for {format(currentMonth, "MMMM yyyy")}.
+        </div>
+      )}
+    </div>
+  )
+
 
   return (
     <>
@@ -162,7 +316,7 @@ export function StockTab() {
                    {stockItems.length > 0 && (
                      <TableFoot>
                         <TableRow>
-                          <TableCell className="text-right font-bold">Totals</TableCell>
+                          <TableCell className="font-bold">Totals</TableCell>
                           <TableCell className="text-right font-bold">{totalStockWeight.toFixed(2)} kg</TableCell>
                           <TableCell className="text-right font-bold">{formatCurrency(weightedAveragePrice)}</TableCell>
                           <TableCell className="text-right font-bold">{formatCurrency(totalStockValue)}</TableCell>
@@ -181,7 +335,7 @@ export function StockTab() {
                     <CardDescription>A detailed log of all purchases and sales.</CardDescription>
                 </div>
                 <div className="flex w-full flex-col sm:w-auto sm:flex-row items-stretch sm:items-center gap-2">
-                    <div className="flex items-center gap-2 self-end">
+                    <div className="flex items-center gap-2 self-end sm:self-auto">
                         <Button variant="outline" size="icon" onClick={goToPreviousMonth} className="h-9 w-9">
                             <ChevronLeft className="h-4 w-4" />
                         </Button>
@@ -218,90 +372,7 @@ export function StockTab() {
                     </div>
                 </div>
               )}
-              <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    {isSelectionMode && (
-                        <TableHead className="w-[50px]">
-                            <Checkbox 
-                                onCheckedChange={(checked) => handleSelectAll(Boolean(checked))}
-                                checked={selectedTxIds.length === paginatedTransactions.length && paginatedTransactions.length > 0}
-                                aria-label="Select all rows"
-                            />
-                        </TableHead>
-                    )}
-                    <TableHead>Date</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead>Item</TableHead>
-                    <TableHead>Description</TableHead>
-                    <TableHead className="text-right">Weight</TableHead>
-                    <TableHead className="text-right">Price/kg</TableHead>
-                    <TableHead className="text-right">Total Value</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {paginatedTransactions.length > 0 ? (
-                    paginatedTransactions.map((tx: StockTransaction) => (
-                      <TableRow key={tx.id} data-state={selectedTxIds.includes(tx.id) && "selected"}>
-                        {isSelectionMode && (
-                            <TableCell>
-                                <Checkbox 
-                                    onCheckedChange={(checked) => handleSelectRow(tx.id, Boolean(checked))}
-                                    checked={selectedTxIds.includes(tx.id)}
-                                    aria-label="Select row"
-                                />
-                            </TableCell>
-                        )}
-                        <TableCell>
-                           <div className="flex items-center gap-2">
-                            <span>{new Date(tx.date).toLocaleDateString()}</span>
-                            {tx.lastEdited && (
-                              <TooltipProvider>
-                                <Tooltip>
-                                  <TooltipTrigger>
-                                    <History className="h-3 w-3 text-muted-foreground" />
-                                  </TooltipTrigger>
-                                  <TooltipContent>
-                                    <p>Edited on: {new Date(tx.lastEdited).toLocaleString()}</p>
-                                  </TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <span className={`capitalize px-2 py-1 text-xs font-semibold rounded-full flex items-center w-fit ${tx.type === 'purchase' ? 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300' : 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300'}`}>
-                            {tx.type === 'purchase' ? <ArrowDownCircle className="mr-1 h-3 w-3" /> : <ArrowUpCircle className="mr-1 h-3 w-3" />}
-                            {tx.type}
-                          </span>
-                        </TableCell>
-                        <TableCell className="font-medium">{tx.stockItemName}</TableCell>
-                        <TableCell>{tx.description}</TableCell>
-                        <TableCell className="text-right">{tx.weight.toFixed(2)} kg</TableCell>
-                        <TableCell className="text-right">{formatCurrency(tx.pricePerKg)}</TableCell>
-                        <TableCell className={`text-right font-semibold ${tx.type === 'purchase' ? 'text-destructive' : 'text-accent'}`}>{formatCurrency(tx.weight * tx.pricePerKg)}</TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex items-center justify-end gap-2">
-                            <Button variant="ghost" size="icon" onClick={() => handleEditClick(tx)}>
-                                <Pencil className="h-4 w-4" />
-                                <span className="sr-only">Edit</span>
-                            </Button>
-                             <Button variant="ghost" size="icon" onClick={() => handleDeleteClick(tx.id)}>
-                                <Trash2 className="h-4 w-4" />
-                                <span className="sr-only">Delete</span>
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  ) : (
-                    <TableRow><TableCell colSpan={isSelectionMode ? 9 : 8} className="text-center h-24">No stock transactions for {format(currentMonth, "MMMM yyyy")}.</TableCell></TableRow>
-                  )}
-                </TableBody>
-              </Table>
-              </div>
+              {isMobile ? renderMobileHistory() : renderDesktopHistory()}
             </CardContent>
             {filteredByMonth.length > 0 && (
                 <CardFooter className="flex flex-col sm:flex-row items-center justify-between gap-4">
