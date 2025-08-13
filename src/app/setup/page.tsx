@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { CheckCircle, Loader2, AlertTriangle, BookOpenCheck } from "lucide-react";
 import { initializeSheets } from '../actions';
 import { useToast } from '@/hooks/use-toast';
+import { useAppContext } from '../store';
 
 export default function SetupPage() {
     const [isLoading, setIsLoading] = useState(false);
@@ -15,6 +16,7 @@ export default function SetupPage() {
     const [error, setError] = useState<string | null>(null);
     const router = useRouter();
     const { toast } = useToast();
+    const { setNeedsSetup, reloadData } = useAppContext();
 
     const handleInitialize = async () => {
         setIsLoading(true);
@@ -42,10 +44,10 @@ export default function SetupPage() {
         }
     };
 
-    const handleContinue = () => {
+    const handleContinue = async () => {
+        setNeedsSetup(false);
+        await reloadData();
         router.push('/');
-        // Force a reload to re-run the data fetching logic on the main page
-        window.location.href = '/';
     }
 
     return (

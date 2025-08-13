@@ -207,29 +207,40 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const finalCashBalance = initialCashBalance + cashFromOps + cashFromStock;
         const finalBankBalance = initialBankBalance + bankFromOps + bankFromStock;
 
-        const currentStockItems = stockTransactions.reduce<Record<string, { weight: number, totalValue: number }>>((acc, tx) => {
-            if (!acc[tx.stockItemName]) {
-                acc[tx.stockItemName] = { weight: 0, totalValue: 0 };
-            }
-            if (tx.type === 'purchase') {
-                acc[tx.stockItemName].weight += tx.weight;
-                acc[tx.stockItemName].totalValue += tx.weight * tx.pricePerKg;
-            } else { // sale
-                acc[tx.stockItemName].weight -= tx.weight;
-                // Value is removed based on avg price, but for simplicity we assume sale price reflects value change
-            }
-            return acc;
-        }, {});
+        // Corrected Stock Calculation Logic
+        const stockPortfolio: Record<string, { weight: number, totalValue: number }> = {};
 
+        // 1. Process initial stock
         initialStockItems.forEach(item => {
-            if(!currentStockItems[item.name]) {
-                currentStockItems[item.name] = { weight: 0, totalValue: 0 };
+            if (!stockPortfolio[item.name]) {
+                stockPortfolio[item.name] = { weight: 0, totalValue: 0 };
             }
-            currentStockItems[item.name].weight += item.weight;
-            currentStockItems[item.name].totalValue += item.weight * item.purchasePricePerKg;
+            stockPortfolio[item.name].weight += item.weight;
+            stockPortfolio[item.name].totalValue += item.weight * item.purchasePricePerKg;
         });
+
+        // 2. Process transactions chronologically
+        const sortedStockTransactions = [...stockTransactions].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
         
-        const aggregatedStockItems: StockItem[] = Object.entries(currentStockItems).map(([name, data], index) => ({
+        sortedStockTransactions.forEach(tx => {
+            if (!stockPortfolio[tx.stockItemName]) {
+                stockPortfolio[tx.stockItemName] = { weight: 0, totalValue: 0 };
+            }
+            
+            const item = stockPortfolio[tx.stockItemName];
+            const currentAvgPrice = item.weight > 0 ? item.totalValue / item.weight : 0;
+
+            if (tx.type === 'purchase') {
+                item.weight += tx.weight;
+                item.totalValue += tx.weight * tx.pricePerKg;
+            } else { // sale
+                item.weight -= tx.weight;
+                // When selling, the value of the remaining stock decreases by the average cost of the sold portion, not the sale price.
+                item.totalValue -= tx.weight * currentAvgPrice;
+            }
+        });
+
+        const aggregatedStockItems: StockItem[] = Object.entries(stockPortfolio).map(([name, data], index) => ({
             id: `stock-agg-${index}`,
             name,
             weight: data.weight,
