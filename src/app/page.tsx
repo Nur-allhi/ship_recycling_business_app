@@ -16,7 +16,7 @@ import { Dialog, DialogContent, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 
 const fontClasses = {
   sm: 'text-sm',
@@ -59,6 +59,10 @@ function ShipShapeLedger() {
                         </Button>
                     </SheetTrigger>
                     <SheetContent side="left" className="w-64 p-4">
+                        <SheetHeader className="sr-only">
+                           <SheetTitle>Navigation Menu</SheetTitle>
+                           <SheetDescription>Select a tab to view your financial data.</SheetDescription>
+                        </SheetHeader>
                          <div className="flex items-center gap-3 mb-6">
                             <Ship className="h-8 w-8 text-primary" />
                             <h1 className="text-xl font-bold text-primary font-headline">
