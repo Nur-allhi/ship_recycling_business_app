@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { Badge } from "@/components/ui/badge"
-import { Plus, Trash2 } from "lucide-react"
+import { Plus, Trash2, Eye, EyeOff } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -29,7 +29,9 @@ export function SettingsTab() {
     wastagePercentage,
     setWastagePercentage,
     currency,
-    setCurrency
+    setCurrency,
+    showStockValue,
+    setShowStockValue
   } = useAppContext()
   const { toast } = useToast()
 
@@ -175,7 +177,7 @@ export function SettingsTab() {
                   <ToggleGroupItem value="lg" aria-label="Large text">Large</ToggleGroupItem>
                 </ToggleGroup>
               </div>
-              <div>
+               <div>
                 <Label>Currency</Label>
                 <Select value={currency} onValueChange={handleCurrencyChange}>
                     <SelectTrigger className="w-[180px] mt-2">
@@ -191,6 +193,15 @@ export function SettingsTab() {
                     </SelectContent>
                 </Select>
               </div>
+              <Separator />
+              <div>
+                <Label className="block mb-2">Data Visibility</Label>
+                 <Button variant="outline" size="sm" onClick={() => setShowStockValue(!showStockValue)}>
+                    {showStockValue ? <EyeOff className="mr-2 h-4 w-4" /> : <Eye className="mr-2 h-4 w-4" />}
+                    {showStockValue ? 'Hide' : 'Show'} Stock Total Value
+                </Button>
+                <p className="text-xs text-muted-foreground mt-2">Toggle visibility for the 'Total Value' column in the stock transaction history.</p>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -198,3 +209,5 @@ export function SettingsTab() {
     </div>
   )
 }
+
+    

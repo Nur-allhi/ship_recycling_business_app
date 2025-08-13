@@ -26,7 +26,7 @@ import { useIsMobile } from "@/hooks/use-mobile"
 import { Badge } from "./ui/badge"
 
 export function StockTab() {
-  const { stockItems, stockTransactions, deleteStockTransaction, deleteMultipleStockTransactions, currency } = useAppContext()
+  const { stockItems, stockTransactions, deleteStockTransaction, deleteMultipleStockTransactions, currency, showStockValue } = useAppContext()
   const [editSheetState, setEditSheetState] = useState<{isOpen: boolean, transaction: StockTransaction | null}>({ isOpen: false, transaction: null});
   const [deleteDialogState, setDeleteDialogState] = useState<{isOpen: boolean, txId: string | null, txIds: string[] | null}>({ isOpen: false, txId: null, txIds: null });
   const [selectedTxIds, setSelectedTxIds] = useState<string[]>([]);
@@ -146,7 +146,7 @@ export function StockTab() {
             <TableHead>Description</TableHead>
             <TableHead className="text-right">Weight</TableHead>
             <TableHead className="text-right">Price/kg</TableHead>
-            <TableHead className="text-right">Total Value</TableHead>
+            {showStockValue && <TableHead className="text-right">Total Value</TableHead>}
             {showActions && <TableHead className="text-right">Actions</TableHead>}
           </TableRow>
         </TableHeader>
@@ -190,7 +190,7 @@ export function StockTab() {
                 <TableCell>{tx.description}</TableCell>
                 <TableCell className="text-right font-mono">{tx.weight.toFixed(2)} kg</TableCell>
                 <TableCell className="text-right font-mono">{formatCurrency(tx.pricePerKg)}</TableCell>
-                <TableCell className={`text-right font-semibold font-mono ${tx.type === 'purchase' ? 'text-destructive' : 'text-accent'}`}>{formatCurrency(tx.weight * tx.pricePerKg)}</TableCell>
+                {showStockValue && <TableCell className={`text-right font-semibold font-mono ${tx.type === 'purchase' ? 'text-destructive' : 'text-accent'}`}>{formatCurrency(tx.weight * tx.pricePerKg)}</TableCell>}
                 {showActions && (
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-2">
@@ -208,7 +208,7 @@ export function StockTab() {
               </TableRow>
             ))
           ) : (
-            <TableRow><TableCell colSpan={isSelectionMode ? (showActions ? 9 : 8) : (showActions ? 8 : 7)} className="text-center h-24">No stock transactions for {format(currentMonth, "MMMM yyyy")}.</TableCell></TableRow>
+            <TableRow><TableCell colSpan={isSelectionMode ? (showActions ? (showStockValue ? 9 : 8) : (showStockValue ? 8 : 7)) : (showActions ? (showStockValue ? 8 : 7) : (showStockValue ? 7 : 6))} className="text-center h-24">No stock transactions for {format(currentMonth, "MMMM yyyy")}.</TableCell></TableRow>
           )}
         </TableBody>
       </Table>

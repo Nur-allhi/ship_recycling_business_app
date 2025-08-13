@@ -21,6 +21,7 @@ interface AppState {
   initialBalanceSet: boolean;
   wastagePercentage: number;
   currency: string;
+  showStockValue: boolean;
 }
 
 interface AppContextType extends AppState {
@@ -43,6 +44,7 @@ interface AppContextType extends AppState {
   setFontSize: (size: FontSize) => void;
   setWastagePercentage: (percentage: number) => void;
   setCurrency: (currency: string) => void;
+  setShowStockValue: (show: boolean) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -60,6 +62,7 @@ const initialAppState: AppState = {
   initialBalanceSet: false,
   wastagePercentage: 0,
   currency: 'BDT',
+  showStockValue: false,
 };
 
 export function AppProvider({ children }: { children: ReactNode }) {
@@ -92,6 +95,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
         if (typeof parsedState.currency === 'undefined') {
           parsedState.currency = 'BDT';
+        }
+
+        if (typeof parsedState.showStockValue === 'undefined') {
+          parsedState.showStockValue = false;
         }
         
         setState(parsedState);
@@ -287,7 +294,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           const otherStockTxs = prev.stockTransactions.filter(t => t.id !== originalTx.id);
 
           // 2. Re-calculate the entire state based on all other transactions
-          let tempState = { ...initialAppState, initialBalanceSet: true, wastagePercentage: prev.wastagePercentage, currency: prev.currency };
+          let tempState = { ...initialAppState, initialBalanceSet: true, wastagePercentage: prev.wastagePercentage, currency: prev.currency, showStockValue: prev.showStockValue };
           
           // Get initial balances from the start of the state, not the global initial
           const initialCashTxs = prev.cashTransactions.filter(t => t.description?.includes('Initial Balance'));
@@ -425,7 +432,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
   
   const recalculateStateAfterStockChange = (stockTxs: StockTransaction[], prevState: AppState): Partial<AppState> => {
-      let tempState = { ...initialAppState, initialBalanceSet: true, wastagePercentage: prevState.wastagePercentage, currency: prevState.currency };
+      let tempState = { ...initialAppState, initialBalanceSet: true, wastagePercentage: prevState.wastagePercentage, currency: prevState.currency, showStockValue: prevState.showStockValue };
       
       const initialCashTxs = prevState.cashTransactions.filter(t => t.description?.includes('Initial Balance'));
       const initialBankTxs = prevState.bankTransactions.filter(t => t.description?.includes('Initial Balance'));
@@ -703,6 +710,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setState(prev => ({ ...prev, currency }));
   };
 
+  const setShowStockValue = (show: boolean) => {
+    setState(prev => ({ ...prev, showStockValue: show }));
+  };
+
   const value: AppContextType = {
     ...state,
     setInitialBalances,
@@ -724,6 +735,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setFontSize,
     setWastagePercentage,
     setCurrency,
+    setShowStockValue,
   };
 
   return <AppContext.Provider value={value}>{isInitialized ? children : null}</AppContext.Provider>;
@@ -736,3 +748,5 @@ export function useAppContext() {
   }
   return context;
 }
+
+    
