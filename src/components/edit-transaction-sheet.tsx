@@ -23,11 +23,35 @@ import type { CashTransaction, BankTransaction, StockTransaction } from '@/lib/t
 import { useEffect, useMemo } from 'react';
 
 const formSchema = z.object({
-  amount: z.coerce.number().positive({ message: 'Amount must be positive.' }),
-  description: z.string().min(1, 'Description is required.'),
-  category: z.string(),
-  inOutType: z.enum(['in', 'out']),
+  // Common
+  description: z.string().optional(),
+  
+  // Cash & Bank
+  amount: z.coerce.number().positive().optional(),
+  category: z.string().optional(),
+  inOutType: z.enum(['in', 'out']).optional(),
+  
+  // Stock
+  stockItemName: z.string().optional(),
+  weight: z.coerce.number().positive().optional(),
+  pricePerKg: z.coerce.number().positive().optional(),
+  paymentMethod: z.enum(['cash', 'bank']).optional(),
+  type: z.enum(['purchase', 'sale']).optional(),
+
+}).superRefine((data, ctx) => {
+    if(data.type) { // It's a stock transaction
+      if (!data.stockItemName) ctx.addIssue({ code: 'custom', message: 'Stock item name is required.', path: ['stockItemName'] });
+      if (!data.weight) ctx.addIssue({ code: 'custom', message: 'Weight must be positive.', path: ['weight'] });
+      if (!data.pricePerKg) ctx.addIssue({ code: 'custom', message: 'Price must be positive.', path: ['pricePerKg'] });
+      if (!data.paymentMethod) ctx.addIssue({ code: 'custom', message: 'Payment method is required.', path: ['paymentMethod'] });
+    } else { // It's a cash/bank transaction
+      if (!data.amount) ctx.addIssue({ code: 'custom', message: 'Amount must be positive.', path: ['amount'] });
+      if (!data.description) ctx.addIssue({ code: 'custom', message: 'Description is required.', path: ['description'] });
+      if (!data.category) ctx.addIssue({ code: 'custom', message: 'Category is required.', path: ['category'] });
+      if (!data.inOutType) ctx.addIssue({ code: 'custom', message: 'Direction is required.', path: ['inOutType'] });
+    }
 });
+
 
 type FormData = z.infer<typeof formSchema>;
 
@@ -42,18 +66,21 @@ export function EditTransactionSheet({ isOpen, setIsOpen, transaction, transacti
   const { 
     editCashTransaction, 
     editBankTransaction,
+    editStockTransaction,
     cashCategories,
     bankCategories,
+    stockItems
   } = useAppContext();
   
   const { toast } = useToast();
 
   const isCash = transactionType === 'cash';
   const isBank = transactionType === 'bank';
+  const isStock = transactionType === 'stock';
   
   const defaultValues = useMemo(() => {
+    const tx = transaction as any;
     if (isCash || isBank) {
-      const tx = transaction as CashTransaction | BankTransaction;
       return {
         amount: tx.amount,
         description: tx.description,
@@ -61,8 +88,18 @@ export function EditTransactionSheet({ isOpen, setIsOpen, transaction, transacti
         inOutType: tx.type === 'income' || tx.type === 'deposit' ? 'in' : 'out',
       }
     }
-    return { amount: 0, description: '', category: '', inOutType: 'in' as 'in'|'out'};
-  }, [transaction, isCash, isBank]);
+    if (isStock) {
+        return {
+            stockItemName: tx.stockItemName,
+            weight: tx.weight,
+            pricePerKg: tx.pricePerKg,
+            paymentMethod: tx.paymentMethod,
+            type: tx.type,
+            description: tx.description || '',
+        }
+    }
+    return {};
+  }, [transaction, transactionType, isCash, isBank, isStock]);
 
 
   const { register, handleSubmit, control, setValue, formState: { errors } } = useForm<FormData>({
@@ -71,10 +108,9 @@ export function EditTransactionSheet({ isOpen, setIsOpen, transaction, transacti
   });
   
   useEffect(() => {
-      setValue('amount', defaultValues.amount);
-      setValue('description', defaultValues.description);
-      setValue('category', defaultValues.category);
-      setValue('inOutType', defaultValues.inOutType);
+      Object.entries(defaultValues).forEach(([key, value]) => {
+          setValue(key as keyof FormData, value);
+      })
   }, [defaultValues, setValue]);
 
 
@@ -84,28 +120,32 @@ export function EditTransactionSheet({ isOpen, setIsOpen, transaction, transacti
     if (isCash) {
       editCashTransaction(transaction as CashTransaction, {
         type: data.inOutType === 'in' ? 'income' : 'expense',
-        amount: data.amount,
-        description: data.description,
-        category: data.category,
+        amount: data.amount!,
+        description: data.description!,
+        category: data.category!,
       });
     } else if (isBank) {
       editBankTransaction(transaction as BankTransaction, {
         type: data.inOutType === 'in' ? 'deposit' : 'withdrawal',
-        amount: data.amount,
-        description: data.description,
-        category: data.category,
+        amount: data.amount!,
+        description: data.description!,
+        category: data.category!,
       });
+    } else if (isStock) {
+        editStockTransaction(transaction as StockTransaction, {
+            type: data.type!,
+            stockItemName: data.stockItemName!,
+            weight: data.weight!,
+            pricePerKg: data.pricePerKg!,
+            paymentMethod: data.paymentMethod!,
+            description: data.description,
+        });
     }
 
     toast({ title: "Transaction Updated", description: "Your transaction has been successfully updated." });
     setIsOpen(false);
   };
   
-  if (transactionType === 'stock') {
-    // Editing stock transactions is complex and deferred.
-    return null;
-  }
-
   const currentCategories = isCash ? cashCategories : bankCategories;
 
   return (
@@ -113,58 +153,108 @@ export function EditTransactionSheet({ isOpen, setIsOpen, transaction, transacti
         <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
             <SheetHeader>
                 <SheetTitle className="flex items-center"><Pencil className="mr-2 h-6 w-6" /> Edit Transaction</SheetTitle>
-                <SheetDescription>Update the details of this transaction.</SheetDescription>
+                <SheetDescription>Update the details of this transaction. Editing stock may have unintended side effects.</SheetDescription>
             </SheetHeader>
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-6 mt-4">
-                <div className="space-y-2">
-                    <Label htmlFor="amount">Amount</Label>
-                    <Input id="amount" type="number" step="0.01" {...register('amount')} />
-                    {errors.amount && <p className="text-sm text-destructive">{errors.amount.message}</p>}
-                </div>
                 
-                <div className="space-y-2">
-                    <Label htmlFor="description">Description</Label>
-                    <Input id="description" {...register('description')} />
-                    {errors.description && <p className="text-sm text-destructive">{errors.description.message}</p>}
-                </div>
+                {(isCash || isBank) && (
+                    <>
+                        <div className="space-y-2">
+                            <Label htmlFor="amount">Amount</Label>
+                            <Input id="amount" type="number" step="0.01" {...register('amount')} />
+                            {errors.amount && <p className="text-sm text-destructive">{errors.amount.message}</p>}
+                        </div>
+                        
+                        <div className="space-y-2">
+                            <Label htmlFor="description">Description</Label>
+                            <Input id="description" {...register('description')} />
+                            {errors.description && <p className="text-sm text-destructive">{errors.description.message}</p>}
+                        </div>
 
-                <div className="space-y-2">
-                    <Label>Category</Label>
-                    <Controller
-                        control={control}
-                        name="category"
-                        render={({ field }) => (
-                            <Select onValueChange={field.onChange} value={field.value}>
-                                <SelectTrigger><SelectValue placeholder="Select a category" /></SelectTrigger>
-                                <SelectContent>
-                                    {currentCategories.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-                                </SelectContent>
-                            </Select>
-                        )}
-                    />
-                    {errors.category && <p className="text-sm text-destructive">{errors.category.message}</p>}
-                </div>
+                        <div className="space-y-2">
+                            <Label>Category</Label>
+                            <Controller
+                                control={control}
+                                name="category"
+                                render={({ field }) => (
+                                    <Select onValueChange={field.onChange} value={field.value}>
+                                        <SelectTrigger><SelectValue placeholder="Select a category" /></SelectTrigger>
+                                        <SelectContent>
+                                            {currentCategories.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                                        </SelectContent>
+                                    </Select>
+                                )}
+                            />
+                            {errors.category && <p className="text-sm text-destructive">{errors.category.message}</p>}
+                        </div>
 
-                <div className="space-y-2">
-                    <Label>Direction</Label>
-                    <Controller 
-                        control={control}
-                        name="inOutType"
-                        render={({ field }) => (
-                            <RadioGroup onValueChange={field.onChange} value={field.value} className="flex pt-2 gap-4">
-                                <Label className="flex items-center gap-2 cursor-pointer">
-                                    <RadioGroupItem value="in" />
-                                    {isCash ? 'Income' : 'Deposit'}
-                                </Label>
-                                <Label className="flex items-center gap-2 cursor-pointer">
-                                    <RadioGroupItem value="out" />
-                                    {isCash ? 'Expense' : 'Withdrawal'}
-                                </Label>
-                            </RadioGroup>
-                        )}
-                    />
-                    {errors.inOutType && <p className="text-sm text-destructive">{errors.inOutType.message}</p>}
-                </div>
+                        <div className="space-y-2">
+                            <Label>Direction</Label>
+                            <Controller 
+                                control={control}
+                                name="inOutType"
+                                render={({ field }) => (
+                                    <RadioGroup onValueChange={field.onChange} value={field.value} className="flex pt-2 gap-4">
+                                        <Label className="flex items-center gap-2 cursor-pointer">
+                                            <RadioGroupItem value="in" />
+                                            {isCash ? 'Income' : 'Deposit'}
+                                        </Label>
+                                        <Label className="flex items-center gap-2 cursor-pointer">
+                                            <RadioGroupItem value="out" />
+                                            {isCash ? 'Expense' : 'Withdrawal'}
+                                        </Label>
+                                    </RadioGroup>
+                                )}
+                            />
+                            {errors.inOutType && <p className="text-sm text-destructive">{errors.inOutType.message}</p>}
+                        </div>
+                    </>
+                )}
+
+                {isStock && (
+                    <>
+                        <div className="space-y-2">
+                            <Label>Item Name</Label>
+                            <Input {...register('stockItemName')} placeholder="e.g. Rice" readOnly className="bg-muted"/>
+                            {errors.stockItemName && <p className="text-sm text-destructive">{errors.stockItemName.message}</p>}
+                        </div>
+                        <div className="space-y-2">
+                            <Label>Type</Label>
+                             <Input {...register('type')} readOnly className="bg-muted"/>
+                        </div>
+                         <div className="space-y-2">
+                            <Label>Payment Method</Label>
+                             <Controller 
+                                control={control}
+                                name="paymentMethod"
+                                render={({ field }) => (
+                                     <RadioGroup onValueChange={field.onChange} value={field.value} className="flex pt-2 gap-4">
+                                        <Label htmlFor="cash" className="flex items-center gap-2 cursor-pointer"><RadioGroupItem value="cash" id="cash" /><span>Cash</span></Label>
+                                        <Label htmlFor="bank" className="flex items-center gap-2 cursor-pointer"><RadioGroupItem value="bank" id="bank" /><span>Bank</span></Label>
+                                    </RadioGroup>
+                                )}
+                            />
+                            {errors.paymentMethod && <p className="text-sm text-destructive">{errors.paymentMethod.message}</p>}
+                        </div>
+                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                             <div className="space-y-2">
+                                <Label>Weight (kg)</Label>
+                                <Input type="number" step="0.01" {...register('weight')} placeholder="0.00"/>
+                                {errors.weight && <p className="text-sm text-destructive">{errors.weight.message}</p>}
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Price per kg</Label>
+                                <Input type="number" step="0.01" {...register('pricePerKg')} placeholder="0.00"/>
+                                {errors.pricePerKg && <p className="text-sm text-destructive">{errors.pricePerKg.message}</p>}
+                            </div>
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="description">Description</Label>
+                            <Input id="description" {...register('description')} placeholder="Optional notes for the transaction" />
+                        </div>
+                    </>
+                )}
+
 
                 <Button type="submit" className="w-full sm:w-auto">Save Changes</Button>
             </form>

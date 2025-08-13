@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useRef } from "react"
@@ -23,6 +24,8 @@ export function SettingsTab() {
     bankCategories,
     addCategory,
     deleteCategory,
+    wastagePercentage,
+    setWastagePercentage
   } = useAppContext()
   const { toast } = useToast()
 
@@ -30,6 +33,8 @@ export function SettingsTab() {
   const bankBalanceRef = useRef<HTMLInputElement>(null)
   const cashCategoryRef = useRef<HTMLInputElement>(null)
   const bankCategoryRef = useRef<HTMLInputElement>(null)
+  const wastageRef = useRef<HTMLInputElement>(null)
+
 
   const handleBalanceSave = () => {
     const cash = parseFloat(cashBalanceRef.current?.value || '0')
@@ -46,6 +51,17 @@ export function SettingsTab() {
       ref.current.value = ""
     }
   }
+
+  const handleWastageSave = () => {
+    const percentage = parseFloat(wastageRef.current?.value || '0');
+    if (percentage >= 0 && percentage <= 100) {
+      setWastagePercentage(percentage);
+      toast({ title: "Wastage Percentage Updated", description: `Set to ${percentage}%.` });
+    } else {
+      toast({ variant: "destructive", title: "Invalid Percentage", description: "Wastage must be between 0 and 100." });
+    }
+  }
+
 
   return (
     <div className="grid gap-6 max-w-2xl mx-auto">
@@ -64,6 +80,20 @@ export function SettingsTab() {
             <Input id="bank-balance" type="number" defaultValue={bankBalance} ref={bankBalanceRef} />
           </div>
           <Button onClick={handleBalanceSave}>Save Balances</Button>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Wastage Settings</CardTitle>
+          <CardDescription>Set a default wastage percentage for stock sales. This is applied to the weight of the sold item.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="wastage-percentage">Wastage Percentage (%)</Label>
+            <Input id="wastage-percentage" type="number" step="0.01" defaultValue={wastagePercentage} ref={wastageRef} />
+          </div>
+          <Button onClick={handleWastageSave}>Save Wastage Setting</Button>
         </CardContent>
       </Card>
 

@@ -29,4 +29,5 @@ export interface StockTransaction {
   weight: number; // in kg
   pricePerKg: number;
   paymentMethod: 'cash' | 'bank';
+  description?: string;
 }

@@ -18,13 +18,14 @@ interface AppState {
   bankCategories: string[];
   fontSize: FontSize;
   initialBalanceSet: boolean;
+  wastagePercentage: number;
 }
 
 interface AppContextType extends AppState {
   setInitialBalances: (cash: number, bank: number) => void;
   addCashTransaction: (tx: Omit<CashTransaction, 'id' | 'date'>) => void;
   addBankTransaction: (tx: Omit<BankTransaction, 'id' | 'date'>) => void;
-  addStockTransaction: (tx: Omit<StockTransaction, 'id' | 'date'>) => void;
+  addStockTransaction: (tx: Omit<StockTransaction, 'id' | 'date' | 'description'> & { description?: string }) => void;
   editCashTransaction: (originalTx: CashTransaction, updatedTxData: Omit<CashTransaction, 'id' | 'date'>) => void;
   editBankTransaction: (originalTx: BankTransaction, updatedTxData: Omit<BankTransaction, 'id' | 'date'>) => void;
   editStockTransaction: (originalTx: StockTransaction, updatedTxData: Omit<StockTransaction, 'id' | 'date'>) => void;
@@ -32,6 +33,7 @@ interface AppContextType extends AppState {
   addCategory: (type: 'cash' | 'bank', category: string) => void;
   deleteCategory: (type: 'cash' | 'bank', category: string) => void;
   setFontSize: (size: FontSize) => void;
+  setWastagePercentage: (percentage: number) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -47,6 +49,7 @@ const initialAppState: AppState = {
   bankCategories: ['Deposit', 'Withdrawal'],
   fontSize: 'base',
   initialBalanceSet: false,
+  wastagePercentage: 0,
 };
 
 export function AppProvider({ children }: { children: ReactNode }) {
@@ -72,6 +75,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (typeof parsedState.initialBalanceSet === 'undefined') {
           parsedState.initialBalanceSet = (parsedState.cashBalance !== 0 || parsedState.bankBalance !== 0 || parsedState.cashTransactions.length > 0 || parsedState.bankTransactions.length > 0)
         }
+        
+        if (typeof parsedState.wastagePercentage === 'undefined') {
+          parsedState.wastagePercentage = 0;
+        }
+        
         setState(parsedState);
       }
     } catch (error) {
@@ -118,10 +126,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
   };
   
-  const addStockTransaction = (tx: Omit<StockTransaction, 'id' | 'date'>) => {
+  const addStockTransaction = (tx: Omit<StockTransaction, 'id' | 'date' | 'description'> & { description?: string }) => {
       setState(prev => {
           const newTx: StockTransaction = { ...tx, id: crypto.randomUUID(), date: new Date().toISOString() };
-          const cost = tx.weight * tx.pricePerKg;
+          const costOrProceeds = tx.weight * tx.pricePerKg;
           let newCashBalance = prev.cashBalance;
           let newBankBalance = prev.bankBalance;
           let newCashTransactions = prev.cashTransactions;
@@ -129,28 +137,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
           if (tx.type === 'purchase') {
               if (tx.paymentMethod === 'cash') {
-                  if(prev.cashBalance < cost) {
+                  if(prev.cashBalance < costOrProceeds) {
                       toast({ variant: "destructive", title: "Insufficient cash balance" });
                       return prev;
                   }
-                  newCashBalance -= cost;
-                  newCashTransactions = [{ id: crypto.randomUUID(), date: newTx.date, type: 'expense', amount: cost, description: `Purchase: ${tx.stockItemName}`, category: 'Stock' }, ...prev.cashTransactions];
+                  newCashBalance -= costOrProceeds;
+                  newCashTransactions = [{ id: crypto.randomUUID(), date: newTx.date, type: 'expense', amount: costOrProceeds, description: `Purchase: ${tx.stockItemName}`, category: 'Stock' }, ...prev.cashTransactions];
               } else {
-                  if(prev.bankBalance < cost) {
+                  if(prev.bankBalance < costOrProceeds) {
                        toast({ variant: "destructive", title: "Insufficient bank balance" });
                       return prev;
                   }
-                  newBankBalance -= cost;
-                  newBankTransactions = [{ id: crypto.randomUUID(), date: newTx.date, type: 'withdrawal', amount: cost, description: `Purchase: ${tx.stockItemName}`, category: 'Stock' }, ...prev.bankTransactions];
+                  newBankBalance -= costOrProceeds;
+                  newBankTransactions = [{ id: crypto.randomUUID(), date: newTx.date, type: 'withdrawal', amount: costOrProceeds, description: `Purchase: ${tx.stockItemName}`, category: 'Stock' }, ...prev.bankTransactions];
               }
           } else { // Sale
-              const proceeds = tx.weight * tx.pricePerKg;
               if (tx.paymentMethod === 'cash') {
-                  newCashBalance += proceeds;
-                  newCashTransactions = [{ id: crypto.randomUUID(), date: newTx.date, type: 'income', amount: proceeds, description: `Sale: ${tx.stockItemName}`, category: 'Stock' }, ...prev.cashTransactions];
+                  newCashBalance += costOrProceeds;
+                  newCashTransactions = [{ id: crypto.randomUUID(), date: newTx.date, type: 'income', amount: costOrProceeds, description: `Sale: ${tx.stockItemName}`, category: 'Stock' }, ...prev.cashTransactions];
               } else {
-                  newBankBalance += proceeds;
-                  newBankTransactions = [{ id: crypto.randomUUID(), date: newTx.date, type: 'deposit', amount: proceeds, description: `Sale: ${tx.stockItemName}`, category: 'Stock' }, ...prev.bankTransactions];
+                  newBankBalance += costOrProceeds;
+                  newBankTransactions = [{ id: crypto.randomUUID(), date: newTx.date, type: 'deposit', amount: costOrProceeds, description: `Sale: ${tx.stockItemName}`, category: 'Stock' }, ...prev.bankTransactions];
               }
           }
 
@@ -164,11 +171,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
                   const newAvgPrice = ((existingItem.weight * existingItem.purchasePricePerKg) + (tx.weight * tx.pricePerKg)) / newWeight;
                   newStockItems[existingItemIndex] = { ...existingItem, weight: newWeight, purchasePricePerKg: newAvgPrice };
               } else { // Sale
-                  if(existingItem.weight < tx.weight) {
-                      toast({ variant: "destructive", title: "Not enough stock to sell" });
+                  const wastageAmount = tx.weight * (prev.wastagePercentage / 100);
+                  const totalDeduction = tx.weight + wastageAmount;
+                  if(existingItem.weight < totalDeduction) {
+                      toast({ variant: "destructive", title: "Not enough stock to sell", description: `Required: ${totalDeduction.toFixed(2)}kg (incl. wastage), Available: ${existingItem.weight.toFixed(2)}kg` });
                       return prev;
                   }
-                  const newWeight = existingItem.weight - tx.weight;
+                  const newWeight = existingItem.weight - totalDeduction;
                   newStockItems[existingItemIndex] = { ...existingItem, weight: newWeight };
                   if (newWeight <= 0) {
                       newStockItems.splice(existingItemIndex, 1);
@@ -252,8 +261,74 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const editStockTransaction = (originalTx: StockTransaction, updatedTxData: Omit<StockTransaction, 'id' | 'date'>) => {
-      toast({ variant: 'destructive', title: "Feature not implemented", description: "Editing stock transactions is complex and not yet supported."})
-  }
+      setState(prev => {
+          // This logic is complex. It needs to revert the old state and apply the new one.
+          // For simplicity, we will remove the old transaction and add the new one.
+          // A more robust solution would re-calculate the state from the beginning.
+
+          // 1. Filter out the transaction to be edited
+          const otherStockTxs = prev.stockTransactions.filter(t => t.id !== originalTx.id);
+
+          // 2. Re-calculate the entire state based on all other transactions
+          let tempState = { ...initialAppState, initialBalanceSet: true, wastagePercentage: prev.wastagePercentage };
+          
+          // Get initial balances from the start of the state, not the global initial
+          const initialCashTxs = prev.cashTransactions.filter(t => t.description?.includes('Initial Balance'));
+          const initialBankTxs = prev.bankTransactions.filter(t => t.description?.includes('Initial Balance'));
+          tempState.cashBalance = initialCashTxs.reduce((acc, tx) => acc + tx.amount, 0);
+          tempState.bankBalance = initialBankTxs.reduce((acc, tx) => acc + tx.amount, 0);
+
+
+          const allTxs = [...otherStockTxs, { ...updatedTxData, id: originalTx.id, date: originalTx.date }].sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+          for (const tx of allTxs) {
+              const costOrProceeds = tx.weight * tx.pricePerKg;
+              if (tx.type === 'purchase') {
+                  if (tx.paymentMethod === 'cash') tempState.cashBalance -= costOrProceeds;
+                  else tempState.bankBalance -= costOrProceeds;
+
+                  const itemIndex = tempState.stockItems.findIndex(i => i.name.toLowerCase() === tx.stockItemName.toLowerCase());
+                  if (itemIndex > -1) {
+                      const item = tempState.stockItems[itemIndex];
+                      const newWeight = item.weight + tx.weight;
+                      const newAvgPrice = ((item.weight * item.purchasePricePerKg) + (tx.weight * tx.pricePerKg)) / newWeight;
+                      tempState.stockItems[itemIndex] = { ...item, weight: newWeight, purchasePricePerKg: newAvgPrice };
+                  } else {
+                      tempState.stockItems.push({ id: crypto.randomUUID(), name: tx.stockItemName, weight: tx.weight, purchasePricePerKg: tx.pricePerKg });
+                  }
+              } else { // Sale
+                  if (tx.paymentMethod === 'cash') tempState.cashBalance += costOrProceeds;
+                  else tempState.bankBalance += costOrProceeds;
+                  
+                  const itemIndex = tempState.stockItems.findIndex(i => i.name.toLowerCase() === tx.stockItemName.toLowerCase());
+                  if (itemIndex > -1) {
+                      const item = tempState.stockItems[itemIndex];
+                      const wastageAmount = tx.weight * (prev.wastagePercentage / 100);
+                      const totalDeduction = tx.weight + wastageAmount;
+                      const newWeight = item.weight - totalDeduction;
+                      tempState.stockItems[itemIndex] = { ...item, weight: newWeight };
+                       if (newWeight <= 0) {
+                          tempState.stockItems.splice(itemIndex, 1);
+                      }
+                  }
+              }
+          }
+          
+          // We can't easily reconstruct cash/bank transactions without more context,
+          // so we'll just use the final calculated balances. This is a limitation.
+          // For a real app, financial transactions should be immutable or handled by a backend.
+          
+          toast({ title: "Stock State Recalculated", description: "Editing stock may have limitations on financial history."})
+
+          return {
+              ...prev,
+              stockTransactions: allTxs.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+              stockItems: tempState.stockItems,
+              cashBalance: tempState.cashBalance,
+              bankBalance: tempState.bankBalance
+          };
+      });
+  };
 
   const transferFunds = (from: 'cash' | 'bank', amount: number) => {
     setState(prev => {
@@ -315,6 +390,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const setFontSize = (size: FontSize) => {
     setState(prev => ({ ...prev, fontSize: size }));
   };
+  
+  const setWastagePercentage = (percentage: number) => {
+    setState(prev => ({ ...prev, wastagePercentage: percentage }));
+  };
 
   const value: AppContextType = {
     ...state,
@@ -329,6 +408,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     addCategory,
     deleteCategory,
     setFontSize,
+    setWastagePercentage,
   };
 
   return <AppContext.Provider value={value}>{isInitialized ? children : null}</AppContext.Provider>;

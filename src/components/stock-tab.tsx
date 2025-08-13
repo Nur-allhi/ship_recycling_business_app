@@ -18,14 +18,11 @@ import type { StockItem, StockTransaction } from "@/lib/types"
 import { EditTransactionSheet } from "./edit-transaction-sheet"
 
 export function StockTab() {
-  const { stockItems, stockTransactions, editStockTransaction } = useAppContext()
+  const { stockItems, stockTransactions } = useAppContext()
   const [editSheetState, setEditSheetState] = useState<{isOpen: boolean, transaction: StockTransaction | null}>({ isOpen: false, transaction: null});
 
   const handleEditClick = (tx: StockTransaction) => {
-    // For now, we are disabling stock editing as it is complex.
-    // The function in the store will show a toast notification.
-    editStockTransaction(tx, tx);
-    // setEditSheetState({ isOpen: true, transaction: tx });
+    setEditSheetState({ isOpen: true, transaction: tx });
   }
 
   const formatCurrency = (amount: number) => {
@@ -85,6 +82,7 @@ export function StockTab() {
                     <TableHead>Date</TableHead>
                     <TableHead>Type</TableHead>
                     <TableHead>Item</TableHead>
+                    <TableHead>Description</TableHead>
                     <TableHead className="text-right">Weight</TableHead>
                     <TableHead className="text-right">Price/kg</TableHead>
                     <TableHead className="text-right">Total Value</TableHead>
@@ -103,6 +101,7 @@ export function StockTab() {
                           </span>
                         </TableCell>
                         <TableCell className="font-medium">{tx.stockItemName}</TableCell>
+                        <TableCell>{tx.description}</TableCell>
                         <TableCell className="text-right">{tx.weight.toFixed(2)} kg</TableCell>
                         <TableCell className="text-right">{formatCurrency(tx.pricePerKg)}</TableCell>
                         <TableCell className={`text-right font-semibold ${tx.type === 'purchase' ? 'text-destructive' : 'text-accent'}`}>{formatCurrency(tx.weight * tx.pricePerKg)}</TableCell>
@@ -115,7 +114,7 @@ export function StockTab() {
                       </TableRow>
                     ))
                   ) : (
-                    <TableRow><TableCell colSpan={7} className="text-center h-24">No stock transactions yet.</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={8} className="text-center h-24">No stock transactions yet.</TableCell></TableRow>
                   )}
                 </TableBody>
               </Table>
@@ -123,14 +122,14 @@ export function StockTab() {
             </CardContent>
           </Card>
       </div>
-      {/* {editSheetState.transaction && (
+      {editSheetState.transaction && (
         <EditTransactionSheet 
           isOpen={editSheetState.isOpen}
           setIsOpen={(isOpen) => setEditSheetState({ isOpen, transaction: isOpen ? editSheetState.transaction : null })}
           transaction={editSheetState.transaction}
           transactionType="stock"
         />
-      )} */}
+      )}
     </>
   )
 }

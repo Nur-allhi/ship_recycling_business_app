@@ -24,7 +24,7 @@ import { SheetHeader, SheetTitle, SheetDescription } from './ui/sheet';
 const formSchema = z.object({
   transactionType: z.enum(['cash', 'bank', 'stock_purchase', 'stock_sale', 'transfer']),
   amount: z.coerce.number().positive({ message: 'Amount must be positive.' }),
-  description: z.string().min(1, 'Description is required.'),
+  description: z.string().optional(),
   category: z.string().optional(),
   
   // stock specific
@@ -60,6 +60,9 @@ const formSchema = z.object({
         }
         if (!data.category) {
             ctx.addIssue({ code: 'custom', message: 'Category is required.', path: ['category'] });
+        }
+         if (!data.description) {
+            ctx.addIssue({ code: 'custom', message: 'Description is required.', path: ['description'] });
         }
     }
     if(data.transactionType === 'transfer') {
@@ -141,7 +144,7 @@ export function UnifiedTransactionForm({ setSheetOpen }: UnifiedTransactionFormP
             addCashTransaction({
                 type: data.inOutType === 'in' ? 'income' : 'expense',
                 amount: data.amount,
-                description: data.description,
+                description: data.description!,
                 category: data.category!,
             });
             break;
@@ -149,7 +152,7 @@ export function UnifiedTransactionForm({ setSheetOpen }: UnifiedTransactionFormP
              addBankTransaction({
                 type: data.inOutType === 'in' ? 'deposit' : 'withdrawal',
                 amount: data.amount,
-                description: data.description,
+                description: data.description!,
                 category: data.category!,
             });
             break;
@@ -160,6 +163,7 @@ export function UnifiedTransactionForm({ setSheetOpen }: UnifiedTransactionFormP
                 weight: data.weight!,
                 pricePerKg: data.pricePerKg!,
                 paymentMethod: data.paymentMethod!,
+                description: data.description,
             });
             break;
         case 'stock_sale':
@@ -169,6 +173,7 @@ export function UnifiedTransactionForm({ setSheetOpen }: UnifiedTransactionFormP
                 weight: data.weight!,
                 pricePerKg: data.pricePerKg!,
                 paymentMethod: data.paymentMethod!,
+                description: data.description,
             });
             break;
         case 'transfer':
@@ -221,10 +226,10 @@ export function UnifiedTransactionForm({ setSheetOpen }: UnifiedTransactionFormP
                       <Input id="amount" type="number" step="0.01" {...register('amount')} placeholder="0.00"/>
                       {errors.amount && <p className="text-sm text-destructive">{errors.amount.message}</p>}
                   </div>
-                  {transactionType !== 'transfer' && transactionType !== 'stock_purchase' && transactionType !== 'stock_sale' && (
+                  {(transactionType === 'cash' || transactionType === 'bank' || transactionType === 'stock_purchase' || transactionType === 'stock_sale') && (
                       <div className="space-y-2">
                           <Label htmlFor="description">Description</Label>
-                          <Input id="description" {...register('description')} />
+                          <Input id="description" {...register('description')} placeholder={transactionType.startsWith('stock') ? "Optional notes" : "e.g., Weekly groceries"} />
                           {errors.description && <p className="text-sm text-destructive">{errors.description.message}</p>}
                       </div>
                   )}
@@ -325,10 +330,6 @@ export function UnifiedTransactionForm({ setSheetOpen }: UnifiedTransactionFormP
                               <Input type="number" step="0.01" {...register('pricePerKg')} placeholder="0.00"/>
                               {errors.pricePerKg && <p className="text-sm text-destructive">{errors.pricePerKg.message}</p>}
                           </div>
-                      </div>
-                      <div className="space-y-2">
-                          <Label htmlFor="description">Description</Label>
-                          <Input id="description" {...register('description')} placeholder="Optional notes for the transaction" />
                       </div>
                      </>
                   )}
