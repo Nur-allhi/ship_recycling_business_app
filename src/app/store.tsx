@@ -55,7 +55,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       const storedState = localStorage.getItem('shipshape-ledger');
       if (storedState) {
-        const parsedState = JSON.parse(storedState);
+        let parsedState = JSON.parse(storedState);
+
+        // Force update categories to latest defaults if they don't match
+        const categoriesMatch = 
+            JSON.stringify(parsedState.bankCategories) === JSON.stringify(initialAppState.bankCategories) &&
+            JSON.stringify(parsedState.cashCategories) === JSON.stringify(initialAppState.cashCategories);
+
+        if (!categoriesMatch) {
+            parsedState.bankCategories = initialAppState.bankCategories;
+            parsedState.cashCategories = initialAppState.cashCategories;
+        }
+
         // ensure initialBalanceSet exists
         if (typeof parsedState.initialBalanceSet === 'undefined') {
           parsedState.initialBalanceSet = (parsedState.cashBalance !== 0 || parsedState.bankBalance !== 0 || parsedState.cashTransactions.length > 0 || parsedState.bankTransactions.length > 0)
