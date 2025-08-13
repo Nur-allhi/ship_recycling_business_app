@@ -329,12 +329,12 @@ export function StockTab() {
           </Card>
 
           <Card>
-            <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                <div className="flex-1">
-                    <CardTitle>Stock Transaction History</CardTitle>
-                    <CardDescription>A detailed log of all purchases and sales.</CardDescription>
-                </div>
-                <div className="flex w-full flex-col sm:w-auto sm:flex-row items-stretch sm:items-center gap-2">
+            <CardHeader>
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                    <div className="flex-1">
+                        <CardTitle>Stock Transaction History</CardTitle>
+                        <CardDescription>A detailed log of all purchases and sales.</CardDescription>
+                    </div>
                     <div className="flex items-center gap-2 self-end sm:self-auto">
                         <Button variant="outline" size="icon" onClick={goToPreviousMonth} className="h-9 w-9">
                             <ChevronLeft className="h-4 w-4" />
@@ -344,17 +344,17 @@ export function StockTab() {
                             <ChevronRight className="h-4 w-4" />
                         </Button>
                     </div>
-                    <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-                        {selectedTxIds.length > 0 && (
-                            <Button size="sm" variant="destructive" onClick={handleMultiDeleteClick} className="w-full sm:w-auto">
-                                <Trash2 className="mr-2 h-4 w-4" /> Delete ({selectedTxIds.length})
-                            </Button>
-                        )}
-                        <Button size="sm" variant="outline" onClick={toggleSelectionMode} className="w-full sm:w-auto">
-                            <CheckSquare className="mr-2 h-4 w-4" />
-                            {isSelectionMode ? 'Cancel' : 'Select'}
+                </div>
+                <div className="flex flex-wrap items-center justify-start sm:justify-end gap-2 pt-4">
+                    {selectedTxIds.length > 0 && (
+                        <Button size="sm" variant="destructive" onClick={handleMultiDeleteClick} className="w-full sm:w-auto">
+                            <Trash2 className="mr-2 h-4 w-4" /> Delete ({selectedTxIds.length})
                         </Button>
-                    </div>
+                    )}
+                    <Button size="sm" variant={isSelectionMode ? "secondary" : "outline"} onClick={toggleSelectionMode} className="w-full sm:w-auto">
+                        <CheckSquare className="mr-2 h-4 w-4" />
+                        {isSelectionMode ? 'Cancel' : 'Select'}
+                    </Button>
                 </div>
             </CardHeader>
             <CardContent>

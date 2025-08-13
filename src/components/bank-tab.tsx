@@ -276,53 +276,53 @@ export function BankTab() {
   return (
     <>
       <Card>
-        <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div className="flex-1">
-            <CardTitle>Bank Ledger</CardTitle>
-            <CardDescription>
-              Current Balance: <span className="font-bold text-primary">{formatCurrency(bankBalance)}</span>
-            </CardDescription>
-          </div>
-          <div className="flex w-full flex-col sm:w-auto sm:flex-row items-stretch sm:items-center gap-2">
-            <div className="flex items-center gap-2 self-end sm:self-auto">
-              <Button variant="outline" size="icon" onClick={goToPreviousMonth} className="h-9 w-9">
-                  <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <span className="text-sm font-medium w-28 sm:w-32 text-center">{format(currentMonth, "MMMM yyyy")}</span>
-              <Button variant="outline" size="icon" onClick={goToNextMonth} className="h-9 w-9">
-                  <ChevronRight className="h-4 w-4" />
-              </Button>
+        <CardHeader>
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                <div className="flex-1">
+                    <CardTitle>Bank Ledger</CardTitle>
+                    <CardDescription>
+                    Current Balance: <span className="font-bold text-primary">{formatCurrency(bankBalance)}</span>
+                    </CardDescription>
+                </div>
+                <div className="flex items-center gap-2 self-end sm:self-auto">
+                    <Button variant="outline" size="icon" onClick={goToPreviousMonth} className="h-9 w-9">
+                        <ChevronLeft className="h-4 w-4" />
+                    </Button>
+                    <span className="text-sm font-medium w-28 sm:w-32 text-center">{format(currentMonth, "MMMM yyyy")}</span>
+                    <Button variant="outline" size="icon" onClick={goToNextMonth} className="h-9 w-9">
+                        <ChevronRight className="h-4 w-4" />
+                    </Button>
+                </div>
             </div>
-            <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-              {selectedTxIds.length > 0 && (
-                  <Button size="sm" variant="destructive" onClick={handleMultiDeleteClick} className="w-full sm:w-auto">
-                      <Trash2 className="mr-2 h-4 w-4" /> Delete ({selectedTxIds.length})
-                  </Button>
-              )}
-              <Button size="sm" variant="outline" onClick={toggleSelectionMode} className="w-full sm:w-auto">
-                  <CheckSquare className="mr-2 h-4 w-4" />
-                  {isSelectionMode ? 'Cancel' : 'Select'}
-              </Button>
-              <Sheet open={isTransferSheetOpen} onOpenChange={setIsTransferSheetOpen}>
-                  <SheetTrigger asChild>
-                      <Button size="sm" variant="outline" className="w-full sm:w-auto"><ArrowRightLeft className="mr-2 h-4 w-4" />Transfer</Button>
-                  </SheetTrigger>
-                  <SheetContent>
-                      <SheetHeader>
-                      <SheetTitle>Transfer Funds</SheetTitle>
-                      <SheetDescription>Move money from your bank account to cash.</SheetDescription>
-                      </SheetHeader>
-                      <form onSubmit={handleTransferSubmit} className="space-y-4 mt-4">
-                          <div className="space-y-2">
-                              <Label htmlFor="amount">Amount</Label>
-                              <Input id="amount" name="amount" type="number" step="0.01" placeholder="0.00" required />
-                          </div>
-                          <Button type="submit" className="w-full">Transfer to Cash</Button>
-                      </form>
-                  </SheetContent>
-              </Sheet>
+             <div className="flex flex-wrap items-center justify-start sm:justify-end gap-2 pt-4">
+                {selectedTxIds.length > 0 && (
+                    <Button size="sm" variant="destructive" onClick={handleMultiDeleteClick} className="w-full sm:w-auto">
+                        <Trash2 className="mr-2 h-4 w-4" /> Delete ({selectedTxIds.length})
+                    </Button>
+                )}
+                <Button size="sm" variant={isSelectionMode ? "secondary" : "outline"} onClick={toggleSelectionMode} className="w-full sm:w-auto">
+                    <CheckSquare className="mr-2 h-4 w-4" />
+                    {isSelectionMode ? 'Cancel' : 'Select'}
+                </Button>
+                <Sheet open={isTransferSheetOpen} onOpenChange={setIsTransferSheetOpen}>
+                    <SheetTrigger asChild>
+                        <Button size="sm" variant="outline" className="w-full sm:w-auto"><ArrowRightLeft className="mr-2 h-4 w-4" />Transfer</Button>
+                    </SheetTrigger>
+                    <SheetContent>
+                        <SheetHeader>
+                        <SheetTitle>Transfer Funds</SheetTitle>
+                        <SheetDescription>Move money from your bank account to cash.</SheetDescription>
+                        </SheetHeader>
+                        <form onSubmit={handleTransferSubmit} className="space-y-4 mt-4">
+                            <div className="space-y-2">
+                                <Label htmlFor="amount">Amount</Label>
+                                <Input id="amount" name="amount" type="number" step="0.01" placeholder="0.00" required />
+                            </div>
+                            <Button type="submit" className="w-full">Transfer to Cash</Button>
+                        </form>
+                    </SheetContent>
+                </Sheet>
             </div>
-          </div>
         </CardHeader>
         <CardContent>
           {isMobile ? renderMobileView() : renderDesktopView()}
