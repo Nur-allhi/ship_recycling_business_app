@@ -1,10 +1,10 @@
 
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAppContext } from './store';
 import { cn } from '@/lib/utils';
-import { Ship, Wallet, Landmark, Boxes, Settings, PlusCircle } from 'lucide-react';
+import { Ship, Wallet, Landmark, Boxes, Settings, PlusCircle, AlertTriangle, Loader2 } from 'lucide-react';
 import { DashboardTab } from '@/components/dashboard-tab';
 import { CashTab } from '@/components/cash-tab';
 import { BankTab } from '@/components/bank-tab';
@@ -17,6 +17,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { InitialBalanceDialog } from '@/components/initial-balance-dialog';
+import { useRouter } from 'next/navigation';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 const fontClasses = {
   sm: 'text-sm',
@@ -33,17 +35,35 @@ const navItems = [
 ]
 
 function ShipShapeLedger() {
-  const { fontSize, organizationName, initialBalanceSet, needsInitialBalance } = useAppContext();
+  const { needsSetup, setNeedsSetup, fontSize, organizationName, initialBalanceSet, needsInitialBalance } = useAppContext();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   const isMobile = useIsMobile();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (needsSetup) {
+      router.push('/setup');
+    }
+  }, [needsSetup, router]);
 
   const handleTabChange = (value: string) => {
     setActiveTab(value);
     if(isMobile) {
         setIsSheetOpen(false);
     }
+  }
+
+  if (needsSetup) {
+     return (
+       <div className="flex items-center justify-center min-h-screen bg-background">
+        <div className="flex items-center gap-4 text-muted-foreground">
+            <Loader2 className="h-8 w-8 animate-spin" />
+            <p className="text-lg">Redirecting to setup...</p>
+        </div>
+      </div>
+     )
   }
 
   if (!initialBalanceSet) {

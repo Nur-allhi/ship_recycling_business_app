@@ -91,3 +91,24 @@ export async function deleteSheetRow(input: z.infer<typeof DeleteSheetRowInputSc
     });
     return response.data;
 }
+
+export async function initializeSheets() {
+    try {
+        const cashHeaders = ['Date', 'Type', 'Amount', 'Description', 'Category'];
+        await updateSheetRow({ range: 'Cash!A1', values: cashHeaders });
+        
+        const bankHeaders = ['Date', 'Type', 'Amount', 'Description', 'Category'];
+        await updateSheetRow({ range: 'Bank!A1', values: bankHeaders });
+        
+        const stockTxHeaders = ['Date', 'Type', 'Item Name', 'Weight', 'Price/kg', 'Payment', 'Description'];
+        await updateSheetRow({ range: 'Stock Transactions!A1', values: stockTxHeaders });
+        
+        const initialStockHeaders = ['Item Name', 'Initial Weight', 'Average Purchase Price/kg'];
+        await updateSheetRow({ range: 'Initial Stock!A1', values: initialStockHeaders });
+        
+        return { success: true };
+    } catch (error: any) {
+        console.error("Failed to initialize sheets:", error);
+        return { success: false, error: error.message };
+    }
+}

@@ -23,6 +23,7 @@ interface AppState {
   numberFont: string;
   initialBalanceSet: boolean;
   needsInitialBalance: boolean;
+  needsSetup: boolean;
   wastagePercentage: number;
   currency: string;
   showStockValue: boolean;
@@ -55,6 +56,7 @@ interface AppContextType extends AppState {
   setOrganizationName: (name: string) => void;
   setInitialBalances: (cash: number, bank: number) => void;
   addInitialStockItem: (item: { name: string; weight: number; pricePerKg: number }) => void;
+  setNeedsSetup: (needs: boolean) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -73,6 +75,7 @@ const initialAppState: AppState = {
   numberFont: "'Roboto Mono', monospace",
   initialBalanceSet: false,
   needsInitialBalance: false,
+  needsSetup: false,
   wastagePercentage: 0,
   currency: 'BDT',
   showStockValue: false,
@@ -84,6 +87,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [isInitialized, setIsInitialized] = useState(false);
   const { toast } = useToast();
 
+  const setNeedsSetup = (needs: boolean) => {
+    setState(prev => ({ ...prev, needsSetup: needs }));
+  }
+
   const reloadData = useCallback(async () => {
     try {
         setState(prev => ({ ...prev, initialBalanceSet: false })); // Show loading indicator
@@ -92,9 +99,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
           try {
             // All ranges start from row 2 (e.g., A2) to account for a header row in the sheet.
             return await readSheetData({ range });
-          } catch (error) {
+          } catch (error: any) {
+            if(error.message.includes("Unable to parse range")) {
+                 setState(prev => ({ ...prev, needsSetup: true, initialBalanceSet: true }));
+            }
             console.warn(`Could not read from sheet "${sheetName}". It might not exist yet.`, error);
-            return [];
+            // Re-throw the error to be caught by the page component
+            throw error;
           }
         }
         
@@ -238,16 +249,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
             bankBalance: finalBankBalance,
             initialBalanceSet: true,
             needsInitialBalance,
+            needsSetup: false, // successfully loaded data, so no setup needed
         }));
 
       } catch (error) {
+        // Error is handled in the fetchData function, this is a fallback.
         console.error("Failed to load data from Google Sheets", error);
         toast({
             variant: 'destructive',
             title: 'Failed to load data',
             description: 'Could not connect to Google Sheets. Please check your setup and sheet names (Cash, Bank, Stock Transactions, Initial Stock).'
         });
-        setState(prev => ({ ...prev, initialBalanceSet: true }));
+        setState(prev => ({ ...prev, initialBalanceSet: true, needsSetup: true }));
       }
   }, [toast]);
 
@@ -561,6 +574,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setOrganizationName,
     setInitialBalances,
     addInitialStockItem,
+    setNeedsSetup,
   };
 
   return <AppContext.Provider value={value}>{isInitialized ? children : <div className="flex items-center justify-center min-h-screen">Loading...</div>}</AppContext.Provider>;
