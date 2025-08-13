@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from 'react';
 import { AppProvider, useAppContext } from './store';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -20,6 +21,7 @@ const fontClasses = {
 
 function ShipShapeLedger() {
   const { fontSize } = useAppContext();
+  const [activeTab, setActiveTab] = useState('dashboard');
 
   return (
     <div className={cn('min-h-screen bg-background text-foreground', fontClasses[fontSize] || 'text-base')}>
@@ -36,7 +38,7 @@ function ShipShapeLedger() {
           </p>
         </header>
         <main>
-          <Tabs defaultValue="dashboard" className="w-full">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
             <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 md:grid-cols-5">
               <TabsTrigger value="dashboard"><Wallet className="mr-2 h-4 w-4" />Dashboard</TabsTrigger>
               <TabsTrigger value="cash"><Wallet className="mr-2 h-4 w-4" />Cash</TabsTrigger>
@@ -45,7 +47,7 @@ function ShipShapeLedger() {
               <TabsTrigger value="settings"><Settings className="mr-2 h-4 w-4" />Settings</TabsTrigger>
             </TabsList>
             <TabsContent value="dashboard" className="mt-6">
-              <DashboardTab />
+              <DashboardTab setActiveTab={setActiveTab} />
             </TabsContent>
             <TabsContent value="cash" className="mt-6">
               <CashTab />
