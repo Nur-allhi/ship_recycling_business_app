@@ -90,17 +90,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
         
         const fetchData = async (range: string, sheetName: string) => {
           try {
+            // All ranges start from row 2 (e.g., A2) to account for a header row in the sheet.
             return await readSheetData({ range });
           } catch (error) {
             console.warn(`Could not read from sheet "${sheetName}". It might not exist yet.`, error);
             return [];
           }
         }
-
+        
+        // Data is read from sheets assuming specific column orders.
+        // Cash Sheet: Date, Type, Amount, Description, Category
         const [cashData, bankData, stockTransactionsData, initialStockData] = await Promise.all([
             fetchData('Cash!A2:E', 'Cash'),
+            // Bank Sheet: Date, Type, Amount, Description, Category
             fetchData('Bank!A2:E', 'Bank'),
+            // Stock Transactions Sheet: Date, Type, Item Name, Weight, Price/kg, Payment, Description
             fetchData('Stock Transactions!A2:G', 'Stock Transactions'),
+            // Initial Stock Sheet: Item Name, Initial Weight, Average Purchase Price/kg
             fetchData('Initial Stock!A2:C', 'Initial Stock'),
         ]);
         
