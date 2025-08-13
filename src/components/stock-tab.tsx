@@ -4,7 +4,7 @@
 import { useState, useMemo } from "react"
 import { useAppContext } from "@/app/store"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card"
 import {
   Table,
   TableBody,
@@ -21,6 +21,7 @@ import { EditTransactionSheet } from "./edit-transaction-sheet"
 import { DeleteConfirmationDialog } from "./delete-confirmation-dialog"
 import { Checkbox } from "./ui/checkbox"
 import { format, subMonths, addMonths } from "date-fns"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 
 export function StockTab() {
@@ -30,14 +31,22 @@ export function StockTab() {
   const [selectedTxIds, setSelectedTxIds] = useState<string[]>([]);
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [currentMonth, setCurrentMonth] = useState(new Date());
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
 
-  const monthlyTransactions = useMemo(() => {
+  const filteredByMonth = useMemo(() => {
     return stockTransactions.filter(tx => {
         const txDate = new Date(tx.date);
         return txDate.getFullYear() === currentMonth.getFullYear() && txDate.getMonth() === currentMonth.getMonth();
     })
   }, [stockTransactions, currentMonth]);
 
+  const paginatedTransactions = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    return filteredByMonth.slice(startIndex, startIndex + itemsPerPage);
+  }, [filteredByMonth, currentPage, itemsPerPage]);
+  
+  const totalPages = Math.ceil(filteredByMonth.length / itemsPerPage);
 
   const handleEditClick = (tx: StockTransaction) => {
     setEditSheetState({ isOpen: true, transaction: tx });
@@ -69,7 +78,7 @@ export function StockTab() {
 
   const handleSelectAll = (checked: boolean) => {
       if (checked) {
-          setSelectedTxIds(monthlyTransactions.map(tx => tx.id));
+          setSelectedTxIds(paginatedTransactions.map(tx => tx.id));
       } else {
           setSelectedTxIds([]);
       }
@@ -95,7 +104,7 @@ export function StockTab() {
   const weightedAveragePrice = totalStockWeight > 0 ? totalStockValue / totalStockWeight : 0;
   
   const { totalPurchaseWeight, totalSaleWeight, totalPurchaseValue, totalSaleValue } = useMemo(() => {
-    return monthlyTransactions.reduce((acc, tx) => {
+    return filteredByMonth.reduce((acc, tx) => {
         if (tx.type === 'purchase') {
             acc.totalPurchaseWeight += tx.weight;
             acc.totalPurchaseValue += tx.weight * tx.pricePerKg;
@@ -105,10 +114,16 @@ export function StockTab() {
         }
         return acc;
     }, { totalPurchaseWeight: 0, totalSaleWeight: 0, totalPurchaseValue: 0, totalSaleValue: 0 });
-  }, [monthlyTransactions]);
+  }, [filteredByMonth]);
   
-  const goToPreviousMonth = () => setCurrentMonth(subMonths(currentMonth, 1));
-  const goToNextMonth = () => setCurrentMonth(addMonths(currentMonth, 1));
+  const goToPreviousMonth = () => {
+    setCurrentMonth(subMonths(currentMonth, 1));
+    setCurrentPage(1);
+  }
+  const goToNextMonth = () => {
+    setCurrentMonth(addMonths(currentMonth, 1));
+    setCurrentPage(1);
+  }
 
 
   return (
@@ -189,7 +204,7 @@ export function StockTab() {
                 </div>
             </CardHeader>
             <CardContent>
-              {monthlyTransactions.length > 0 && (
+              {filteredByMonth.length > 0 && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 p-4 border rounded-lg">
                     <div>
                       <h4 className="font-semibold text-destructive">Monthly Purchases</h4>
@@ -211,7 +226,7 @@ export function StockTab() {
                         <TableHead className="w-[50px]">
                             <Checkbox 
                                 onCheckedChange={(checked) => handleSelectAll(Boolean(checked))}
-                                checked={selectedTxIds.length === monthlyTransactions.length && monthlyTransactions.length > 0}
+                                checked={selectedTxIds.length === paginatedTransactions.length && paginatedTransactions.length > 0}
                                 aria-label="Select all rows"
                             />
                         </TableHead>
@@ -227,8 +242,8 @@ export function StockTab() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {monthlyTransactions.length > 0 ? (
-                    monthlyTransactions.map((tx: StockTransaction) => (
+                  {paginatedTransactions.length > 0 ? (
+                    paginatedTransactions.map((tx: StockTransaction) => (
                       <TableRow key={tx.id} data-state={selectedTxIds.includes(tx.id) && "selected"}>
                         {isSelectionMode && (
                             <TableCell>
@@ -288,6 +303,31 @@ export function StockTab() {
               </Table>
               </div>
             </CardContent>
+            {filteredByMonth.length > 0 && (
+                <CardFooter className="flex items-center justify-between">
+                    <div className="text-sm text-muted-foreground">
+                    Showing page {currentPage} of {totalPages}
+                    </div>
+                    <div className="flex items-center gap-2">
+                    <Select value={String(itemsPerPage)} onValueChange={(value) => { setItemsPerPage(Number(value)); setCurrentPage(1); }}>
+                        <SelectTrigger className="w-[120px]">
+                        <SelectValue placeholder="Records per page" />
+                        </SelectTrigger>
+                        <SelectContent>
+                        <SelectItem value="10">10 / page</SelectItem>
+                        <SelectItem value="20">20 / page</SelectItem>
+                        <SelectItem value="30">30 / page</SelectItem>
+                        </SelectContent>
+                    </Select>
+                    <Button variant="outline" size="sm" onClick={() => setCurrentPage(prev => prev - 1)} disabled={currentPage === 1}>
+                        Previous
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => setCurrentPage(prev => prev + 1)} disabled={currentPage === totalPages}>
+                        Next
+                    </Button>
+                    </div>
+                </CardFooter>
+            )}
           </Card>
       </div>
       {editSheetState.transaction && (

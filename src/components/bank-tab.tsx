@@ -4,7 +4,7 @@
 import { useState, useMemo } from "react"
 import { useAppContext } from "@/app/store"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card"
 import {
   Sheet,
   SheetContent,
@@ -30,6 +30,8 @@ import { EditTransactionSheet } from "./edit-transaction-sheet"
 import { DeleteConfirmationDialog } from "./delete-confirmation-dialog"
 import { Checkbox } from "./ui/checkbox"
 import { format, subMonths, addMonths } from "date-fns"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+
 
 export function BankTab() {
   const { bankBalance, bankTransactions, transferFunds, deleteBankTransaction, deleteMultipleBankTransactions, currency } = useAppContext()
@@ -39,13 +41,22 @@ export function BankTab() {
   const [selectedTxIds, setSelectedTxIds] = useState<string[]>([]);
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [currentMonth, setCurrentMonth] = useState(new Date());
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
 
-  const monthlyTransactions = useMemo(() => {
+  const filteredByMonth = useMemo(() => {
     return bankTransactions.filter(tx => {
         const txDate = new Date(tx.date);
         return txDate.getFullYear() === currentMonth.getFullYear() && txDate.getMonth() === currentMonth.getMonth();
     })
   }, [bankTransactions, currentMonth]);
+
+  const paginatedTransactions = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    return filteredByMonth.slice(startIndex, startIndex + itemsPerPage);
+  }, [filteredByMonth, currentPage, itemsPerPage]);
+
+  const totalPages = Math.ceil(filteredByMonth.length / itemsPerPage);
 
   const handleEditClick = (tx: BankTransaction) => {
     setEditSheetState({ isOpen: true, transaction: tx });
@@ -87,7 +98,7 @@ export function BankTab() {
   
   const handleSelectAll = (checked: boolean) => {
       if (checked) {
-          setSelectedTxIds(monthlyTransactions.map(tx => tx.id));
+          setSelectedTxIds(paginatedTransactions.map(tx => tx.id));
       } else {
           setSelectedTxIds([]);
       }
@@ -108,8 +119,14 @@ export function BankTab() {
     }
   }
   
-  const goToPreviousMonth = () => setCurrentMonth(subMonths(currentMonth, 1));
-  const goToNextMonth = () => setCurrentMonth(addMonths(currentMonth, 1));
+  const goToPreviousMonth = () => {
+    setCurrentMonth(subMonths(currentMonth, 1));
+    setCurrentPage(1);
+  }
+  const goToNextMonth = () => {
+    setCurrentMonth(addMonths(currentMonth, 1));
+    setCurrentPage(1);
+  }
 
   return (
     <>
@@ -169,7 +186,7 @@ export function BankTab() {
                     <TableHead className="w-[50px]">
                         <Checkbox 
                             onCheckedChange={(checked) => handleSelectAll(Boolean(checked))}
-                            checked={selectedTxIds.length === monthlyTransactions.length && monthlyTransactions.length > 0}
+                            checked={selectedTxIds.length === paginatedTransactions.length && paginatedTransactions.length > 0}
                             aria-label="Select all rows"
                         />
                     </TableHead>
@@ -182,8 +199,8 @@ export function BankTab() {
                   </TableRow>
               </TableHeader>
               <TableBody>
-                  {monthlyTransactions.length > 0 ? (
-                  monthlyTransactions.map((tx: BankTransaction) => (
+                  {paginatedTransactions.length > 0 ? (
+                  paginatedTransactions.map((tx: BankTransaction) => (
                       <TableRow key={tx.id} data-state={selectedTxIds.includes(tx.id) && "selected"}>
                       {isSelectionMode && (
                         <TableCell>
@@ -242,6 +259,31 @@ export function BankTab() {
               </Table>
           </div>
         </CardContent>
+        {filteredByMonth.length > 0 && (
+          <CardFooter className="flex items-center justify-between">
+            <div className="text-sm text-muted-foreground">
+              Showing page {currentPage} of {totalPages}
+            </div>
+            <div className="flex items-center gap-2">
+               <Select value={String(itemsPerPage)} onValueChange={(value) => { setItemsPerPage(Number(value)); setCurrentPage(1); }}>
+                <SelectTrigger className="w-[120px]">
+                  <SelectValue placeholder="Records per page" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="10">10 / page</SelectItem>
+                  <SelectItem value="20">20 / page</SelectItem>
+                  <SelectItem value="30">30 / page</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button variant="outline" size="sm" onClick={() => setCurrentPage(prev => prev - 1)} disabled={currentPage === 1}>
+                Previous
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => setCurrentPage(prev => prev + 1)} disabled={currentPage === totalPages}>
+                Next
+              </Button>
+            </div>
+          </CardFooter>
+        )}
       </Card>
       {editSheetState.transaction && (
         <EditTransactionSheet 
