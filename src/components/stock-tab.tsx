@@ -19,7 +19,7 @@ import type { StockItem, StockTransaction } from "@/lib/types"
 import { EditTransactionSheet } from "./edit-transaction-sheet"
 
 export function StockTab() {
-  const { stockItems, stockTransactions } = useAppContext()
+  const { stockItems, stockTransactions, currency } = useAppContext()
   const [editSheetState, setEditSheetState] = useState<{isOpen: boolean, transaction: StockTransaction | null}>({ isOpen: false, transaction: null});
 
   const handleEditClick = (tx: StockTransaction) => {
@@ -27,7 +27,7 @@ export function StockTab() {
   }
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount)
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency: currency }).format(amount)
   }
 
   return (

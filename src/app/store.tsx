@@ -19,6 +19,7 @@ interface AppState {
   fontSize: FontSize;
   initialBalanceSet: boolean;
   wastagePercentage: number;
+  currency: string;
 }
 
 interface AppContextType extends AppState {
@@ -34,6 +35,7 @@ interface AppContextType extends AppState {
   deleteCategory: (type: 'cash' | 'bank', category: string) => void;
   setFontSize: (size: FontSize) => void;
   setWastagePercentage: (percentage: number) => void;
+  setCurrency: (currency: string) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -50,6 +52,7 @@ const initialAppState: AppState = {
   fontSize: 'base',
   initialBalanceSet: false,
   wastagePercentage: 0,
+  currency: 'USD',
 };
 
 export function AppProvider({ children }: { children: ReactNode }) {
@@ -78,6 +81,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         
         if (typeof parsedState.wastagePercentage === 'undefined') {
           parsedState.wastagePercentage = 0;
+        }
+
+        if (typeof parsedState.currency === 'undefined') {
+          parsedState.currency = 'USD';
         }
         
         setState(parsedState);
@@ -270,7 +277,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           const otherStockTxs = prev.stockTransactions.filter(t => t.id !== originalTx.id);
 
           // 2. Re-calculate the entire state based on all other transactions
-          let tempState = { ...initialAppState, initialBalanceSet: true, wastagePercentage: prev.wastagePercentage };
+          let tempState = { ...initialAppState, initialBalanceSet: true, wastagePercentage: prev.wastagePercentage, currency: prev.currency };
           
           // Get initial balances from the start of the state, not the global initial
           const initialCashTxs = prev.cashTransactions.filter(t => t.description?.includes('Initial Balance'));
@@ -395,6 +402,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setState(prev => ({ ...prev, wastagePercentage: percentage }));
   };
 
+  const setCurrency = (currency: string) => {
+    setState(prev => ({ ...prev, currency }));
+  };
+
   const value: AppContextType = {
     ...state,
     setInitialBalances,
@@ -409,6 +420,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     deleteCategory,
     setFontSize,
     setWastagePercentage,
+    setCurrency,
   };
 
   return <AppContext.Provider value={value}>{isInitialized ? children : null}</AppContext.Provider>;

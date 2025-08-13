@@ -12,6 +12,7 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { Badge } from "@/components/ui/badge"
 import { Plus, Trash2 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 export function SettingsTab() {
   const {
@@ -25,7 +26,9 @@ export function SettingsTab() {
     addCategory,
     deleteCategory,
     wastagePercentage,
-    setWastagePercentage
+    setWastagePercentage,
+    currency,
+    setCurrency
   } = useAppContext()
   const { toast } = useToast()
 
@@ -60,6 +63,11 @@ export function SettingsTab() {
     } else {
       toast({ variant: "destructive", title: "Invalid Percentage", description: "Wastage must be between 0 and 100." });
     }
+  }
+
+  const handleCurrencyChange = (value: string) => {
+    setCurrency(value);
+    toast({ title: "Currency Updated", description: `Set to ${value}.` });
   }
 
 
@@ -146,13 +154,30 @@ export function SettingsTab() {
           <CardTitle>Appearance</CardTitle>
           <CardDescription>Adjust the look and feel of the app.</CardDescription>
         </CardHeader>
-        <CardContent>
-          <Label>Font Size</Label>
-          <ToggleGroup type="single" value={fontSize} onValueChange={(value) => { if (value) setFontSize(value as any) }} className="mt-2">
-            <ToggleGroupItem value="sm" aria-label="Small text">Small</ToggleGroupItem>
-            <ToggleGroupItem value="base" aria-label="Normal text">Normal</ToggleGroupItem>
-            <ToggleGroupItem value="lg" aria-label="Large text">Large</ToggleGroupItem>
-          </ToggleGroup>
+        <CardContent className="space-y-4">
+          <div>
+            <Label>Font Size</Label>
+            <ToggleGroup type="single" value={fontSize} onValueChange={(value) => { if (value) setFontSize(value as any) }} className="mt-2">
+              <ToggleGroupItem value="sm" aria-label="Small text">Small</ToggleGroupItem>
+              <ToggleGroupItem value="base" aria-label="Normal text">Normal</ToggleGroupItem>
+              <ToggleGroupItem value="lg" aria-label="Large text">Large</ToggleGroupItem>
+            </ToggleGroup>
+          </div>
+          <div>
+            <Label>Currency</Label>
+             <Select value={currency} onValueChange={handleCurrencyChange}>
+                <SelectTrigger className="w-[180px] mt-2">
+                    <SelectValue placeholder="Select currency" />
+                </SelectTrigger>
+                <SelectContent>
+                    <SelectItem value="USD">USD ($)</SelectItem>
+                    <SelectItem value="EUR">EUR (€)</SelectItem>
+                    <SelectItem value="GBP">GBP (£)</SelectItem>
+                    <SelectItem value="JPY">JPY (¥)</SelectItem>
+                    <SelectItem value="INR">INR (₹)</SelectItem>
+                </SelectContent>
+            </Select>
+          </div>
         </CardContent>
       </Card>
     </div>

@@ -23,7 +23,7 @@ import { EditTransactionSheet } from "./edit-transaction-sheet"
 
 
 export function CashTab() {
-  const { cashBalance, cashTransactions, transferFunds } = useAppContext()
+  const { cashBalance, cashTransactions, transferFunds, currency } = useAppContext()
   const [isTransferSheetOpen, setIsTransferSheetOpen] = useState(false)
   const [editSheetState, setEditSheetState] = useState<{isOpen: boolean, transaction: CashTransaction | null}>({ isOpen: false, transaction: null});
 
@@ -32,7 +32,7 @@ export function CashTab() {
   }
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount)
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency: currency }).format(amount)
   }
 
   const handleTransferSubmit = (event: React.FormEvent<HTMLFormElement>) => {

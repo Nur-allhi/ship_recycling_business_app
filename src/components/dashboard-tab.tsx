@@ -10,10 +10,10 @@ interface DashboardTabProps {
 }
 
 export function DashboardTab({ setActiveTab }: DashboardTabProps) {
-  const { cashBalance, bankBalance, stockItems } = useAppContext()
+  const { cashBalance, bankBalance, stockItems, currency } = useAppContext()
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount)
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency: currency }).format(amount)
   }
 
   const totalStockValue = stockItems.reduce((acc, item) => acc + item.weight * item.purchasePricePerKg, 0)

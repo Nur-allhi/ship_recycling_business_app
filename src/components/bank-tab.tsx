@@ -29,7 +29,7 @@ import type { BankTransaction } from "@/lib/types"
 import { EditTransactionSheet } from "./edit-transaction-sheet"
 
 export function BankTab() {
-  const { bankBalance, bankTransactions, transferFunds } = useAppContext()
+  const { bankBalance, bankTransactions, transferFunds, currency } = useAppContext()
   const [isTransferSheetOpen, setIsTransferSheetOpen] = useState(false)
   const [editSheetState, setEditSheetState] = useState<{isOpen: boolean, transaction: BankTransaction | null}>({ isOpen: false, transaction: null});
 
@@ -39,7 +39,7 @@ export function BankTab() {
   }
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount)
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency: currency }).format(amount)
   }
 
     const handleTransferSubmit = (event: React.FormEvent<HTMLFormElement>) => {
