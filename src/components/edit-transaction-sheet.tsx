@@ -21,6 +21,7 @@ import { Pencil } from 'lucide-react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from './ui/sheet';
 import type { CashTransaction, BankTransaction, StockTransaction } from '@/lib/types';
 import { useEffect, useMemo } from 'react';
+import { Alert, AlertTitle, AlertDescription } from './ui/alert';
 
 const formSchema = z.object({
   // Common
@@ -146,7 +147,7 @@ export function EditTransactionSheet({ isOpen, setIsOpen, transaction, transacti
   };
   
   const currentCategories = isCash ? cashCategories : bankCategories;
-  const isStockDerivedTx = (isCash || isBank) && transaction.rowIndex === 0;
+  const isStockDerivedTx = (isCash || isBank) && ['Stock Purchase', 'Stock Sale'].includes((transaction as any).category);
 
   return (
     <Sheet open={isOpen} onOpenChange={setIsOpen}>
@@ -154,12 +155,25 @@ export function EditTransactionSheet({ isOpen, setIsOpen, transaction, transacti
             <SheetHeader>
                 <SheetTitle className="flex items-center"><Pencil className="mr-2 h-6 w-6" /> Edit Transaction</SheetTitle>
                 <SheetDescription>
-                    {isStockDerivedTx 
-                        ? "This transaction was generated from a stock movement and cannot be edited directly."
-                        : "Update the details of this transaction."
-                    }
+                    { "Update the details of this transaction." }
                 </SheetDescription>
             </SheetHeader>
+             {isStockDerivedTx && (
+                <Alert variant="destructive" className="mt-4">
+                  <AlertTitle>Editing Restricted</AlertTitle>
+                  <AlertDescription>
+                    This financial entry was created automatically from a stock transaction. To edit it, please modify or delete the original transaction in the Stock tab.
+                  </AlertDescription>
+                </Alert>
+              )}
+               {isStock && (
+                <Alert variant="destructive" className="mt-4">
+                  <AlertTitle>Editing Caution</AlertTitle>
+                  <AlertDescription>
+                    Editing this stock transaction will not automatically update the linked cash or bank entry. Please update the financial record manually if you change the value.
+                  </AlertDescription>
+                </Alert>
+              )}
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-6 mt-4">
                 
                 {(isCash || isBank) && (

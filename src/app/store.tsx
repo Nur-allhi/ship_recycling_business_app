@@ -97,7 +97,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
         
         const fetchData = async (range: string, sheetName: string) => {
           try {
-            // All ranges start from row 2 (e.g., A2) to account for a header row in the sheet.
             return await readSheetData({ range });
           } catch (error: any) {
             if (error.message.includes("Unable to parse range")) {
@@ -108,15 +107,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
           }
         }
         
-        // Data is read from sheets assuming specific column orders.
-        // Cash Sheet: Date, Type, Amount, Description, Category
         const [cashData, bankData, stockTransactionsData, initialStockData] = await Promise.all([
             fetchData('Cash!A2:E', 'Cash'),
-            // Bank Sheet: Date, Type, Amount, Description, Category
             fetchData('Bank!A2:E', 'Bank'),
-            // Stock Transactions Sheet: Date, Type, Item Name, Weight, Price/kg, Payment, Description
             fetchData('Stock Transactions!A2:G', 'Stock Transactions'),
-            // Initial Stock Sheet: Item Name, Initial Weight, Average Purchase Price/kg
             fetchData('Initial Stock!A2:C', 'Initial Stock'),
         ]);
         
@@ -167,34 +161,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
             }))
             .filter(tx => tx.date && tx.type && tx.stockItemName && !isNaN(tx.weight) && !isNaN(tx.pricePerKg));
 
-        // Generate corresponding financial transactions from stock transactions
-        stockTransactions.forEach(tx => {
-            const totalValue = tx.weight * tx.pricePerKg;
-            const description = `${tx.type === 'purchase' ? 'Purchase' : 'Sale'} of ${tx.stockItemName}`;
-
-            if (tx.paymentMethod === 'cash') {
-                cashTransactions.push({
-                    id: `stock-cash-${tx.id}`,
-                    rowIndex: 0, // Not a real row in the sheet
-                    date: tx.date,
-                    type: tx.type === 'purchase' ? 'expense' : 'income',
-                    amount: totalValue,
-                    description,
-                    category: tx.type === 'purchase' ? 'Stock Purchase' : 'Stock Sale',
-                });
-            } else { // bank
-                bankTransactions.push({
-                    id: `stock-bank-${tx.id}`,
-                    rowIndex: 0, // Not a real row in the sheet
-                    date: tx.date,
-                    type: tx.type === 'purchase' ? 'withdrawal' : 'deposit',
-                    amount: totalValue,
-                    description,
-                    category: tx.type === 'purchase' ? 'Stock Purchase' : 'Stock Sale',
-                });
-            }
-        });
-
         const initialStockItems: StockItem[] = initialStockData.map((row, index) => ({
             id: `initial-stock-${index}`,
             rowIndex: index + 2,
@@ -206,10 +172,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const finalCashBalance = cashTransactions.reduce((acc, tx) => acc + (tx.type === 'income' ? tx.amount : -tx.amount), 0);
         const finalBankBalance = bankTransactions.reduce((acc, tx) => acc + (tx.type === 'deposit' ? tx.amount : -tx.amount), 0);
         
-        // Corrected Stock Calculation Logic
         const stockPortfolio: Record<string, { weight: number, totalValue: number }> = {};
 
-        // 1. Process initial stock
         initialStockItems.forEach(item => {
             if (!stockPortfolio[item.name]) {
                 stockPortfolio[item.name] = { weight: 0, totalValue: 0 };
@@ -218,7 +182,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
             stockPortfolio[item.name].totalValue += item.weight * item.purchasePricePerKg;
         });
 
-        // 2. Process transactions chronologically
         const sortedStockTransactions = [...stockTransactions].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
         
         sortedStockTransactions.forEach(tx => {
@@ -234,7 +197,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
                 item.totalValue += tx.weight * tx.pricePerKg;
             } else { // sale
                 item.weight -= tx.weight;
-                // When selling, the value of the remaining stock decreases by the average cost of the sold portion, not the sale price.
                 item.totalValue -= tx.weight * currentAvgPrice;
             }
         });
@@ -340,12 +302,37 @@ export function AppProvider({ children }: { children: ReactNode }) {
   
   const addStockTransaction = async (tx: Omit<StockTransaction, 'id' | 'rowIndex'>) => {
      try {
+      // 1. Add the stock transaction itself
       await appendSheetRow({
         range: 'Stock Transactions!A:G',
         values: [format(new Date(tx.date), 'MM/dd/yyyy'), tx.type, tx.stockItemName, tx.weight, tx.pricePerKg, tx.paymentMethod, tx.description]
       });
-      toast({ title: "Success", description: "Stock transaction added to sheet."});
-      await reloadData();
+
+      // 2. Add the corresponding financial transaction
+      const totalValue = tx.weight * tx.pricePerKg;
+      const description = `${tx.type === 'purchase' ? 'Purchase' : 'Sale'} of ${tx.stockItemName}`;
+      const category = tx.type === 'purchase' ? 'Stock Purchase' : 'Stock Sale';
+
+      if (tx.paymentMethod === 'cash') {
+          await addCashTransaction({
+              date: tx.date,
+              type: tx.type === 'purchase' ? 'expense' : 'income',
+              amount: totalValue,
+              description,
+              category
+          });
+      } else { // bank
+          await addBankTransaction({
+              date: tx.date,
+              type: tx.type === 'purchase' ? 'withdrawal' : 'deposit',
+              amount: totalValue,
+              description,
+              category
+          });
+      }
+
+      toast({ title: "Success", description: "Stock transaction and financial entry added."});
+      // reloadData is already called by addCash/BankTransaction, so no need to call it again here.
     } catch (error) {
       console.error(error);
       toast({ variant: 'destructive', title: "Error", description: "Failed to add stock transaction."});
@@ -391,7 +378,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const range = `Stock Transactions!A${originalTx.rowIndex}:G${originalTx.rowIndex}`;
         const values = [format(new Date(originalTx.date), 'MM/dd/yyyy'), updatedTxData.type, updatedTxData.stockItemName, updatedTxData.weight, updatedTxData.pricePerKg, updatedTxData.paymentMethod, updatedTxData.description];
         await updateSheetRow({ range, values });
-        toast({ title: "Success", description: "Stock transaction updated."});
+        toast({ title: "Success", description: "Stock transaction updated. Please manually update the corresponding financial transaction."});
         await reloadData();
       } catch (error) {
         console.error(error);
@@ -401,9 +388,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const deleteCashTransaction = async (tx: CashTransaction) => {
     try {
-        if(tx.rowIndex === 0) {
-            toast({ variant: 'destructive', title: "Error", description: "Cannot delete transactions generated from stock movements. Delete the original stock transaction instead."});
-            return;
+        if(['Stock Purchase', 'Stock Sale'].includes(tx.category)) {
+             toast({ variant: 'destructive', title: "Deletion Prohibited", description: "This transaction came from a stock movement. Please delete the original stock transaction instead."});
+             return;
         }
         await deleteSheetRow({ sheetName: "Cash", rowIndex: tx.rowIndex });
         toast({ title: "Success", description: "Cash transaction deleted."});
@@ -416,9 +403,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const deleteBankTransaction = async (tx: BankTransaction) => {
     try {
-        if(tx.rowIndex === 0) {
-            toast({ variant: 'destructive', title: "Error", description: "Cannot delete transactions generated from stock movements. Delete the original stock transaction instead."});
-            return;
+         if(['Stock Purchase', 'Stock Sale'].includes(tx.category)) {
+             toast({ variant: 'destructive', title: "Deletion Prohibited", description: "This transaction came from a stock movement. Please delete the original stock transaction instead."});
+             return;
         }
         await deleteSheetRow({ sheetName: "Bank", rowIndex: tx.rowIndex });
         toast({ title: "Success", description: "Bank transaction deleted."});
@@ -432,7 +419,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const deleteStockTransaction = async (tx: StockTransaction) => {
     try {
         await deleteSheetRow({ sheetName: "Stock Transactions", rowIndex: tx.rowIndex });
-        toast({ title: "Success", description: "Stock transaction deleted."});
+        toast({ title: "Stock Transaction Deleted", description: "Please manually delete the corresponding entry from your Cash or Bank ledger."});
         await reloadData();
     } catch(error) {
         console.error(error);
@@ -442,11 +429,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const deleteMultipleCashTransactions = async (txs: CashTransaction[]) => {
      try {
-        if(txs.some(tx => tx.rowIndex === 0)) {
-            toast({ variant: 'destructive', title: "Error", description: "Cannot delete transactions generated from stock movements."});
+        if(txs.some(tx => ['Stock Purchase', 'Stock Sale'].includes(tx.category))) {
+            toast({ variant: 'destructive', title: "Error", description: "Cannot delete transactions generated from stock movements in bulk."});
             return;
         }
-        // Deleting rows changes row indices, so we process from bottom to top
         const sortedTxs = [...txs].sort((a,b) => b.rowIndex - a.rowIndex);
         for(const tx of sortedTxs) {
             await deleteSheetRow({ sheetName: "Cash", rowIndex: tx.rowIndex });
@@ -461,8 +447,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const deleteMultipleBankTransactions = async (txs: BankTransaction[]) => {
     try {
-        if(txs.some(tx => tx.rowIndex === 0)) {
-            toast({ variant: 'destructive', title: "Error", description: "Cannot delete transactions generated from stock movements."});
+        if(txs.some(tx => ['Stock Purchase', 'Stock Sale'].includes(tx.category))) {
+            toast({ variant: 'destructive', title: "Error", description: "Cannot delete transactions generated from stock movements in bulk."});
             return;
         }
         const sortedTxs = [...txs].sort((a,b) => b.rowIndex - a.rowIndex);
@@ -483,7 +469,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         for(const tx of sortedTxs) {
             await deleteSheetRow({ sheetName: "Stock Transactions", rowIndex: tx.rowIndex });
         }
-        toast({ title: "Success", description: `${txs.length} stock transactions deleted.`});
+        toast({ title: "Success", description: `${txs.length} stock transactions deleted. Please manually delete corresponding financial entries.`});
         await reloadData();
     } catch(error) {
         console.error(error);
@@ -619,5 +605,3 @@ export function useAppContext() {
   }
   return context;
 }
-
-    
