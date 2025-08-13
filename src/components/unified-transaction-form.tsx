@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -76,6 +76,11 @@ interface UnifiedTransactionFormProps {
   setSheetOpen: (open: boolean) => void;
 }
 
+const cashIncomeCategories = ['Salary'];
+const cashExpenseCategories = ['Groceries', 'Transport', 'Utilities'];
+const bankDepositCategories = ['Salary'];
+const bankWithdrawalCategories = ['Investment', 'Loan', 'Shopping'];
+
 export function UnifiedTransactionForm({ setSheetOpen }: UnifiedTransactionFormProps) {
   const { 
     addCashTransaction, 
@@ -89,7 +94,7 @@ export function UnifiedTransactionForm({ setSheetOpen }: UnifiedTransactionFormP
   
   const { toast } = useToast();
   
-  const { register, handleSubmit, control, watch, reset, formState: { errors } } = useForm<FormData>({
+  const { register, handleSubmit, control, watch, reset, setValue, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(formSchema),
     defaultValues: {
         amount: undefined,
@@ -98,6 +103,37 @@ export function UnifiedTransactionForm({ setSheetOpen }: UnifiedTransactionFormP
   });
 
   const transactionType = watch('transactionType');
+  const category = watch('category');
+  const [showDirection, setShowDirection] = useState(false);
+
+  useEffect(() => {
+    if (transactionType === 'cash' && category) {
+      if (cashIncomeCategories.includes(category)) {
+        setValue('inOutType', 'in');
+        setShowDirection(false);
+      } else if (cashExpenseCategories.includes(category)) {
+        setValue('inOutType', 'out');
+        setShowDirection(false);
+      } else {
+        setValue('inOutType', undefined);
+        setShowDirection(true);
+      }
+    } else if (transactionType === 'bank' && category) {
+        if (bankDepositCategories.includes(category)) {
+            setValue('inOutType', 'in');
+            setShowDirection(false);
+        } else if (bankWithdrawalCategories.includes(category)) {
+            setValue('inOutType', 'out');
+            setShowDirection(false);
+        } else {
+            setValue('inOutType', undefined);
+            setShowDirection(true);
+        }
+    } else {
+        setShowDirection(false);
+    }
+  }, [category, transactionType, setValue]);
+
 
   const onSubmit = (data: FormData) => {
     switch(data.transactionType) {
@@ -157,7 +193,12 @@ export function UnifiedTransactionForm({ setSheetOpen }: UnifiedTransactionFormP
                   control={control}
                   name="transactionType"
                   render={({ field }) => (
-                      <Select onValueChange={field.onChange} value={field.value}>
+                      <Select onValueChange={(value) => {
+                          field.onChange(value);
+                          // Reset dependent fields when type changes
+                          setValue('category', undefined);
+                          setValue('inOutType', undefined);
+                      }} value={field.value}>
                           <SelectTrigger><SelectValue placeholder="Select a transaction type..." /></SelectTrigger>
                           <SelectContent>
                               <SelectItem value="cash">Cash Transaction</SelectItem>
@@ -175,26 +216,42 @@ export function UnifiedTransactionForm({ setSheetOpen }: UnifiedTransactionFormP
           {transactionType && (
                <>
                   {/* Common Fields */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                          <Label htmlFor="amount">Amount</Label>
-                          <Input id="amount" type="number" step="0.01" {...register('amount')} placeholder="0.00"/>
-                          {errors.amount && <p className="text-sm text-destructive">{errors.amount.message}</p>}
-                      </div>
-                      {transactionType !== 'transfer' && transactionType !== 'stock_purchase' && (
-                          <div className="space-y-2">
-                              <Label htmlFor="description">Description</Label>
-                              <Input id="description" {...register('description')} />
-                              {errors.description && <p className="text-sm text-destructive">{errors.description.message}</p>}
-                          </div>
-                      )}
+                   <div className="space-y-2">
+                      <Label htmlFor="amount">Amount</Label>
+                      <Input id="amount" type="number" step="0.01" {...register('amount')} placeholder="0.00"/>
+                      {errors.amount && <p className="text-sm text-destructive">{errors.amount.message}</p>}
                   </div>
+                  {transactionType !== 'transfer' && transactionType !== 'stock_purchase' && transactionType !== 'stock_sale' && (
+                      <div className="space-y-2">
+                          <Label htmlFor="description">Description</Label>
+                          <Input id="description" {...register('description')} />
+                          {errors.description && <p className="text-sm text-destructive">{errors.description.message}</p>}
+                      </div>
+                  )}
 
 
                   {/* Cash/Bank Specific */}
                   {(transactionType === 'cash' || transactionType === 'bank') && (
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+                      <div className="space-y-4">
                           <div className="space-y-2">
+                              <Label>Category</Label>
+                              <Controller
+                                  control={control}
+                                  name="category"
+                                  render={({ field }) => (
+                                      <Select onValueChange={field.onChange} value={field.value}>
+                                          <SelectTrigger><SelectValue placeholder="Select a category" /></SelectTrigger>
+                                          <SelectContent>
+                                              {(transactionType === 'cash' ? cashCategories : bankCategories).map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                                          </SelectContent>
+                                      </Select>
+                                  )}
+                              />
+                              {errors.category && <p className="text-sm text-destructive">{errors.category.message}</p>}
+                          </div>
+
+                         {showDirection && (
+                           <div className="space-y-2">
                               <Label>Direction</Label>
                               <Controller 
                                   control={control}
@@ -214,22 +271,7 @@ export function UnifiedTransactionForm({ setSheetOpen }: UnifiedTransactionFormP
                               />
                               {errors.inOutType && <p className="text-sm text-destructive">{errors.inOutType.message}</p>}
                           </div>
-                          <div className="space-y-2">
-                              <Label>Category</Label>
-                              <Controller
-                                  control={control}
-                                  name="category"
-                                  render={({ field }) => (
-                                      <Select onValueChange={field.onChange} value={field.value}>
-                                          <SelectTrigger><SelectValue placeholder="Select a category" /></SelectTrigger>
-                                          <SelectContent>
-                                              {(transactionType === 'cash' ? cashCategories : bankCategories).map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-                                          </SelectContent>
-                                      </Select>
-                                  )}
-                              />
-                              {errors.category && <p className="text-sm text-destructive">{errors.category.message}</p>}
-                          </div>
+                         )}
                       </div>
                   )}
 
@@ -283,6 +325,10 @@ export function UnifiedTransactionForm({ setSheetOpen }: UnifiedTransactionFormP
                               <Input type="number" step="0.01" {...register('pricePerKg')} placeholder="0.00"/>
                               {errors.pricePerKg && <p className="text-sm text-destructive">{errors.pricePerKg.message}</p>}
                           </div>
+                      </div>
+                      <div className="space-y-2">
+                          <Label htmlFor="description">Description</Label>
+                          <Input id="description" {...register('description')} placeholder="Optional notes for the transaction" />
                       </div>
                      </>
                   )}
