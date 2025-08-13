@@ -50,7 +50,7 @@ export function CashTab() {
       setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
     } else {
       setSortKey(key);
-      setSortDirection('asc');
+      setSortDirection('desc');
     }
   };
 
@@ -163,7 +163,7 @@ export function CashTab() {
 
   const renderSortArrow = (key: SortKey) => {
     if (sortKey !== key) return <ArrowUpDown className="ml-2 h-4 w-4 opacity-50" />;
-    return sortDirection === 'asc' ? <ArrowUpCircle className="ml-2 h-4 w-4" /> : <ArrowDownCircle className="ml-2 h-4 w-4" />;
+    return sortDirection === 'desc' ? <ArrowDownCircle className="ml-2 h-4 w-4" /> : <ArrowUpCircle className="ml-2 h-4 w-4" />;
   };
 
   const renderDesktopView = () => (
@@ -433,3 +433,5 @@ export function CashTab() {
     </>
   )
 }
+
+    
