@@ -12,7 +12,7 @@ import { StockTab } from '@/components/stock-tab';
 import { SettingsTab } from '@/components/settings-tab';
 import { InitialBalanceDialog } from '@/components/initial-balance-dialog';
 import { UnifiedTransactionForm } from '@/components/unified-transaction-form';
-import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+import { Dialog, DialogContent, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
@@ -25,7 +25,7 @@ const fontClasses = {
 function ShipShapeLedger() {
   const { fontSize } = useAppContext();
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [isSheetOpen, setIsSheetOpen] = useState(false);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
 
   return (
     <div className={cn('min-h-screen bg-background text-foreground', fontClasses[fontSize] || 'text-base')}>
@@ -42,14 +42,14 @@ function ShipShapeLedger() {
               Your all-in-one ledger for cash, bank, and stock management.
             </p>
           </div>
-          <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
-            <SheetTrigger asChild>
+          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+            <DialogTrigger asChild>
               <Button className="w-full sm:w-auto"><PlusCircle className="mr-2 h-4 w-4" /> Add Transaction</Button>
-            </SheetTrigger>
-            <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
-                <UnifiedTransactionForm setSheetOpen={setIsSheetOpen}/>
-            </SheetContent>
-          </Sheet>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-lg">
+                <UnifiedTransactionForm setDialogOpen={setIsDialogOpen}/>
+            </DialogContent>
+          </Dialog>
         </header>
         <main>
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">

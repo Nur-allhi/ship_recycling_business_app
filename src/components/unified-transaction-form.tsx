@@ -19,7 +19,7 @@ import {
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useToast } from '@/hooks/use-toast';
 import { CalendarIcon, PlusCircle } from 'lucide-react';
-import { SheetHeader, SheetTitle, SheetDescription } from './ui/sheet';
+import { DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { format } from 'date-fns';
@@ -81,7 +81,7 @@ const formSchema = z.object({
 type FormData = z.infer<typeof formSchema>;
 
 interface UnifiedTransactionFormProps {
-  setSheetOpen: (open: boolean) => void;
+  setDialogOpen: (open: boolean) => void;
 }
 
 const cashIncomeCategories = ['Salary'];
@@ -89,7 +89,7 @@ const cashExpenseCategories = ['Groceries', 'Transport', 'Utilities'];
 const bankDepositCategories = ['Deposit'];
 const bankWithdrawalCategories = ['Withdrawal'];
 
-export function UnifiedTransactionForm({ setSheetOpen }: UnifiedTransactionFormProps) {
+export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionFormProps) {
   const { 
     addCashTransaction, 
     addBankTransaction, 
@@ -193,16 +193,16 @@ export function UnifiedTransactionForm({ setSheetOpen }: UnifiedTransactionFormP
     }
     toast({ title: "Transaction Added", description: "Your transaction has been successfully recorded." });
     reset();
-    setSheetOpen(false);
+    setDialogOpen(false);
   };
 
   return (
     <>
-      <SheetHeader>
-        <SheetTitle className="flex items-center"><PlusCircle className="mr-2 h-6 w-6" /> Add a New Transaction</SheetTitle>
-        <SheetDescription>A single place to record any cash, bank, or stock transaction.</SheetDescription>
-      </SheetHeader>
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6 mt-4">
+      <DialogHeader>
+        <DialogTitle className="flex items-center"><PlusCircle className="mr-2 h-6 w-6" /> Add a New Transaction</DialogTitle>
+        <DialogDescription>A single place to record any cash, bank, or stock transaction.</DialogDescription>
+      </DialogHeader>
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6 pt-4">
           <div className="space-y-2">
               <Label>Transaction Type</Label>
               <Controller
