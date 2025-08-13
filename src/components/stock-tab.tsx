@@ -24,6 +24,7 @@ import { format, subMonths, addMonths } from "date-fns"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { Badge } from "./ui/badge"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 export function StockTab() {
   const { stockItems, stockTransactions, deleteStockTransaction, deleteMultipleStockTransactions, currency, showStockValue } = useAppContext()
@@ -286,139 +287,148 @@ export function StockTab() {
   return (
     <>
       <div className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Current Stock Inventory</CardTitle>
-              <CardDescription>An overview of your current stock levels and value.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Item Name</TableHead>
-                      <TableHead className="text-right">Weight (kg)</TableHead>
-                      <TableHead className="text-right">Avg. Price/kg</TableHead>
-                      <TableHead className="text-right">Current Value</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {stockItems.length > 0 ? (
-                      stockItems.map((item: StockItem) => (
-                        <TableRow key={item.id}>
-                          <TableCell className="font-medium">{item.name}</TableCell>
-                          <TableCell className="text-right font-mono">{item.weight.toFixed(2)}</TableCell>
-                          <TableCell className="text-right font-mono">{formatCurrency(item.purchasePricePerKg)}</TableCell>
-                          <TableCell className="text-right font-medium font-mono">{formatCurrency(item.weight * item.purchasePricePerKg)}</TableCell>
-                        </TableRow>
-                      ))
-                    ) : (
-                      <TableRow>
-                        <TableCell colSpan={4} className="text-center h-24">No stock items yet.</TableCell>
-                      </TableRow>
-                    )}
-                  </TableBody>
-                   {stockItems.length > 0 && (
-                     <TableFoot>
-                        <TableRow>
-                          <TableCell className="font-bold">Totals</TableCell>
-                          <TableCell className="text-right font-bold font-mono">{totalStockWeight.toFixed(2)} kg</TableCell>
-                          <TableCell className="text-right font-bold font-mono">{formatCurrency(weightedAveragePrice)}</TableCell>
-                          <TableCell className="text-right font-bold font-mono">{formatCurrency(totalStockValue)}</TableCell>
-                        </TableRow>
-                      </TableFoot>
-                   )}
-                </Table>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                    <div className="flex-1">
-                        <CardTitle>Stock Transaction History</CardTitle>
-                        <CardDescription>A detailed log of all purchases and sales.</CardDescription>
-                    </div>
-                    <div className="flex items-center gap-2 self-center sm:self-auto">
-                        <Button variant="outline" size="icon" onClick={goToPreviousMonth} className="h-9 w-9">
-                            <ChevronLeft className="h-4 w-4" />
-                        </Button>
-                        <span className="text-sm font-medium w-28 sm:w-32 text-center">{format(currentMonth, "MMMM yyyy")}</span>
-                        <Button variant="outline" size="icon" onClick={goToNextMonth} className="h-9 w-9">
-                            <ChevronRight className="h-4 w-4" />
-                        </Button>
-                    </div>
-                </div>
-                <div className="flex flex-col items-center justify-center gap-2 pt-4">
-                    <div className="flex flex-wrap items-center justify-center gap-2">
-                        <Button size="sm" variant={isSelectionMode ? "secondary" : "outline"} onClick={toggleSelectionMode}>
-                            <CheckSquare className="mr-2 h-4 w-4" />
-                            {isSelectionMode ? 'Cancel' : 'Select'}
-                        </Button>
-                         <TooltipProvider>
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                <Button size="sm" variant="outline" onClick={() => setShowActions(!showActions)}>
-                                    {showActions ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                                </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                <p>{showActions ? 'Hide' : 'Show'} Actions</p>
-                                </TooltipContent>
-                            </Tooltip>
-                        </TooltipProvider>
-                        {selectedTxIds.length > 0 && (
-                            <Button size="sm" variant="destructive" onClick={handleMultiDeleteClick}>
-                                <Trash2 className="mr-2 h-4 w-4" /> ({selectedTxIds.length})
-                            </Button>
+        <Tabs defaultValue="inventory" className="w-full">
+            <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="inventory">Inventory</TabsTrigger>
+                <TabsTrigger value="history">History</TabsTrigger>
+            </TabsList>
+            <TabsContent value="inventory" className="mt-6">
+                <Card>
+                    <CardHeader>
+                    <CardTitle>Current Stock Inventory</CardTitle>
+                    <CardDescription>An overview of your current stock levels and value.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                    <div className="overflow-x-auto">
+                        <Table>
+                        <TableHeader>
+                            <TableRow>
+                            <TableHead>Item Name</TableHead>
+                            <TableHead className="text-right">Weight (kg)</TableHead>
+                            <TableHead className="text-right">Avg. Price/kg</TableHead>
+                            <TableHead className="text-right">Current Value</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {stockItems.length > 0 ? (
+                            stockItems.map((item: StockItem) => (
+                                <TableRow key={item.id}>
+                                <TableCell className="font-medium">{item.name}</TableCell>
+                                <TableCell className="text-right font-mono">{item.weight.toFixed(2)}</TableCell>
+                                <TableCell className="text-right font-mono">{formatCurrency(item.purchasePricePerKg)}</TableCell>
+                                <TableCell className="text-right font-medium font-mono">{formatCurrency(item.weight * item.purchasePricePerKg)}</TableCell>
+                                </TableRow>
+                            ))
+                            ) : (
+                            <TableRow>
+                                <TableCell colSpan={4} className="text-center h-24">No stock items yet.</TableCell>
+                            </TableRow>
+                            )}
+                        </TableBody>
+                        {stockItems.length > 0 && (
+                            <TableFoot>
+                                <TableRow>
+                                <TableCell className="font-bold">Totals</TableCell>
+                                <TableCell className="text-right font-bold font-mono">{totalStockWeight.toFixed(2)} kg</TableCell>
+                                <TableCell className="text-right font-bold font-mono">{formatCurrency(weightedAveragePrice)}</TableCell>
+                                <TableCell className="text-right font-bold font-mono">{formatCurrency(totalStockValue)}</TableCell>
+                                </TableRow>
+                            </TableFoot>
                         )}
+                        </Table>
                     </div>
-                </div>
-            </CardHeader>
-            <CardContent>
-              {filteredByMonth.length > 0 && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 p-4 border rounded-lg bg-muted/50">
-                    <div>
-                      <h4 className="font-semibold text-destructive">Monthly Purchases</h4>
-                      <p className="font-mono">{totalPurchaseWeight.toFixed(2)} kg</p>
-                      <p className="font-bold font-mono">{formatCurrency(totalPurchaseValue)}</p>
-                    </div>
-                    <div>
-                      <h4 className="font-semibold text-accent">Monthly Sales</h4>
-                      <p className="font-mono">{totalSaleWeight.toFixed(2)} kg</p>
-                      <p className="font-bold font-mono">{formatCurrency(totalSaleValue)}</p>
-                    </div>
-                </div>
-              )}
-              {isMobile ? renderMobileHistory() : renderDesktopHistory()}
-            </CardContent>
-            {filteredByMonth.length > 0 && (
-                <CardFooter className="flex flex-col sm:flex-row items-center justify-between gap-4">
-                    <div className="text-sm text-muted-foreground">
-                    Showing page {currentPage} of {totalPages}
-                    </div>
-                    <div className="flex items-center gap-2">
-                    <Select value={String(itemsPerPage)} onValueChange={(value) => { setItemsPerPage(Number(value)); setCurrentPage(1); }}>
-                        <SelectTrigger className="w-[120px]">
-                        <SelectValue placeholder="Records per page" />
-                        </SelectTrigger>
-                        <SelectContent>
-                        <SelectItem value="10">10 / page</SelectItem>
-                        <SelectItem value="20">20 / page</SelectItem>
-                        <SelectItem value="30">30 / page</SelectItem>
-                        </SelectContent>
-                    </Select>
-                    <Button variant="outline" size="sm" onClick={() => setCurrentPage(prev => prev - 1)} disabled={currentPage === 1}>
-                        Previous
-                    </Button>
-                    <Button variant="outline" size="sm" onClick={() => setCurrentPage(prev => prev + 1)} disabled={currentPage === totalPages}>
-                        Next
-                    </Button>
-                    </div>
-                </CardFooter>
-            )}
-          </Card>
+                    </CardContent>
+                </Card>
+            </TabsContent>
+            <TabsContent value="history" className="mt-6">
+                <Card>
+                    <CardHeader>
+                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                            <div className="flex-1">
+                                <CardTitle>Stock Transaction History</CardTitle>
+                                <CardDescription>A detailed log of all purchases and sales.</CardDescription>
+                            </div>
+                            <div className="flex items-center gap-2 self-center sm:self-auto">
+                                <Button variant="outline" size="icon" onClick={goToPreviousMonth} className="h-9 w-9">
+                                    <ChevronLeft className="h-4 w-4" />
+                                </Button>
+                                <span className="text-sm font-medium w-28 sm:w-32 text-center">{format(currentMonth, "MMMM yyyy")}</span>
+                                <Button variant="outline" size="icon" onClick={goToNextMonth} className="h-9 w-9">
+                                    <ChevronRight className="h-4 w-4" />
+                                </Button>
+                            </div>
+                        </div>
+                        <div className="flex flex-col items-center justify-center gap-2 pt-4">
+                            <div className="flex flex-wrap items-center justify-center gap-2">
+                                <Button size="sm" variant={isSelectionMode ? "secondary" : "outline"} onClick={toggleSelectionMode}>
+                                    <CheckSquare className="mr-2 h-4 w-4" />
+                                    {isSelectionMode ? 'Cancel' : 'Select'}
+                                </Button>
+                                 <TooltipProvider>
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                        <Button size="sm" variant="outline" onClick={() => setShowActions(!showActions)}>
+                                            {showActions ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                        </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent>
+                                        <p>{showActions ? 'Hide' : 'Show'} Actions</p>
+                                        </TooltipContent>
+                                    </Tooltip>
+                                </TooltipProvider>
+                                {selectedTxIds.length > 0 && (
+                                    <Button size="sm" variant="destructive" onClick={handleMultiDeleteClick}>
+                                        <Trash2 className="mr-2 h-4 w-4" /> ({selectedTxIds.length})
+                                    </Button>
+                                )}
+                            </div>
+                        </div>
+                    </CardHeader>
+                    <CardContent>
+                    {filteredByMonth.length > 0 && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 p-4 border rounded-lg bg-muted/50">
+                            <div>
+                            <h4 className="font-semibold text-destructive">Monthly Purchases</h4>
+                            <p className="font-mono">{totalPurchaseWeight.toFixed(2)} kg</p>
+                            <p className="font-bold font-mono">{formatCurrency(totalPurchaseValue)}</p>
+                            </div>
+                            <div>
+                            <h4 className="font-semibold text-accent">Monthly Sales</h4>
+                            <p className="font-mono">{totalSaleWeight.toFixed(2)} kg</p>
+                            <p className="font-bold font-mono">{formatCurrency(totalSaleValue)}</p>
+                            </div>
+                        </div>
+                    )}
+                    {isMobile ? renderMobileHistory() : renderDesktopHistory()}
+                    </CardContent>
+                    {filteredByMonth.length > 0 && (
+                        <CardFooter className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                            <div className="text-sm text-muted-foreground">
+                            Showing page {currentPage} of {totalPages}
+                            </div>
+                            <div className="flex items-center gap-2">
+                            <Select value={String(itemsPerPage)} onValueChange={(value) => { setItemsPerPage(Number(value)); setCurrentPage(1); }}>
+                                <SelectTrigger className="w-[120px]">
+                                <SelectValue placeholder="Records per page" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                <SelectItem value="10">10 / page</SelectItem>
+                                <SelectItem value="20">20 / page</SelectItem>
+                                <SelectItem value="30">30 / page</SelectItem>
+                                </SelectContent>
+                            </Select>
+                            <Button variant="outline" size="sm" onClick={() => setCurrentPage(prev => prev - 1)} disabled={currentPage === 1}>
+                                Previous
+                            </Button>
+                            <Button variant="outline" size="sm" onClick={() => setCurrentPage(prev => prev + 1)} disabled={currentPage === totalPages}>
+                                Next
+                            </Button>
+                            </div>
+                        </CardFooter>
+                    )}
+                </Card>
+            </TabsContent>
+        </Tabs>
       </div>
       {editSheetState.transaction && (
         <EditTransactionSheet 
@@ -437,5 +447,3 @@ export function StockTab() {
     </>
   )
 }
-
-    
