@@ -29,6 +29,7 @@ interface AppState {
 
 interface AppContextType extends AppState {
   setInitialBalances: (cash: number, bank: number) => void;
+  addInitialStockItem: (item: { name: string, weight: number, pricePerKg: number}) => void;
   addCashTransaction: (tx: Omit<CashTransaction, 'id'>) => void;
   addBankTransaction: (tx: Omit<BankTransaction, 'id'>) => void;
   addStockTransaction: (tx: Omit<StockTransaction, 'id'>) => void;
@@ -142,6 +143,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const setInitialBalances = (cash: number, bank: number) => {
     setState(prev => ({ ...prev, cashBalance: cash, bankBalance: bank, initialBalanceSet: true }));
+  };
+
+  const addInitialStockItem = (item: { name: string, weight: number, pricePerKg: number}) => {
+    setState(prev => {
+        const newItem: StockItem = {
+            id: crypto.randomUUID(),
+            name: item.name,
+            weight: item.weight,
+            purchasePricePerKg: item.pricePerKg
+        };
+        const newStockItems = [...prev.stockItems, newItem];
+        return {
+            ...prev,
+            stockItems: newStockItems
+        }
+    });
   };
   
   const addCashTransaction = (tx: Omit<CashTransaction, 'id'>) => {
@@ -747,6 +764,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const value: AppContextType = {
     ...state,
     setInitialBalances,
+    addInitialStockItem,
     addCashTransaction,
     addBankTransaction,
     addStockTransaction,
@@ -781,3 +799,5 @@ export function useAppContext() {
   }
   return context;
 }
+
+    

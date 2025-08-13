@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect } from 'react';
@@ -56,7 +57,7 @@ export function InitialBalanceDialog() {
         <DialogHeader>
           <DialogTitle>Set Initial Balances</DialogTitle>
           <DialogDescription>
-            Enter your starting balances for cash and bank accounts to get started.
+            Enter your starting balances for cash and bank accounts. You can set initial stock from the Settings tab.
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4 py-4">
@@ -94,3 +95,5 @@ export function InitialBalanceDialog() {
     </Dialog>
   );
 }
+
+    

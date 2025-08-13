@@ -38,6 +38,7 @@ export function SettingsTab() {
     cashBalance,
     bankBalance,
     setInitialBalances,
+    addInitialStockItem,
     fontSize,
     setFontSize,
     bodyFont,
@@ -65,20 +66,58 @@ export function SettingsTab() {
   const bankCategoryRef = useRef<HTMLInputElement>(null)
   const wastageRef = useRef<HTMLInputElement>(null)
   const orgNameRef = useRef<HTMLInputElement>(null)
+  
+  const stockItemNameRef = useRef<HTMLInputElement>(null)
+  const stockWeightRef = useRef<HTMLInputElement>(null)
+  const stockPriceRef = useRef<HTMLInputElement>(null)
 
   const handleBalanceSave = () => {
-    const cash = parseFloat(cashBalanceRef.current?.value || '0')
-    const bank = parseFloat(bankBalanceRef.current?.value || '0')
+    const cash = parseFloat(cashBalanceRef.current?.value || '')
+    const bank = parseFloat(bankBalanceRef.current?.value || '')
+
+     if (isNaN(cash) || isNaN(bank) || cash < 0 || bank < 0) {
+        toast({
+            variant: "destructive",
+            title: "Invalid Input",
+            description: "Please enter valid, non-negative numbers for balances.",
+        });
+        return;
+    }
+
     setInitialBalances(cash, bank)
-    toast({ title: "Balances Updated", description: "Initial balances have been set." })
+    toast({ title: "Balances Updated", description: "Initial cash and bank balances have been set." })
   }
+
+  const handleInitialStockSave = () => {
+    const name = stockItemNameRef.current?.value.trim();
+    const weight = parseFloat(stockWeightRef.current?.value || '');
+    const price = parseFloat(stockPriceRef.current?.value || '');
+
+    if (!name || isNaN(weight) || isNaN(price) || weight <= 0 || price < 0) {
+        toast({
+            variant: "destructive",
+            title: "Invalid Stock Input",
+            description: "Please fill all stock fields with valid values.",
+        });
+        return;
+    }
+
+    addInitialStockItem({ name, weight, pricePerKg: price });
+    toast({ title: "Initial Stock Added", description: `${name} has been added to your inventory.` });
+
+    // Clear fields
+    if(stockItemNameRef.current) stockItemNameRef.current.value = "";
+    if(stockWeightRef.current) stockWeightRef.current.value = "";
+    if(stockPriceRef.current) stockPriceRef.current.value = "";
+  }
+
 
   const handleAddCategory = (type: 'cash' | 'bank') => {
     const ref = type === 'cash' ? cashCategoryRef : bankCategoryRef
     const category = ref.current?.value.trim()
     if (category) {
       addCategory(type, category)
-      ref.current.value = ""
+      if (ref.current) ref.current.value = ""
     }
   }
 
@@ -118,7 +157,7 @@ export function SettingsTab() {
       <Tabs defaultValue="appearance" className="w-full">
         <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="general">General</TabsTrigger>
-          <TabsTrigger value="balances">Balances</TabsTrigger>
+          <TabsTrigger value="balances">Initial Balances</TabsTrigger>
           <TabsTrigger value="wastage">Wastage</TabsTrigger>
           <TabsTrigger value="categories">Categories</TabsTrigger>
           <TabsTrigger value="appearance">Appearance</TabsTrigger>
@@ -142,18 +181,44 @@ export function SettingsTab() {
           <Card>
             <CardHeader>
               <CardTitle>Initial Balances</CardTitle>
-              <CardDescription>Set your starting cash and bank balances. This should be done once.</CardDescription>
+              <CardDescription>Set your starting cash, bank, and stock balances. This should be done once.</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="cash-balance">Initial Cash Balance</Label>
-                <Input id="cash-balance" type="number" defaultValue={cashBalance} ref={cashBalanceRef} />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="bank-balance">Initial Bank Balance</Label>
-                <Input id="bank-balance" type="number" defaultValue={bankBalance} ref={bankBalanceRef} />
-              </div>
-              <Button onClick={handleBalanceSave}>Save Balances</Button>
+            <CardContent className="space-y-6">
+                <div>
+                  <h3 className="font-semibold mb-2">Financial Balances</h3>
+                  <div className="space-y-4">
+                      <div className="space-y-2">
+                          <Label htmlFor="cash-balance">Initial Cash Balance</Label>
+                          <Input id="cash-balance" type="number" defaultValue={cashBalance} ref={cashBalanceRef} />
+                      </div>
+                      <div className="space-y-2">
+                          <Label htmlFor="bank-balance">Initial Bank Balance</Label>
+                          <Input id="bank-balance" type="number" defaultValue={bankBalance} ref={bankBalanceRef} />
+                      </div>
+                      <Button onClick={handleBalanceSave}>Save Financial Balances</Button>
+                  </div>
+                </div>
+                <Separator />
+                <div>
+                  <h3 className="font-semibold mb-2">Initial Stock Inventory</h3>
+                   <div className="space-y-4">
+                      <div className="space-y-2">
+                          <Label htmlFor="stock-item-name">Item Name</Label>
+                          <Input id="stock-item-name" type="text" ref={stockItemNameRef} placeholder="e.g. Rice"/>
+                      </div>
+                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                              <Label htmlFor="stock-weight">Total Stock Weight (kg)</Label>
+                              <Input id="stock-weight" type="number" ref={stockWeightRef} placeholder="e.g. 1000"/>
+                          </div>
+                          <div className="space-y-2">
+                              <Label htmlFor="stock-price">Average Purchase Price/kg</Label>
+                              <Input id="stock-price" type="number" ref={stockPriceRef} placeholder="e.g. 50.00"/>
+                          </div>
+                       </div>
+                      <Button onClick={handleInitialStockSave}>Add Initial Stock Item</Button>
+                  </div>
+                </div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -297,3 +362,5 @@ export function SettingsTab() {
     </div>
   )
 }
+
+    
