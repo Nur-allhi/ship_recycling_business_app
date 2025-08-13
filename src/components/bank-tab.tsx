@@ -44,7 +44,7 @@ export function BankTab() {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
-  const [showActions, setShowActions] = useState(true);
+  const [showActions, setShowActions] = useState(false);
   const isMobile = useIsMobile();
 
   const filteredByMonth = useMemo(() => {
@@ -300,7 +300,7 @@ export function BankTab() {
             </div>
              <div className="flex flex-col items-center justify-center gap-2 pt-4">
                 <div className="flex flex-wrap items-center justify-center gap-2">
-                     <Button size="sm" variant={isSelectionMode ? "secondary" : "outline"} onClick={toggleSelectionMode}>
+                    <Button size="sm" variant={isSelectionMode ? "secondary" : "outline"} onClick={toggleSelectionMode}>
                         <CheckSquare className="mr-2 h-4 w-4" />
                         {isSelectionMode ? 'Cancel' : 'Select'}
                     </Button>
@@ -388,3 +388,5 @@ export function BankTab() {
     </>
   )
 }
+
+    
