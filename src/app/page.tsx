@@ -47,7 +47,7 @@ function ShipShapeLedger() {
   }
 
   return (
-    <div className={cn('min-h-screen bg-background text-foreground', fontClasses[fontSize] || 'text-base')}>
+    <div className={cn('min-h-screen bg-background text-foreground animate-fade-in', fontClasses[fontSize] || 'text-base')}>
       <div className="container mx-auto p-4 md:p-6 lg:p-8">
         <header className="mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div className="flex items-center gap-4 w-full">
@@ -126,19 +126,19 @@ function ShipShapeLedger() {
                     </TabsList>
                 </div>
              )}
-            <TabsContent value="dashboard" className="mt-6">
+            <TabsContent value="dashboard" className="mt-6 animate-slide-in-up">
               <DashboardTab setActiveTab={setActiveTab} />
             </TabsContent>
-            <TabsContent value="cash" className="mt-6">
+            <TabsContent value="cash" className="mt-6 animate-slide-in-up">
               <CashTab />
             </TabsContent>
-            <TabsContent value="bank" className="mt-6">
+            <TabsContent value="bank" className="mt-6 animate-slide-in-up">
               <BankTab />
             </TabsContent>
-            <TabsContent value="stock" className="mt-6">
+            <TabsContent value="stock" className="mt-6 animate-slide-in-up">
               <StockTab />
             </TabsContent>
-            <TabsContent value="settings" className="mt-6">
+            <TabsContent value="settings" className="mt-6 animate-slide-in-up">
               <SettingsTab />
             </TabsContent>
           </Tabs>

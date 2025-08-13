@@ -211,7 +211,7 @@ export function CashTab() {
     <div className="space-y-4">
       {paginatedTransactions.length > 0 ? (
         paginatedTransactions.map((tx: CashTransaction) => (
-          <Card key={tx.id} className="relative">
+          <Card key={tx.id} className="relative animate-fade-in">
              {isSelectionMode && (
                 <Checkbox 
                     onCheckedChange={(checked) => handleSelectRow(tx.id, Boolean(checked))}
@@ -381,5 +381,3 @@ export function CashTab() {
     </>
   )
 }
-
-    

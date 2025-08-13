@@ -220,7 +220,7 @@ export function StockTab() {
     <div className="space-y-4">
       {paginatedTransactions.length > 0 ? (
         paginatedTransactions.map((tx: StockTransaction) => (
-            <Card key={tx.id} className="relative">
+            <Card key={tx.id} className="relative animate-fade-in">
                 {isSelectionMode && (
                     <Checkbox 
                         onCheckedChange={(checked) => handleSelectRow(tx.id, Boolean(checked))}
@@ -292,7 +292,7 @@ export function StockTab() {
                 <TabsTrigger value="history">History</TabsTrigger>
                 <TabsTrigger value="inventory">Inventory</TabsTrigger>
             </TabsList>
-            <TabsContent value="history" className="mt-6">
+            <TabsContent value="history" className="mt-6 animate-slide-in-up">
                 <Card>
                     <CardHeader>
                         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -380,7 +380,7 @@ export function StockTab() {
                     )}
                 </Card>
             </TabsContent>
-            <TabsContent value="inventory" className="mt-6">
+            <TabsContent value="inventory" className="mt-6 animate-slide-in-up">
                 <Card>
                     <CardHeader>
                     <CardTitle>Current Stock Inventory</CardTitle>
@@ -447,5 +447,3 @@ export function StockTab() {
     </>
   )
 }
-
-    
