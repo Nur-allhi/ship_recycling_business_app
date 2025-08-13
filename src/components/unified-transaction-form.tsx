@@ -7,7 +7,6 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { useAppContext } from '@/app/store';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -93,7 +92,7 @@ export function UnifiedTransactionForm({ setSheetOpen }: UnifiedTransactionFormP
   const { register, handleSubmit, control, watch, reset, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-        amount: 0,
+        amount: undefined,
         description: ""
     }
   });
@@ -179,7 +178,7 @@ export function UnifiedTransactionForm({ setSheetOpen }: UnifiedTransactionFormP
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="space-y-2">
                           <Label htmlFor="amount">Amount</Label>
-                          <Input id="amount" type="number" step="0.01" {...register('amount')} />
+                          <Input id="amount" type="number" step="0.01" {...register('amount')} placeholder="0.00"/>
                           {errors.amount && <p className="text-sm text-destructive">{errors.amount.message}</p>}
                       </div>
                       {transactionType !== 'transfer' && transactionType !== 'stock_purchase' && (
@@ -194,21 +193,21 @@ export function UnifiedTransactionForm({ setSheetOpen }: UnifiedTransactionFormP
 
                   {/* Cash/Bank Specific */}
                   {(transactionType === 'cash' || transactionType === 'bank') && (
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
                           <div className="space-y-2">
                               <Label>Direction</Label>
                               <Controller 
                                   control={control}
                                   name="inOutType"
                                   render={({ field }) => (
-                                      <RadioGroup onValueChange={field.onChange} value={field.value} className="flex items-center space-x-4">
-                                          <Label htmlFor="in" className="flex items-center space-x-2 cursor-pointer">
+                                      <RadioGroup onValueChange={field.onChange} value={field.value} className="flex pt-2 gap-4">
+                                          <Label htmlFor="in" className="flex items-center gap-2 cursor-pointer">
                                               <RadioGroupItem value="in" id="in" />
-                                              <span>In / Income / Deposit</span>
+                                              In
                                           </Label>
-                                          <Label htmlFor="out" className="flex items-center space-x-2 cursor-pointer">
+                                          <Label htmlFor="out" className="flex items-center gap-2 cursor-pointer">
                                               <RadioGroupItem value="out" id="out" />
-                                              <span>Out / Expense / Withdrawal</span>
+                                              Out
                                           </Label>
                                       </RadioGroup>
                                   )}
@@ -264,9 +263,9 @@ export function UnifiedTransactionForm({ setSheetOpen }: UnifiedTransactionFormP
                                   control={control}
                                   name="paymentMethod"
                                   render={({ field }) => (
-                                      <RadioGroup onValueChange={field.onChange} value={field.value} className="flex items-center space-x-4">
-                                          <Label htmlFor="cash" className="flex items-center space-x-2 cursor-pointer"><RadioGroupItem value="cash" id="cash" /><span>Cash</span></Label>
-                                          <Label htmlFor="bank" className="flex items-center space-x-2 cursor-pointer"><RadioGroupItem value="bank" id="bank" /><span>Bank</span></Label>
+                                       <RadioGroup onValueChange={field.onChange} value={field.value} className="flex pt-2 gap-4">
+                                          <Label htmlFor="cash" className="flex items-center gap-2 cursor-pointer"><RadioGroupItem value="cash" id="cash" /><span>Cash</span></Label>
+                                          <Label htmlFor="bank" className="flex items-center gap-2 cursor-pointer"><RadioGroupItem value="bank" id="bank" /><span>Bank</span></Label>
                                       </RadioGroup>
                                   )}
                               />
@@ -276,12 +275,12 @@ export function UnifiedTransactionForm({ setSheetOpen }: UnifiedTransactionFormP
                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                            <div className="space-y-2">
                               <Label>Weight (kg)</Label>
-                              <Input type="number" step="0.01" {...register('weight')} />
+                              <Input type="number" step="0.01" {...register('weight')} placeholder="0.00"/>
                               {errors.weight && <p className="text-sm text-destructive">{errors.weight.message}</p>}
                           </div>
                           <div className="space-y-2">
                               <Label>Price per kg</Label>
-                              <Input type="number" step="0.01" {...register('pricePerKg')} />
+                              <Input type="number" step="0.01" {...register('pricePerKg')} placeholder="0.00"/>
                               {errors.pricePerKg && <p className="text-sm text-destructive">{errors.pricePerKg.message}</p>}
                           </div>
                       </div>
@@ -296,16 +295,16 @@ export function UnifiedTransactionForm({ setSheetOpen }: UnifiedTransactionFormP
                                   control={control}
                                   name="transferFrom"
                                   render={({ field }) => (
-                                      <RadioGroup onValueChange={field.onChange} value={field.value} className="flex items-center space-x-4">
-                                          <Label htmlFor="from_cash" className="flex items-center space-x-2 cursor-pointer"><RadioGroupItem value="cash" id="from_cash" /><span>Cash to Bank</span></Label>
-                                          <Label htmlFor="from_bank" className="flex items-center space-x-2 cursor-pointer"><RadioGroupItem value="bank" id="from_bank" /><span>Bank to Cash</span></Label>
+                                      <RadioGroup onValueChange={field.onChange} value={field.value} className="flex pt-2 gap-4">
+                                          <Label htmlFor="from_cash" className="flex items-center gap-2 cursor-pointer"><RadioGroupItem value="cash" id="from_cash" /><span>Cash to Bank</span></Label>
+                                          <Label htmlFor="from_bank" className="flex items-center gap-2 cursor-pointer"><RadioGroupItem value="bank" id="from_bank" /><span>Bank to Cash</span></Label>
                                       </RadioGroup>
                                   )}
                               />
                           {errors.transferFrom && <p className="text-sm text-destructive">{errors.transferFrom.message}</p>}
                       </div>
                   )}
-                  <Button type="submit" className="w-full md:w-auto">Record Transaction</Button>
+                  <Button type="submit" className="w-full sm:w-auto">Record Transaction</Button>
                </>
           )}
 

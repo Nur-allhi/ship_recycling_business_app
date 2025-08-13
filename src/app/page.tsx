@@ -3,8 +3,6 @@
 
 import { useState } from 'react';
 import { AppProvider, useAppContext } from './store';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 import { Ship, Wallet, Landmark, Boxes, Settings, PlusCircle } from 'lucide-react';
 import { DashboardTab } from '@/components/dashboard-tab';
@@ -16,6 +14,7 @@ import { InitialBalanceDialog } from '@/components/initial-balance-dialog';
 import { UnifiedTransactionForm } from '@/components/unified-transaction-form';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 const fontClasses = {
   sm: 'text-sm',
@@ -30,10 +29,10 @@ function ShipShapeLedger() {
 
   return (
     <div className={cn('min-h-screen bg-background text-foreground', fontClasses[fontSize] || 'text-base')}>
-      <div className="container mx-auto p-4 md:p-8">
-        <header className="mb-8 flex justify-between items-center">
+      <div className="container mx-auto p-4 md:p-6 lg:p-8">
+        <header className="mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
-            <div className="flex items-center gap-3 mb-2">
+            <div className="flex items-center gap-3 mb-1">
               <Ship className="h-8 w-8 text-primary" />
               <h1 className="text-3xl font-bold text-primary font-headline">
                 ShipShape Ledger
@@ -45,22 +44,24 @@ function ShipShapeLedger() {
           </div>
           <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
             <SheetTrigger asChild>
-              <Button><PlusCircle className="mr-2 h-4 w-4" /> Add Transaction</Button>
+              <Button className="w-full sm:w-auto"><PlusCircle className="mr-2 h-4 w-4" /> Add Transaction</Button>
             </SheetTrigger>
-            <SheetContent className="w-full sm:w-[540px] overflow-y-auto">
+            <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
                 <UnifiedTransactionForm setSheetOpen={setIsSheetOpen}/>
             </SheetContent>
           </Sheet>
         </header>
         <main>
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 md:grid-cols-5">
-              <TabsTrigger value="dashboard"><Wallet className="mr-2 h-4 w-4" />Dashboard</TabsTrigger>
-              <TabsTrigger value="cash"><Wallet className="mr-2 h-4 w-4" />Cash</TabsTrigger>
-              <TabsTrigger value="bank"><Landmark className="mr-2 h-4 w-4" />Bank</TabsTrigger>
-              <TabsTrigger value="stock"><Boxes className="mr-2 h-4 w-4" />Stock</TabsTrigger>
-              <TabsTrigger value="settings"><Settings className="mr-2 h-4 w-4" />Settings</TabsTrigger>
-            </TabsList>
+             <div className="overflow-x-auto pb-2">
+                <TabsList className="grid w-full grid-cols-5 min-w-[500px]">
+                    <TabsTrigger value="dashboard"><Wallet className="mr-2 h-4 w-4" />Dashboard</TabsTrigger>
+                    <TabsTrigger value="cash"><Wallet className="mr-2 h-4 w-4" />Cash</TabsTrigger>
+                    <TabsTrigger value="bank"><Landmark className="mr-2 h-4 w-4" />Bank</TabsTrigger>
+                    <TabsTrigger value="stock"><Boxes className="mr-2 h-4 w-4" />Stock</TabsTrigger>
+                    <TabsTrigger value="settings"><Settings className="mr-2 h-4 w-4" />Settings</TabsTrigger>
+                </TabsList>
+            </div>
             <TabsContent value="dashboard" className="mt-6">
               <DashboardTab setActiveTab={setActiveTab} />
             </TabsContent>
