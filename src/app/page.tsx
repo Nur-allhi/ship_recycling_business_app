@@ -2,7 +2,7 @@
 "use client";
 
 import { useState } from 'react';
-import { AppProvider, useAppContext } from './store';
+import { useAppContext } from './store';
 import { cn } from '@/lib/utils';
 import { Ship, Wallet, Landmark, Boxes, Settings, PlusCircle, Menu } from 'lucide-react';
 import { DashboardTab } from '@/components/dashboard-tab';
@@ -151,8 +151,6 @@ function ShipShapeLedger() {
 
 export default function Home() {
   return (
-    <AppProvider>
-      <ShipShapeLedger />
-    </AppProvider>
+    <ShipShapeLedger />
   );
 }
