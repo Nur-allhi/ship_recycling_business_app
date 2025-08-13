@@ -25,6 +25,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Separator } from './ui/separator';
+import { ScrollArea } from './ui/scroll-area';
 
 const formSchema = z.object({
   transactionType: z.enum(['cash', 'bank', 'stock_purchase', 'stock_sale', 'transfer']),
@@ -203,211 +204,213 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
         <DialogTitle className="flex items-center"><PlusCircle className="mr-2 h-6 w-6" /> Add a New Transaction</DialogTitle>
         <DialogDescription>A single place to record any cash, bank, or stock transaction.</DialogDescription>
       </DialogHeader>
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 pt-4">
-          <div className="space-y-2">
-              <Label>Transaction Type</Label>
-              <Controller
-                  control={control}
-                  name="transactionType"
-                  rules={{ required: true }}
-                  render={({ field }) => (
-                      <Select onValueChange={(value) => {
-                          field.onChange(value);
-                          reset({
-                            date: new Date(),
-                            amount: undefined,
-                            description: "",
-                            transactionType: value as any
-                          });
-                      }} value={field.value}>
-                          <SelectTrigger><SelectValue placeholder="Select a transaction type..." /></SelectTrigger>
-                          <SelectContent>
-                              <SelectItem value="cash">Cash Transaction</SelectItem>
-                              <SelectItem value="bank">Bank Transaction</SelectItem>
-                              <SelectItem value="stock_purchase">Stock Purchase</SelectItem>
-                              <SelectItem value="stock_sale">Stock Sale</SelectItem>
-                              <SelectItem value="transfer">Fund Transfer</SelectItem>
-                          </SelectContent>
-                      </Select>
-                  )}
-              />
-              {errors.transactionType && <p className="text-sm text-destructive">{errors.transactionType.message}</p>}
-          </div>
+       <ScrollArea className="flex-grow pr-6 -mr-6">
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 pt-4">
+            <div className="space-y-2">
+                <Label>Transaction Type</Label>
+                <Controller
+                    control={control}
+                    name="transactionType"
+                    rules={{ required: true }}
+                    render={({ field }) => (
+                        <Select onValueChange={(value) => {
+                            field.onChange(value);
+                            reset({
+                                date: new Date(),
+                                amount: undefined,
+                                description: "",
+                                transactionType: value as any
+                            });
+                        }} value={field.value}>
+                            <SelectTrigger><SelectValue placeholder="Select a transaction type..." /></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="cash">Cash Transaction</SelectItem>
+                                <SelectItem value="bank">Bank Transaction</SelectItem>
+                                <SelectItem value="stock_purchase">Stock Purchase</SelectItem>
+                                <SelectItem value="stock_sale">Stock Sale</SelectItem>
+                                <SelectItem value="transfer">Fund Transfer</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    )}
+                />
+                {errors.transactionType && <p className="text-sm text-destructive">{errors.transactionType.message}</p>}
+            </div>
 
-          {transactionType && (
-               <div className="space-y-4">
-                  <Separator />
-                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {transactionType && (
+                <div className="space-y-4">
+                    <Separator />
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                            <Label htmlFor="amount">Amount</Label>
+                            <Input id="amount" type="number" step="0.01" {...register('amount')} placeholder="0.00"/>
+                            {errors.amount && <p className="text-sm text-destructive">{errors.amount.message}</p>}
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="date">Date</Label>
+                                <Controller
+                                    control={control}
+                                    name="date"
+                                    render={({ field }) => (
+                                        <Popover>
+                                            <PopoverTrigger asChild>
+                                            <Button
+                                                variant={"outline"}
+                                                className={cn(
+                                                "w-full justify-start text-left font-normal",
+                                                !field.value && "text-muted-foreground"
+                                                )}
+                                            >
+                                                <CalendarIcon className="mr-2 h-4 w-4" />
+                                                {field.value ? format(field.value, "PPP") : <span>Pick a date</span>}
+                                            </Button>
+                                            </PopoverTrigger>
+                                            <PopoverContent className="w-auto p-0">
+                                                <Calendar
+                                                    mode="single"
+                                                    selected={field.value}
+                                                    onSelect={field.onChange}
+                                                    initialFocus
+                                                />
+                                            </PopoverContent>
+                                        </Popover>
+                                    )}
+                                />
+                                {errors.date && <p className="text-sm text-destructive">{errors.date.message}</p>}
+                            </div>
+                    </div>
+                    {(transactionType === 'cash' || transactionType === 'bank' || transactionType === 'stock_purchase' || transactionType === 'stock_sale') && (
                         <div className="space-y-2">
-                          <Label htmlFor="amount">Amount</Label>
-                          <Input id="amount" type="number" step="0.01" {...register('amount')} placeholder="0.00"/>
-                          {errors.amount && <p className="text-sm text-destructive">{errors.amount.message}</p>}
+                            <Label htmlFor="description">Description</Label>
+                            <Input id="description" {...register('description')} placeholder={transactionType.startsWith('stock') ? "Optional notes" : "e.g., Weekly groceries"} />
+                            {errors.description && <p className="text-sm text-destructive">{errors.description.message}</p>}
                         </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="date">Date</Label>
-                            <Controller
-                                control={control}
-                                name="date"
-                                render={({ field }) => (
-                                    <Popover>
-                                        <PopoverTrigger asChild>
-                                        <Button
-                                            variant={"outline"}
-                                            className={cn(
-                                            "w-full justify-start text-left font-normal",
-                                            !field.value && "text-muted-foreground"
-                                            )}
-                                        >
-                                            <CalendarIcon className="mr-2 h-4 w-4" />
-                                            {field.value ? format(field.value, "PPP") : <span>Pick a date</span>}
-                                        </Button>
-                                        </PopoverTrigger>
-                                        <PopoverContent className="w-auto p-0">
-                                            <Calendar
-                                                mode="single"
-                                                selected={field.value}
-                                                onSelect={field.onChange}
-                                                initialFocus
-                                            />
-                                        </PopoverContent>
-                                    </Popover>
+                    )}
+
+                    {(transactionType === 'cash' || transactionType === 'bank') && (
+                        <div className="space-y-4 pt-4">
+                            <Separator />
+                            <div className="space-y-2">
+                                <Label>Category</Label>
+                                <Controller
+                                    control={control}
+                                    name="category"
+                                    render={({ field }) => (
+                                        <Select onValueChange={field.onChange} value={field.value}>
+                                            <SelectTrigger><SelectValue placeholder="Select a category" /></SelectTrigger>
+                                            <SelectContent>
+                                                {(transactionType === 'cash' ? cashCategories : bankCategories).map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                                            </SelectContent>
+                                        </Select>
+                                    )}
+                                />
+                                {errors.category && <p className="text-sm text-destructive">{errors.category.message}</p>}
+                            </div>
+
+                            {showDirection && (
+                            <div className="space-y-2">
+                                <Label>Direction</Label>
+                                <Controller 
+                                    control={control}
+                                    name="inOutType"
+                                    render={({ field }) => (
+                                        <RadioGroup onValueChange={field.onChange} value={field.value} className="flex pt-2 gap-4">
+                                            <Label htmlFor="in" className="flex items-center gap-2 cursor-pointer">
+                                                <RadioGroupItem value="in" id="in" />
+                                                In
+                                            </Label>
+                                            <Label htmlFor="out" className="flex items-center gap-2 cursor-pointer">
+                                                <RadioGroupItem value="out" id="out" />
+                                                Out
+                                            </Label>
+                                        </RadioGroup>
+                                    )}
+                                />
+                                {errors.inOutType && <p className="text-sm text-destructive">{errors.inOutType.message}</p>}
+                            </div>
+                            )}
+                        </div>
+                    )}
+
+                    {(transactionType === 'stock_purchase' || transactionType === 'stock_sale') && (
+                        <div className="space-y-4 pt-4">
+                        <Separator />
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <Label>Item Name</Label>
+                                {transactionType === 'stock_purchase' ? (
+                                    <Input {...register('stockItemName')} placeholder="e.g. Rice"/>
+                                ) : (
+                                    <Controller
+                                        control={control}
+                                        name="stockItemName"
+                                        render={({ field }) => (
+                                            <Select onValueChange={field.onChange} value={field.value}>
+                                                <SelectTrigger><SelectValue placeholder="Select item to sell" /></SelectTrigger>
+                                                <SelectContent>
+                                                    {stockItems.map(item => <SelectItem key={item.id} value={item.name}>{item.name}</SelectItem>)}
+                                                </SelectContent>
+                                            </Select>
+                                        )}
+                                    />
                                 )}
-                            />
-                            {errors.date && <p className="text-sm text-destructive">{errors.date.message}</p>}
+                                {errors.stockItemName && <p className="text-sm text-destructive">{errors.stockItemName.message}</p>}
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Payment Method</Label>
+                                <Controller 
+                                    control={control}
+                                    name="paymentMethod"
+                                    render={({ field }) => (
+                                        <RadioGroup onValueChange={field.onChange} value={field.value} className="flex pt-2 gap-4">
+                                            <Label htmlFor="cash" className="flex items-center gap-2 cursor-pointer"><RadioGroupItem value="cash" id="cash" /><span>Cash</span></Label>
+                                            <Label htmlFor="bank" className="flex items-center gap-2 cursor-pointer"><RadioGroupItem value="bank" id="bank" /><span>Bank</span></Label>
+                                        </RadioGroup>
+                                    )}
+                                />
+                                {errors.paymentMethod && <p className="text-sm text-destructive">{errors.paymentMethod.message}</p>}
+                            </div>
                         </div>
-                   </div>
-                  {(transactionType === 'cash' || transactionType === 'bank' || transactionType === 'stock_purchase' || transactionType === 'stock_sale') && (
-                      <div className="space-y-2">
-                          <Label htmlFor="description">Description</Label>
-                          <Input id="description" {...register('description')} placeholder={transactionType.startsWith('stock') ? "Optional notes" : "e.g., Weekly groceries"} />
-                          {errors.description && <p className="text-sm text-destructive">{errors.description.message}</p>}
-                      </div>
-                  )}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <Label>Weight (kg)</Label>
+                                <Input type="number" step="0.01" {...register('weight')} placeholder="0.00"/>
+                                {errors.weight && <p className="text-sm text-destructive">{errors.weight.message}</p>}
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Price per kg</Label>
+                                <Input type="number" step="0.01" {...register('pricePerKg')} placeholder="0.00"/>
+                                {errors.pricePerKg && <p className="text-sm text-destructive">{errors.pricePerKg.message}</p>}
+                            </div>
+                        </div>
+                        </div>
+                    )}
 
-                  {(transactionType === 'cash' || transactionType === 'bank') && (
-                      <div className="space-y-4 pt-4">
+                    {transactionType === 'transfer' && (
+                        <div className="space-y-2 pt-4">
                         <Separator />
-                          <div className="space-y-2">
-                              <Label>Category</Label>
-                              <Controller
-                                  control={control}
-                                  name="category"
-                                  render={({ field }) => (
-                                      <Select onValueChange={field.onChange} value={field.value}>
-                                          <SelectTrigger><SelectValue placeholder="Select a category" /></SelectTrigger>
-                                          <SelectContent>
-                                              {(transactionType === 'cash' ? cashCategories : bankCategories).map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-                                          </SelectContent>
-                                      </Select>
-                                  )}
-                              />
-                              {errors.category && <p className="text-sm text-destructive">{errors.category.message}</p>}
-                          </div>
-
-                         {showDirection && (
-                           <div className="space-y-2">
-                              <Label>Direction</Label>
-                              <Controller 
-                                  control={control}
-                                  name="inOutType"
-                                  render={({ field }) => (
-                                      <RadioGroup onValueChange={field.onChange} value={field.value} className="flex pt-2 gap-4">
-                                          <Label htmlFor="in" className="flex items-center gap-2 cursor-pointer">
-                                              <RadioGroupItem value="in" id="in" />
-                                              In
-                                          </Label>
-                                          <Label htmlFor="out" className="flex items-center gap-2 cursor-pointer">
-                                              <RadioGroupItem value="out" id="out" />
-                                              Out
-                                          </Label>
-                                      </RadioGroup>
-                                  )}
-                              />
-                              {errors.inOutType && <p className="text-sm text-destructive">{errors.inOutType.message}</p>}
-                          </div>
-                         )}
-                      </div>
-                  )}
-
-                  {(transactionType === 'stock_purchase' || transactionType === 'stock_sale') && (
-                     <div className="space-y-4 pt-4">
-                        <Separator />
-                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div className="space-y-2">
-                              <Label>Item Name</Label>
-                              {transactionType === 'stock_purchase' ? (
-                                   <Input {...register('stockItemName')} placeholder="e.g. Rice"/>
-                              ) : (
-                                  <Controller
-                                      control={control}
-                                      name="stockItemName"
-                                      render={({ field }) => (
-                                          <Select onValueChange={field.onChange} value={field.value}>
-                                              <SelectTrigger><SelectValue placeholder="Select item to sell" /></SelectTrigger>
-                                              <SelectContent>
-                                                  {stockItems.map(item => <SelectItem key={item.id} value={item.name}>{item.name}</SelectItem>)}
-                                              </SelectContent>
-                                          </Select>
-                                      )}
-                                  />
-                              )}
-                              {errors.stockItemName && <p className="text-sm text-destructive">{errors.stockItemName.message}</p>}
-                          </div>
-                          <div className="space-y-2">
-                              <Label>Payment Method</Label>
-                               <Controller 
-                                  control={control}
-                                  name="paymentMethod"
-                                  render={({ field }) => (
-                                       <RadioGroup onValueChange={field.onChange} value={field.value} className="flex pt-2 gap-4">
-                                          <Label htmlFor="cash" className="flex items-center gap-2 cursor-pointer"><RadioGroupItem value="cash" id="cash" /><span>Cash</span></Label>
-                                          <Label htmlFor="bank" className="flex items-center gap-2 cursor-pointer"><RadioGroupItem value="bank" id="bank" /><span>Bank</span></Label>
-                                      </RadioGroup>
-                                  )}
-                              />
-                              {errors.paymentMethod && <p className="text-sm text-destructive">{errors.paymentMethod.message}</p>}
-                          </div>
-                      </div>
-                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                           <div className="space-y-2">
-                              <Label>Weight (kg)</Label>
-                              <Input type="number" step="0.01" {...register('weight')} placeholder="0.00"/>
-                              {errors.weight && <p className="text-sm text-destructive">{errors.weight.message}</p>}
-                          </div>
-                          <div className="space-y-2">
-                              <Label>Price per kg</Label>
-                              <Input type="number" step="0.01" {...register('pricePerKg')} placeholder="0.00"/>
-                              {errors.pricePerKg && <p className="text-sm text-destructive">{errors.pricePerKg.message}</p>}
-                          </div>
-                      </div>
-                     </div>
-                  )}
-
-                  {transactionType === 'transfer' && (
-                      <div className="space-y-2 pt-4">
-                        <Separator />
-                          <Label>Transfer from</Label>
-                              <Controller 
-                                  control={control}
-                                  name="transferFrom"
-                                  render={({ field }) => (
-                                      <RadioGroup onValueChange={field.onChange} value={field.value} className="flex pt-2 gap-4">
-                                          <Label htmlFor="from_cash" className="flex items-center gap-2 cursor-pointer"><RadioGroupItem value="cash" id="from_cash" /><span>Cash to Bank</span></Label>
-                                          <Label htmlFor="from_bank" className="flex items-center gap-2 cursor-pointer"><RadioGroupItem value="bank" id="from_bank" /><span>Bank to Cash</span></Label>
-                                      </RadioGroup>
-                                  )}
-                              />
-                          {errors.transferFrom && <p className="text-sm text-destructive">{errors.transferFrom.message}</p>}
-                      </div>
-                  )}
-                  
-                  <Separator />
-                  <div className="flex justify-end">
-                    <Button type="submit" className="w-full sm:w-auto">Record Transaction</Button>
-                  </div>
-               </div>
-          )}
-      </form>
+                            <Label>Transfer from</Label>
+                                <Controller 
+                                    control={control}
+                                    name="transferFrom"
+                                    render={({ field }) => (
+                                        <RadioGroup onValueChange={field.onChange} value={field.value} className="flex pt-2 gap-4">
+                                            <Label htmlFor="from_cash" className="flex items-center gap-2 cursor-pointer"><RadioGroupItem value="cash" id="from_cash" /><span>Cash to Bank</span></Label>
+                                            <Label htmlFor="from_bank" className="flex items-center gap-2 cursor-pointer"><RadioGroupItem value="bank" id="from_bank" /><span>Bank to Cash</span></Label>
+                                        </RadioGroup>
+                                    )}
+                                />
+                            {errors.transferFrom && <p className="text-sm text-destructive">{errors.transferFrom.message}</p>}
+                        </div>
+                    )}
+                    
+                </div>
+            )}
+             <div className="flex justify-end pt-4">
+                <Button type="submit" className="w-full sm:w-auto">Record Transaction</Button>
+            </div>
+        </form>
+       </ScrollArea>
+       <div className="flex-shrink-0"></div> 
     </>
   );
 }

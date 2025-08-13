@@ -180,23 +180,23 @@ export function StockTab() {
                     <CardTitle>Stock Transaction History</CardTitle>
                     <CardDescription>A detailed log of all purchases and sales.</CardDescription>
                 </div>
-                <div className="flex w-full sm:w-auto sm:items-center gap-2 flex-col sm:flex-row">
+                <div className="flex w-full flex-col sm:w-auto sm:flex-row items-stretch sm:items-center gap-2">
                     <div className="flex items-center gap-2 self-end">
-                        <Button variant="outline" size="icon" onClick={goToPreviousMonth}>
+                        <Button variant="outline" size="icon" onClick={goToPreviousMonth} className="h-9 w-9">
                             <ChevronLeft className="h-4 w-4" />
                         </Button>
-                        <span className="text-sm font-medium w-32 text-center">{format(currentMonth, "MMMM yyyy")}</span>
-                        <Button variant="outline" size="icon" onClick={goToNextMonth}>
+                        <span className="text-sm font-medium w-28 sm:w-32 text-center">{format(currentMonth, "MMMM yyyy")}</span>
+                        <Button variant="outline" size="icon" onClick={goToNextMonth} className="h-9 w-9">
                             <ChevronRight className="h-4 w-4" />
                         </Button>
                     </div>
                     <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
                         {selectedTxIds.length > 0 && (
-                            <Button variant="destructive" onClick={handleMultiDeleteClick} className="w-full sm:w-auto">
+                            <Button size="sm" variant="destructive" onClick={handleMultiDeleteClick} className="w-full sm:w-auto">
                                 <Trash2 className="mr-2 h-4 w-4" /> Delete ({selectedTxIds.length})
                             </Button>
                         )}
-                        <Button variant="outline" onClick={toggleSelectionMode} className="w-full sm:w-auto">
+                        <Button size="sm" variant="outline" onClick={toggleSelectionMode} className="w-full sm:w-auto">
                             <CheckSquare className="mr-2 h-4 w-4" />
                             {isSelectionMode ? 'Cancel' : 'Select'}
                         </Button>
