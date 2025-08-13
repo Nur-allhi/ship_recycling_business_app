@@ -12,7 +12,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-  TableFooter,
+  TableFooter as TableFoot,
 } from "@/components/ui/table"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { ArrowUpCircle, ArrowDownCircle, Pencil, History, Trash2, CheckSquare, ChevronLeft, ChevronRight } from "lucide-react"
@@ -94,9 +94,7 @@ export function StockTab() {
 
   const toggleSelectionMode = () => {
     setIsSelectionMode(!isSelectionMode);
-    if (isSelectionMode) {
-      setSelectedTxIds([]);
-    }
+    setSelectedTxIds([]);
   }
 
   const totalStockValue = stockItems.reduce((acc, item) => acc + (item.weight * item.purchasePricePerKg), 0);
@@ -162,14 +160,14 @@ export function StockTab() {
                     )}
                   </TableBody>
                    {stockItems.length > 0 && (
-                     <TableFooter>
+                     <TableFoot>
                         <TableRow>
                           <TableCell className="text-right font-bold">Totals</TableCell>
                           <TableCell className="text-right font-bold">{totalStockWeight.toFixed(2)} kg</TableCell>
                           <TableCell className="text-right font-bold">{formatCurrency(weightedAveragePrice)}</TableCell>
                           <TableCell className="text-right font-bold">{formatCurrency(totalStockValue)}</TableCell>
                         </TableRow>
-                      </TableFooter>
+                      </TableFoot>
                    )}
                 </Table>
               </div>
@@ -182,30 +180,32 @@ export function StockTab() {
                     <CardTitle>Stock Transaction History</CardTitle>
                     <CardDescription>A detailed log of all purchases and sales.</CardDescription>
                 </div>
-                <div className="flex items-center gap-2">
-                    <Button variant="outline" size="icon" onClick={goToPreviousMonth}>
-                        <ChevronLeft className="h-4 w-4" />
-                    </Button>
-                    <span className="text-sm font-medium w-32 text-center">{format(currentMonth, "MMMM yyyy")}</span>
-                    <Button variant="outline" size="icon" onClick={goToNextMonth}>
-                        <ChevronRight className="h-4 w-4" />
-                    </Button>
-                </div>
-                <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-                    {selectedTxIds.length > 0 && (
-                        <Button variant="destructive" onClick={handleMultiDeleteClick} className="w-full sm:w-auto">
-                            <Trash2 className="mr-2 h-4 w-4" /> Delete ({selectedTxIds.length})
+                <div className="flex w-full sm:w-auto sm:items-center gap-2 flex-col sm:flex-row">
+                    <div className="flex items-center gap-2 self-end">
+                        <Button variant="outline" size="icon" onClick={goToPreviousMonth}>
+                            <ChevronLeft className="h-4 w-4" />
                         </Button>
-                    )}
-                    <Button variant="outline" onClick={toggleSelectionMode} className="w-full sm:w-auto">
-                        <CheckSquare className="mr-2 h-4 w-4" />
-                        {isSelectionMode ? 'Cancel' : 'Select'}
-                    </Button>
+                        <span className="text-sm font-medium w-32 text-center">{format(currentMonth, "MMMM yyyy")}</span>
+                        <Button variant="outline" size="icon" onClick={goToNextMonth}>
+                            <ChevronRight className="h-4 w-4" />
+                        </Button>
+                    </div>
+                    <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                        {selectedTxIds.length > 0 && (
+                            <Button variant="destructive" onClick={handleMultiDeleteClick} className="w-full sm:w-auto">
+                                <Trash2 className="mr-2 h-4 w-4" /> Delete ({selectedTxIds.length})
+                            </Button>
+                        )}
+                        <Button variant="outline" onClick={toggleSelectionMode} className="w-full sm:w-auto">
+                            <CheckSquare className="mr-2 h-4 w-4" />
+                            {isSelectionMode ? 'Cancel' : 'Select'}
+                        </Button>
+                    </div>
                 </div>
             </CardHeader>
             <CardContent>
               {filteredByMonth.length > 0 && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 p-4 border rounded-lg">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 p-4 border rounded-lg bg-muted/50">
                     <div>
                       <h4 className="font-semibold text-destructive">Monthly Purchases</h4>
                       <p>{totalPurchaseWeight.toFixed(2)} kg</p>
@@ -304,7 +304,7 @@ export function StockTab() {
               </div>
             </CardContent>
             {filteredByMonth.length > 0 && (
-                <CardFooter className="flex items-center justify-between">
+                <CardFooter className="flex flex-col sm:flex-row items-center justify-between gap-4">
                     <div className="text-sm text-muted-foreground">
                     Showing page {currentPage} of {totalPages}
                     </div>

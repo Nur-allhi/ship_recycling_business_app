@@ -54,7 +54,7 @@ function ShipShapeLedger() {
         <main>
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
              <div className="overflow-x-auto pb-2">
-                <TabsList className="grid w-full grid-cols-5 min-w-[500px]">
+                <TabsList className="grid w-full grid-cols-5 min-w-[600px]">
                     <TabsTrigger value="dashboard"><Wallet className="mr-2 h-4 w-4" />Dashboard</TabsTrigger>
                     <TabsTrigger value="cash"><Wallet className="mr-2 h-4 w-4" />Cash</TabsTrigger>
                     <TabsTrigger value="bank"><Landmark className="mr-2 h-4 w-4" />Bank</TabsTrigger>
