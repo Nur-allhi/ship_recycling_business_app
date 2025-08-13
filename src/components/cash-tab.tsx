@@ -1,7 +1,7 @@
 
 "use client"
 
-import { useState } from "react"
+import { useState, useMemo } from "react"
 import { useAppContext } from "@/app/store"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
@@ -16,12 +16,13 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { ArrowUpCircle, ArrowDownCircle, ArrowRightLeft, Pencil, History, Trash2, CheckSquare } from "lucide-react"
+import { ArrowUpCircle, ArrowDownCircle, ArrowRightLeft, Pencil, History, Trash2, CheckSquare, ChevronLeft, ChevronRight } from "lucide-react"
 import type { CashTransaction } from "@/lib/types"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetTrigger } from "@/components/ui/sheet"
 import { EditTransactionSheet } from "./edit-transaction-sheet"
 import { DeleteConfirmationDialog } from "./delete-confirmation-dialog"
 import { Checkbox } from "./ui/checkbox"
+import { format, subMonths, addMonths } from "date-fns"
 
 export function CashTab() {
   const { cashBalance, cashTransactions, transferFunds, deleteCashTransaction, deleteMultipleCashTransactions, currency } = useAppContext()
@@ -30,6 +31,14 @@ export function CashTab() {
   const [deleteDialogState, setDeleteDialogState] = useState<{isOpen: boolean, txId: string | null, txIds: string[] | null}>({ isOpen: false, txId: null, txIds: null });
   const [selectedTxIds, setSelectedTxIds] = useState<string[]>([]);
   const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [currentMonth, setCurrentMonth] = useState(new Date());
+
+  const monthlyTransactions = useMemo(() => {
+    return cashTransactions.filter(tx => {
+        const txDate = new Date(tx.date);
+        return txDate.getFullYear() === currentMonth.getFullYear() && txDate.getMonth() === currentMonth.getMonth();
+    })
+  }, [cashTransactions, currentMonth]);
 
   const handleEditClick = (tx: CashTransaction) => {
     setEditSheetState({ isOpen: true, transaction: tx });
@@ -71,7 +80,7 @@ export function CashTab() {
 
   const handleSelectAll = (checked: boolean) => {
       if (checked) {
-          setSelectedTxIds(cashTransactions.map(tx => tx.id));
+          setSelectedTxIds(monthlyTransactions.map(tx => tx.id));
       } else {
           setSelectedTxIds([]);
       }
@@ -92,6 +101,9 @@ export function CashTab() {
     }
   }
 
+  const goToPreviousMonth = () => setCurrentMonth(subMonths(currentMonth, 1));
+  const goToNextMonth = () => setCurrentMonth(addMonths(currentMonth, 1));
+
   return (
     <>
       <Card>
@@ -101,6 +113,15 @@ export function CashTab() {
             <CardDescription>
               Current Balance: <span className="font-bold text-primary">{formatCurrency(cashBalance)}</span>
             </CardDescription>
+          </div>
+           <div className="flex items-center gap-2">
+            <Button variant="outline" size="icon" onClick={goToPreviousMonth}>
+                <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <span className="text-sm font-medium w-32 text-center">{format(currentMonth, "MMMM yyyy")}</span>
+            <Button variant="outline" size="icon" onClick={goToNextMonth}>
+                <ChevronRight className="h-4 w-4" />
+            </Button>
           </div>
           <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
             {selectedTxIds.length > 0 && (
@@ -141,7 +162,7 @@ export function CashTab() {
                   <TableHead className="w-[50px]">
                       <Checkbox 
                           onCheckedChange={(checked) => handleSelectAll(Boolean(checked))}
-                          checked={selectedTxIds.length === cashTransactions.length && cashTransactions.length > 0}
+                          checked={selectedTxIds.length === monthlyTransactions.length && monthlyTransactions.length > 0}
                           aria-label="Select all rows"
                       />
                   </TableHead>
@@ -154,8 +175,8 @@ export function CashTab() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {cashTransactions.length > 0 ? (
-                cashTransactions.map((tx: CashTransaction) => (
+              {monthlyTransactions.length > 0 ? (
+                monthlyTransactions.map((tx: CashTransaction) => (
                   <TableRow key={tx.id} data-state={selectedTxIds.includes(tx.id) && "selected"}>
                     {isSelectionMode && (
                       <TableCell>
@@ -207,7 +228,7 @@ export function CashTab() {
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={isSelectionMode ? 6 : 5} className="text-center h-24">No cash transactions yet.</TableCell>
+                  <TableCell colSpan={isSelectionMode ? 6 : 5} className="text-center h-24">No cash transactions for {format(currentMonth, "MMMM yyyy")}.</TableCell>
                 </TableRow>
               )}
             </TableBody>

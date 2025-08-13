@@ -1,7 +1,7 @@
 
 "use client"
 
-import { useState } from "react"
+import { useState, useMemo } from "react"
 import { useAppContext } from "@/app/store"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
@@ -15,11 +15,13 @@ import {
   TableFooter,
 } from "@/components/ui/table"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { ArrowUpCircle, ArrowDownCircle, Pencil, History, Trash2, CheckSquare } from "lucide-react"
+import { ArrowUpCircle, ArrowDownCircle, Pencil, History, Trash2, CheckSquare, ChevronLeft, ChevronRight } from "lucide-react"
 import type { StockItem, StockTransaction } from "@/lib/types"
 import { EditTransactionSheet } from "./edit-transaction-sheet"
 import { DeleteConfirmationDialog } from "./delete-confirmation-dialog"
 import { Checkbox } from "./ui/checkbox"
+import { format, subMonths, addMonths } from "date-fns"
+
 
 export function StockTab() {
   const { stockItems, stockTransactions, deleteStockTransaction, deleteMultipleStockTransactions, currency } = useAppContext()
@@ -27,6 +29,15 @@ export function StockTab() {
   const [deleteDialogState, setDeleteDialogState] = useState<{isOpen: boolean, txId: string | null, txIds: string[] | null}>({ isOpen: false, txId: null, txIds: null });
   const [selectedTxIds, setSelectedTxIds] = useState<string[]>([]);
   const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [currentMonth, setCurrentMonth] = useState(new Date());
+
+  const monthlyTransactions = useMemo(() => {
+    return stockTransactions.filter(tx => {
+        const txDate = new Date(tx.date);
+        return txDate.getFullYear() === currentMonth.getFullYear() && txDate.getMonth() === currentMonth.getMonth();
+    })
+  }, [stockTransactions, currentMonth]);
+
 
   const handleEditClick = (tx: StockTransaction) => {
     setEditSheetState({ isOpen: true, transaction: tx });
@@ -58,7 +69,7 @@ export function StockTab() {
 
   const handleSelectAll = (checked: boolean) => {
       if (checked) {
-          setSelectedTxIds(stockTransactions.map(tx => tx.id));
+          setSelectedTxIds(monthlyTransactions.map(tx => tx.id));
       } else {
           setSelectedTxIds([]);
       }
@@ -83,21 +94,22 @@ export function StockTab() {
   const totalStockWeight = stockItems.reduce((acc, item) => acc + item.weight, 0);
   const weightedAveragePrice = totalStockWeight > 0 ? totalStockValue / totalStockWeight : 0;
   
-  const totalPurchaseWeight = stockTransactions
-    .filter(tx => tx.type === 'purchase')
-    .reduce((acc, tx) => acc + tx.weight, 0);
+  const { totalPurchaseWeight, totalSaleWeight, totalPurchaseValue, totalSaleValue } = useMemo(() => {
+    return monthlyTransactions.reduce((acc, tx) => {
+        if (tx.type === 'purchase') {
+            acc.totalPurchaseWeight += tx.weight;
+            acc.totalPurchaseValue += tx.weight * tx.pricePerKg;
+        } else {
+            acc.totalSaleWeight += tx.weight;
+            acc.totalSaleValue += tx.weight * tx.pricePerKg;
+        }
+        return acc;
+    }, { totalPurchaseWeight: 0, totalSaleWeight: 0, totalPurchaseValue: 0, totalSaleValue: 0 });
+  }, [monthlyTransactions]);
+  
+  const goToPreviousMonth = () => setCurrentMonth(subMonths(currentMonth, 1));
+  const goToNextMonth = () => setCurrentMonth(addMonths(currentMonth, 1));
 
-  const totalSaleWeight = stockTransactions
-    .filter(tx => tx.type === 'sale')
-    .reduce((acc, tx) => acc + tx.weight, 0);
-
-  const totalPurchaseValue = stockTransactions
-    .filter(tx => tx.type === 'purchase')
-    .reduce((acc, tx) => acc + (tx.weight * tx.pricePerKg), 0);
-
-  const totalSaleValue = stockTransactions
-    .filter(tx => tx.type === 'sale')
-    .reduce((acc, tx) => acc + (tx.weight * tx.pricePerKg), 0);
 
   return (
     <>
@@ -151,9 +163,18 @@ export function StockTab() {
 
           <Card>
             <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                <div>
+                <div className="flex-1">
                     <CardTitle>Stock Transaction History</CardTitle>
                     <CardDescription>A detailed log of all purchases and sales.</CardDescription>
+                </div>
+                <div className="flex items-center gap-2">
+                    <Button variant="outline" size="icon" onClick={goToPreviousMonth}>
+                        <ChevronLeft className="h-4 w-4" />
+                    </Button>
+                    <span className="text-sm font-medium w-32 text-center">{format(currentMonth, "MMMM yyyy")}</span>
+                    <Button variant="outline" size="icon" onClick={goToNextMonth}>
+                        <ChevronRight className="h-4 w-4" />
+                    </Button>
                 </div>
                 <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
                     {selectedTxIds.length > 0 && (
@@ -168,15 +189,15 @@ export function StockTab() {
                 </div>
             </CardHeader>
             <CardContent>
-              {stockTransactions.length > 0 && (
+              {monthlyTransactions.length > 0 && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 p-4 border rounded-lg">
                     <div>
-                      <h4 className="font-semibold text-destructive">Total Purchases</h4>
+                      <h4 className="font-semibold text-destructive">Monthly Purchases</h4>
                       <p>{totalPurchaseWeight.toFixed(2)} kg</p>
                       <p className="font-bold">{formatCurrency(totalPurchaseValue)}</p>
                     </div>
                     <div>
-                      <h4 className="font-semibold text-accent">Total Sales</h4>
+                      <h4 className="font-semibold text-accent">Monthly Sales</h4>
                       <p>{totalSaleWeight.toFixed(2)} kg</p>
                       <p className="font-bold">{formatCurrency(totalSaleValue)}</p>
                     </div>
@@ -190,7 +211,7 @@ export function StockTab() {
                         <TableHead className="w-[50px]">
                             <Checkbox 
                                 onCheckedChange={(checked) => handleSelectAll(Boolean(checked))}
-                                checked={selectedTxIds.length === stockTransactions.length && stockTransactions.length > 0}
+                                checked={selectedTxIds.length === monthlyTransactions.length && monthlyTransactions.length > 0}
                                 aria-label="Select all rows"
                             />
                         </TableHead>
@@ -206,8 +227,8 @@ export function StockTab() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {stockTransactions.length > 0 ? (
-                    stockTransactions.map((tx: StockTransaction) => (
+                  {monthlyTransactions.length > 0 ? (
+                    monthlyTransactions.map((tx: StockTransaction) => (
                       <TableRow key={tx.id} data-state={selectedTxIds.includes(tx.id) && "selected"}>
                         {isSelectionMode && (
                             <TableCell>
@@ -261,7 +282,7 @@ export function StockTab() {
                       </TableRow>
                     ))
                   ) : (
-                    <TableRow><TableCell colSpan={isSelectionMode ? 9 : 8} className="text-center h-24">No stock transactions yet.</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={isSelectionMode ? 9 : 8} className="text-center h-24">No stock transactions for {format(currentMonth, "MMMM yyyy")}.</TableCell></TableRow>
                   )}
                 </TableBody>
               </Table>
