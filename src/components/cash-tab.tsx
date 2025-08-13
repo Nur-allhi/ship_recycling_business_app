@@ -26,6 +26,7 @@ import { format, subMonths, addMonths } from "date-fns"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { Badge } from "./ui/badge"
+import { Switch } from "./ui/switch"
 
 export function CashTab() {
   const { cashBalance, cashTransactions, transferFunds, deleteCashTransaction, deleteMultipleCashTransactions, currency } = useAppContext()
@@ -37,6 +38,7 @@ export function CashTab() {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [showActions, setShowActions] = useState(true);
   const isMobile = useIsMobile();
 
   const filteredByMonth = useMemo(() => {
@@ -139,7 +141,7 @@ export function CashTab() {
             <TableHead>Description</TableHead>
             <TableHead>Category</TableHead>
             <TableHead className="text-right">Amount</TableHead>
-            <TableHead className="text-right">Actions</TableHead>
+            {showActions && <TableHead className="text-right">Actions</TableHead>}
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -180,23 +182,25 @@ export function CashTab() {
                     {formatCurrency(tx.amount)}
                   </div>
                 </TableCell>
-                <TableCell className="text-right">
-                   <div className="flex items-center justify-end gap-2">
-                      <Button variant="ghost" size="icon" onClick={() => handleEditClick(tx)}>
-                        <Pencil className="h-4 w-4" />
-                        <span className="sr-only">Edit</span>
-                      </Button>
-                      <Button variant="ghost" size="icon" onClick={() => handleDeleteClick(tx.id)}>
-                        <Trash2 className="h-4 w-4" />
-                        <span className="sr-only">Delete</span>
-                      </Button>
-                    </div>
-                </TableCell>
+                {showActions && (
+                  <TableCell className="text-right">
+                    <div className="flex items-center justify-end gap-2">
+                        <Button variant="ghost" size="icon" onClick={() => handleEditClick(tx)}>
+                          <Pencil className="h-4 w-4" />
+                          <span className="sr-only">Edit</span>
+                        </Button>
+                        <Button variant="ghost" size="icon" onClick={() => handleDeleteClick(tx.id)}>
+                          <Trash2 className="h-4 w-4" />
+                          <span className="sr-only">Delete</span>
+                        </Button>
+                      </div>
+                  </TableCell>
+                )}
               </TableRow>
             ))
           ) : (
             <TableRow>
-              <TableCell colSpan={isSelectionMode ? 6 : 5} className="text-center h-24">No cash transactions for {format(currentMonth, "MMMM yyyy")}.</TableCell>
+              <TableCell colSpan={isSelectionMode ? (showActions ? 6 : 5) : (showActions ? 5 : 4)} className="text-center h-24">No cash transactions for {format(currentMonth, "MMMM yyyy")}.</TableCell>
             </TableRow>
           )}
         </TableBody>
@@ -245,14 +249,16 @@ export function CashTab() {
                           </TooltipProvider>
                         )}
                     </div>
-                    <div className="flex gap-1">
-                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEditClick(tx)}>
-                            <Pencil className="h-4 w-4" />
-                        </Button>
-                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleDeleteClick(tx.id)}>
-                            <Trash2 className="h-4 w-4" />
-                        </Button>
-                    </div>
+                    {showActions && (
+                      <div className="flex gap-1">
+                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEditClick(tx)}>
+                              <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleDeleteClick(tx.id)}>
+                              <Trash2 className="h-4 w-4" />
+                          </Button>
+                      </div>
+                    )}
                 </div>
             </CardContent>
           </Card>
@@ -317,6 +323,10 @@ export function CashTab() {
                           </form>
                       </SheetContent>
                   </Sheet>
+                  <div className="flex items-center space-x-2">
+                    <Switch id="show-actions-cash" checked={showActions} onCheckedChange={setShowActions} />
+                    <Label htmlFor="show-actions-cash" className="text-sm">Actions</Label>
+                  </div>
               </div>
           </div>
         </CardHeader>
