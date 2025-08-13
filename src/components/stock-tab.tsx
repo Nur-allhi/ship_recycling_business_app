@@ -82,6 +82,22 @@ export function StockTab() {
   const totalStockValue = stockItems.reduce((acc, item) => acc + (item.weight * item.purchasePricePerKg), 0);
   const totalStockWeight = stockItems.reduce((acc, item) => acc + item.weight, 0);
   const weightedAveragePrice = totalStockWeight > 0 ? totalStockValue / totalStockWeight : 0;
+  
+  const totalPurchaseWeight = stockTransactions
+    .filter(tx => tx.type === 'purchase')
+    .reduce((acc, tx) => acc + tx.weight, 0);
+
+  const totalSaleWeight = stockTransactions
+    .filter(tx => tx.type === 'sale')
+    .reduce((acc, tx) => acc + tx.weight, 0);
+
+  const totalPurchaseValue = stockTransactions
+    .filter(tx => tx.type === 'purchase')
+    .reduce((acc, tx) => acc + (tx.weight * tx.pricePerKg), 0);
+
+  const totalSaleValue = stockTransactions
+    .filter(tx => tx.type === 'sale')
+    .reduce((acc, tx) => acc + (tx.weight * tx.pricePerKg), 0);
 
   return (
     <>
@@ -234,6 +250,26 @@ export function StockTab() {
                     <TableRow><TableCell colSpan={isSelectionMode ? 9 : 8} className="text-center h-24">No stock transactions yet.</TableCell></TableRow>
                   )}
                 </TableBody>
+                {stockTransactions.length > 0 && (
+                  <TableFooter>
+                    <TableRow>
+                        <TableCell colSpan={isSelectionMode ? 4 : 3} />
+                        <TableCell className="text-right font-bold">Total Purchases</TableCell>
+                        <TableCell className="text-right font-bold">{totalPurchaseWeight.toFixed(2)} kg</TableCell>
+                        <TableCell />
+                        <TableCell className="text-right font-bold text-destructive">{formatCurrency(totalPurchaseValue)}</TableCell>
+                        <TableCell />
+                    </TableRow>
+                    <TableRow>
+                        <TableCell colSpan={isSelectionMode ? 4 : 3} />
+                        <TableCell className="text-right font-bold">Total Sales</TableCell>
+                        <TableCell className="text-right font-bold">{totalSaleWeight.toFixed(2)} kg</TableCell>
+                        <TableCell />
+                        <TableCell className="text-right font-bold text-accent">{formatCurrency(totalSaleValue)}</TableCell>
+                        <TableCell />
+                    </TableRow>
+                  </TableFooter>
+                )}
               </Table>
               </div>
             </CardContent>
