@@ -371,6 +371,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         action: (
           <Button variant="secondary" onClick={() => {
             setState(prev => {
+              // Ensure we are not re-adding a transaction that might already exist if undo is clicked multiple times
+              if (prev.cashTransactions.some(t => t.id === originalTx.id)) {
+                  return prev;
+              }
               const restoredBalance = originalTx.type === 'income' ? prev.cashBalance + originalTx.amount : prev.cashBalance - originalTx.amount;
               const restoredTxs = [...prev.cashTransactions, originalTx].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
               return { ...prev, cashBalance: restoredBalance, cashTransactions: restoredTxs };
@@ -661,3 +665,5 @@ export function useAppContext() {
   }
   return context;
 }
+
+    
