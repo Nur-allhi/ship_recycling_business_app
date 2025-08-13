@@ -330,12 +330,12 @@ export function StockTab() {
 
           <Card>
             <CardHeader>
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                     <div className="flex-1">
                         <CardTitle>Stock Transaction History</CardTitle>
                         <CardDescription>A detailed log of all purchases and sales.</CardDescription>
                     </div>
-                    <div className="flex items-center gap-2 self-end sm:self-auto">
+                    <div className="flex items-center gap-2 self-center sm:self-auto">
                         <Button variant="outline" size="icon" onClick={goToPreviousMonth} className="h-9 w-9">
                             <ChevronLeft className="h-4 w-4" />
                         </Button>
@@ -345,15 +345,15 @@ export function StockTab() {
                         </Button>
                     </div>
                 </div>
-                <div className="flex flex-wrap items-center justify-between gap-2 pt-4">
-                    <div className="flex items-center gap-2">
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-2 pt-4">
+                    <div className="flex items-center gap-2 sm:order-last">
                         {selectedTxIds.length > 0 && (
                             <Button size="sm" variant="destructive" onClick={handleMultiDeleteClick}>
                                 <Trash2 className="mr-2 h-4 w-4" /> ({selectedTxIds.length})
                             </Button>
                         )}
                     </div>
-                     <div className="flex items-center gap-2">
+                     <div className="flex items-center gap-2 justify-center flex-1">
                         <Button size="sm" variant={isSelectionMode ? "secondary" : "outline"} onClick={toggleSelectionMode}>
                             <CheckSquare className="mr-2 h-4 w-4" />
                             {isSelectionMode ? 'Cancel' : 'Select'}
