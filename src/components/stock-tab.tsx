@@ -18,29 +18,55 @@ import { ArrowUpCircle, ArrowDownCircle, Pencil, History, Trash2 } from "lucide-
 import type { StockItem, StockTransaction } from "@/lib/types"
 import { EditTransactionSheet } from "./edit-transaction-sheet"
 import { DeleteConfirmationDialog } from "./delete-confirmation-dialog"
+import { Checkbox } from "./ui/checkbox"
 
 export function StockTab() {
-  const { stockItems, stockTransactions, deleteStockTransaction, currency } = useAppContext()
+  const { stockItems, stockTransactions, deleteStockTransaction, deleteMultipleStockTransactions, currency } = useAppContext()
   const [editSheetState, setEditSheetState] = useState<{isOpen: boolean, transaction: StockTransaction | null}>({ isOpen: false, transaction: null});
-  const [deleteDialogState, setDeleteDialogState] = useState<{isOpen: boolean, txId: string | null}>({ isOpen: false, txId: null });
+  const [deleteDialogState, setDeleteDialogState] = useState<{isOpen: boolean, txId: string | null, txIds: string[] | null}>({ isOpen: false, txId: null, txIds: null });
+  const [selectedTxIds, setSelectedTxIds] = useState<string[]>([]);
 
   const handleEditClick = (tx: StockTransaction) => {
     setEditSheetState({ isOpen: true, transaction: tx });
   }
 
   const handleDeleteClick = (txId: string) => {
-    setDeleteDialogState({ isOpen: true, txId });
+    setDeleteDialogState({ isOpen: true, txId, txIds: null });
   };
+  
+  const handleMultiDeleteClick = () => {
+    setDeleteDialogState({ isOpen: true, txId: null, txIds: selectedTxIds });
+  }
 
   const confirmDeletion = () => {
     if (deleteDialogState.txId) {
         deleteStockTransaction(deleteDialogState.txId);
-        setDeleteDialogState({ isOpen: false, txId: null });
     }
+     if (deleteDialogState.txIds && deleteDialogState.txIds.length > 0) {
+        deleteMultipleStockTransactions(deleteDialogState.txIds);
+        setSelectedTxIds([]);
+    }
+    setDeleteDialogState({ isOpen: false, txId: null, txIds: null });
   };
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: currency }).format(amount)
+  }
+
+  const handleSelectAll = (checked: boolean) => {
+      if (checked) {
+          setSelectedTxIds(stockTransactions.map(tx => tx.id));
+      } else {
+          setSelectedTxIds([]);
+      }
+  }
+
+  const handleSelectRow = (txId: string, checked: boolean) => {
+      if (checked) {
+          setSelectedTxIds(prev => [...prev, txId]);
+      } else {
+          setSelectedTxIds(prev => prev.filter(id => id !== txId));
+      }
   }
 
   return (
@@ -84,15 +110,29 @@ export function StockTab() {
           </Card>
 
           <Card>
-            <CardHeader>
-              <CardTitle>Stock Transaction History</CardTitle>
-              <CardDescription>Recent purchases and sales.</CardDescription>
+            <CardHeader className="flex flex-row items-center justify-between">
+                <div>
+                    <CardTitle>Stock Transaction History</CardTitle>
+                    <CardDescription>Recent purchases and sales.</CardDescription>
+                </div>
+                {selectedTxIds.length > 0 && (
+                    <Button variant="destructive" onClick={handleMultiDeleteClick}>
+                        <Trash2 className="mr-2 h-4 w-4" /> Delete ({selectedTxIds.length})
+                    </Button>
+                )}
             </CardHeader>
             <CardContent>
               <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-[50px]">
+                        <Checkbox 
+                            onCheckedChange={(checked) => handleSelectAll(Boolean(checked))}
+                            checked={selectedTxIds.length === stockTransactions.length && stockTransactions.length > 0}
+                            aria-label="Select all rows"
+                        />
+                    </TableHead>
                     <TableHead>Date</TableHead>
                     <TableHead>Type</TableHead>
                     <TableHead>Item</TableHead>
@@ -106,7 +146,14 @@ export function StockTab() {
                 <TableBody>
                   {stockTransactions.length > 0 ? (
                     stockTransactions.map((tx: StockTransaction) => (
-                      <TableRow key={tx.id}>
+                      <TableRow key={tx.id} data-state={selectedTxIds.includes(tx.id) && "selected"}>
+                        <TableCell>
+                            <Checkbox 
+                                onCheckedChange={(checked) => handleSelectRow(tx.id, Boolean(checked))}
+                                checked={selectedTxIds.includes(tx.id)}
+                                aria-label="Select row"
+                            />
+                        </TableCell>
                         <TableCell>
                            <div className="flex items-center gap-2">
                             <span>{new Date(tx.date).toLocaleDateString()}</span>
@@ -150,7 +197,7 @@ export function StockTab() {
                       </TableRow>
                     ))
                   ) : (
-                    <TableRow><TableCell colSpan={8} className="text-center h-24">No stock transactions yet.</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={9} className="text-center h-24">No stock transactions yet.</TableCell></TableRow>
                   )}
                 </TableBody>
               </Table>
@@ -168,8 +215,9 @@ export function StockTab() {
       )}
       <DeleteConfirmationDialog 
         isOpen={deleteDialogState.isOpen}
-        setIsOpen={(isOpen) => setDeleteDialogState({ isOpen, txId: null })}
+        setIsOpen={(isOpen) => setDeleteDialogState({ isOpen, txId: null, txIds: null })}
         onConfirm={confirmDeletion}
+        itemCount={deleteDialogState.txIds?.length || 1}
       />
     </>
   )

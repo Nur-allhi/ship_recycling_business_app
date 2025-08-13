@@ -28,26 +28,36 @@ import { ArrowUpCircle, ArrowDownCircle, ArrowRightLeft, Pencil, History, Trash2
 import type { BankTransaction } from "@/lib/types"
 import { EditTransactionSheet } from "./edit-transaction-sheet"
 import { DeleteConfirmationDialog } from "./delete-confirmation-dialog"
+import { Checkbox } from "./ui/checkbox"
 
 export function BankTab() {
-  const { bankBalance, bankTransactions, transferFunds, deleteBankTransaction, currency } = useAppContext()
+  const { bankBalance, bankTransactions, transferFunds, deleteBankTransaction, deleteMultipleBankTransactions, currency } = useAppContext()
   const [isTransferSheetOpen, setIsTransferSheetOpen] = useState(false)
   const [editSheetState, setEditSheetState] = useState<{isOpen: boolean, transaction: BankTransaction | null}>({ isOpen: false, transaction: null});
-  const [deleteDialogState, setDeleteDialogState] = useState<{isOpen: boolean, txId: string | null}>({ isOpen: false, txId: null });
+  const [deleteDialogState, setDeleteDialogState] = useState<{isOpen: boolean, txId: string | null, txIds: string[] | null}>({ isOpen: false, txId: null, txIds: null });
+  const [selectedTxIds, setSelectedTxIds] = useState<string[]>([]);
 
   const handleEditClick = (tx: BankTransaction) => {
     setEditSheetState({ isOpen: true, transaction: tx });
   }
 
   const handleDeleteClick = (txId: string) => {
-    setDeleteDialogState({ isOpen: true, txId });
+    setDeleteDialogState({ isOpen: true, txId, txIds: null });
   };
+  
+  const handleMultiDeleteClick = () => {
+    setDeleteDialogState({ isOpen: true, txId: null, txIds: selectedTxIds });
+  }
 
   const confirmDeletion = () => {
     if (deleteDialogState.txId) {
         deleteBankTransaction(deleteDialogState.txId);
-        setDeleteDialogState({ isOpen: false, txId: null });
     }
+    if (deleteDialogState.txIds && deleteDialogState.txIds.length > 0) {
+        deleteMultipleBankTransactions(deleteDialogState.txIds);
+        setSelectedTxIds([]);
+    }
+    setDeleteDialogState({ isOpen: false, txId: null, txIds: null });
   };
 
   const formatCurrency = (amount: number) => {
@@ -63,41 +73,71 @@ export function BankTab() {
       setIsTransferSheetOpen(false)
     }
   }
+  
+  const handleSelectAll = (checked: boolean) => {
+      if (checked) {
+          setSelectedTxIds(bankTransactions.map(tx => tx.id));
+      } else {
+          setSelectedTxIds([]);
+      }
+  }
+
+  const handleSelectRow = (txId: string, checked: boolean) => {
+      if (checked) {
+          setSelectedTxIds(prev => [...prev, txId]);
+      } else {
+          setSelectedTxIds(prev => prev.filter(id => id !== txId));
+      }
+  }
 
   return (
     <>
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <div>
+        <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex-1">
             <CardTitle>Bank Ledger</CardTitle>
             <CardDescription>
               Current Balance: <span className="font-bold text-primary">{formatCurrency(bankBalance)}</span>
             </CardDescription>
           </div>
-          <Sheet open={isTransferSheetOpen} onOpenChange={setIsTransferSheetOpen}>
-              <SheetTrigger asChild>
-                  <Button variant="outline"><ArrowRightLeft className="mr-2 h-4 w-4" />Transfer</Button>
-              </SheetTrigger>
-              <SheetContent>
-                  <SheetHeader>
-                  <SheetTitle>Transfer Funds</SheetTitle>
-                  <SheetDescription>Move money from your bank account to cash.</SheetDescription>
-                  </SheetHeader>
-                  <form onSubmit={handleTransferSubmit} className="space-y-4 mt-4">
-                      <div className="space-y-2">
-                          <Label htmlFor="amount">Amount</Label>
-                          <Input id="amount" name="amount" type="number" step="0.01" placeholder="0.00" required />
-                      </div>
-                      <Button type="submit" className="w-full">Transfer to Cash</Button>
-                  </form>
-              </SheetContent>
-          </Sheet>
+          <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+             {selectedTxIds.length > 0 && (
+                <Button variant="destructive" onClick={handleMultiDeleteClick}>
+                    <Trash2 className="mr-2 h-4 w-4" /> Delete ({selectedTxIds.length})
+                </Button>
+            )}
+            <Sheet open={isTransferSheetOpen} onOpenChange={setIsTransferSheetOpen}>
+                <SheetTrigger asChild>
+                    <Button variant="outline" className="w-full sm:w-auto"><ArrowRightLeft className="mr-2 h-4 w-4" />Transfer</Button>
+                </SheetTrigger>
+                <SheetContent>
+                    <SheetHeader>
+                    <SheetTitle>Transfer Funds</SheetTitle>
+                    <SheetDescription>Move money from your bank account to cash.</SheetDescription>
+                    </SheetHeader>
+                    <form onSubmit={handleTransferSubmit} className="space-y-4 mt-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="amount">Amount</Label>
+                            <Input id="amount" name="amount" type="number" step="0.01" placeholder="0.00" required />
+                        </div>
+                        <Button type="submit" className="w-full">Transfer to Cash</Button>
+                    </form>
+                </SheetContent>
+            </Sheet>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
               <Table>
               <TableHeader>
                   <TableRow>
+                  <TableHead className="w-[50px]">
+                     <Checkbox 
+                        onCheckedChange={(checked) => handleSelectAll(Boolean(checked))}
+                        checked={selectedTxIds.length === bankTransactions.length && bankTransactions.length > 0}
+                        aria-label="Select all rows"
+                    />
+                  </TableHead>
                   <TableHead>Date</TableHead>
                   <TableHead>Description</TableHead>
                   <TableHead>Category</TableHead>
@@ -108,7 +148,14 @@ export function BankTab() {
               <TableBody>
                   {bankTransactions.length > 0 ? (
                   bankTransactions.map((tx: BankTransaction) => (
-                      <TableRow key={tx.id}>
+                      <TableRow key={tx.id} data-state={selectedTxIds.includes(tx.id) && "selected"}>
+                      <TableCell>
+                         <Checkbox 
+                            onCheckedChange={(checked) => handleSelectRow(tx.id, Boolean(checked))}
+                            checked={selectedTxIds.includes(tx.id)}
+                            aria-label="Select row"
+                         />
+                      </TableCell>
                       <TableCell>
                          <div className="flex items-center gap-2">
                           <span>{new Date(tx.date).toLocaleDateString()}</span>
@@ -150,7 +197,7 @@ export function BankTab() {
                   ))
                   ) : (
                   <TableRow>
-                      <TableCell colSpan={5} className="text-center h-24">No bank transactions yet.</TableCell>
+                      <TableCell colSpan={6} className="text-center h-24">No bank transactions yet.</TableCell>
                   </TableRow>
                   )}
               </TableBody>
@@ -168,8 +215,9 @@ export function BankTab() {
       )}
       <DeleteConfirmationDialog 
         isOpen={deleteDialogState.isOpen}
-        setIsOpen={(isOpen) => setDeleteDialogState({ isOpen, txId: null })}
+        setIsOpen={(isOpen) => setDeleteDialogState({ isOpen, txId: null, txIds: null })}
         onConfirm={confirmDeletion}
+        itemCount={deleteDialogState.txIds?.length || 1}
       />
     </>
   )
