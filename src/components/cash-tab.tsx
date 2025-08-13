@@ -286,34 +286,38 @@ export function CashTab() {
               </Button>
             </div>
           </div>
-          <div className="flex flex-wrap items-center justify-start sm:justify-end gap-2 pt-4">
-              {selectedTxIds.length > 0 && (
-                  <Button size="sm" variant="destructive" onClick={handleMultiDeleteClick} className="w-full sm:w-auto">
-                      <Trash2 className="mr-2 h-4 w-4" /> Delete ({selectedTxIds.length})
+          <div className="flex flex-wrap items-center justify-between gap-2 pt-4">
+              <div className="flex items-center gap-2">
+                  {selectedTxIds.length > 0 && (
+                      <Button size="sm" variant="destructive" onClick={handleMultiDeleteClick}>
+                          <Trash2 className="mr-2 h-4 w-4" /> ({selectedTxIds.length})
+                      </Button>
+                  )}
+              </div>
+              <div className="flex items-center gap-2">
+                  <Button size="sm" variant={isSelectionMode ? "secondary" : "outline"} onClick={toggleSelectionMode}>
+                      <CheckSquare className="mr-2 h-4 w-4" />
+                      {isSelectionMode ? 'Cancel' : 'Select'}
                   </Button>
-              )}
-              <Button size="sm" variant={isSelectionMode ? "secondary" : "outline"} onClick={toggleSelectionMode} className="w-full sm:w-auto">
-                  <CheckSquare className="mr-2 h-4 w-4" />
-                  {isSelectionMode ? 'Cancel' : 'Select'}
-              </Button>
-              <Sheet open={isTransferSheetOpen} onOpenChange={setIsTransferSheetOpen}>
-                  <SheetTrigger asChild>
-                      <Button size="sm" variant="outline" className="w-full sm:w-auto"><ArrowRightLeft className="mr-2 h-4 w-4" />Transfer</Button>
-                  </SheetTrigger>
-                  <SheetContent>
-                      <SheetHeader>
-                      <SheetTitle>Transfer Funds</SheetTitle>
-                      <SheetDescription>Move money from cash to your bank account.</SheetDescription>
-                      </SheetHeader>
-                      <form onSubmit={handleTransferSubmit} className="space-y-4 mt-4">
-                          <div className="space-y-2">
-                              <Label htmlFor="amount">Amount</Label>
-                              <Input id="amount" name="amount" type="number" step="0.01" placeholder="0.00" required />
-                          </div>
-                          <Button type="submit" className="w-full">Transfer to Bank</Button>
-                      </form>
-                  </SheetContent>
-              </Sheet>
+                  <Sheet open={isTransferSheetOpen} onOpenChange={setIsTransferSheetOpen}>
+                      <SheetTrigger asChild>
+                          <Button size="sm" variant="outline"><ArrowRightLeft className="mr-2 h-4 w-4" />Transfer</Button>
+                      </SheetTrigger>
+                      <SheetContent>
+                          <SheetHeader>
+                          <SheetTitle>Transfer Funds</SheetTitle>
+                          <SheetDescription>Move money from cash to your bank account.</SheetDescription>
+                          </SheetHeader>
+                          <form onSubmit={handleTransferSubmit} className="space-y-4 mt-4">
+                              <div className="space-y-2">
+                                  <Label htmlFor="amount">Amount</Label>
+                                  <Input id="amount" name="amount" type="number" step="0.01" placeholder="0.00" required />
+                              </div>
+                              <Button type="submit" className="w-full">Transfer to Bank</Button>
+                          </form>
+                      </SheetContent>
+                  </Sheet>
+              </div>
           </div>
         </CardHeader>
         <CardContent>
