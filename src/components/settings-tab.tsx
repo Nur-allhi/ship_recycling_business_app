@@ -153,7 +153,7 @@ export function SettingsTab() {
   return (
     <div className="max-w-2xl mx-auto">
       <Tabs defaultValue="appearance" className="w-full">
-        <TabsList className="grid w-full grid-cols-5">
+        <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 md:grid-cols-5">
           <TabsTrigger value="general">General</TabsTrigger>
           <TabsTrigger value="balances">Initial Balances</TabsTrigger>
           <TabsTrigger value="wastage">Wastage</TabsTrigger>
@@ -360,5 +360,3 @@ export function SettingsTab() {
     </div>
   )
 }
-
-    
