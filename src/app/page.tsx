@@ -59,9 +59,9 @@ function ShipShapeLedger() {
                         </Button>
                     </SheetTrigger>
                     <SheetContent side="left" className="w-64 p-4">
-                        <SheetHeader className="sr-only">
-                           <SheetTitle>Navigation Menu</SheetTitle>
-                           <SheetDescription>Select a tab to view your financial data.</SheetDescription>
+                        <SheetHeader>
+                           <SheetTitle className="sr-only">Navigation Menu</SheetTitle>
+                           <SheetDescription className="sr-only">Select a tab to view your financial data.</SheetDescription>
                         </SheetHeader>
                          <div className="flex items-center gap-3 mb-6">
                             <Ship className="h-8 w-8 text-primary" />
@@ -69,14 +69,14 @@ function ShipShapeLedger() {
                                 ShipShape Ledger
                             </h1>
                         </div>
-                        <nav className="flex flex-col gap-2">
+                        <nav className="flex flex-col gap-1">
                             {navItems.map(item => {
                                 const Icon = item.icon;
                                 return (
                                 <Button 
                                     key={item.value} 
                                     variant={activeTab === item.value ? "secondary" : "ghost"}
-                                    className="justify-start"
+                                    className="justify-start rounded-full"
                                     onClick={() => handleTabChange(item.value)}
                                 >
                                     <Icon className="mr-2 h-4 w-4" />
