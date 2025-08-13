@@ -15,6 +15,24 @@ import { useToast } from "@/hooks/use-toast"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
+const bodyFontOptions = [
+    { name: "Inter", value: "Inter, sans-serif" },
+    { name: "Roboto", value: "Roboto, sans-serif" },
+    { name: "Lato", value: "Lato, sans-serif" },
+    { name: "Open Sans", value: "'Open Sans', sans-serif" },
+    { name: "Roboto Slab", value: "'Roboto Slab', serif" },
+    { name: "Merriweather", value: "Merriweather, serif" },
+    { name: "Playfair Display", value: "'Playfair Display', serif" },
+];
+
+const numberFontOptions = [
+    { name: "Roboto Mono", value: "'Roboto Mono', monospace" },
+    { name: "Source Code Pro", value: "'Source Code Pro', monospace" },
+    { name: "Fira Code", value: "'Fira Code', monospace" },
+    { name: "Inter", value: "Inter, sans-serif" },
+    { name: "Open Sans", value: "'Open Sans', sans-serif" },
+];
+
 export function SettingsTab() {
   const {
     cashBalance,
@@ -22,6 +40,10 @@ export function SettingsTab() {
     setInitialBalances,
     fontSize,
     setFontSize,
+    bodyFont,
+    setBodyFont,
+    numberFont,
+    setNumberFont,
     cashCategories,
     bankCategories,
     addCategory,
@@ -71,6 +93,14 @@ export function SettingsTab() {
   const handleCurrencyChange = (value: string) => {
     setCurrency(value);
     toast({ title: "Currency Updated", description: `Set to ${value}.` });
+  }
+
+  const handleBodyFontChange = (value: string) => {
+    setBodyFont(value);
+  }
+
+  const handleNumberFontChange = (value: string) => {
+    setNumberFont(value);
   }
 
 
@@ -168,7 +198,7 @@ export function SettingsTab() {
               <CardTitle>Appearance</CardTitle>
               <CardDescription>Adjust the look and feel of the app.</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-6">
               <div>
                 <Label>Font Size</Label>
                 <ToggleGroup type="single" value={fontSize} onValueChange={(value) => { if (value) setFontSize(value as any) }} className="mt-2">
@@ -194,6 +224,39 @@ export function SettingsTab() {
                 </Select>
               </div>
               <Separator />
+               <div className="space-y-4">
+                  <div>
+                      <Label>Body Text Font</Label>
+                       <Select value={bodyFont} onValueChange={handleBodyFontChange}>
+                          <SelectTrigger className="w-[180px] mt-2">
+                              <SelectValue placeholder="Select font" />
+                          </SelectTrigger>
+                          <SelectContent>
+                              {bodyFontOptions.map(font => (
+                                  <SelectItem key={font.name} value={font.value} style={{fontFamily: font.value}}>
+                                      {font.name}
+                                  </SelectItem>
+                              ))}
+                          </SelectContent>
+                      </Select>
+                  </div>
+                   <div>
+                      <Label>Number Font</Label>
+                       <Select value={numberFont} onValueChange={handleNumberFontChange}>
+                          <SelectTrigger className="w-[180px] mt-2">
+                              <SelectValue placeholder="Select font" />
+                          </SelectTrigger>
+                          <SelectContent>
+                              {numberFontOptions.map(font => (
+                                  <SelectItem key={font.name} value={font.value} style={{fontFamily: font.value}}>
+                                      {font.name}
+                                  </SelectItem>
+                              ))}
+                          </SelectContent>
+                      </Select>
+                  </div>
+              </div>
+              <Separator />
               <div>
                 <Label className="block mb-2">Data Visibility</Label>
                  <Button variant="outline" size="sm" onClick={() => setShowStockValue(!showStockValue)}>
@@ -209,5 +272,3 @@ export function SettingsTab() {
     </div>
   )
 }
-
-    

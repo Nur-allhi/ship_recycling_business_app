@@ -11,9 +11,9 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        body: ['"Roboto Slab"', 'serif'],
-        headline: ['"Roboto Slab"', 'serif'],
-        mono: ['"Roboto Mono"', 'monospace'],
+        body: ['var(--font-body)', 'sans-serif'],
+        headline: ['var(--font-body)', 'sans-serif'],
+        mono: ['var(--font-mono)', 'monospace'],
         code: ['monospace'],
       },
       colors: {

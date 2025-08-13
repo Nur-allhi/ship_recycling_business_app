@@ -18,6 +18,8 @@ interface AppState {
   cashCategories: string[];
   bankCategories: string[];
   fontSize: FontSize;
+  bodyFont: string;
+  numberFont: string;
   initialBalanceSet: boolean;
   wastagePercentage: number;
   currency: string;
@@ -42,6 +44,8 @@ interface AppContextType extends AppState {
   addCategory: (type: 'cash' | 'bank', category: string) => void;
   deleteCategory: (type: 'cash' | 'bank', category: string) => void;
   setFontSize: (size: FontSize) => void;
+  setBodyFont: (font: string) => void;
+  setNumberFont: (font: string) => void;
   setWastagePercentage: (percentage: number) => void;
   setCurrency: (currency: string) => void;
   setShowStockValue: (show: boolean) => void;
@@ -59,6 +63,8 @@ const initialAppState: AppState = {
   cashCategories: ['Salary', 'Groceries', 'Transport', 'Utilities'],
   bankCategories: ['Deposit', 'Withdrawal'],
   fontSize: 'base',
+  bodyFont: "'Roboto Slab', serif",
+  numberFont: "'Roboto Mono', monospace",
   initialBalanceSet: false,
   wastagePercentage: 0,
   currency: 'BDT',
@@ -99,6 +105,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
         if (typeof parsedState.showStockValue === 'undefined') {
           parsedState.showStockValue = false;
+        }
+         if (typeof parsedState.bodyFont === 'undefined') {
+          parsedState.bodyFont = initialAppState.bodyFont;
+        }
+         if (typeof parsedState.numberFont === 'undefined') {
+          parsedState.numberFont = initialAppState.numberFont;
         }
         
         setState(parsedState);
@@ -701,6 +713,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const setFontSize = (size: FontSize) => {
     setState(prev => ({ ...prev, fontSize: size }));
   };
+
+  const setBodyFont = (font: string) => {
+    setState(prev => ({ ...prev, bodyFont: font }));
+  };
+  
+  const setNumberFont = (font: string) => {
+    setState(prev => ({ ...prev, numberFont: font }));
+  };
   
   const setWastagePercentage = (percentage: number) => {
     setState(prev => ({ ...prev, wastagePercentage: percentage }));
@@ -733,6 +753,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     addCategory,
     deleteCategory,
     setFontSize,
+    setBodyFont,
+    setNumberFont,
     setWastagePercentage,
     setCurrency,
     setShowStockValue,
