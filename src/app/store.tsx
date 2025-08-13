@@ -52,7 +52,7 @@ const initialAppState: AppState = {
   fontSize: 'base',
   initialBalanceSet: false,
   wastagePercentage: 0,
-  currency: 'USD',
+  currency: 'BDT',
 };
 
 export function AppProvider({ children }: { children: ReactNode }) {
@@ -84,13 +84,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
 
         if (typeof parsedState.currency === 'undefined') {
-          parsedState.currency = 'USD';
+          parsedState.currency = 'BDT';
         }
         
         setState(parsedState);
+      } else {
+        setState(initialAppState);
       }
     } catch (error) {
       console.error("Failed to load state from localStorage", error);
+      setState(initialAppState);
     }
     setIsInitialized(true);
   }, []);
