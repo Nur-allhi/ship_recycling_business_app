@@ -1,9 +1,9 @@
+
 "use client"
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useAppContext } from "@/app/store"
 import { Wallet, Landmark, Boxes, BarChart2 } from "lucide-react"
-import { UnifiedTransactionForm } from "./unified-transaction-form"
 
 interface DashboardTabProps {
   setActiveTab: (tab: string) => void;
@@ -66,7 +66,6 @@ export function DashboardTab({ setActiveTab }: DashboardTabProps) {
           </CardContent>
         </Card>
       </div>
-      <UnifiedTransactionForm />
     </div>
   )
 }
