@@ -52,6 +52,8 @@ interface AppContextType extends AppState {
   setCurrency: (currency: string) => void;
   setShowStockValue: (show: boolean) => void;
   setOrganizationName: (name: string) => void;
+  setInitialBalances: (cash: number, bank: number) => void;
+  addInitialStockItem: (item: { name: string; weight: number; pricePerKg: number }) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -83,30 +85,41 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const reloadData = useCallback(async () => {
     try {
         setState(prev => ({ ...prev, initialBalanceSet: false })); // Show loading indicator
-        const [cashData, bankData, stockItemsData, stockTransactionsData] = await Promise.all([
-            readSheetData({ range: 'Cash!A2:E' }),
-            readSheetData({ range: 'Bank!A2:E' }),
-            readSheetData({ range: 'Stock!A2:D' }),
-            readSheetData({ range: 'Stock Transactions!A2:G' }),
-        ]);
+        
+        const fetchData = async (range: string, sheetName: string) => {
+          try {
+            return await readSheetData({ range });
+          } catch (error) {
+            console.warn(`Could not read from sheet "${sheetName}". It might not exist yet.`, error);
+            // Return empty array so the app can still load
+            return [];
+          }
+        }
 
-        const cashTransactions: CashTransaction[] = cashData
+        const [cashData, bankData, stockTransactionsData, initialStockData] = await Promise.all([
+            fetchData('Cash!A2:E', 'Cash'),
+            fetchData('Bank!A2:E', 'Bank'),
+            fetchData('Stock Transactions!A2:G', 'Stock Transactions'),
+            fetchData('Initial Stock!A2:C', 'Initial Stock'),
+        ]);
+        
+        let cashTransactions: CashTransaction[] = cashData
             .map((row, index) => ({
                 id: `cash-${index}`,
                 rowIndex: index + 2,
-                date: new Date(row[0]).toISOString(),
+                date: row[0] ? new Date(row[0]).toISOString() : new Date().toISOString(),
                 type: row[1]?.toLowerCase() as 'income' | 'expense',
                 amount: parseFloat(row[2]) || 0,
                 description: row[3] || '',
                 category: row[4] || '',
             }))
             .filter(tx => tx.date && tx.type && !isNaN(tx.amount));
-
-        const bankTransactions: BankTransaction[] = bankData
+        
+        let bankTransactions: BankTransaction[] = bankData
              .map((row, index) => ({
                 id: `bank-${index}`,
                 rowIndex: index + 2,
-                date: new Date(row[0]).toISOString(),
+                date: row[0] ? new Date(row[0]).toISOString() : new Date().toISOString(),
                 type: row[1]?.toLowerCase() as 'deposit' | 'withdrawal',
                 amount: parseFloat(row[2]) || 0,
                 description: row[3] || '',
@@ -114,19 +127,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
             }))
             .filter(tx => tx.date && tx.type && !isNaN(tx.amount));
 
-        const stockItems: StockItem[] = stockItemsData.map((row, index) => ({
-            id: `stock-item-${index}`,
-            rowIndex: index + 2,
-            name: row[0],
-            weight: parseFloat(row[1]) || 0,
-            purchasePricePerKg: parseFloat(row[2]) || 0,
-        }));
-        
         const stockTransactions: StockTransaction[] = stockTransactionsData
             .map((row, index) => ({
                 id: `stock-tx-${index}`,
                 rowIndex: index + 2,
-                date: new Date(row[0]).toISOString(),
+                date: row[0] ? new Date(row[0]).toISOString() : new Date().toISOString(),
                 type: row[1]?.toLowerCase() as 'purchase' | 'sale',
                 stockItemName: row[2] || '',
                 weight: parseFloat(row[3]) || 0,
@@ -136,6 +141,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
             }))
             .filter(tx => tx.date && tx.type && tx.stockItemName && !isNaN(tx.weight) && !isNaN(tx.pricePerKg));
 
+        const initialStockItems: StockItem[] = initialStockData.map((row, index) => ({
+            id: `initial-stock-${index}`,
+            rowIndex: index + 2,
+            name: row[0] || '',
+            weight: parseFloat(row[1]) || 0,
+            purchasePricePerKg: parseFloat(row[2]) || 0,
+        }));
+        
         // This recalculation logic should eventually move to the backend/sheet itself
         const cashBalance = cashTransactions.reduce((acc, tx) => acc + (tx.type === 'income' ? tx.amount : -tx.amount), 0);
         const bankBalance = bankTransactions.reduce((acc, tx) => acc + (tx.type === 'deposit' ? tx.amount : -tx.amount), 0);
@@ -168,6 +181,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
             }
             return acc;
         }, {});
+
+        initialStockItems.forEach(item => {
+            if(!currentStockItems[item.name]) {
+                currentStockItems[item.name] = { weight: 0, totalValue: 0 };
+            }
+            currentStockItems[item.name].weight += item.weight;
+            currentStockItems[item.name].totalValue += item.weight * item.purchasePricePerKg;
+        });
         
         const aggregatedStockItems: StockItem[] = Object.entries(currentStockItems).map(([name, data], index) => ({
             id: `stock-agg-${index}`,
@@ -194,7 +215,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         toast({
             variant: 'destructive',
             title: 'Failed to load data',
-            description: 'Could not connect to Google Sheets. Please check your setup and sheet names (Cash, Bank, Stock, Stock Transactions).'
+            description: 'Could not connect to Google Sheets. Please check your setup and sheet names (Cash, Bank, Stock Transactions, Initial Stock).'
         });
         setState(prev => ({ ...prev, initialBalanceSet: true }));
       }
@@ -354,7 +375,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const deleteMultipleCashTransactions = async (txs: CashTransaction[]) => {
      try {
-        for(const tx of txs) {
+        // Deleting rows changes row indices, so we process from bottom to top
+        const sortedTxs = [...txs].sort((a,b) => b.rowIndex - a.rowIndex);
+        for(const tx of sortedTxs) {
             await deleteSheetRow({ sheetName: "Cash", rowIndex: tx.rowIndex });
         }
         toast({ title: "Success", description: `${txs.length} cash transactions deleted.`});
@@ -367,7 +390,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const deleteMultipleBankTransactions = async (txs: BankTransaction[]) => {
     try {
-        for(const tx of txs) {
+        const sortedTxs = [...txs].sort((a,b) => b.rowIndex - a.rowIndex);
+        for(const tx of sortedTxs) {
             await deleteSheetRow({ sheetName: "Bank", rowIndex: tx.rowIndex });
         }
         toast({ title: "Success", description: `${txs.length} bank transactions deleted.`});
@@ -380,7 +404,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const deleteMultipleStockTransactions = async (txs: StockTransaction[]) => {
     try {
-        for(const tx of txs) {
+        const sortedTxs = [...txs].sort((a,b) => b.rowIndex - a.rowIndex);
+        for(const tx of sortedTxs) {
             await deleteSheetRow({ sheetName: "Stock Transactions", rowIndex: tx.rowIndex });
         }
         toast({ title: "Success", description: `${txs.length} stock transactions deleted.`});
@@ -447,6 +472,32 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
   };
 
+  const setInitialBalances = async (cash: number, bank: number) => {
+      try {
+          await appendSheetRow({ range: 'Cash!A:E', values: [format(new Date(), 'MM/dd/yyyy'), 'income', cash, 'Initial Balance', 'Initial']});
+          await appendSheetRow({ range: 'Bank!A:E', values: [format(new Date(), 'MM/dd/yyyy'), 'deposit', bank, 'Initial Balance', 'Initial']});
+          toast({ title: "Initial balances set." });
+          await reloadData();
+      } catch (e) {
+          console.error(e);
+          toast({variant: 'destructive', title: 'Failed to set initial balances'});
+      }
+  }
+
+  const addInitialStockItem = async (item: { name: string; weight: number; pricePerKg: number }) => {
+      try {
+        await appendSheetRow({
+            range: 'Initial Stock!A:C',
+            values: [item.name, item.weight, item.pricePerKg]
+        });
+        toast({ title: "Initial stock item added." });
+        await reloadData();
+      } catch (e) {
+          console.error(e);
+          toast({variant: 'destructive', title: 'Failed to add initial stock item.'});
+      }
+  }
+
   const setFontSize = (size: FontSize) => setState(prev => ({ ...prev, fontSize: size }));
   const setBodyFont = (font: string) => setState(prev => ({ ...prev, bodyFont: font }));
   const setNumberFont = (font: string) => setState(prev => ({ ...prev, numberFont: font }));
@@ -480,6 +531,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setCurrency,
     setShowStockValue,
     setOrganizationName,
+    setInitialBalances,
+    addInitialStockItem,
   };
 
   return <AppContext.Provider value={value}>{isInitialized ? children : <div className="flex items-center justify-center min-h-screen">Loading...</div>}</AppContext.Provider>;
@@ -492,3 +545,5 @@ export function useAppContext() {
   }
   return context;
 }
+
+    

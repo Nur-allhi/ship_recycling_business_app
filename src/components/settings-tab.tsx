@@ -35,8 +35,6 @@ const numberFontOptions = [
 
 export function SettingsTab() {
   const {
-    cashBalance,
-    bankBalance,
     setInitialBalances,
     addInitialStockItem,
     fontSize,
@@ -189,11 +187,11 @@ export function SettingsTab() {
                   <div className="space-y-4">
                       <div className="space-y-2">
                           <Label htmlFor="cash-balance">Initial Cash Balance</Label>
-                          <Input id="cash-balance" type="number" defaultValue={cashBalance} ref={cashBalanceRef} />
+                          <Input id="cash-balance" type="number" ref={cashBalanceRef} placeholder="0.00" />
                       </div>
                       <div className="space-y-2">
                           <Label htmlFor="bank-balance">Initial Bank Balance</Label>
-                          <Input id="bank-balance" type="number" defaultValue={bankBalance} ref={bankBalanceRef} />
+                          <Input id="bank-balance" type="number" ref={bankBalanceRef} placeholder="0.00"/>
                       </div>
                       <Button onClick={handleBalanceSave}>Save Financial Balances</Button>
                   </div>
