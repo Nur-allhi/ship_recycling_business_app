@@ -287,59 +287,11 @@ export function StockTab() {
   return (
     <>
       <div className="space-y-6">
-        <Tabs defaultValue="inventory" className="w-full">
+        <Tabs defaultValue="history" className="w-full">
             <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="inventory">Inventory</TabsTrigger>
                 <TabsTrigger value="history">History</TabsTrigger>
+                <TabsTrigger value="inventory">Inventory</TabsTrigger>
             </TabsList>
-            <TabsContent value="inventory" className="mt-6">
-                <Card>
-                    <CardHeader>
-                    <CardTitle>Current Stock Inventory</CardTitle>
-                    <CardDescription>An overview of your current stock levels and value.</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                    <div className="overflow-x-auto">
-                        <Table>
-                        <TableHeader>
-                            <TableRow>
-                            <TableHead>Item Name</TableHead>
-                            <TableHead className="text-right">Weight (kg)</TableHead>
-                            <TableHead className="text-right">Avg. Price/kg</TableHead>
-                            <TableHead className="text-right">Current Value</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {stockItems.length > 0 ? (
-                            stockItems.map((item: StockItem) => (
-                                <TableRow key={item.id}>
-                                <TableCell className="font-medium">{item.name}</TableCell>
-                                <TableCell className="text-right font-mono">{item.weight.toFixed(2)}</TableCell>
-                                <TableCell className="text-right font-mono">{formatCurrency(item.purchasePricePerKg)}</TableCell>
-                                <TableCell className="text-right font-medium font-mono">{formatCurrency(item.weight * item.purchasePricePerKg)}</TableCell>
-                                </TableRow>
-                            ))
-                            ) : (
-                            <TableRow>
-                                <TableCell colSpan={4} className="text-center h-24">No stock items yet.</TableCell>
-                            </TableRow>
-                            )}
-                        </TableBody>
-                        {stockItems.length > 0 && (
-                            <TableFoot>
-                                <TableRow>
-                                <TableCell className="font-bold">Totals</TableCell>
-                                <TableCell className="text-right font-bold font-mono">{totalStockWeight.toFixed(2)} kg</TableCell>
-                                <TableCell className="text-right font-bold font-mono">{formatCurrency(weightedAveragePrice)}</TableCell>
-                                <TableCell className="text-right font-bold font-mono">{formatCurrency(totalStockValue)}</TableCell>
-                                </TableRow>
-                            </TableFoot>
-                        )}
-                        </Table>
-                    </div>
-                    </CardContent>
-                </Card>
-            </TabsContent>
             <TabsContent value="history" className="mt-6">
                 <Card>
                     <CardHeader>
@@ -428,6 +380,54 @@ export function StockTab() {
                     )}
                 </Card>
             </TabsContent>
+            <TabsContent value="inventory" className="mt-6">
+                <Card>
+                    <CardHeader>
+                    <CardTitle>Current Stock Inventory</CardTitle>
+                    <CardDescription>An overview of your current stock levels and value.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                    <div className="overflow-x-auto">
+                        <Table>
+                        <TableHeader>
+                            <TableRow>
+                            <TableHead>Item Name</TableHead>
+                            <TableHead className="text-right">Weight (kg)</TableHead>
+                            <TableHead className="text-right">Avg. Price/kg</TableHead>
+                            <TableHead className="text-right">Current Value</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {stockItems.length > 0 ? (
+                            stockItems.map((item: StockItem) => (
+                                <TableRow key={item.id}>
+                                <TableCell className="font-medium">{item.name}</TableCell>
+                                <TableCell className="text-right font-mono">{item.weight.toFixed(2)}</TableCell>
+                                <TableCell className="text-right font-mono">{formatCurrency(item.purchasePricePerKg)}</TableCell>
+                                <TableCell className="text-right font-medium font-mono">{formatCurrency(item.weight * item.purchasePricePerKg)}</TableCell>
+                                </TableRow>
+                            ))
+                            ) : (
+                            <TableRow>
+                                <TableCell colSpan={4} className="text-center h-24">No stock items yet.</TableCell>
+                            </TableRow>
+                            )}
+                        </TableBody>
+                        {stockItems.length > 0 && (
+                            <TableFoot>
+                                <TableRow>
+                                <TableCell className="font-bold">Totals</TableCell>
+                                <TableCell className="text-right font-bold font-mono">{totalStockWeight.toFixed(2)} kg</TableCell>
+                                <TableCell className="text-right font-bold font-mono">{formatCurrency(weightedAveragePrice)}</TableCell>
+                                <TableCell className="text-right font-bold font-mono">{formatCurrency(totalStockValue)}</TableCell>
+                                </TableRow>
+                            </TableFoot>
+                        )}
+                        </Table>
+                    </div>
+                    </CardContent>
+                </Card>
+            </TabsContent>
         </Tabs>
       </div>
       {editSheetState.transaction && (
@@ -447,3 +447,5 @@ export function StockTab() {
     </>
   )
 }
+
+    
