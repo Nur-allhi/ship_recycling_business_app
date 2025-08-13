@@ -30,7 +30,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { ShoppingCart, Tag, PlusCircle } from "lucide-react"
+import { ShoppingCart, Tag, ArrowUpCircle, ArrowDownCircle } from "lucide-react"
 import type { StockItem, StockTransaction } from "@/lib/types"
 
 export function StockTab() {
@@ -130,7 +130,12 @@ export function StockTab() {
                   stockTransactions.slice(0, 10).map((tx: StockTransaction) => (
                     <TableRow key={tx.id}>
                       <TableCell>{new Date(tx.date).toLocaleDateString()}</TableCell>
-                      <TableCell><span className={`capitalize px-2 py-1 text-xs rounded-full ${tx.type === 'purchase' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'}`}>{tx.type}</span></TableCell>
+                      <TableCell>
+                        <span className={`capitalize px-2 py-1 text-xs rounded-full flex items-center w-fit ${tx.type === 'purchase' ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}`}>
+                           {tx.type === 'purchase' ? <ArrowDownCircle className="mr-1 h-3 w-3" /> : <ArrowUpCircle className="mr-1 h-3 w-3" />}
+                          {tx.type}
+                        </span>
+                      </TableCell>
                       <TableCell>{tx.stockItemName}</TableCell>
                       <TableCell>{tx.weight.toFixed(2)} kg</TableCell>
                       <TableCell>{formatCurrency(tx.pricePerKg)}</TableCell>

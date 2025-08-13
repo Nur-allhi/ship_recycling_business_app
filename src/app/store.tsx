@@ -16,6 +16,7 @@ interface AppState {
   cashCategories: string[];
   bankCategories: string[];
   fontSize: FontSize;
+  initialBalanceSet: boolean;
 }
 
 interface AppContextType extends AppState {
@@ -41,6 +42,7 @@ const initialAppState: AppState = {
   cashCategories: ['Salary', 'Groceries', 'Transport', 'Utilities'],
   bankCategories: ['Salary', 'Investment', 'Loan', 'Shopping'],
   fontSize: 'base',
+  initialBalanceSet: false,
 };
 
 export function AppProvider({ children }: { children: ReactNode }) {
@@ -52,7 +54,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       const storedState = localStorage.getItem('shipshape-ledger');
       if (storedState) {
-        setState(JSON.parse(storedState));
+        const parsedState = JSON.parse(storedState);
+        // ensure initialBalanceSet exists
+        if (typeof parsedState.initialBalanceSet === 'undefined') {
+          parsedState.initialBalanceSet = (parsedState.cashBalance !== 0 || parsedState.bankBalance !== 0 || parsedState.cashTransactions.length > 0 || parsedState.bankTransactions.length > 0)
+        }
+        setState(parsedState);
       }
     } catch (error) {
       console.error("Failed to load state from localStorage", error);
@@ -71,7 +78,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [state, isInitialized]);
 
   const setInitialBalances = (cash: number, bank: number) => {
-    setState(prev => ({ ...prev, cashBalance: cash, bankBalance: bank }));
+    setState(prev => ({ ...prev, cashBalance: cash, bankBalance: bank, initialBalanceSet: true }));
   };
   
   const addCashTransaction = (tx: Omit<CashTransaction, 'id' | 'date'>) => {
@@ -256,7 +263,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setFontSize,
   };
 
-  return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
+  return <AppContext.Provider value={value}>{isInitialized ? children : null}</AppContext.Provider>;
 }
 
 export function useAppContext() {

@@ -10,6 +10,7 @@ import { CashTab } from '@/components/cash-tab';
 import { BankTab } from '@/components/bank-tab';
 import { StockTab } from '@/components/stock-tab';
 import { SettingsTab } from '@/components/settings-tab';
+import { InitialBalanceDialog } from '@/components/initial-balance-dialog';
 
 const fontClasses = {
   sm: 'text-sm',
@@ -61,6 +62,7 @@ function ShipShapeLedger() {
           </Tabs>
         </main>
       </div>
+      <InitialBalanceDialog />
     </div>
   );
 }
