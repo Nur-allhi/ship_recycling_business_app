@@ -30,6 +30,9 @@ interface AppContextType extends AppState {
   editCashTransaction: (originalTx: CashTransaction, updatedTxData: Omit<CashTransaction, 'id' | 'date'>) => void;
   editBankTransaction: (originalTx: BankTransaction, updatedTxData: Omit<BankTransaction, 'id' | 'date'>) => void;
   editStockTransaction: (originalTx: StockTransaction, updatedTxData: Omit<StockTransaction, 'id' | 'date'>) => void;
+  deleteCashTransaction: (txId: string) => void;
+  deleteBankTransaction: (txId: string) => void;
+  deleteStockTransaction: (txId: string) => void;
   transferFunds: (from: 'cash' | 'bank', amount: number, date?: string) => void;
   addCategory: (type: 'cash' | 'bank', category: string) => void;
   deleteCategory: (type: 'cash' | 'bank', category: string) => void;
@@ -338,6 +341,101 @@ export function AppProvider({ children }: { children: ReactNode }) {
       });
   };
 
+  const deleteCashTransaction = (txId: string) => {
+    setState(prev => {
+        const txToDelete = prev.cashTransactions.find(tx => tx.id === txId);
+        if (!txToDelete) return prev;
+
+        const newBalance = txToDelete.type === 'income' 
+            ? prev.cashBalance - txToDelete.amount 
+            : prev.cashBalance + txToDelete.amount;
+
+        const newTransactions = prev.cashTransactions.filter(tx => tx.id !== txId);
+
+        return {
+            ...prev,
+            cashBalance: newBalance,
+            cashTransactions: newTransactions,
+        };
+    });
+  };
+
+  const deleteBankTransaction = (txId: string) => {
+    setState(prev => {
+        const txToDelete = prev.bankTransactions.find(tx => tx.id === txId);
+        if (!txToDelete) return prev;
+
+        const newBalance = txToDelete.type === 'deposit' 
+            ? prev.bankBalance - txToDelete.amount 
+            : prev.bankBalance + txToDelete.amount;
+
+        const newTransactions = prev.bankTransactions.filter(tx => tx.id !== txId);
+        
+        return {
+            ...prev,
+            bankBalance: newBalance,
+            bankTransactions: newTransactions,
+        };
+    });
+  };
+  
+  const deleteStockTransaction = (txId: string) => {
+      setState(prev => {
+          const newStockTxs = prev.stockTransactions.filter(t => t.id !== txId);
+
+          // Full recalculation needed
+          let tempState = { ...initialAppState, initialBalanceSet: true, wastagePercentage: prev.wastagePercentage, currency: prev.currency };
+          
+          const initialCashTxs = prev.cashTransactions.filter(t => t.description?.includes('Initial Balance'));
+          const initialBankTxs = prev.bankTransactions.filter(t => t.description?.includes('Initial Balance'));
+          tempState.cashBalance = initialCashTxs.reduce((acc, tx) => acc + tx.amount, 0);
+          tempState.bankBalance = initialBankTxs.reduce((acc, tx) => acc + tx.amount, 0);
+
+          const allTxs = newStockTxs.sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+          for (const tx of allTxs) {
+               const costOrProceeds = tx.weight * tx.pricePerKg;
+              if (tx.type === 'purchase') {
+                  if (tx.paymentMethod === 'cash') tempState.cashBalance -= costOrProceeds;
+                  else tempState.bankBalance -= costOrProceeds;
+
+                  const itemIndex = tempState.stockItems.findIndex(i => i.name.toLowerCase() === tx.stockItemName.toLowerCase());
+                  if (itemIndex > -1) {
+                      const item = tempState.stockItems[itemIndex];
+                      const newWeight = item.weight + tx.weight;
+                      const newAvgPrice = ((item.weight * item.purchasePricePerKg) + (tx.weight * tx.pricePerKg)) / newWeight;
+                      tempState.stockItems[itemIndex] = { ...item, weight: newWeight, purchasePricePerKg: newAvgPrice };
+                  } else {
+                      tempState.stockItems.push({ id: crypto.randomUUID(), name: tx.stockItemName, weight: tx.weight, purchasePricePerKg: tx.pricePerKg });
+                  }
+              } else { // Sale
+                  if (tx.paymentMethod === 'cash') tempState.cashBalance += costOrProceeds;
+                  else tempState.bankBalance += costOrProceeds;
+                  
+                  const itemIndex = tempState.stockItems.findIndex(i => i.name.toLowerCase() === tx.stockItemName.toLowerCase());
+                  if (itemIndex > -1) {
+                      const item = tempState.stockItems[itemIndex];
+                      const wastageAmount = tx.weight * (prev.wastagePercentage / 100);
+                      const totalDeduction = tx.weight + wastageAmount;
+                      const newWeight = item.weight - totalDeduction;
+                      tempState.stockItems[itemIndex] = { ...item, weight: newWeight };
+                       if (newWeight <= 0) {
+                          tempState.stockItems.splice(itemIndex, 1);
+                      }
+                  }
+              }
+          }
+          
+          return {
+              ...prev,
+              stockTransactions: allTxs.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+              stockItems: tempState.stockItems,
+              cashBalance: tempState.cashBalance,
+              bankBalance: tempState.bankBalance,
+          };
+      });
+  };
+
   const transferFunds = (from: 'cash' | 'bank', amount: number, date?: string) => {
     setState(prev => {
       if (from === 'cash') {
@@ -418,6 +516,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     editCashTransaction,
     editBankTransaction,
     editStockTransaction,
+    deleteCashTransaction,
+    deleteBankTransaction,
+    deleteStockTransaction,
     transferFunds,
     addCategory,
     deleteCategory,

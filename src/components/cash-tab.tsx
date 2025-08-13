@@ -16,20 +16,33 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { ArrowUpCircle, ArrowDownCircle, ArrowRightLeft, Pencil, History } from "lucide-react"
+import { ArrowUpCircle, ArrowDownCircle, ArrowRightLeft, Pencil, History, Trash2 } from "lucide-react"
 import type { CashTransaction } from "@/lib/types"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetTrigger } from "@/components/ui/sheet"
 import { EditTransactionSheet } from "./edit-transaction-sheet"
+import { DeleteConfirmationDialog } from "./delete-confirmation-dialog"
 
 
 export function CashTab() {
-  const { cashBalance, cashTransactions, transferFunds, currency } = useAppContext()
+  const { cashBalance, cashTransactions, transferFunds, deleteCashTransaction, currency } = useAppContext()
   const [isTransferSheetOpen, setIsTransferSheetOpen] = useState(false)
   const [editSheetState, setEditSheetState] = useState<{isOpen: boolean, transaction: CashTransaction | null}>({ isOpen: false, transaction: null});
+  const [deleteDialogState, setDeleteDialogState] = useState<{isOpen: boolean, txId: string | null}>({ isOpen: false, txId: null });
 
   const handleEditClick = (tx: CashTransaction) => {
     setEditSheetState({ isOpen: true, transaction: tx });
   }
+
+  const handleDeleteClick = (txId: string) => {
+    setDeleteDialogState({ isOpen: true, txId });
+  };
+
+  const confirmDeletion = () => {
+    if (deleteDialogState.txId) {
+        deleteCashTransaction(deleteDialogState.txId);
+        setDeleteDialogState({ isOpen: false, txId: null });
+    }
+  };
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: currency }).format(amount)
@@ -116,10 +129,16 @@ export function CashTab() {
                       </div>
                     </TableCell>
                     <TableCell className="text-right">
-                      <Button variant="ghost" size="icon" onClick={() => handleEditClick(tx)}>
-                        <Pencil className="h-4 w-4" />
-                        <span className="sr-only">Edit</span>
-                      </Button>
+                       <div className="flex items-center justify-end gap-2">
+                          <Button variant="ghost" size="icon" onClick={() => handleEditClick(tx)}>
+                            <Pencil className="h-4 w-4" />
+                            <span className="sr-only">Edit</span>
+                          </Button>
+                          <Button variant="ghost" size="icon" onClick={() => handleDeleteClick(tx.id)}>
+                            <Trash2 className="h-4 w-4" />
+                            <span className="sr-only">Delete</span>
+                          </Button>
+                        </div>
                     </TableCell>
                   </TableRow>
                 ))
@@ -141,6 +160,11 @@ export function CashTab() {
           transactionType="cash"
         />
       )}
+      <DeleteConfirmationDialog 
+        isOpen={deleteDialogState.isOpen}
+        setIsOpen={(isOpen) => setDeleteDialogState({ isOpen, txId: null })}
+        onConfirm={confirmDeletion}
+      />
     </>
   )
 }

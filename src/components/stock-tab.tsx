@@ -14,17 +14,30 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { ArrowUpCircle, ArrowDownCircle, Pencil, History } from "lucide-react"
+import { ArrowUpCircle, ArrowDownCircle, Pencil, History, Trash2 } from "lucide-react"
 import type { StockItem, StockTransaction } from "@/lib/types"
 import { EditTransactionSheet } from "./edit-transaction-sheet"
+import { DeleteConfirmationDialog } from "./delete-confirmation-dialog"
 
 export function StockTab() {
-  const { stockItems, stockTransactions, currency } = useAppContext()
+  const { stockItems, stockTransactions, deleteStockTransaction, currency } = useAppContext()
   const [editSheetState, setEditSheetState] = useState<{isOpen: boolean, transaction: StockTransaction | null}>({ isOpen: false, transaction: null});
+  const [deleteDialogState, setDeleteDialogState] = useState<{isOpen: boolean, txId: string | null}>({ isOpen: false, txId: null });
 
   const handleEditClick = (tx: StockTransaction) => {
     setEditSheetState({ isOpen: true, transaction: tx });
   }
+
+  const handleDeleteClick = (txId: string) => {
+    setDeleteDialogState({ isOpen: true, txId });
+  };
+
+  const confirmDeletion = () => {
+    if (deleteDialogState.txId) {
+        deleteStockTransaction(deleteDialogState.txId);
+        setDeleteDialogState({ isOpen: false, txId: null });
+    }
+  };
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: currency }).format(amount)
@@ -123,10 +136,16 @@ export function StockTab() {
                         <TableCell className="text-right">{formatCurrency(tx.pricePerKg)}</TableCell>
                         <TableCell className={`text-right font-semibold ${tx.type === 'purchase' ? 'text-destructive' : 'text-accent'}`}>{formatCurrency(tx.weight * tx.pricePerKg)}</TableCell>
                         <TableCell className="text-right">
-                          <Button variant="ghost" size="icon" onClick={() => handleEditClick(tx)}>
-                              <Pencil className="h-4 w-4" />
-                              <span className="sr-only">Edit</span>
-                          </Button>
+                          <div className="flex items-center justify-end gap-2">
+                            <Button variant="ghost" size="icon" onClick={() => handleEditClick(tx)}>
+                                <Pencil className="h-4 w-4" />
+                                <span className="sr-only">Edit</span>
+                            </Button>
+                             <Button variant="ghost" size="icon" onClick={() => handleDeleteClick(tx.id)}>
+                                <Trash2 className="h-4 w-4" />
+                                <span className="sr-only">Delete</span>
+                            </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))
@@ -147,6 +166,11 @@ export function StockTab() {
           transactionType="stock"
         />
       )}
+      <DeleteConfirmationDialog 
+        isOpen={deleteDialogState.isOpen}
+        setIsOpen={(isOpen) => setDeleteDialogState({ isOpen, txId: null })}
+        onConfirm={confirmDeletion}
+      />
     </>
   )
 }
