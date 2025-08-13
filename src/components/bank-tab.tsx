@@ -44,7 +44,7 @@ export function BankTab() {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
-  const [showActions, setShowActions] = useState(true);
+  const [showActions, setShowActions] = useState(false);
   const isMobile = useIsMobile();
 
   const filteredByMonth = useMemo(() => {
@@ -298,8 +298,8 @@ export function BankTab() {
                     </Button>
                 </div>
             </div>
-             <div className="flex flex-col sm:flex-row items-center justify-between gap-2 pt-4">
-                <div className="flex items-center gap-2">
+             <div className="flex flex-col items-center justify-center gap-2 pt-4">
+                <div className="flex flex-wrap items-center justify-center gap-2">
                      <Button size="sm" variant={isSelectionMode ? "secondary" : "outline"} onClick={toggleSelectionMode}>
                         <CheckSquare className="mr-2 h-4 w-4" />
                         {isSelectionMode ? 'Cancel' : 'Select'}
@@ -307,12 +307,12 @@ export function BankTab() {
                     <TooltipProvider>
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <Button size="sm" variant="outline" onClick={() => setShowActions(!showActions)}>
-                            {showActions ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                          </Button>
+                           <Button size="sm" variant="outline" onClick={() => setShowActions(!showActions)}>
+                                {showActions ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                           </Button>
                         </TooltipTrigger>
                         <TooltipContent>
-                          <p>{showActions ? 'Hide' : 'Show'} Actions</p>
+                           <p>{showActions ? 'Hide' : 'Show'} Actions</p>
                         </TooltipContent>
                       </Tooltip>
                     </TooltipProvider>
@@ -334,8 +334,6 @@ export function BankTab() {
                             </form>
                         </SheetContent>
                     </Sheet>
-                </div>
-                <div className="flex items-center gap-2">
                      {selectedTxIds.length > 0 && (
                         <Button size="sm" variant="destructive" onClick={handleMultiDeleteClick}>
                             <Trash2 className="mr-2 h-4 w-4" /> ({selectedTxIds.length})
@@ -390,5 +388,3 @@ export function BankTab() {
     </>
   )
 }
-
-    
