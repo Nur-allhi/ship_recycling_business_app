@@ -55,13 +55,13 @@ export function DashboardTab({ setActiveTab }: DashboardTabProps) {
         </Card>
         <Card onClick={() => setActiveTab('stock')} className="cursor-pointer hover:bg-muted/50">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Stock Value</CardTitle>
+            <CardTitle className="text-sm font-medium">Stock Quantity</CardTitle>
             <Boxes className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(totalStockValue)}</div>
+            <div className="text-2xl font-bold">{totalStockWeight.toFixed(2)} kg</div>
             <p className="text-xs text-muted-foreground">
-              {totalStockWeight.toFixed(2)} kg of items
+              Total Value: {formatCurrency(totalStockValue)}
             </p>
           </CardContent>
         </Card>
