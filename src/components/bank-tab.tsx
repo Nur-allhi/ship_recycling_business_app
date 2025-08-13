@@ -41,8 +41,8 @@ export function BankTab() {
   const { bankBalance, bankTransactions, transferFunds, deleteBankTransaction, deleteMultipleBankTransactions, currency } = useAppContext()
   const [isTransferSheetOpen, setIsTransferSheetOpen] = useState(false)
   const [editSheetState, setEditSheetState] = useState<{isOpen: boolean, transaction: BankTransaction | null}>({ isOpen: false, transaction: null});
-  const [deleteDialogState, setDeleteDialogState] = useState<{isOpen: boolean, txId: string | null, txIds: string[] | null}>({ isOpen: false, txId: null, txIds: null });
-  const [selectedTxIds, setSelectedTxIds] = useState<string[]>([]);
+  const [deleteDialogState, setDeleteDialogState] = useState<{isOpen: boolean, txToDelete: BankTransaction | null, txsToDelete: BankTransaction[] | null}>({ isOpen: false, txToDelete: null, txsToDelete: null });
+  const [selectedTxs, setSelectedTxs] = useState<BankTransaction[]>([]);
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [currentPage, setCurrentPage] = useState(1);
@@ -99,23 +99,23 @@ export function BankTab() {
     setEditSheetState({ isOpen: true, transaction: tx });
   }
 
-  const handleDeleteClick = (txId: string) => {
-    setDeleteDialogState({ isOpen: true, txId, txIds: null });
+  const handleDeleteClick = (tx: BankTransaction) => {
+    setDeleteDialogState({ isOpen: true, txToDelete: tx, txsToDelete: null });
   };
   
   const handleMultiDeleteClick = () => {
-    setDeleteDialogState({ isOpen: true, txId: null, txIds: selectedTxIds });
+    setDeleteDialogState({ isOpen: true, txToDelete: null, txsToDelete: selectedTxs });
   }
 
   const confirmDeletion = () => {
-    if (deleteDialogState.txId) {
-        deleteBankTransaction(deleteDialogState.txId);
+    if (deleteDialogState.txToDelete) {
+        deleteBankTransaction(deleteDialogState.txToDelete);
     }
-    if (deleteDialogState.txIds && deleteDialogState.txIds.length > 0) {
-        deleteMultipleBankTransactions(deleteDialogState.txIds);
-        setSelectedTxIds([]);
+    if (deleteDialogState.txsToDelete && deleteDialogState.txsToDelete.length > 0) {
+        deleteMultipleBankTransactions(deleteDialogState.txsToDelete);
+        setSelectedTxs([]);
     }
-    setDeleteDialogState({ isOpen: false, txId: null, txIds: null });
+    setDeleteDialogState({ isOpen: false, txToDelete: null, txsToDelete: null });
     setIsSelectionMode(false);
   };
 
@@ -138,23 +138,23 @@ export function BankTab() {
   
   const handleSelectAll = (checked: boolean) => {
       if (checked) {
-          setSelectedTxIds(paginatedTransactions.map(tx => tx.id));
+          setSelectedTxs(paginatedTransactions);
       } else {
-          setSelectedTxIds([]);
+          setSelectedTxs([]);
       }
   }
 
-  const handleSelectRow = (txId: string, checked: boolean) => {
+  const handleSelectRow = (tx: BankTransaction, checked: boolean) => {
       if (checked) {
-          setSelectedTxIds(prev => [...prev, txId]);
+          setSelectedTxs(prev => [...prev, tx]);
       } else {
-          setSelectedTxIds(prev => prev.filter(id => id !== txId));
+          setSelectedTxs(prev => prev.filter(t => t.id !== tx.id));
       }
   }
 
   const toggleSelectionMode = () => {
     setIsSelectionMode(!isSelectionMode);
-    setSelectedTxIds([]);
+    setSelectedTxs([]);
   }
   
   const goToPreviousMonth = () => {
@@ -170,6 +170,8 @@ export function BankTab() {
     if (sortKey !== key) return <ArrowUpDown className="ml-2 h-4 w-4 opacity-50" />;
     return sortDirection === 'asc' ? <ArrowUpCircle className="ml-2 h-4 w-4" /> : <ArrowDownCircle className="ml-2 h-4 w-4" />;
   };
+  
+  const selectedTxIds = useMemo(() => selectedTxs.map(tx => tx.id), [selectedTxs]);
 
   const renderDesktopView = () => (
     <div className="overflow-x-auto">
@@ -180,7 +182,7 @@ export function BankTab() {
               <TableHead className="w-[50px]">
                   <Checkbox 
                       onCheckedChange={(checked) => handleSelectAll(Boolean(checked))}
-                      checked={selectedTxIds.length === paginatedTransactions.length && paginatedTransactions.length > 0}
+                      checked={selectedTxs.length === paginatedTransactions.length && paginatedTransactions.length > 0}
                       aria-label="Select all rows"
                   />
               </TableHead>
@@ -207,7 +209,7 @@ export function BankTab() {
                 {isSelectionMode && (
                   <TableCell>
                       <Checkbox 
-                          onCheckedChange={(checked) => handleSelectRow(tx.id, Boolean(checked))}
+                          onCheckedChange={(checked) => handleSelectRow(tx, Boolean(checked))}
                           checked={selectedTxIds.includes(tx.id)}
                           aria-label="Select row"
                       />
@@ -245,7 +247,7 @@ export function BankTab() {
                             <Pencil className="h-4 w-4" />
                             <span className="sr-only">Edit</span>
                         </Button>
-                        <Button variant="ghost" size="icon" onClick={() => handleDeleteClick(tx.id)}>
+                        <Button variant="ghost" size="icon" onClick={() => handleDeleteClick(tx)}>
                             <Trash2 className="h-4 w-4" />
                             <span className="sr-only">Delete</span>
                         </Button>
@@ -271,7 +273,7 @@ export function BankTab() {
           <Card key={tx.id} className="relative animate-fade-in">
              {isSelectionMode && (
                 <Checkbox 
-                    onCheckedChange={(checked) => handleSelectRow(tx.id, Boolean(checked))}
+                    onCheckedChange={(checked) => handleSelectRow(tx, Boolean(checked))}
                     checked={selectedTxIds.includes(tx.id)}
                     aria-label="Select row"
                     className="absolute top-4 left-4"
@@ -310,7 +312,7 @@ export function BankTab() {
                           <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEditClick(tx)}>
                               <Pencil className="h-4 w-4" />
                           </Button>
-                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleDeleteClick(tx.id)}>
+                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleDeleteClick(tx)}>
                               <Trash2 className="h-4 w-4" />
                           </Button>
                       </div>
@@ -384,9 +386,9 @@ export function BankTab() {
                             </form>
                         </SheetContent>
                     </Sheet>
-                     {selectedTxIds.length > 0 && (
+                     {selectedTxs.length > 0 && (
                         <Button size="sm" variant="destructive" onClick={handleMultiDeleteClick}>
-                            <Trash2 className="mr-2 h-4 w-4" /> ({selectedTxIds.length})
+                            <Trash2 className="mr-2 h-4 w-4" /> ({selectedTxs.length})
                         </Button>
                     )}
                 </div>
@@ -431,9 +433,9 @@ export function BankTab() {
       )}
       <DeleteConfirmationDialog 
         isOpen={deleteDialogState.isOpen}
-        setIsOpen={(isOpen) => setDeleteDialogState({ isOpen, txId: null, txIds: null })}
+        setIsOpen={(isOpen) => setDeleteDialogState({ isOpen, txToDelete: null, txsToDelete: null })}
         onConfirm={confirmDeletion}
-        itemCount={deleteDialogState.txIds?.length || 1}
+        itemCount={deleteDialogState.txsToDelete?.length || (deleteDialogState.txToDelete ? 1 : 0)}
       />
     </>
   )

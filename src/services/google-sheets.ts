@@ -1,3 +1,4 @@
+
 /**
  * @fileoverview Service for interacting with the Google Sheets API.
  * This service provides methods to authenticate and access Google Sheets using a service account.
@@ -47,4 +48,24 @@ export async function verifyGoogleSheetsConnection() {
     console.error('Failed to connect to Google Sheets:', error);
     throw new Error('Could not connect to Google Sheets. Please check your credentials and sheet permissions.');
   }
+}
+
+let sheetMetadataCache: any = null;
+
+async function getSheetMetadata() {
+    if (sheetMetadataCache) {
+        return sheetMetadataCache;
+    }
+     if (!sheetId) {
+        throw new Error('GOOGLE_SHEET_ID is not set.');
+    }
+    const response = await sheets.spreadsheets.get({ spreadsheetId: sheetId });
+    sheetMetadataCache = response.data;
+    return sheetMetadataCache;
+}
+
+export async function getSheetIdByName(sheetName: string): Promise<number | null> {
+    const metadata = await getSheetMetadata();
+    const sheet = metadata.sheets?.find(s => s.properties?.title === sheetName);
+    return sheet?.properties?.sheetId ?? null;
 }

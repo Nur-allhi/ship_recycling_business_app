@@ -1,11 +1,11 @@
 
 "use client";
 
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import type { CashTransaction, BankTransaction, StockItem, StockTransaction } from '@/lib/types';
 import { useToast } from "@/hooks/use-toast"
-import { Button } from '@/components/ui/button';
-import { readSheetData } from '@/app/actions';
+import { readSheetData, appendSheetRow, updateSheetRow, deleteSheetRow } from '@/app/actions';
+import { format } from 'date-fns';
 
 type FontSize = 'sm' | 'base' | 'lg';
 
@@ -29,20 +29,19 @@ interface AppState {
 }
 
 interface AppContextType extends AppState {
-  setInitialBalances: (cash: number, bank: number) => void;
-  addInitialStockItem: (item: { name: string, weight: number, pricePerKg: number}) => void;
-  addCashTransaction: (tx: Omit<CashTransaction, 'id'>) => void;
-  addBankTransaction: (tx: Omit<BankTransaction, 'id'>) => void;
-  addStockTransaction: (tx: Omit<StockTransaction, 'id'>) => void;
-  editCashTransaction: (originalTx: CashTransaction, updatedTxData: Omit<CashTransaction, 'id' | 'date'>) => void;
-  editBankTransaction: (originalTx: BankTransaction, updatedTxData: Omit<BankTransaction, 'id' | 'date'>) => void;
-  editStockTransaction: (originalTx: StockTransaction, updatedTxData: Omit<StockTransaction, 'id' | 'date'>) => void;
-  deleteCashTransaction: (txId: string) => void;
-  deleteBankTransaction: (txId: string) => void;
-  deleteStockTransaction: (txId: string) => void;
-  deleteMultipleCashTransactions: (txIds: string[]) => void;
-  deleteMultipleBankTransactions: (txIds: string[]) => void;
-  deleteMultipleStockTransactions: (txIds: string[]) => void;
+  reloadData: () => Promise<void>;
+  addCashTransaction: (tx: Omit<CashTransaction, 'id' | 'rowIndex'>) => void;
+  addBankTransaction: (tx: Omit<BankTransaction, 'id' | 'rowIndex'>) => void;
+  addStockTransaction: (tx: Omit<StockTransaction, 'id' | 'rowIndex'>) => void;
+  editCashTransaction: (originalTx: CashTransaction, updatedTxData: Omit<CashTransaction, 'id' | 'date' | 'rowIndex'>) => void;
+  editBankTransaction: (originalTx: BankTransaction, updatedTxData: Omit<BankTransaction, 'id' | 'date' | 'rowIndex'>) => void;
+  editStockTransaction: (originalTx: StockTransaction, updatedTxData: Omit<StockTransaction, 'id'| 'date'| 'rowIndex'>) => void;
+  deleteCashTransaction: (tx: CashTransaction) => void;
+  deleteBankTransaction: (tx: BankTransaction) => void;
+  deleteStockTransaction: (tx: StockTransaction) => void;
+  deleteMultipleCashTransactions: (txs: CashTransaction[]) => void;
+  deleteMultipleBankTransactions: (txs: BankTransaction[]) => void;
+  deleteMultipleStockTransactions: (txs: StockTransaction[]) => void;
   transferFunds: (from: 'cash' | 'bank', amount: number, date?: string) => void;
   addCategory: (type: 'cash' | 'bank', category: string) => void;
   deleteCategory: (type: 'cash' | 'bank', category: string) => void;
@@ -81,55 +80,112 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [isInitialized, setIsInitialized] = useState(false);
   const { toast } = useToast();
 
-  useEffect(() => {
-    async function loadData() {
-      try {
-        // Fetch from Google Sheets
-        const [cashData, bankData, stockData] = await Promise.all([
-          readSheetData({ range: 'Cash!A2:E' }), // Assuming headers are in row 1
-          readSheetData({ range: 'Bank!A2:E' }),
-          readSheetData({ range: 'Stock!A2:D' })
+  const reloadData = useCallback(async () => {
+    try {
+        setState(prev => ({ ...prev, initialBalanceSet: false })); // Show loading indicator
+        const [cashData, bankData, stockItemsData, stockTransactionsData] = await Promise.all([
+            readSheetData({ range: 'Cash!A2:E' }),
+            readSheetData({ range: 'Bank!A2:E' }),
+            readSheetData({ range: 'Stock!A2:D' }),
+            readSheetData({ range: 'Stock Transactions!A2:G' }),
         ]);
 
-        // Process Cash Transactions
-        const cashTransactions: CashTransaction[] = cashData.map((row, index) => ({
-          id: `cash-${index}`,
-          date: new Date(row[0]).toISOString(),
-          type: row[1]?.toLowerCase() as 'income' | 'expense',
-          amount: parseFloat(row[2]),
-          description: row[3],
-          category: row[4],
-        }));
+        const cashTransactions: CashTransaction[] = cashData
+            .map((row, index) => ({
+                id: `cash-${index}`,
+                rowIndex: index + 2,
+                date: new Date(row[0]).toISOString(),
+                type: row[1]?.toLowerCase() as 'income' | 'expense',
+                amount: parseFloat(row[2]) || 0,
+                description: row[3] || '',
+                category: row[4] || '',
+            }))
+            .filter(tx => tx.date && tx.type && !isNaN(tx.amount));
 
-        // Process Bank Transactions
-        const bankTransactions: BankTransaction[] = bankData.map((row, index) => ({
-          id: `bank-${index}`,
-          date: new Date(row[0]).toISOString(),
-          type: row[1]?.toLowerCase() as 'deposit' | 'withdrawal',
-          amount: parseFloat(row[2]),
-          description: row[3],
-          category: row[4],
-        }));
+        const bankTransactions: BankTransaction[] = bankData
+             .map((row, index) => ({
+                id: `bank-${index}`,
+                rowIndex: index + 2,
+                date: new Date(row[0]).toISOString(),
+                type: row[1]?.toLowerCase() as 'deposit' | 'withdrawal',
+                amount: parseFloat(row[2]) || 0,
+                description: row[3] || '',
+                category: row[4] || '',
+            }))
+            .filter(tx => tx.date && tx.type && !isNaN(tx.amount));
 
-        // Process Stock Items
-        const stockItems: StockItem[] = stockData.map((row, index) => ({
-            id: row[0] || `stock-${index}`,
-            name: row[1],
-            weight: parseFloat(row[2]),
-            purchasePricePerKg: parseFloat(row[3]),
+        const stockItems: StockItem[] = stockItemsData.map((row, index) => ({
+            id: `stock-item-${index}`,
+            rowIndex: index + 2,
+            name: row[0],
+            weight: parseFloat(row[1]) || 0,
+            purchasePricePerKg: parseFloat(row[2]) || 0,
         }));
+        
+        const stockTransactions: StockTransaction[] = stockTransactionsData
+            .map((row, index) => ({
+                id: `stock-tx-${index}`,
+                rowIndex: index + 2,
+                date: new Date(row[0]).toISOString(),
+                type: row[1]?.toLowerCase() as 'purchase' | 'sale',
+                stockItemName: row[2] || '',
+                weight: parseFloat(row[3]) || 0,
+                pricePerKg: parseFloat(row[4]) || 0,
+                paymentMethod: row[5]?.toLowerCase() as 'cash' | 'bank',
+                description: row[6] || '',
+            }))
+            .filter(tx => tx.date && tx.type && tx.stockItemName && !isNaN(tx.weight) && !isNaN(tx.pricePerKg));
 
-        // Calculate initial balances from transactions
+        // This recalculation logic should eventually move to the backend/sheet itself
         const cashBalance = cashTransactions.reduce((acc, tx) => acc + (tx.type === 'income' ? tx.amount : -tx.amount), 0);
         const bankBalance = bankTransactions.reduce((acc, tx) => acc + (tx.type === 'deposit' ? tx.amount : -tx.amount), 0);
+        
+        // Adjust balances based on stock transactions
+        const finalCashBalance = stockTransactions.reduce((balance, tx) => {
+            if (tx.paymentMethod === 'cash') {
+                return balance + (tx.type === 'sale' ? tx.weight * tx.pricePerKg : -(tx.weight * tx.pricePerKg));
+            }
+            return balance;
+        }, cashBalance);
+
+        const finalBankBalance = stockTransactions.reduce((balance, tx) => {
+            if (tx.paymentMethod === 'bank') {
+                return balance + (tx.type === 'sale' ? tx.weight * tx.pricePerKg : -(tx.weight * tx.pricePerKg));
+            }
+            return balance;
+        }, bankBalance);
+
+        const currentStockItems = stockTransactions.reduce<Record<string, { weight: number, totalValue: number }>>((acc, tx) => {
+            if (!acc[tx.stockItemName]) {
+                acc[tx.stockItemName] = { weight: 0, totalValue: 0 };
+            }
+            if (tx.type === 'purchase') {
+                acc[tx.stockItemName].weight += tx.weight;
+                acc[tx.stockItemName].totalValue += tx.weight * tx.pricePerKg;
+            } else { // sale
+                acc[tx.stockItemName].weight -= tx.weight;
+                // Value is removed based on avg price, but for simplicity we assume sale price reflects value change
+            }
+            return acc;
+        }, {});
+        
+        const aggregatedStockItems: StockItem[] = Object.entries(currentStockItems).map(([name, data], index) => ({
+            id: `stock-agg-${index}`,
+            name,
+            weight: data.weight,
+            purchasePricePerKg: data.weight > 0 ? data.totalValue / data.weight : 0,
+            rowIndex: 0 // Not applicable for aggregated view
+        }));
+
 
         setState(prev => ({
-            ...prev, // Keep user settings like font, currency etc.
+            ...prev,
             cashTransactions: cashTransactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
             bankTransactions: bankTransactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
-            stockItems,
-            cashBalance,
-            bankBalance,
+            stockItems: aggregatedStockItems,
+            stockTransactions: stockTransactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+            cashBalance: finalCashBalance,
+            bankBalance: finalBankBalance,
             initialBalanceSet: true
         }));
 
@@ -138,14 +194,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
         toast({
             variant: 'destructive',
             title: 'Failed to load data',
-            description: 'Could not connect to Google Sheets. Please check your setup.'
+            description: 'Could not connect to Google Sheets. Please check your setup and sheet names (Cash, Bank, Stock, Stock Transactions).'
         });
-        setState(prev => ({ ...prev, initialBalanceSet: true })); // Prevent dialog from showing on error
+        setState(prev => ({ ...prev, initialBalanceSet: true }));
       }
-      setIsInitialized(true);
-    }
+  }, [toast]);
 
-    // Load settings from localStorage first
+
+  useEffect(() => {
      try {
       const storedSettings = localStorage.getItem('shipshape-ledger-settings');
       let settings = {};
@@ -157,8 +213,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         console.error("Could not parse settings from local storage", e)
     }
 
-    loadData();
-  }, [toast]);
+    reloadData();
+    setIsInitialized(true);
+  }, [reloadData]);
 
   useEffect(() => {
     if (isInitialized) {
@@ -180,132 +237,213 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
     }
   }, [state, isInitialized]);
-
-
-  const setInitialBalances = (cash: number, bank: number) => {
-    // This now can be used to add 'Initial Balance' transactions to the sheet via another flow
-    toast({ title: "Note", description: "This functionality will now add a transaction to your sheet."});
+  
+  const addCashTransaction = async (tx: Omit<CashTransaction, 'id' | 'rowIndex'>) => {
+    try {
+      await appendSheetRow({
+        range: 'Cash!A:E',
+        values: [format(new Date(tx.date), 'MM/dd/yyyy'), tx.type, tx.amount, tx.description, tx.category]
+      });
+      toast({ title: "Success", description: "Cash transaction added to sheet."});
+      await reloadData();
+    } catch (error) {
+      console.error(error);
+      toast({ variant: 'destructive', title: "Error", description: "Failed to add cash transaction."});
+    }
   };
 
-  const addInitialStockItem = (item: { name: string, weight: number, pricePerKg: number}) => {
-    // This now can be used to add a row to the stock sheet
-     toast({ title: "Note", description: "This functionality will now add a row to your stock sheet."});
+  const addBankTransaction = async (tx: Omit<BankTransaction, 'id' | 'rowIndex'>) => {
+     try {
+      await appendSheetRow({
+        range: 'Bank!A:E',
+        values: [format(new Date(tx.date), 'MM/dd/yyyy'), tx.type, tx.amount, tx.description, tx.category]
+      });
+      toast({ title: "Success", description: "Bank transaction added to sheet."});
+      await reloadData();
+    } catch (error) {
+      console.error(error);
+      toast({ variant: 'destructive', title: "Error", description: "Failed to add bank transaction."});
+    }
   };
   
-  const addCashTransaction = (tx: Omit<CashTransaction, 'id'>) => {
-    // TODO: Implement flow to add this transaction to the Google Sheet
-    console.log("Adding cash transaction (to be implemented in backend):", tx);
-    toast({ title: "Pending", description: "Adding transactions to sheet is not yet implemented."})
+  const addStockTransaction = async (tx: Omit<StockTransaction, 'id' | 'rowIndex'>) => {
+     try {
+      await appendSheetRow({
+        range: 'Stock Transactions!A:G',
+        values: [format(new Date(tx.date), 'MM/dd/yyyy'), tx.type, tx.stockItemName, tx.weight, tx.pricePerKg, tx.paymentMethod, tx.description]
+      });
+      toast({ title: "Success", description: "Stock transaction added to sheet."});
+      await reloadData();
+    } catch (error) {
+      console.error(error);
+      toast({ variant: 'destructive', title: "Error", description: "Failed to add stock transaction."});
+    }
   };
 
-  const addBankTransaction = (tx: Omit<BankTransaction, 'id'>) => {
-    // TODO: Implement flow to add this transaction to the Google Sheet
-    console.log("Adding bank transaction (to be implemented in backend):", tx);
-    toast({ title: "Pending", description: "Adding transactions to sheet is not yet implemented."})
+  const editCashTransaction = async (originalTx: CashTransaction, updatedTxData: Omit<CashTransaction, 'id' | 'date' | 'rowIndex'>) => {
+      try {
+        const range = `Cash!A${originalTx.rowIndex}:E${originalTx.rowIndex}`;
+        const values = [format(new Date(originalTx.date), 'MM/dd/yyyy'), updatedTxData.type, updatedTxData.amount, updatedTxData.description, updatedTxData.category];
+        await updateSheetRow({ range, values });
+        toast({ title: "Success", description: "Cash transaction updated."});
+        await reloadData();
+      } catch (error) {
+        console.error(error);
+        toast({ variant: 'destructive', title: "Error", description: "Failed to update cash transaction."});
+      }
+  };
+
+  const editBankTransaction = async (originalTx: BankTransaction, updatedTxData: Omit<BankTransaction, 'id' | 'date' | 'rowIndex'>) => {
+      try {
+        const range = `Bank!A${originalTx.rowIndex}:E${originalTx.rowIndex}`;
+        const values = [format(new Date(originalTx.date), 'MM/dd/yyyy'), updatedTxData.type, updatedTxData.amount, updatedTxData.description, updatedTxData.category];
+        await updateSheetRow({ range, values });
+        toast({ title: "Success", description: "Bank transaction updated."});
+        await reloadData();
+      } catch (error) {
+        console.error(error);
+        toast({ variant: 'destructive', title: "Error", description: "Failed to update bank transaction."});
+      }
+  };
+
+  const editStockTransaction = async (originalTx: StockTransaction, updatedTxData: Omit<StockTransaction, 'id' | 'date' | 'rowIndex'>) => {
+      try {
+        const range = `Stock Transactions!A${originalTx.rowIndex}:G${originalTx.rowIndex}`;
+        const values = [format(new Date(originalTx.date), 'MM/dd/yyyy'), updatedTxData.type, updatedTxData.stockItemName, updatedTxData.weight, updatedTxData.pricePerKg, updatedTxData.paymentMethod, updatedTxData.description];
+        await updateSheetRow({ range, values });
+        toast({ title: "Success", description: "Stock transaction updated."});
+        await reloadData();
+      } catch (error) {
+        console.error(error);
+        toast({ variant: 'destructive', title: "Error", description: "Failed to update stock transaction."});
+      }
+  };
+
+  const deleteCashTransaction = async (tx: CashTransaction) => {
+    try {
+        await deleteSheetRow({ sheetName: "Cash", rowIndex: tx.rowIndex });
+        toast({ title: "Success", description: "Cash transaction deleted."});
+        await reloadData();
+    } catch(error) {
+        console.error(error);
+        toast({ variant: 'destructive', title: "Error", description: "Failed to delete cash transaction."});
+    }
+  };
+
+  const deleteBankTransaction = async (tx: BankTransaction) => {
+    try {
+        await deleteSheetRow({ sheetName: "Bank", rowIndex: tx.rowIndex });
+        toast({ title: "Success", description: "Bank transaction deleted."});
+        await reloadData();
+    } catch(error) {
+        console.error(error);
+        toast({ variant: 'destructive', title: "Error", description: "Failed to delete bank transaction."});
+    }
   };
   
-  const addStockTransaction = (tx: Omit<StockTransaction, 'id'>) => {
-    // TODO: Implement flow to add this transaction to the Google Sheet
-    console.log("Adding stock transaction (to be implemented in backend):", tx);
-    toast({ title: "Pending", description: "Adding transactions to sheet is not yet implemented."})
+  const deleteStockTransaction = async (tx: StockTransaction) => {
+    try {
+        await deleteSheetRow({ sheetName: "Stock Transactions", rowIndex: tx.rowIndex });
+        toast({ title: "Success", description: "Stock transaction deleted."});
+        await reloadData();
+    } catch(error) {
+        console.error(error);
+        toast({ variant: 'destructive', title: "Error", description: "Failed to delete stock transaction."});
+    }
   };
 
-  // The edit/delete/transfer functions will also need to be backed by flows.
-  // For now, they will only update local state, and will be out of sync with the sheet.
-
-  const editCashTransaction = (originalTx: CashTransaction, updatedTxData: Omit<CashTransaction, 'id' | 'date'>) => {
-      setState(prev => {
-          let newCashBalance = prev.cashBalance;
-          if (originalTx.type === 'income') newCashBalance -= originalTx.amount;
-          else newCashBalance += originalTx.amount;
-
-          const newTx: CashTransaction = { ...updatedTxData, id: originalTx.id, date: originalTx.date, lastEdited: new Date().toISOString() };
-          if (newTx.type === 'income') newCashBalance += newTx.amount;
-          else newCashBalance -= newTx.amount;
-
-          const newTransactions = prev.cashTransactions.map(tx => tx.id === originalTx.id ? newTx : tx);
-
-          return { ...prev, cashBalance: newCashBalance, cashTransactions: newTransactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()) };
-      });
-      toast({title: "Locally Edited", description: "Syncing edits with Google Sheets is not yet implemented."})
+  const deleteMultipleCashTransactions = async (txs: CashTransaction[]) => {
+     try {
+        for(const tx of txs) {
+            await deleteSheetRow({ sheetName: "Cash", rowIndex: tx.rowIndex });
+        }
+        toast({ title: "Success", description: `${txs.length} cash transactions deleted.`});
+        await reloadData();
+    } catch(error) {
+        console.error(error);
+        toast({ variant: 'destructive', title: "Error", description: "Failed to delete multiple cash transactions."});
+    }
   };
 
-  const editBankTransaction = (originalTx: BankTransaction, updatedTxData: Omit<BankTransaction, 'id' | 'date'>) => {
-      setState(prev => {
-          let newBankBalance = prev.bankBalance;
-          if (originalTx.type === 'deposit') newBankBalance -= originalTx.amount;
-          else newBankBalance += originalTx.amount;
-
-          const newTx: BankTransaction = { ...updatedTxData, id: originalTx.id, date: originalTx.date, lastEdited: new Date().toISOString() };
-          if (newTx.type === 'deposit') newBankBalance += newTx.amount;
-          else newBankBalance -= newTx.amount;
-
-          const newTransactions = prev.bankTransactions.map(tx => tx.id === originalTx.id ? newTx : tx);
-          return { ...prev, bankBalance: newBankBalance, bankTransactions: newTransactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()) };
-      });
-       toast({title: "Locally Edited", description: "Syncing edits with Google Sheets is not yet implemented."})
+  const deleteMultipleBankTransactions = async (txs: BankTransaction[]) => {
+    try {
+        for(const tx of txs) {
+            await deleteSheetRow({ sheetName: "Bank", rowIndex: tx.rowIndex });
+        }
+        toast({ title: "Success", description: `${txs.length} bank transactions deleted.`});
+        await reloadData();
+    } catch(error) {
+        console.error(error);
+        toast({ variant: 'destructive', title: "Error", description: "Failed to delete multiple bank transactions."});
+    }
   };
 
-  const editStockTransaction = (originalTx: StockTransaction, updatedTxData: Omit<StockTransaction, 'id' | 'date'>) => {
-      setState(prev => {
-          const otherStockTxs = prev.stockTransactions.filter(t => t.id !== originalTx.id);
-          let tempState = { ...initialAppState, initialBalanceSet: true, wastagePercentage: prev.wastagePercentage, currency: prev.currency, showStockValue: prev.showStockValue, organizationName: prev.organizationName };
-          const allTxs = [...otherStockTxs, { ...updatedTxData, id: originalTx.id, date: originalTx.date, lastEdited: new Date().toISOString() }].sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-          return { ...prev, stockTransactions: allTxs.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()) };
-      });
-      toast({title: "Locally Edited", description: "Syncing edits with Google Sheets is not yet implemented."})
+  const deleteMultipleStockTransactions = async (txs: StockTransaction[]) => {
+    try {
+        for(const tx of txs) {
+            await deleteSheetRow({ sheetName: "Stock Transactions", rowIndex: tx.rowIndex });
+        }
+        toast({ title: "Success", description: `${txs.length} stock transactions deleted.`});
+        await reloadData();
+    } catch(error) {
+        console.error(error);
+        toast({ variant: 'destructive', title: "Error", description: "Failed to delete multiple stock transactions."});
+    }
   };
 
-  const deleteCashTransaction = (txId: string) => {
-    setState(prev => ({ ...prev, cashTransactions: prev.cashTransactions.filter(tx => tx.id !== txId) }));
-    toast({title: "Locally Deleted", description: "Syncing deletions with Google Sheets is not yet implemented."})
-  };
-
-  const deleteBankTransaction = (txId: string) => {
-    setState(prev => ({ ...prev, bankTransactions: prev.bankTransactions.filter(tx => tx.id !== txId) }));
-    toast({title: "Locally Deleted", description: "Syncing deletions with Google Sheets is not yet implemented."})
-  };
-  
-  const deleteStockTransaction = (txId: string) => {
-    setState(prev => ({ ...prev, stockTransactions: prev.stockTransactions.filter(tx => tx.id !== txId) }));
-    toast({title: "Locally Deleted", description: "Syncing deletions with Google Sheets is not yet implemented."})
-  };
-
-  const deleteMultipleCashTransactions = (txIds: string[]) => {
-    setState(prev => ({ ...prev, cashTransactions: prev.cashTransactions.filter(tx => !txIds.includes(tx.id)) }));
-    toast({title: "Locally Deleted", description: "Syncing deletions with Google Sheets is not yet implemented."})
-  };
-
-  const deleteMultipleBankTransactions = (txIds: string[]) => {
-    setState(prev => ({ ...prev, bankTransactions: prev.bankTransactions.filter(tx => !txIds.includes(tx.id)) }));
-    toast({title: "Locally Deleted", description: "Syncing deletions with Google Sheets is not yet implemented."})
-  };
-
-  const deleteMultipleStockTransactions = (txIds: string[]) => {
-    setState(prev => ({ ...prev, stockTransactions: prev.stockTransactions.filter(tx => !txIds.includes(tx.id)) }));
-     toast({title: "Locally Deleted", description: "Syncing deletions with Google Sheets is not yet implemented."})
-  };
-
-  const transferFunds = (from: 'cash' | 'bank', amount: number, date?: string) => {
-     toast({ title: "Pending", description: "Transfer to sheet is not yet implemented."})
+  const transferFunds = async (from: 'cash' | 'bank', amount: number, date?: string) => {
+     const transactionDate = date ? new Date(date) : new Date();
+     const formattedDate = format(transactionDate, 'MM/dd/yyyy');
+     const description = from === 'cash' ? 'Transfer to Bank' : 'Transfer from Bank';
+     
+     try {
+        if(from === 'cash') {
+            await appendSheetRow({ range: 'Cash!A:E', values: [formattedDate, 'expense', amount, description, 'Transfer']});
+            await appendSheetRow({ range: 'Bank!A:E', values: [formattedDate, 'deposit', amount, description, 'Transfer']});
+        } else { // from bank
+            await appendSheetRow({ range: 'Bank!A:E', values: [formattedDate, 'withdrawal', amount, description, 'Transfer']});
+            await appendSheetRow({ range: 'Cash!A:E', values: [formattedDate, 'income', amount, description, 'Transfer']});
+        }
+        toast({ title: "Success", description: "Fund transfer completed."});
+        await reloadData();
+     } catch (error) {
+        console.error(error);
+        toast({ variant: 'destructive', title: "Error", description: "Failed to complete fund transfer."});
+     }
   };
 
   const addCategory = (type: 'cash' | 'bank', category: string) => {
     setState(prev => {
       const categories = type === 'cash' ? prev.cashCategories : prev.bankCategories;
       if (categories.includes(category) || !category) return prev;
-      return type === 'cash'
-        ? { ...prev, cashCategories: [...categories, category] }
-        : { ...prev, bankCategories: [...categories, category] };
+      const newCategories = [...categories, category];
+      const newState = type === 'cash'
+        ? { ...prev, cashCategories: newCategories }
+        : { ...prev, bankCategories: newCategories };
+      
+      // Also update local storage
+      const storedSettings = JSON.parse(localStorage.getItem('shipshape-ledger-settings') || '{}');
+      storedSettings[`${type}Categories`] = newCategories;
+      localStorage.setItem('shipshape-ledger-settings', JSON.stringify(storedSettings));
+
+      return newState;
     });
   };
 
   const deleteCategory = (type: 'cash' | 'bank', category: string) => {
     setState(prev => {
       const categories = type === 'cash' ? prev.cashCategories : prev.bankCategories;
-      return type === 'cash'
-        ? { ...prev, cashCategories: categories.filter(c => c !== category) }
-        : { ...prev, bankCategories: categories.filter(c => c !== category) };
+      const newCategories = categories.filter(c => c !== category);
+       const newState = type === 'cash'
+        ? { ...prev, cashCategories: newCategories }
+        : { ...prev, bankCategories: newCategories };
+      
+       // Also update local storage
+      const storedSettings = JSON.parse(localStorage.getItem('shipshape-ledger-settings') || '{}');
+      storedSettings[`${type}Categories`] = newCategories;
+      localStorage.setItem('shipshape-ledger-settings', JSON.stringify(storedSettings));
+
+      return newState;
     });
   };
 
@@ -319,8 +457,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const value: AppContextType = {
     ...state,
-    setInitialBalances,
-    addInitialStockItem,
+    reloadData,
     addCashTransaction,
     addBankTransaction,
     addStockTransaction,
@@ -345,7 +482,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setOrganizationName,
   };
 
-  return <AppContext.Provider value={value}>{isInitialized ? children : null}</AppContext.Provider>;
+  return <AppContext.Provider value={value}>{isInitialized ? children : <div className="flex items-center justify-center min-h-screen">Loading...</div>}</AppContext.Provider>;
 }
 
 export function useAppContext() {
@@ -355,5 +492,3 @@ export function useAppContext() {
   }
   return context;
 }
-
-    

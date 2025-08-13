@@ -113,38 +113,24 @@ export function EditTransactionSheet({ isOpen, setIsOpen, transaction, transacti
       })
   }, [defaultValues, setValue]);
 
-  useEffect(() => {
-    if (!isOpen) return; // Only run when the sheet is open.
-    if (isStock) {
-        const timer = setTimeout(() => {
-            toast({ 
-                title: "Stock State Recalculated", 
-                description: "Editing stock may have limitations on financial history." 
-            });
-        }, 100); // Small delay to ensure it runs after render.
-        return () => clearTimeout(timer);
-    }
-  }, [isOpen, isStock, toast])
-
-
   const onSubmit = (data: FormData) => {
     if (!transaction) return;
 
-    if (isCash) {
+    if (isCash && 'rowIndex' in transaction) {
       editCashTransaction(transaction as CashTransaction, {
         type: data.inOutType === 'in' ? 'income' : 'expense',
         amount: data.amount!,
         description: data.description!,
         category: data.category!,
       });
-    } else if (isBank) {
+    } else if (isBank && 'rowIndex' in transaction) {
       editBankTransaction(transaction as BankTransaction, {
         type: data.inOutType === 'in' ? 'deposit' : 'withdrawal',
         amount: data.amount!,
         description: data.description!,
         category: data.category!,
       });
-    } else if (isStock) {
+    } else if (isStock && 'rowIndex' in transaction) {
         editStockTransaction(transaction as StockTransaction, {
             type: data.type!,
             stockItemName: data.stockItemName!,
@@ -155,7 +141,7 @@ export function EditTransactionSheet({ isOpen, setIsOpen, transaction, transacti
         });
     }
 
-    toast({ title: "Transaction Updated", description: "Your transaction has been successfully updated." });
+    toast({ title: "Transaction Update Requested", description: "Updating your transaction in the sheet." });
     setIsOpen(false);
   };
   
@@ -166,7 +152,7 @@ export function EditTransactionSheet({ isOpen, setIsOpen, transaction, transacti
         <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
             <SheetHeader>
                 <SheetTitle className="flex items-center"><Pencil className="mr-2 h-6 w-6" /> Edit Transaction</SheetTitle>
-                <SheetDescription>Update the details of this transaction. Editing stock may have unintended side effects.</SheetDescription>
+                <SheetDescription>Update the details of this transaction.</SheetDescription>
             </SheetHeader>
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-6 mt-4">
                 

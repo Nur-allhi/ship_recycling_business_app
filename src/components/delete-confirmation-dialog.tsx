@@ -28,7 +28,7 @@ export function DeleteConfirmationDialog({ isOpen, setIsOpen, onConfirm, itemCou
           <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
           <AlertDialogDescription>
             This action cannot be undone. This will permanently delete {itemCount > 1 ? `${itemCount} transactions` : 'this transaction'}
-            and update your balances.
+            from your Google Sheet.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
