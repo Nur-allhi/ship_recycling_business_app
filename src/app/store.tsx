@@ -386,8 +386,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const deleteBankTransaction = (txId: string) => {
+    let txToDelete: BankTransaction | undefined;
     setState(prev => {
-        const txToDelete = prev.bankTransactions.find(tx => tx.id === txId);
+        txToDelete = prev.bankTransactions.find(tx => tx.id === txId);
         if (!txToDelete) return prev;
 
         const newBalance = txToDelete.type === 'deposit' 
@@ -402,69 +403,113 @@ export function AppProvider({ children }: { children: ReactNode }) {
             bankTransactions: newTransactions,
         };
     });
+
+    if (txToDelete) {
+      const originalTx = txToDelete;
+      toast({
+        title: "Transaction deleted",
+        action: (
+          <Button variant="secondary" onClick={() => {
+            setState(prev => {
+              if (prev.bankTransactions.some(t => t.id === originalTx.id)) {
+                  return prev;
+              }
+              const restoredBalance = originalTx.type === 'deposit' ? prev.bankBalance + originalTx.amount : prev.bankBalance - originalTx.amount;
+              const restoredTxs = [...prev.bankTransactions, originalTx].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+              return { ...prev, bankBalance: restoredBalance, bankTransactions: restoredTxs };
+            });
+          }}>Undo</Button>
+        )
+      });
+    }
   };
   
-  const deleteStockTransaction = (txId: string) => {
-      setState(prev => {
-          const newStockTxs = prev.stockTransactions.filter(t => t.id !== txId);
+  const recalculateStateAfterStockChange = (stockTxs: StockTransaction[], prevState: AppState): Partial<AppState> => {
+      let tempState = { ...initialAppState, initialBalanceSet: true, wastagePercentage: prevState.wastagePercentage, currency: prevState.currency };
+      
+      const initialCashTxs = prevState.cashTransactions.filter(t => t.description?.includes('Initial Balance'));
+      const initialBankTxs = prevState.bankTransactions.filter(t => t.description?.includes('Initial Balance'));
+      tempState.cashBalance = initialCashTxs.reduce((acc, tx) => acc + tx.amount, 0);
+      tempState.bankBalance = initialBankTxs.reduce((acc, tx) => acc + tx.amount, 0);
 
-          // Full recalculation needed
-          let tempState = { ...initialAppState, initialBalanceSet: true, wastagePercentage: prev.wastagePercentage, currency: prev.currency };
-          
-          const initialCashTxs = prev.cashTransactions.filter(t => t.description?.includes('Initial Balance'));
-          const initialBankTxs = prev.bankTransactions.filter(t => t.description?.includes('Initial Balance'));
-          tempState.cashBalance = initialCashTxs.reduce((acc, tx) => acc + tx.amount, 0);
-          tempState.bankBalance = initialBankTxs.reduce((acc, tx) => acc + tx.amount, 0);
+      const allTxs = stockTxs.sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
-          const allTxs = newStockTxs.sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+      for (const tx of allTxs) {
+           const costOrProceeds = tx.weight * tx.pricePerKg;
+          if (tx.type === 'purchase') {
+              if (tx.paymentMethod === 'cash') tempState.cashBalance -= costOrProceeds;
+              else tempState.bankBalance -= costOrProceeds;
 
-          for (const tx of allTxs) {
-               const costOrProceeds = tx.weight * tx.pricePerKg;
-              if (tx.type === 'purchase') {
-                  if (tx.paymentMethod === 'cash') tempState.cashBalance -= costOrProceeds;
-                  else tempState.bankBalance -= costOrProceeds;
-
-                  const itemIndex = tempState.stockItems.findIndex(i => i.name.toLowerCase() === tx.stockItemName.toLowerCase());
-                  if (itemIndex > -1) {
-                      const item = tempState.stockItems[itemIndex];
-                      const newWeight = item.weight + tx.weight;
-                      const newAvgPrice = ((item.weight * item.purchasePricePerKg) + (tx.weight * tx.pricePerKg)) / newWeight;
-                      tempState.stockItems[itemIndex] = { ...item, weight: newWeight, purchasePricePerKg: newAvgPrice };
-                  } else {
-                      tempState.stockItems.push({ id: crypto.randomUUID(), name: tx.stockItemName, weight: tx.weight, purchasePricePerKg: tx.pricePerKg });
-                  }
-              } else { // Sale
-                  if (tx.paymentMethod === 'cash') tempState.cashBalance += costOrProceeds;
-                  else tempState.bankBalance += costOrProceeds;
-                  
-                  const itemIndex = tempState.stockItems.findIndex(i => i.name.toLowerCase() === tx.stockItemName.toLowerCase());
-                  if (itemIndex > -1) {
-                      const item = tempState.stockItems[itemIndex];
-                      const wastageAmount = tx.weight * (prev.wastagePercentage / 100);
-                      const totalDeduction = tx.weight + wastageAmount;
-                      const newWeight = item.weight - totalDeduction;
-                      tempState.stockItems[itemIndex] = { ...item, weight: newWeight };
-                       if (newWeight <= 0) {
-                          tempState.stockItems.splice(itemIndex, 1);
-                      }
+              const itemIndex = tempState.stockItems.findIndex(i => i.name.toLowerCase() === tx.stockItemName.toLowerCase());
+              if (itemIndex > -1) {
+                  const item = tempState.stockItems[itemIndex];
+                  const newWeight = item.weight + tx.weight;
+                  const newAvgPrice = ((item.weight * item.purchasePricePerKg) + (tx.weight * tx.pricePerKg)) / newWeight;
+                  tempState.stockItems[itemIndex] = { ...item, weight: newWeight, purchasePricePerKg: newAvgPrice };
+              } else {
+                  tempState.stockItems.push({ id: crypto.randomUUID(), name: tx.stockItemName, weight: tx.weight, purchasePricePerKg: tx.pricePerKg });
+              }
+          } else { // Sale
+              if (tx.paymentMethod === 'cash') tempState.cashBalance += costOrProceeds;
+              else tempState.bankBalance += costOrProceeds;
+              
+              const itemIndex = tempState.stockItems.findIndex(i => i.name.toLowerCase() === tx.stockItemName.toLowerCase());
+              if (itemIndex > -1) {
+                  const item = tempState.stockItems[itemIndex];
+                  const wastageAmount = tx.weight * (prevState.wastagePercentage / 100);
+                  const totalDeduction = tx.weight + wastageAmount;
+                  const newWeight = item.weight - totalDeduction;
+                  tempState.stockItems[itemIndex] = { ...item, weight: newWeight };
+                   if (newWeight <= 0) {
+                      tempState.stockItems.splice(itemIndex, 1);
                   }
               }
           }
-          
-          return {
-              ...prev,
-              stockTransactions: allTxs.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
-              stockItems: tempState.stockItems,
-              cashBalance: tempState.cashBalance,
-              bankBalance: tempState.bankBalance,
-          };
+      }
+      
+      return {
+          stockTransactions: allTxs.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+          stockItems: tempState.stockItems,
+          cashBalance: tempState.cashBalance,
+          bankBalance: tempState.bankBalance,
+      };
+  }
+
+  const deleteStockTransaction = (txId: string) => {
+      let txToDelete: StockTransaction | undefined;
+      setState(prev => {
+          txToDelete = prev.stockTransactions.find(t => t.id === txId);
+          if (!txToDelete) return prev;
+          const newStockTxs = prev.stockTransactions.filter(t => t.id !== txId);
+          const newState = recalculateStateAfterStockChange(newStockTxs, prev);
+          return { ...prev, ...newState };
       });
+
+      if (txToDelete) {
+        const originalTx = txToDelete;
+        toast({
+          title: "Transaction deleted",
+          action: (
+            <Button variant="secondary" onClick={() => {
+              setState(prev => {
+                if (prev.stockTransactions.some(t => t.id === originalTx.id)) {
+                    return prev;
+                }
+                const restoredTxs = [...prev.stockTransactions, originalTx];
+                const newState = recalculateStateAfterStockChange(restoredTxs, prev);
+                return { ...prev, ...newState };
+              });
+            }}>Undo</Button>
+          )
+        });
+      }
   };
 
   const deleteMultipleCashTransactions = (txIds: string[]) => {
+    let txsToDelete: CashTransaction[] = [];
     setState(prev => {
         let newBalance = prev.cashBalance;
-        const txsToDelete = prev.cashTransactions.filter(tx => txIds.includes(tx.id));
+        txsToDelete = prev.cashTransactions.filter(tx => txIds.includes(tx.id));
 
         for (const tx of txsToDelete) {
             newBalance = tx.type === 'income' 
@@ -480,12 +525,38 @@ export function AppProvider({ children }: { children: ReactNode }) {
             cashTransactions: newTransactions,
         };
     });
+
+    if (txsToDelete.length > 0) {
+      const originalTxs = txsToDelete;
+      toast({
+        title: `${originalTxs.length} transactions deleted`,
+        action: (
+          <Button variant="secondary" onClick={() => {
+            setState(prev => {
+              const txIdsToRestore = new Set(originalTxs.map(t => t.id));
+              const existingIds = new Set(prev.cashTransactions.map(t => t.id));
+              const txsToAdd = originalTxs.filter(t => !existingIds.has(t.id));
+              if (txsToAdd.length === 0) return prev;
+              
+              let restoredBalance = prev.cashBalance;
+              for (const tx of txsToAdd) {
+                  restoredBalance = tx.type === 'income' ? restoredBalance + tx.amount : restoredBalance - tx.amount;
+              }
+
+              const restoredTxs = [...prev.cashTransactions, ...txsToAdd].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+              return { ...prev, cashBalance: restoredBalance, cashTransactions: restoredTxs };
+            });
+          }}>Undo</Button>
+        )
+      });
+    }
   };
 
   const deleteMultipleBankTransactions = (txIds: string[]) => {
+    let txsToDelete: BankTransaction[] = [];
     setState(prev => {
         let newBalance = prev.bankBalance;
-        const txsToDelete = prev.bankTransactions.filter(tx => txIds.includes(tx.id));
+        txsToDelete = prev.bankTransactions.filter(tx => txIds.includes(tx.id));
 
         for (const tx of txsToDelete) {
             newBalance = tx.type === 'deposit' 
@@ -501,63 +572,63 @@ export function AppProvider({ children }: { children: ReactNode }) {
             bankTransactions: newTransactions,
         };
     });
+
+    if (txsToDelete.length > 0) {
+      const originalTxs = txsToDelete;
+      toast({
+        title: `${originalTxs.length} transactions deleted`,
+        action: (
+          <Button variant="secondary" onClick={() => {
+            setState(prev => {
+              const txIdsToRestore = new Set(originalTxs.map(t => t.id));
+              const existingIds = new Set(prev.bankTransactions.map(t => t.id));
+              const txsToAdd = originalTxs.filter(t => !existingIds.has(t.id));
+              if (txsToAdd.length === 0) return prev;
+              
+              let restoredBalance = prev.bankBalance;
+              for (const tx of txsToAdd) {
+                  restoredBalance = tx.type === 'deposit' ? restoredBalance + tx.amount : restoredBalance - tx.amount;
+              }
+
+              const restoredTxs = [...prev.bankTransactions, ...txsToAdd].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+              return { ...prev, bankBalance: restoredBalance, bankTransactions: restoredTxs };
+            });
+          }}>Undo</Button>
+        )
+      });
+    }
   };
 
   const deleteMultipleStockTransactions = (txIds: string[]) => {
+    let txsToDelete: StockTransaction[] = [];
     setState(prev => {
+        txsToDelete = prev.stockTransactions.filter(t => txIds.includes(t.id));
+        if (txsToDelete.length === 0) return prev;
         const newStockTxs = prev.stockTransactions.filter(t => !txIds.includes(t.id));
-
-        // Full recalculation needed, same as single delete but with more items removed
-        let tempState = { ...initialAppState, initialBalanceSet: true, wastagePercentage: prev.wastagePercentage, currency: prev.currency };
-        
-        const initialCashTxs = prev.cashTransactions.filter(t => t.description?.includes('Initial Balance'));
-        const initialBankTxs = prev.bankTransactions.filter(t => t.description?.includes('Initial Balance'));
-        tempState.cashBalance = initialCashTxs.reduce((acc, tx) => acc + tx.amount, 0);
-        tempState.bankBalance = initialBankTxs.reduce((acc, tx) => acc + tx.amount, 0);
-
-        const allTxs = newStockTxs.sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-
-        for (const tx of allTxs) {
-            const costOrProceeds = tx.weight * tx.pricePerKg;
-            if (tx.type === 'purchase') {
-                if (tx.paymentMethod === 'cash') tempState.cashBalance -= costOrProceeds;
-                else tempState.bankBalance -= costOrProceeds;
-
-                const itemIndex = tempState.stockItems.findIndex(i => i.name.toLowerCase() === tx.stockItemName.toLowerCase());
-                if (itemIndex > -1) {
-                    const item = tempState.stockItems[itemIndex];
-                    const newWeight = item.weight + tx.weight;
-                    const newAvgPrice = ((item.weight * item.purchasePricePerKg) + (tx.weight * tx.pricePerKg)) / newWeight;
-                    tempState.stockItems[itemIndex] = { ...item, weight: newWeight, purchasePricePerKg: newAvgPrice };
-                } else {
-                    tempState.stockItems.push({ id: crypto.randomUUID(), name: tx.stockItemName, weight: tx.weight, purchasePricePerKg: tx.pricePerKg });
-                }
-            } else { // Sale
-                if (tx.paymentMethod === 'cash') tempState.cashBalance += costOrProceeds;
-                else tempState.bankBalance += costOrProceeds;
-                
-                const itemIndex = tempState.stockItems.findIndex(i => i.name.toLowerCase() === tx.stockItemName.toLowerCase());
-                if (itemIndex > -1) {
-                    const item = tempState.stockItems[itemIndex];
-                    const wastageAmount = tx.weight * (prev.wastagePercentage / 100);
-                    const totalDeduction = tx.weight + wastageAmount;
-                    const newWeight = item.weight - totalDeduction;
-                    tempState.stockItems[itemIndex] = { ...item, weight: newWeight };
-                    if (newWeight <= 0) {
-                        tempState.stockItems.splice(itemIndex, 1);
-                    }
-                }
-            }
-        }
-        
-        return {
-            ...prev,
-            stockTransactions: allTxs.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
-            stockItems: tempState.stockItems,
-            cashBalance: tempState.cashBalance,
-            bankBalance: tempState.bankBalance,
-        };
+        const newState = recalculateStateAfterStockChange(newStockTxs, prev);
+        return { ...prev, ...newState };
     });
+
+    if (txsToDelete.length > 0) {
+        const originalTxs = txsToDelete;
+        toast({
+          title: `${originalTxs.length} transactions deleted`,
+          action: (
+            <Button variant="secondary" onClick={() => {
+              setState(prev => {
+                const txIdsToRestore = new Set(originalTxs.map(t => t.id));
+                const existingIds = new Set(prev.stockTransactions.map(t => t.id));
+                const txsToAdd = originalTxs.filter(t => !existingIds.has(t.id));
+                if (txsToAdd.length === 0) return prev;
+
+                const restoredTxs = [...prev.stockTransactions, ...txsToAdd];
+                const newState = recalculateStateAfterStockChange(restoredTxs, prev);
+                return { ...prev, ...newState };
+              });
+            }}>Undo</Button>
+          )
+        });
+    }
   };
 
 
@@ -665,5 +736,3 @@ export function useAppContext() {
   }
   return context;
 }
-
-    
