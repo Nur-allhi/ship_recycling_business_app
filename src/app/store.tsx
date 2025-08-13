@@ -25,6 +25,9 @@ interface AppContextType extends AppState {
   addCashTransaction: (tx: Omit<CashTransaction, 'id' | 'date'>) => void;
   addBankTransaction: (tx: Omit<BankTransaction, 'id' | 'date'>) => void;
   addStockTransaction: (tx: Omit<StockTransaction, 'id' | 'date'>) => void;
+  editCashTransaction: (originalTx: CashTransaction, updatedTxData: Omit<CashTransaction, 'id' | 'date'>) => void;
+  editBankTransaction: (originalTx: BankTransaction, updatedTxData: Omit<BankTransaction, 'id' | 'date'>) => void;
+  editStockTransaction: (originalTx: StockTransaction, updatedTxData: Omit<StockTransaction, 'id' | 'date'>) => void;
   transferFunds: (from: 'cash' | 'bank', amount: number) => void;
   addCategory: (type: 'cash' | 'bank', category: string) => void;
   deleteCategory: (type: 'cash' | 'bank', category: string) => void;
@@ -57,7 +60,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (storedState) {
         let parsedState = JSON.parse(storedState);
 
-        // Force update categories to latest defaults if they don't match
         const categoriesMatch = 
             JSON.stringify(parsedState.bankCategories) === JSON.stringify(initialAppState.bankCategories) &&
             JSON.stringify(parsedState.cashCategories) === JSON.stringify(initialAppState.cashCategories);
@@ -67,7 +69,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
             parsedState.cashCategories = initialAppState.cashCategories;
         }
 
-        // ensure initialBalanceSet exists
         if (typeof parsedState.initialBalanceSet === 'undefined') {
           parsedState.initialBalanceSet = (parsedState.cashBalance !== 0 || parsedState.bankBalance !== 0 || parsedState.cashTransactions.length > 0 || parsedState.bankTransactions.length > 0)
         }
@@ -100,7 +101,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return {
         ...prev,
         cashBalance: newBalance,
-        cashTransactions: [newTx, ...prev.cashTransactions],
+        cashTransactions: [newTx, ...prev.cashTransactions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
       };
     });
   };
@@ -112,7 +113,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return {
         ...prev,
         bankBalance: newBalance,
-        bankTransactions: [newTx, ...prev.bankTransactions],
+        bankTransactions: [newTx, ...prev.bankTransactions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
       };
     });
   };
@@ -143,12 +144,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
                   newBankTransactions = [{ id: crypto.randomUUID(), date: newTx.date, type: 'withdrawal', amount: cost, description: `Purchase: ${tx.stockItemName}`, category: 'Stock' }, ...prev.bankTransactions];
               }
           } else { // Sale
+              const proceeds = tx.weight * tx.pricePerKg;
               if (tx.paymentMethod === 'cash') {
-                  newCashBalance += cost;
-                  newCashTransactions = [{ id: crypto.randomUUID(), date: newTx.date, type: 'income', amount: cost, description: `Sale: ${tx.stockItemName}`, category: 'Stock' }, ...prev.cashTransactions];
+                  newCashBalance += proceeds;
+                  newCashTransactions = [{ id: crypto.randomUUID(), date: newTx.date, type: 'income', amount: proceeds, description: `Sale: ${tx.stockItemName}`, category: 'Stock' }, ...prev.cashTransactions];
               } else {
-                  newBankBalance += cost;
-                  newBankTransactions = [{ id: crypto.randomUUID(), date: newTx.date, type: 'deposit', amount: cost, description: `Sale: ${tx.stockItemName}`, category: 'Stock' }, ...prev.bankTransactions];
+                  newBankBalance += proceeds;
+                  newBankTransactions = [{ id: crypto.randomUUID(), date: newTx.date, type: 'deposit', amount: proceeds, description: `Sale: ${tx.stockItemName}`, category: 'Stock' }, ...prev.bankTransactions];
               }
           }
 
@@ -185,13 +187,73 @@ export function AppProvider({ children }: { children: ReactNode }) {
               ...prev,
               cashBalance: newCashBalance,
               bankBalance: newBankBalance,
-              cashTransactions: newCashTransactions,
-              bankTransactions: newBankTransactions,
+              cashTransactions: newCashTransactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+              bankTransactions: newBankTransactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
               stockItems: newStockItems,
-              stockTransactions: [newTx, ...prev.stockTransactions],
+              stockTransactions: [newTx, ...prev.stockTransactions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
           };
       });
   };
+
+  const editCashTransaction = (originalTx: CashTransaction, updatedTxData: Omit<CashTransaction, 'id' | 'date'>) => {
+      setState(prev => {
+          let newCashBalance = prev.cashBalance;
+          // Revert original transaction
+          if (originalTx.type === 'income') {
+              newCashBalance -= originalTx.amount;
+          } else {
+              newCashBalance += originalTx.amount;
+          }
+
+          // Apply new transaction
+          const newTx: CashTransaction = { ...updatedTxData, id: originalTx.id, date: originalTx.date };
+          if (newTx.type === 'income') {
+              newCashBalance += newTx.amount;
+          } else {
+              newCashBalance -= newTx.amount;
+          }
+
+          const newTransactions = prev.cashTransactions.map(tx => tx.id === originalTx.id ? newTx : tx);
+
+          return {
+              ...prev,
+              cashBalance: newCashBalance,
+              cashTransactions: newTransactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+          };
+      });
+  };
+
+  const editBankTransaction = (originalTx: BankTransaction, updatedTxData: Omit<BankTransaction, 'id' | 'date'>) => {
+      setState(prev => {
+          let newBankBalance = prev.bankBalance;
+          // Revert original transaction
+          if (originalTx.type === 'deposit') {
+              newBankBalance -= originalTx.amount;
+          } else {
+              newBankBalance += originalTx.amount;
+          }
+
+          // Apply new transaction
+          const newTx: BankTransaction = { ...updatedTxData, id: originalTx.id, date: originalTx.date };
+          if (newTx.type === 'deposit') {
+              newBankBalance += newTx.amount;
+          } else {
+              newBankBalance -= newTx.amount;
+          }
+
+          const newTransactions = prev.bankTransactions.map(tx => tx.id === originalTx.id ? newTx : tx);
+
+          return {
+              ...prev,
+              bankBalance: newBankBalance,
+              bankTransactions: newTransactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+          };
+      });
+  };
+
+  const editStockTransaction = (originalTx: StockTransaction, updatedTxData: Omit<StockTransaction, 'id' | 'date'>) => {
+      toast({ variant: 'destructive', title: "Feature not implemented", description: "Editing stock transactions is complex and not yet supported."})
+  }
 
   const transferFunds = (from: 'cash' | 'bank', amount: number) => {
     setState(prev => {
@@ -200,41 +262,32 @@ export function AppProvider({ children }: { children: ReactNode }) {
           toast({ variant: "destructive", title: "Insufficient cash balance for transfer." });
           return prev;
         }
-        addCashTransaction({ type: 'expense', amount, description: 'Transfer to Bank', category: 'Transfer' });
-        addBankTransaction({ type: 'deposit', amount, description: 'Transfer from Cash', category: 'Transfer' });
       } else {
         if (prev.bankBalance < amount) {
           toast({ variant: "destructive", title: "Insufficient bank balance for transfer." });
           return prev;
         }
-        addBankTransaction({ type: 'withdrawal', amount, description: 'Transfer to Cash', category: 'Transfer' });
-        addCashTransaction({ type: 'income', amount, description: 'Transfer from Bank', category: 'Transfer' });
       }
-      // The individual transaction functions already update state, so we just call them.
-      // The state will be updated twice, which is slightly inefficient but ensures consistency.
-      // A better way would be to refactor this to update state once.
-      // Let's refactor
+
       if (from === 'cash') {
-          if (prev.cashBalance < amount) { /* re-check for standalone logic */ return prev; }
           const cashTx: CashTransaction = { id: crypto.randomUUID(), date: new Date().toISOString(), type: 'expense', amount, description: 'Transfer to Bank', category: 'Transfer' };
           const bankTx: BankTransaction = { id: crypto.randomUUID(), date: new Date().toISOString(), type: 'deposit', amount, description: 'Transfer from Cash', category: 'Transfer' };
           return {
               ...prev,
               cashBalance: prev.cashBalance - amount,
               bankBalance: prev.bankBalance + amount,
-              cashTransactions: [cashTx, ...prev.cashTransactions],
-              bankTransactions: [bankTx, ...prev.bankTransactions],
+              cashTransactions: [cashTx, ...prev.cashTransactions].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+              bankTransactions: [bankTx, ...prev.bankTransactions].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
           }
       } else {
-          if (prev.bankBalance < amount) { /* re-check for standalone logic */ return prev; }
           const bankTx: BankTransaction = { id: crypto.randomUUID(), date: new Date().toISOString(), type: 'withdrawal', amount, description: 'Transfer to Cash', category: 'Transfer' };
           const cashTx: CashTransaction = { id: crypto.randomUUID(), date: new Date().toISOString(), type: 'income', amount, description: 'Transfer from Bank', category: 'Transfer' };
            return {
               ...prev,
               bankBalance: prev.bankBalance - amount,
               cashBalance: prev.cashBalance + amount,
-              bankTransactions: [bankTx, ...prev.bankTransactions],
-              cashTransactions: [cashTx, ...prev.cashTransactions],
+              bankTransactions: [bankTx, ...prev.bankTransactions].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+              cashTransactions: [cashTx, ...prev.cashTransactions].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
           }
       }
     });
@@ -263,12 +316,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setState(prev => ({ ...prev, fontSize: size }));
   };
 
-  const value = {
+  const value: AppContextType = {
     ...state,
     setInitialBalances,
     addCashTransaction,
     addBankTransaction,
     addStockTransaction,
+    editCashTransaction,
+    editBankTransaction,
+    editStockTransaction,
     transferFunds,
     addCategory,
     deleteCategory,
