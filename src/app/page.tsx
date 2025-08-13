@@ -10,7 +10,6 @@ import { CashTab } from '@/components/cash-tab';
 import { BankTab } from '@/components/bank-tab';
 import { StockTab } from '@/components/stock-tab';
 import { SettingsTab } from '@/components/settings-tab';
-import { InitialBalanceDialog } from '@/components/initial-balance-dialog';
 import { UnifiedTransactionForm } from '@/components/unified-transaction-form';
 import { Dialog, DialogContent, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -33,7 +32,7 @@ const navItems = [
 ]
 
 function ShipShapeLedger() {
-  const { fontSize, organizationName } = useAppContext();
+  const { fontSize, organizationName, initialBalanceSet } = useAppContext();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isSheetOpen, setIsSheetOpen] = useState(false);
@@ -44,6 +43,17 @@ function ShipShapeLedger() {
     if(isMobile) {
         setIsSheetOpen(false);
     }
+  }
+
+  if (!initialBalanceSet) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-background">
+        <div className="flex flex-col items-center gap-4">
+            <Ship className="h-12 w-12 text-primary animate-pulse" />
+            <p className="text-muted-foreground">Loading your ledger...</p>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -147,7 +157,6 @@ function ShipShapeLedger() {
           </Tabs>
         </main>
       </div>
-      <InitialBalanceDialog />
     </div>
   );
 }
@@ -157,3 +166,5 @@ export default function Home() {
     <ShipShapeLedger />
   );
 }
+
+    
