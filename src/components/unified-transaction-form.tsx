@@ -18,14 +18,19 @@ import {
 } from '@/components/ui/select';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useToast } from '@/hooks/use-toast';
-import { PlusCircle } from 'lucide-react';
+import { CalendarIcon, PlusCircle } from 'lucide-react';
 import { SheetHeader, SheetTitle, SheetDescription } from './ui/sheet';
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
+import { format } from 'date-fns';
+import { cn } from '@/lib/utils';
 
 const formSchema = z.object({
   transactionType: z.enum(['cash', 'bank', 'stock_purchase', 'stock_sale', 'transfer']),
   amount: z.coerce.number().positive({ message: 'Amount must be positive.' }),
   description: z.string().optional(),
   category: z.string().optional(),
+  date: z.date(),
   
   // stock specific
   stockItemName: z.string().optional(),
@@ -101,7 +106,8 @@ export function UnifiedTransactionForm({ setSheetOpen }: UnifiedTransactionFormP
     resolver: zodResolver(formSchema),
     defaultValues: {
         amount: undefined,
-        description: ""
+        description: "",
+        date: new Date(),
     }
   });
 
@@ -139,6 +145,7 @@ export function UnifiedTransactionForm({ setSheetOpen }: UnifiedTransactionFormP
 
 
   const onSubmit = (data: FormData) => {
+    const transactionDate = data.date.toISOString();
     switch(data.transactionType) {
         case 'cash':
             addCashTransaction({
@@ -146,6 +153,7 @@ export function UnifiedTransactionForm({ setSheetOpen }: UnifiedTransactionFormP
                 amount: data.amount,
                 description: data.description!,
                 category: data.category!,
+                date: transactionDate,
             });
             break;
         case 'bank':
@@ -154,6 +162,7 @@ export function UnifiedTransactionForm({ setSheetOpen }: UnifiedTransactionFormP
                 amount: data.amount,
                 description: data.description!,
                 category: data.category!,
+                date: transactionDate,
             });
             break;
         case 'stock_purchase':
@@ -164,6 +173,7 @@ export function UnifiedTransactionForm({ setSheetOpen }: UnifiedTransactionFormP
                 pricePerKg: data.pricePerKg!,
                 paymentMethod: data.paymentMethod!,
                 description: data.description,
+                date: transactionDate,
             });
             break;
         case 'stock_sale':
@@ -174,10 +184,11 @@ export function UnifiedTransactionForm({ setSheetOpen }: UnifiedTransactionFormP
                 pricePerKg: data.pricePerKg!,
                 paymentMethod: data.paymentMethod!,
                 description: data.description,
+                date: transactionDate,
             });
             break;
         case 'transfer':
-            transferFunds(data.transferFrom!, data.amount);
+            transferFunds(data.transferFrom!, data.amount, transactionDate);
             break;
     }
     toast({ title: "Transaction Added", description: "Your transaction has been successfully recorded." });
@@ -197,6 +208,7 @@ export function UnifiedTransactionForm({ setSheetOpen }: UnifiedTransactionFormP
               <Controller
                   control={control}
                   name="transactionType"
+                  rules={{ required: true }}
                   render={({ field }) => (
                       <Select onValueChange={(value) => {
                           field.onChange(value);
@@ -221,11 +233,45 @@ export function UnifiedTransactionForm({ setSheetOpen }: UnifiedTransactionFormP
           {transactionType && (
                <>
                   {/* Common Fields */}
-                   <div className="space-y-2">
-                      <Label htmlFor="amount">Amount</Label>
-                      <Input id="amount" type="number" step="0.01" {...register('amount')} placeholder="0.00"/>
-                      {errors.amount && <p className="text-sm text-destructive">{errors.amount.message}</p>}
-                  </div>
+                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="amount">Amount</Label>
+                          <Input id="amount" type="number" step="0.01" {...register('amount')} placeholder="0.00"/>
+                          {errors.amount && <p className="text-sm text-destructive">{errors.amount.message}</p>}
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="date">Date</Label>
+                            <Controller
+                                control={control}
+                                name="date"
+                                render={({ field }) => (
+                                    <Popover>
+                                        <PopoverTrigger asChild>
+                                        <Button
+                                            variant={"outline"}
+                                            className={cn(
+                                            "w-full justify-start text-left font-normal",
+                                            !field.value && "text-muted-foreground"
+                                            )}
+                                        >
+                                            <CalendarIcon className="mr-2 h-4 w-4" />
+                                            {field.value ? format(field.value, "PPP") : <span>Pick a date</span>}
+                                        </Button>
+                                        </PopoverTrigger>
+                                        <PopoverContent className="w-auto p-0">
+                                            <Calendar
+                                                mode="single"
+                                                selected={field.value}
+                                                onSelect={field.onChange}
+                                                initialFocus
+                                            />
+                                        </PopoverContent>
+                                    </Popover>
+                                )}
+                            />
+                            {errors.date && <p className="text-sm text-destructive">{errors.date.message}</p>}
+                        </div>
+                   </div>
                   {(transactionType === 'cash' || transactionType === 'bank' || transactionType === 'stock_purchase' || transactionType === 'stock_sale') && (
                       <div className="space-y-2">
                           <Label htmlFor="description">Description</Label>

@@ -23,13 +23,13 @@ interface AppState {
 
 interface AppContextType extends AppState {
   setInitialBalances: (cash: number, bank: number) => void;
-  addCashTransaction: (tx: Omit<CashTransaction, 'id' | 'date'>) => void;
-  addBankTransaction: (tx: Omit<BankTransaction, 'id' | 'date'>) => void;
-  addStockTransaction: (tx: Omit<StockTransaction, 'id' | 'date' | 'description'> & { description?: string }) => void;
+  addCashTransaction: (tx: Omit<CashTransaction, 'id'>) => void;
+  addBankTransaction: (tx: Omit<BankTransaction, 'id'>) => void;
+  addStockTransaction: (tx: Omit<StockTransaction, 'id'>) => void;
   editCashTransaction: (originalTx: CashTransaction, updatedTxData: Omit<CashTransaction, 'id' | 'date'>) => void;
   editBankTransaction: (originalTx: BankTransaction, updatedTxData: Omit<BankTransaction, 'id' | 'date'>) => void;
   editStockTransaction: (originalTx: StockTransaction, updatedTxData: Omit<StockTransaction, 'id' | 'date'>) => void;
-  transferFunds: (from: 'cash' | 'bank', amount: number) => void;
+  transferFunds: (from: 'cash' | 'bank', amount: number, date?: string) => void;
   addCategory: (type: 'cash' | 'bank', category: string) => void;
   deleteCategory: (type: 'cash' | 'bank', category: string) => void;
   setFontSize: (size: FontSize) => void;
@@ -102,9 +102,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setState(prev => ({ ...prev, cashBalance: cash, bankBalance: bank, initialBalanceSet: true }));
   };
   
-  const addCashTransaction = (tx: Omit<CashTransaction, 'id' | 'date'>) => {
+  const addCashTransaction = (tx: Omit<CashTransaction, 'id'>) => {
     setState(prev => {
-      const newTx = { ...tx, id: crypto.randomUUID(), date: new Date().toISOString() };
+      const newTx = { ...tx, id: crypto.randomUUID() };
       const newBalance = newTx.type === 'income' ? prev.cashBalance + newTx.amount : prev.cashBalance - newTx.amount;
       return {
         ...prev,
@@ -114,9 +114,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
   };
 
-  const addBankTransaction = (tx: Omit<BankTransaction, 'id' | 'date'>) => {
+  const addBankTransaction = (tx: Omit<BankTransaction, 'id'>) => {
     setState(prev => {
-      const newTx = { ...tx, id: crypto.randomUUID(), date: new Date().toISOString() };
+      const newTx = { ...tx, id: crypto.randomUUID() };
       const newBalance = newTx.type === 'deposit' ? prev.bankBalance + newTx.amount : prev.bankBalance - newTx.amount;
       return {
         ...prev,
@@ -126,9 +126,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
   };
   
-  const addStockTransaction = (tx: Omit<StockTransaction, 'id' | 'date' | 'description'> & { description?: string }) => {
+  const addStockTransaction = (tx: Omit<StockTransaction, 'id'>) => {
       setState(prev => {
-          const newTx: StockTransaction = { ...tx, id: crypto.randomUUID(), date: new Date().toISOString() };
+          const newTx: StockTransaction = { ...tx, id: crypto.randomUUID() };
           const costOrProceeds = tx.weight * tx.pricePerKg;
           let newCashBalance = prev.cashBalance;
           let newBankBalance = prev.bankBalance;
@@ -328,7 +328,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       });
   };
 
-  const transferFunds = (from: 'cash' | 'bank', amount: number) => {
+  const transferFunds = (from: 'cash' | 'bank', amount: number, date?: string) => {
     setState(prev => {
       if (from === 'cash') {
         if (prev.cashBalance < amount) {
@@ -342,9 +342,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
       }
 
+      const transactionDate = date || new Date().toISOString();
+
       if (from === 'cash') {
-          const cashTx: CashTransaction = { id: crypto.randomUUID(), date: new Date().toISOString(), type: 'expense', amount, description: 'Transfer to Bank', category: 'Transfer' };
-          const bankTx: BankTransaction = { id: crypto.randomUUID(), date: new Date().toISOString(), type: 'deposit', amount, description: 'Transfer from Cash', category: 'Transfer' };
+          const cashTx: CashTransaction = { id: crypto.randomUUID(), date: transactionDate, type: 'expense', amount, description: 'Transfer to Bank', category: 'Transfer' };
+          const bankTx: BankTransaction = { id: crypto.randomUUID(), date: transactionDate, type: 'deposit', amount, description: 'Transfer from Cash', category: 'Transfer' };
           return {
               ...prev,
               cashBalance: prev.cashBalance - amount,
@@ -353,8 +355,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
               bankTransactions: [bankTx, ...prev.bankTransactions].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
           }
       } else {
-          const bankTx: BankTransaction = { id: crypto.randomUUID(), date: new Date().toISOString(), type: 'withdrawal', amount, description: 'Transfer to Cash', category: 'Transfer' };
-          const cashTx: CashTransaction = { id: crypto.randomUUID(), date: new Date().toISOString(), type: 'income', amount, description: 'Transfer from Bank', category: 'Transfer' };
+          const bankTx: BankTransaction = { id: crypto.randomUUID(), date: transactionDate, type: 'withdrawal', amount, description: 'Transfer to Cash', category: 'Transfer' };
+          const cashTx: CashTransaction = { id: crypto.randomUUID(), date: transactionDate, type: 'income', amount, description: 'Transfer from Bank', category: 'Transfer' };
            return {
               ...prev,
               bankBalance: prev.bankBalance - amount,
