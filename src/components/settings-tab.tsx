@@ -224,11 +224,11 @@ export function SettingsTab() {
                 </Select>
               </div>
               <Separator />
-               <div className="space-y-4">
-                  <div>
+               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-2">
                       <Label>Body Text Font</Label>
                        <Select value={bodyFont} onValueChange={handleBodyFontChange}>
-                          <SelectTrigger className="w-[180px] mt-2">
+                          <SelectTrigger>
                               <SelectValue placeholder="Select font" />
                           </SelectTrigger>
                           <SelectContent>
@@ -240,10 +240,10 @@ export function SettingsTab() {
                           </SelectContent>
                       </Select>
                   </div>
-                   <div>
+                   <div className="space-y-2">
                       <Label>Number Font</Label>
                        <Select value={numberFont} onValueChange={handleNumberFontChange}>
-                          <SelectTrigger className="w-[180px] mt-2">
+                          <SelectTrigger>
                               <SelectValue placeholder="Select font" />
                           </SelectTrigger>
                           <SelectContent>

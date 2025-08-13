@@ -21,7 +21,7 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTr
 const fontClasses = {
   sm: 'text-sm',
   base: 'text-base',
-  lg: 'text-lg',
+  lg: 'text-xl',
 };
 
 const navItems = [
