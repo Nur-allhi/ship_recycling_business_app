@@ -24,6 +24,7 @@ import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { Separator } from './ui/separator';
 
 const formSchema = z.object({
   transactionType: z.enum(['cash', 'bank', 'stock_purchase', 'stock_sale', 'transfer']),
@@ -213,8 +214,12 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                       <Select onValueChange={(value) => {
                           field.onChange(value);
                           // Reset dependent fields when type changes
-                          setValue('category', undefined);
-                          setValue('inOutType', undefined);
+                          reset({
+                            date: new Date(),
+                            amount: undefined,
+                            description: "",
+                            transactionType: value as any
+                          });
                       }} value={field.value}>
                           <SelectTrigger><SelectValue placeholder="Select a transaction type..." /></SelectTrigger>
                           <SelectContent>
@@ -232,6 +237,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
 
           {transactionType && (
                <>
+                  <Separator />
                   {/* Common Fields */}
                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-2">
@@ -284,6 +290,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                   {/* Cash/Bank Specific */}
                   {(transactionType === 'cash' || transactionType === 'bank') && (
                       <div className="space-y-4">
+                        <Separator />
                           <div className="space-y-2">
                               <Label>Category</Label>
                               <Controller
@@ -328,7 +335,8 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
 
                   {/* Stock Specific */}
                   {(transactionType === 'stock_purchase' || transactionType === 'stock_sale') && (
-                     <>
+                     <div className="space-y-4">
+                        <Separator />
                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div className="space-y-2">
                               <Label>Item Name</Label>
@@ -377,12 +385,13 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                               {errors.pricePerKg && <p className="text-sm text-destructive">{errors.pricePerKg.message}</p>}
                           </div>
                       </div>
-                     </>
+                     </div>
                   )}
 
                   {/* Transfer Specific */}
                   {transactionType === 'transfer' && (
                       <div className="space-y-2">
+                        <Separator />
                           <Label>Transfer from</Label>
                               <Controller 
                                   control={control}
@@ -397,7 +406,10 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                           {errors.transferFrom && <p className="text-sm text-destructive">{errors.transferFrom.message}</p>}
                       </div>
                   )}
-                  <Button type="submit" className="w-full sm:w-auto">Record Transaction</Button>
+                  <Separator />
+                  <div className="flex justify-end">
+                    <Button type="submit" className="w-full sm:w-auto">Record Transaction</Button>
+                  </div>
                </>
           )}
 
