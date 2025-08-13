@@ -44,7 +44,7 @@ export function BankTab() {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
-  const [showActions, setShowActions] = useState(true);
+  const [showActions, setShowActions] = useState(false);
   const isMobile = useIsMobile();
 
   const filteredByMonth = useMemo(() => {
