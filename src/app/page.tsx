@@ -55,7 +55,7 @@ function ShipShapeLedger() {
                  <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
                     <SheetTrigger asChild>
                         <Button variant="outline" size="icon">
-                            <Menu className="h-6 w-6" />
+                            <Ship className="h-6 w-6" />
                         </Button>
                     </SheetTrigger>
                     <SheetContent side="left" className="w-64 p-4">
