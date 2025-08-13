@@ -203,7 +203,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
         <DialogTitle className="flex items-center"><PlusCircle className="mr-2 h-6 w-6" /> Add a New Transaction</DialogTitle>
         <DialogDescription>A single place to record any cash, bank, or stock transaction.</DialogDescription>
       </DialogHeader>
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6 pt-4">
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 pt-4">
           <div className="space-y-2">
               <Label>Transaction Type</Label>
               <Controller
@@ -213,7 +213,6 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                   render={({ field }) => (
                       <Select onValueChange={(value) => {
                           field.onChange(value);
-                          // Reset dependent fields when type changes
                           reset({
                             date: new Date(),
                             amount: undefined,
@@ -236,9 +235,8 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
           </div>
 
           {transactionType && (
-               <>
+               <div className="space-y-4">
                   <Separator />
-                  {/* Common Fields */}
                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-2">
                           <Label htmlFor="amount">Amount</Label>
@@ -286,10 +284,8 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                       </div>
                   )}
 
-
-                  {/* Cash/Bank Specific */}
                   {(transactionType === 'cash' || transactionType === 'bank') && (
-                      <div className="space-y-4">
+                      <div className="space-y-4 pt-4">
                         <Separator />
                           <div className="space-y-2">
                               <Label>Category</Label>
@@ -333,9 +329,8 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                       </div>
                   )}
 
-                  {/* Stock Specific */}
                   {(transactionType === 'stock_purchase' || transactionType === 'stock_sale') && (
-                     <div className="space-y-4">
+                     <div className="space-y-4 pt-4">
                         <Separator />
                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div className="space-y-2">
@@ -388,9 +383,8 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                      </div>
                   )}
 
-                  {/* Transfer Specific */}
                   {transactionType === 'transfer' && (
-                      <div className="space-y-2">
+                      <div className="space-y-2 pt-4">
                         <Separator />
                           <Label>Transfer from</Label>
                               <Controller 
@@ -406,13 +400,13 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                           {errors.transferFrom && <p className="text-sm text-destructive">{errors.transferFrom.message}</p>}
                       </div>
                   )}
+                  
                   <Separator />
                   <div className="flex justify-end">
                     <Button type="submit" className="w-full sm:w-auto">Record Transaction</Button>
                   </div>
-               </>
+               </div>
           )}
-
       </form>
     </>
   );
