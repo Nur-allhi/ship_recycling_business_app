@@ -150,24 +150,38 @@ export function StockTab() {
           </Card>
 
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
+            <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                 <div>
                     <CardTitle>Stock Transaction History</CardTitle>
-                    <CardDescription>Recent purchases and sales.</CardDescription>
+                    <CardDescription>A detailed log of all purchases and sales.</CardDescription>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
                     {selectedTxIds.length > 0 && (
-                        <Button variant="destructive" onClick={handleMultiDeleteClick}>
+                        <Button variant="destructive" onClick={handleMultiDeleteClick} className="w-full sm:w-auto">
                             <Trash2 className="mr-2 h-4 w-4" /> Delete ({selectedTxIds.length})
                         </Button>
                     )}
-                    <Button variant="outline" onClick={toggleSelectionMode}>
+                    <Button variant="outline" onClick={toggleSelectionMode} className="w-full sm:w-auto">
                         <CheckSquare className="mr-2 h-4 w-4" />
                         {isSelectionMode ? 'Cancel' : 'Select'}
                     </Button>
                 </div>
             </CardHeader>
             <CardContent>
+              {stockTransactions.length > 0 && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 p-4 border rounded-lg">
+                    <div>
+                      <h4 className="font-semibold text-destructive">Total Purchases</h4>
+                      <p>{totalPurchaseWeight.toFixed(2)} kg</p>
+                      <p className="font-bold">{formatCurrency(totalPurchaseValue)}</p>
+                    </div>
+                    <div>
+                      <h4 className="font-semibold text-accent">Total Sales</h4>
+                      <p>{totalSaleWeight.toFixed(2)} kg</p>
+                      <p className="font-bold">{formatCurrency(totalSaleValue)}</p>
+                    </div>
+                </div>
+              )}
               <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
@@ -250,26 +264,6 @@ export function StockTab() {
                     <TableRow><TableCell colSpan={isSelectionMode ? 9 : 8} className="text-center h-24">No stock transactions yet.</TableCell></TableRow>
                   )}
                 </TableBody>
-                {stockTransactions.length > 0 && (
-                  <TableFooter>
-                    <TableRow>
-                        <TableCell colSpan={isSelectionMode ? 4 : 3} />
-                        <TableCell className="text-right font-bold">Total Purchases</TableCell>
-                        <TableCell className="text-right font-bold">{totalPurchaseWeight.toFixed(2)} kg</TableCell>
-                        <TableCell />
-                        <TableCell className="text-right font-bold text-destructive">{formatCurrency(totalPurchaseValue)}</TableCell>
-                        <TableCell />
-                    </TableRow>
-                    <TableRow>
-                        <TableCell colSpan={isSelectionMode ? 4 : 3} />
-                        <TableCell className="text-right font-bold">Total Sales</TableCell>
-                        <TableCell className="text-right font-bold">{totalSaleWeight.toFixed(2)} kg</TableCell>
-                        <TableCell />
-                        <TableCell className="text-right font-bold text-accent">{formatCurrency(totalSaleValue)}</TableCell>
-                        <TableCell />
-                    </TableRow>
-                  </TableFooter>
-                )}
               </Table>
               </div>
             </CardContent>
