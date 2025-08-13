@@ -29,7 +29,7 @@ export function DashboardTab({ setActiveTab }: DashboardTabProps) {
             <BarChart2 className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(totalBalance)}</div>
+            <div className="text-2xl font-bold font-mono">{formatCurrency(totalBalance)}</div>
             <p className="text-xs text-muted-foreground">Cash + Bank combined</p>
           </CardContent>
         </Card>
@@ -39,7 +39,7 @@ export function DashboardTab({ setActiveTab }: DashboardTabProps) {
             <Wallet className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(cashBalance)}</div>
+            <div className="text-2xl font-bold font-mono">{formatCurrency(cashBalance)}</div>
             <p className="text-xs text-muted-foreground">In-hand currency</p>
           </CardContent>
         </Card>
@@ -49,7 +49,7 @@ export function DashboardTab({ setActiveTab }: DashboardTabProps) {
             <Landmark className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(bankBalance)}</div>
+            <div className="text-2xl font-bold font-mono">{formatCurrency(bankBalance)}</div>
             <p className="text-xs text-muted-foreground">Managed by financial institutions</p>
           </CardContent>
         </Card>
@@ -59,9 +59,9 @@ export function DashboardTab({ setActiveTab }: DashboardTabProps) {
             <Boxes className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{totalStockWeight.toFixed(2)} kg</div>
+            <div className="text-2xl font-bold font-mono">{totalStockWeight.toFixed(2)} kg</div>
             <p className="text-xs text-muted-foreground">
-              Total Value: {formatCurrency(totalStockValue)}
+              Total Value: <span className="font-mono">{formatCurrency(totalStockValue)}</span>
             </p>
           </CardContent>
         </Card>

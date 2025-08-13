@@ -34,7 +34,7 @@ export function StockTab() {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
-  const [showActions, setShowActions] = useState(false);
+  const [showActions, setShowActions] = useState(true);
   const isMobile = useIsMobile();
 
   const filteredByMonth = useMemo(() => {
@@ -165,7 +165,7 @@ export function StockTab() {
                 )}
                 <TableCell>
                    <div className="flex items-center gap-2">
-                    <span>{new Date(tx.date).toLocaleDateString()}</span>
+                    <span className="font-mono">{new Date(tx.date).toLocaleDateString()}</span>
                     {tx.lastEdited && (
                       <TooltipProvider>
                         <Tooltip>
@@ -188,9 +188,9 @@ export function StockTab() {
                 </TableCell>
                 <TableCell className="font-medium">{tx.stockItemName}</TableCell>
                 <TableCell>{tx.description}</TableCell>
-                <TableCell className="text-right">{tx.weight.toFixed(2)} kg</TableCell>
-                <TableCell className="text-right">{formatCurrency(tx.pricePerKg)}</TableCell>
-                <TableCell className={`text-right font-semibold ${tx.type === 'purchase' ? 'text-destructive' : 'text-accent'}`}>{formatCurrency(tx.weight * tx.pricePerKg)}</TableCell>
+                <TableCell className="text-right font-mono">{tx.weight.toFixed(2)} kg</TableCell>
+                <TableCell className="text-right font-mono">{formatCurrency(tx.pricePerKg)}</TableCell>
+                <TableCell className={`text-right font-semibold font-mono ${tx.type === 'purchase' ? 'text-destructive' : 'text-accent'}`}>{formatCurrency(tx.weight * tx.pricePerKg)}</TableCell>
                 {showActions && (
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-2">
@@ -230,7 +230,7 @@ export function StockTab() {
                 )}
                 <CardContent className="p-4 space-y-2">
                     <div className="flex justify-between items-start">
-                        <div className={`font-semibold text-lg ${tx.type === 'sale' ? 'text-accent' : 'text-destructive'}`}>
+                        <div className={`font-semibold text-lg font-mono ${tx.type === 'sale' ? 'text-accent' : 'text-destructive'}`}>
                             {formatCurrency(tx.weight * tx.pricePerKg)}
                         </div>
                         <Badge variant={tx.type === 'sale' ? 'default' : 'destructive'} className="capitalize bg-opacity-20 text-opacity-100">
@@ -239,13 +239,13 @@ export function StockTab() {
                     </div>
                     <div className="font-medium text-base">{tx.stockItemName}</div>
                     <p className="text-sm text-muted-foreground">{tx.description}</p>
-                    <div className="flex justify-between text-sm pt-2">
+                    <div className="flex justify-between text-sm pt-2 font-mono">
                         <span>{tx.weight.toFixed(2)} kg</span>
                         <span>@ {formatCurrency(tx.pricePerKg)}/kg</span>
                     </div>
 
                     <div className="flex justify-between items-center pt-2">
-                        <div className="text-xs text-muted-foreground flex items-center gap-1">
+                        <div className="text-xs text-muted-foreground flex items-center gap-1 font-mono">
                             {new Date(tx.date).toLocaleDateString()}
                             {tx.lastEdited && (
                             <TooltipProvider>
@@ -307,9 +307,9 @@ export function StockTab() {
                       stockItems.map((item: StockItem) => (
                         <TableRow key={item.id}>
                           <TableCell className="font-medium">{item.name}</TableCell>
-                          <TableCell className="text-right">{item.weight.toFixed(2)}</TableCell>
-                          <TableCell className="text-right">{formatCurrency(item.purchasePricePerKg)}</TableCell>
-                          <TableCell className="text-right font-medium">{formatCurrency(item.weight * item.purchasePricePerKg)}</TableCell>
+                          <TableCell className="text-right font-mono">{item.weight.toFixed(2)}</TableCell>
+                          <TableCell className="text-right font-mono">{formatCurrency(item.purchasePricePerKg)}</TableCell>
+                          <TableCell className="text-right font-medium font-mono">{formatCurrency(item.weight * item.purchasePricePerKg)}</TableCell>
                         </TableRow>
                       ))
                     ) : (
@@ -322,9 +322,9 @@ export function StockTab() {
                      <TableFoot>
                         <TableRow>
                           <TableCell className="font-bold">Totals</TableCell>
-                          <TableCell className="text-right font-bold">{totalStockWeight.toFixed(2)} kg</TableCell>
-                          <TableCell className="text-right font-bold">{formatCurrency(weightedAveragePrice)}</TableCell>
-                          <TableCell className="text-right font-bold">{formatCurrency(totalStockValue)}</TableCell>
+                          <TableCell className="text-right font-bold font-mono">{totalStockWeight.toFixed(2)} kg</TableCell>
+                          <TableCell className="text-right font-bold font-mono">{formatCurrency(weightedAveragePrice)}</TableCell>
+                          <TableCell className="text-right font-bold font-mono">{formatCurrency(totalStockValue)}</TableCell>
                         </TableRow>
                       </TableFoot>
                    )}
@@ -381,13 +381,13 @@ export function StockTab() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 p-4 border rounded-lg bg-muted/50">
                     <div>
                       <h4 className="font-semibold text-destructive">Monthly Purchases</h4>
-                      <p>{totalPurchaseWeight.toFixed(2)} kg</p>
-                      <p className="font-bold">{formatCurrency(totalPurchaseValue)}</p>
+                      <p className="font-mono">{totalPurchaseWeight.toFixed(2)} kg</p>
+                      <p className="font-bold font-mono">{formatCurrency(totalPurchaseValue)}</p>
                     </div>
                     <div>
                       <h4 className="font-semibold text-accent">Monthly Sales</h4>
-                      <p>{totalSaleWeight.toFixed(2)} kg</p>
-                      <p className="font-bold">{formatCurrency(totalSaleValue)}</p>
+                      <p className="font-mono">{totalSaleWeight.toFixed(2)} kg</p>
+                      <p className="font-bold font-mono">{formatCurrency(totalSaleValue)}</p>
                     </div>
                 </div>
               )}

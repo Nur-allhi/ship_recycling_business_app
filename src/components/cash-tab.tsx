@@ -37,7 +37,7 @@ export function CashTab() {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
-  const [showActions, setShowActions] = useState(false);
+  const [showActions, setShowActions] = useState(true);
   const isMobile = useIsMobile();
 
   const filteredByMonth = useMemo(() => {
@@ -158,7 +158,7 @@ export function CashTab() {
                 )}
                 <TableCell>
                   <div className="flex items-center gap-2">
-                    <span>{new Date(tx.date).toLocaleDateString()}</span>
+                    <span className="font-mono">{new Date(tx.date).toLocaleDateString()}</span>
                     {tx.lastEdited && (
                       <TooltipProvider>
                         <Tooltip>
@@ -175,7 +175,7 @@ export function CashTab() {
                 </TableCell>
                 <TableCell className="font-medium">{tx.description}</TableCell>
                 <TableCell>{tx.category}</TableCell>
-                <TableCell className={`text-right font-semibold ${tx.type === 'income' ? 'text-accent' : 'text-destructive'}`}>
+                <TableCell className={`text-right font-semibold font-mono ${tx.type === 'income' ? 'text-accent' : 'text-destructive'}`}>
                   <div className="flex items-center justify-end gap-2">
                     {tx.type === 'income' ? <ArrowUpCircle /> : <ArrowDownCircle />}
                     {formatCurrency(tx.amount)}
@@ -222,7 +222,7 @@ export function CashTab() {
               )}
             <CardContent className="p-4 space-y-2">
                 <div className="flex justify-between items-start">
-                    <div className={`font-semibold text-lg ${tx.type === 'income' ? 'text-accent' : 'text-destructive'}`}>
+                    <div className={`font-semibold text-lg font-mono ${tx.type === 'income' ? 'text-accent' : 'text-destructive'}`}>
                         {formatCurrency(tx.amount)}
                     </div>
                     <Badge variant={tx.type === 'income' ? 'default' : 'destructive'} className="capitalize bg-opacity-20 text-opacity-100">
@@ -233,7 +233,7 @@ export function CashTab() {
                 <div className="text-sm text-muted-foreground">{tx.category}</div>
 
                 <div className="flex justify-between items-center pt-2">
-                    <div className="text-xs text-muted-foreground flex items-center gap-1">
+                    <div className="text-xs text-muted-foreground flex items-center gap-1 font-mono">
                         {new Date(tx.date).toLocaleDateString()}
                         {tx.lastEdited && (
                            <TooltipProvider>
@@ -278,7 +278,7 @@ export function CashTab() {
             <div className="flex-1">
               <CardTitle>Cash Ledger</CardTitle>
               <CardDescription>
-                Current Balance: <span className="font-bold text-primary">{formatCurrency(cashBalance)}</span>
+                Current Balance: <span className="font-bold text-primary font-mono">{formatCurrency(cashBalance)}</span>
               </CardDescription>
             </div>
             <div className="flex items-center gap-2 self-center sm:self-auto">
