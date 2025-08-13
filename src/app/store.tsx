@@ -22,6 +22,7 @@ interface AppState {
   bodyFont: string;
   numberFont: string;
   initialBalanceSet: boolean;
+  needsInitialBalance: boolean;
   wastagePercentage: number;
   currency: string;
   showStockValue: boolean;
@@ -70,7 +71,8 @@ const initialAppState: AppState = {
   fontSize: 'base',
   bodyFont: "'Roboto Slab', serif",
   numberFont: "'Roboto Mono', monospace",
-  initialBalanceSet: false, // This will be set to true after fetch
+  initialBalanceSet: false,
+  needsInitialBalance: false,
   wastagePercentage: 0,
   currency: 'BDT',
   showStockValue: false,
@@ -91,7 +93,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
             return await readSheetData({ range });
           } catch (error) {
             console.warn(`Could not read from sheet "${sheetName}". It might not exist yet.`, error);
-            // Return empty array so the app can still load
             return [];
           }
         }
@@ -103,7 +104,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
             fetchData('Initial Stock!A2:C', 'Initial Stock'),
         ]);
         
-        let cashTransactions: CashTransaction[] = cashData
+        let initialCashBalance = 0;
+        let initialBankBalance = 0;
+        let needsInitialBalance = true;
+
+        const cashTransactions: CashTransaction[] = cashData
             .map((row, index) => ({
                 id: `cash-${index}`,
                 rowIndex: index + 2,
@@ -115,7 +120,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             }))
             .filter(tx => tx.date && tx.type && !isNaN(tx.amount));
         
-        let bankTransactions: BankTransaction[] = bankData
+        const bankTransactions: BankTransaction[] = bankData
              .map((row, index) => ({
                 id: `bank-${index}`,
                 rowIndex: index + 2,
@@ -126,6 +131,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
                 category: row[4] || '',
             }))
             .filter(tx => tx.date && tx.type && !isNaN(tx.amount));
+        
+        const initialCashTx = cashTransactions.find(tx => tx.category === 'Initial');
+        if (initialCashTx) {
+          initialCashBalance = initialCashTx.amount;
+        }
+
+        const initialBankTx = bankTransactions.find(tx => tx.category === 'Initial');
+        if (initialBankTx) {
+          initialBankBalance = initialBankTx.amount;
+        }
+
+        if (initialCashTx || initialBankTx) {
+          needsInitialBalance = false;
+        }
+
+        const operationalCashTxs = cashTransactions.filter(tx => tx.category !== 'Initial');
+        const operationalBankTxs = bankTransactions.filter(tx => tx.category !== 'Initial');
 
         const stockTransactions: StockTransaction[] = stockTransactionsData
             .map((row, index) => ({
@@ -149,24 +171,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
             purchasePricePerKg: parseFloat(row[2]) || 0,
         }));
         
-        // This recalculation logic should eventually move to the backend/sheet itself
-        const cashBalance = cashTransactions.reduce((acc, tx) => acc + (tx.type === 'income' ? tx.amount : -tx.amount), 0);
-        const bankBalance = bankTransactions.reduce((acc, tx) => acc + (tx.type === 'deposit' ? tx.amount : -tx.amount), 0);
+        const cashFromOps = operationalCashTxs.reduce((acc, tx) => acc + (tx.type === 'income' ? tx.amount : -tx.amount), 0);
+        const bankFromOps = operationalBankTxs.reduce((acc, tx) => acc + (tx.type === 'deposit' ? tx.amount : -tx.amount), 0);
         
-        // Adjust balances based on stock transactions
-        const finalCashBalance = stockTransactions.reduce((balance, tx) => {
+        const cashFromStock = stockTransactions.reduce((balance, tx) => {
             if (tx.paymentMethod === 'cash') {
                 return balance + (tx.type === 'sale' ? tx.weight * tx.pricePerKg : -(tx.weight * tx.pricePerKg));
             }
             return balance;
-        }, cashBalance);
+        }, 0);
 
-        const finalBankBalance = stockTransactions.reduce((balance, tx) => {
+        const bankFromStock = stockTransactions.reduce((balance, tx) => {
             if (tx.paymentMethod === 'bank') {
                 return balance + (tx.type === 'sale' ? tx.weight * tx.pricePerKg : -(tx.weight * tx.pricePerKg));
             }
             return balance;
-        }, bankBalance);
+        }, 0);
+        
+        const finalCashBalance = initialCashBalance + cashFromOps + cashFromStock;
+        const finalBankBalance = initialBankBalance + bankFromOps + bankFromStock;
 
         const currentStockItems = stockTransactions.reduce<Record<string, { weight: number, totalValue: number }>>((acc, tx) => {
             if (!acc[tx.stockItemName]) {
@@ -207,7 +230,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
             stockTransactions: stockTransactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
             cashBalance: finalCashBalance,
             bankBalance: finalBankBalance,
-            initialBalanceSet: true
+            initialBalanceSet: true,
+            needsInitialBalance,
         }));
 
       } catch (error) {
@@ -446,7 +470,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
         ? { ...prev, cashCategories: newCategories }
         : { ...prev, bankCategories: newCategories };
       
-      // Also update local storage
       const storedSettings = JSON.parse(localStorage.getItem('shipshape-ledger-settings') || '{}');
       storedSettings[`${type}Categories`] = newCategories;
       localStorage.setItem('shipshape-ledger-settings', JSON.stringify(storedSettings));
@@ -463,7 +486,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
         ? { ...prev, cashCategories: newCategories }
         : { ...prev, bankCategories: newCategories };
       
-       // Also update local storage
       const storedSettings = JSON.parse(localStorage.getItem('shipshape-ledger-settings') || '{}');
       storedSettings[`${type}Categories`] = newCategories;
       localStorage.setItem('shipshape-ledger-settings', JSON.stringify(storedSettings));
@@ -545,5 +567,3 @@ export function useAppContext() {
   }
   return context;
 }
-
-    

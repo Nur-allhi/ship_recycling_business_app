@@ -4,7 +4,7 @@
 import { useState } from 'react';
 import { useAppContext } from './store';
 import { cn } from '@/lib/utils';
-import { Ship, Wallet, Landmark, Boxes, Settings, PlusCircle, Menu } from 'lucide-react';
+import { Ship, Wallet, Landmark, Boxes, Settings, PlusCircle } from 'lucide-react';
 import { DashboardTab } from '@/components/dashboard-tab';
 import { CashTab } from '@/components/cash-tab';
 import { BankTab } from '@/components/bank-tab';
@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
+import { InitialBalanceDialog } from '@/components/initial-balance-dialog';
 
 const fontClasses = {
   sm: 'text-sm',
@@ -32,7 +33,7 @@ const navItems = [
 ]
 
 function ShipShapeLedger() {
-  const { fontSize, organizationName, initialBalanceSet } = useAppContext();
+  const { fontSize, organizationName, initialBalanceSet, needsInitialBalance } = useAppContext();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isSheetOpen, setIsSheetOpen] = useState(false);
@@ -58,6 +59,7 @@ function ShipShapeLedger() {
 
   return (
     <div className={cn('min-h-screen bg-background text-foreground animate-fade-in', fontClasses[fontSize] || 'text-base')}>
+      <InitialBalanceDialog isOpen={needsInitialBalance} />
       <div className="container mx-auto p-4 md:p-6 lg:p-8">
         <header className="mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div className="flex items-center gap-4 w-full">
@@ -166,5 +168,3 @@ export default function Home() {
     <ShipShapeLedger />
   );
 }
-
-    
