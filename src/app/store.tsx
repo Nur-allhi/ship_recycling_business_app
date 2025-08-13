@@ -100,12 +100,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
             // All ranges start from row 2 (e.g., A2) to account for a header row in the sheet.
             return await readSheetData({ range });
           } catch (error: any) {
-            if(error.message.includes("Unable to parse range")) {
-                 setState(prev => ({ ...prev, needsSetup: true, initialBalanceSet: true }));
+            if (error.message.includes("Unable to parse range")) {
+                 setState(prev => ({ ...prev, needsSetup: true }));
             }
-            console.warn(`Could not read from sheet "${sheetName}". It might not exist yet.`, error);
-            // Re-throw the error to be caught by the page component
-            throw error;
+            console.warn(`Could not read from sheet "${sheetName}". It might not exist yet. Returning empty array.`, error.message);
+            return []; // Return empty array to prevent crash
           }
         }
         
@@ -249,11 +248,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
             bankBalance: finalBankBalance,
             initialBalanceSet: true,
             needsInitialBalance,
-            needsSetup: false, // successfully loaded data, so no setup needed
+            needsSetup: state.needsSetup, // Persist needsSetup flag if already set
         }));
 
       } catch (error) {
-        // Error is handled in the fetchData function, this is a fallback.
         console.error("Failed to load data from Google Sheets", error);
         toast({
             variant: 'destructive',
@@ -262,7 +260,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         });
         setState(prev => ({ ...prev, initialBalanceSet: true, needsSetup: true }));
       }
-  }, [toast]);
+  }, [toast, state.needsSetup]);
 
 
   useEffect(() => {
@@ -587,3 +585,5 @@ export function useAppContext() {
   }
   return context;
 }
+
+    
