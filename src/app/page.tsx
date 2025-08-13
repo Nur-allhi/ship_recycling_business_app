@@ -100,7 +100,7 @@ function ShipShapeLedger() {
             <DialogTrigger asChild>
               <Button className="w-full sm:w-auto flex-shrink-0"><PlusCircle className="mr-2 h-4 w-4" /> Add Transaction</Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-lg max-h-[90vh] flex flex-col">
+            <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
                 <UnifiedTransactionForm setDialogOpen={setIsDialogOpen}/>
             </DialogContent>
           </Dialog>
