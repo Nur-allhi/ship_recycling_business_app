@@ -28,7 +28,7 @@ import { Separator } from './ui/separator';
 
 const formSchema = z.object({
   transactionType: z.enum(['cash', 'bank', 'stock_purchase', 'stock_sale', 'transfer']),
-  amount: z.coerce.number().positive({ message: 'Amount must be positive.' }),
+  amount: z.coerce.number().optional(), // Optional now, required conditionally
   description: z.string().optional(),
   category: z.string().optional(),
   date: z.date(),
@@ -53,11 +53,16 @@ const formSchema = z.object({
         if (!data.weight || data.weight <= 0) {
             ctx.addIssue({ code: 'custom', message: 'Weight must be positive.', path: ['weight'] });
         }
-        if (!data.pricePerKg || data.pricePerKg < 0) { // Price can be 0 for some cases
+        if (data.pricePerKg === undefined || data.pricePerKg < 0) { // Price can be 0
             ctx.addIssue({ code: 'custom', message: 'Price must be non-negative.', path: ['pricePerKg'] });
         }
         if (!data.paymentMethod) {
             ctx.addIssue({ code: 'custom', message: 'Payment method is required.', path: ['paymentMethod'] });
+        }
+    }
+    if(data.transactionType === 'cash' || data.transactionType === 'bank' || data.transactionType === 'transfer') {
+        if(!data.amount || data.amount <=0){
+             ctx.addIssue({ code: 'custom', message: 'Amount must be positive.', path: ['amount'] });
         }
     }
     if(data.transactionType === 'cash' || data.transactionType === 'bank') {
@@ -116,7 +121,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
         case 'cash':
             addCashTransaction({
                 type: data.inOutType === 'in' ? 'income' : 'expense',
-                amount: data.amount,
+                amount: data.amount!,
                 description: data.description!,
                 category: data.category!,
                 date: transactionDate,
@@ -125,7 +130,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
         case 'bank':
              addBankTransaction({
                 type: data.inOutType === 'in' ? 'deposit' : 'withdrawal',
-                amount: data.amount,
+                amount: data.amount!,
                 description: data.description!,
                 category: data.category!,
                 date: transactionDate,
@@ -154,7 +159,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
             });
             break;
         case 'transfer':
-            transferFunds(data.transferFrom!, data.amount, transactionDate);
+            transferFunds(data.transferFrom!, data.amount!, transactionDate);
             break;
     }
     toast({ title: "Transaction Added", description: "Your transaction has been successfully recorded." });
@@ -204,13 +209,16 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
           {transactionType && (
               <div className="space-y-4">
                   <Separator />
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div className="space-y-2">
-                          <Label htmlFor="amount">{transactionType.startsWith('stock') ? 'Total Cost / Revenue' : 'Amount'}</Label>
-                          <Input id="amount" type="number" step="0.01" {...register('amount')} placeholder="0.00"/>
-                          {errors.amount && <p className="text-sm text-destructive">{errors.amount.message}</p>}
-                          </div>
-                          <div className="space-y-2">
+
+                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {(transactionType === 'cash' || transactionType === 'bank' || transactionType === 'transfer') && (
+                            <div className="space-y-2">
+                                <Label htmlFor="amount">Amount</Label>
+                                <Input id="amount" type="number" step="0.01" {...register('amount')} placeholder="0.00"/>
+                                {errors.amount && <p className="text-sm text-destructive">{errors.amount.message}</p>}
+                            </div>
+                        )}
+                         <div className="space-y-2 md:col-start-2">
                               <Label htmlFor="date">Date</Label>
                               <Controller
                                   control={control}
@@ -243,6 +251,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                               {errors.date && <p className="text-sm text-destructive">{errors.date.message}</p>}
                           </div>
                   </div>
+
                   {(transactionType === 'cash' || transactionType === 'bank' || transactionType === 'stock_purchase' || transactionType === 'stock_sale') && (
                       <div className="space-y-2">
                           <Label htmlFor="description">Description</Label>
@@ -392,5 +401,3 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
     </>
   );
 }
-
-    
