@@ -113,6 +113,19 @@ export function EditTransactionSheet({ isOpen, setIsOpen, transaction, transacti
       })
   }, [defaultValues, setValue]);
 
+  useEffect(() => {
+    if (!isOpen) return; // Only run when the sheet is open.
+    if (isStock) {
+        const timer = setTimeout(() => {
+            toast({ 
+                title: "Stock State Recalculated", 
+                description: "Editing stock may have limitations on financial history." 
+            });
+        }, 100); // Small delay to ensure it runs after render.
+        return () => clearTimeout(timer);
+    }
+  }, [isOpen, isStock, toast])
+
 
   const onSubmit = (data: FormData) => {
     if (!transaction) return;

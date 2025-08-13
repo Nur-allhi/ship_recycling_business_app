@@ -317,8 +317,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
           // We can't easily reconstruct cash/bank transactions without more context,
           // so we'll just use the final calculated balances. This is a limitation.
           // For a real app, financial transactions should be immutable or handled by a backend.
-          
-          toast({ title: "Stock State Recalculated", description: "Editing stock may have limitations on financial history."})
 
           return {
               ...prev,
