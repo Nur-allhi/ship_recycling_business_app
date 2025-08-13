@@ -78,8 +78,8 @@ interface UnifiedTransactionFormProps {
 
 const cashIncomeCategories = ['Salary'];
 const cashExpenseCategories = ['Groceries', 'Transport', 'Utilities'];
-const bankDepositCategories = ['Salary'];
-const bankWithdrawalCategories = ['Investment', 'Loan', 'Shopping'];
+const bankDepositCategories = ['Deposit'];
+const bankWithdrawalCategories = ['Withdrawal'];
 
 export function UnifiedTransactionForm({ setSheetOpen }: UnifiedTransactionFormProps) {
   const { 

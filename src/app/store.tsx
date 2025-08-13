@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
@@ -40,7 +41,7 @@ const initialAppState: AppState = {
   stockItems: [],
   stockTransactions: [],
   cashCategories: ['Salary', 'Groceries', 'Transport', 'Utilities'],
-  bankCategories: ['Salary', 'Investment', 'Loan', 'Shopping'],
+  bankCategories: ['Deposit', 'Withdrawal'],
   fontSize: 'base',
   initialBalanceSet: false,
 };
