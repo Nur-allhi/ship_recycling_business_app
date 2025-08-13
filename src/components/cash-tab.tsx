@@ -16,7 +16,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { ArrowUpCircle, ArrowDownCircle, ArrowRightLeft, Pencil, History, Trash2, CheckSquare, ChevronLeft, ChevronRight, Eye, EyeOff } from "lucide-react"
+import { ArrowUpCircle, ArrowDownCircle, ArrowRightLeft, Pencil, History, Trash2, CheckSquare, ChevronLeft, ChevronRight, Eye, EyeOff, ArrowUpDown } from "lucide-react"
 import type { CashTransaction } from "@/lib/types"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetTrigger } from "@/components/ui/sheet"
 import { EditTransactionSheet } from "./edit-transaction-sheet"
@@ -26,6 +26,9 @@ import { format, subMonths, addMonths } from "date-fns"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { Badge } from "./ui/badge"
+
+type SortKey = keyof CashTransaction | null;
+type SortDirection = 'asc' | 'desc';
 
 export function CashTab() {
   const { cashBalance, cashTransactions, transferFunds, deleteCashTransaction, deleteMultipleCashTransactions, currency } = useAppContext()
@@ -38,14 +41,45 @@ export function CashTab() {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [showActions, setShowActions] = useState(false);
+  const [sortKey, setSortKey] = useState<SortKey>('date');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const isMobile = useIsMobile();
 
+  const handleSort = (key: SortKey) => {
+    if (sortKey === key) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortKey(key);
+      setSortDirection('asc');
+    }
+  };
+
+  const sortedTransactions = useMemo(() => {
+    if (!sortKey) return cashTransactions;
+
+    return [...cashTransactions].sort((a, b) => {
+      const aValue = a[sortKey];
+      const bValue = b[sortKey];
+      
+      let result = 0;
+      if (typeof aValue === 'string' && typeof bValue === 'string') {
+        result = aValue.localeCompare(bValue);
+      } else if (typeof aValue === 'number' && typeof bValue === 'number') {
+        result = aValue - bValue;
+      } else if (sortKey === 'date') {
+        result = new Date(a.date).getTime() - new Date(b.date).getTime();
+      }
+
+      return sortDirection === 'asc' ? result : -result;
+    });
+  }, [cashTransactions, sortKey, sortDirection]);
+
   const filteredByMonth = useMemo(() => {
-    return cashTransactions.filter(tx => {
+    return sortedTransactions.filter(tx => {
         const txDate = new Date(tx.date);
         return txDate.getFullYear() === currentMonth.getFullYear() && txDate.getMonth() === currentMonth.getMonth();
     })
-  }, [cashTransactions, currentMonth]);
+  }, [sortedTransactions, currentMonth]);
 
   const paginatedTransactions = useMemo(() => {
     const startIndex = (currentPage - 1) * itemsPerPage;
@@ -125,6 +159,11 @@ export function CashTab() {
     setCurrentPage(1);
   }
 
+  const renderSortArrow = (key: SortKey) => {
+    if (sortKey !== key) return <ArrowUpDown className="ml-2 h-4 w-4 opacity-50" />;
+    return sortDirection === 'asc' ? <ArrowUpCircle className="ml-2 h-4 w-4" /> : <ArrowDownCircle className="ml-2 h-4 w-4" />;
+  };
+
   const renderDesktopView = () => (
      <div className="overflow-x-auto">
       <Table>
@@ -139,10 +178,18 @@ export function CashTab() {
                   />
               </TableHead>
             )}
-            <TableHead>Date</TableHead>
-            <TableHead>Description</TableHead>
-            <TableHead>Category</TableHead>
-            <TableHead className="text-right">Amount</TableHead>
+             <TableHead>
+                <Button variant="ghost" onClick={() => handleSort('date')}>Date {renderSortArrow('date')}</Button>
+            </TableHead>
+            <TableHead>
+                <Button variant="ghost" onClick={() => handleSort('description')}>Description {renderSortArrow('description')}</Button>
+            </TableHead>
+            <TableHead>
+                <Button variant="ghost" onClick={() => handleSort('category')}>Category {renderSortArrow('category')}</Button>
+            </TableHead>
+            <TableHead className="text-right">
+                 <Button variant="ghost" onClick={() => handleSort('amount')}>Amount {renderSortArrow('amount')}</Button>
+            </TableHead>
             {showActions && <TableHead className="text-right">Actions</TableHead>}
           </TableRow>
         </TableHeader>
@@ -161,7 +208,7 @@ export function CashTab() {
                 )}
                 <TableCell>
                   <div className="flex items-center gap-2">
-                    <span className="font-mono">{new Date(tx.date).toLocaleDateString()}</span>
+                    <span className="font-mono">{format(new Date(tx.date), 'dd-MM-yyyy')}</span>
                     {tx.lastEdited && (
                       <TooltipProvider>
                         <Tooltip>
@@ -237,7 +284,7 @@ export function CashTab() {
 
                 <div className="flex justify-between items-center pt-2">
                     <div className="text-xs text-muted-foreground flex items-center gap-1 font-mono">
-                        {new Date(tx.date).toLocaleDateString()}
+                        {format(new Date(tx.date), 'dd-MM-yyyy')}
                         {tx.lastEdited && (
                            <TooltipProvider>
                             <Tooltip>

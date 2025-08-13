@@ -33,7 +33,7 @@ const navItems = [
 ]
 
 function ShipShapeLedger() {
-  const { fontSize } = useAppContext();
+  const { fontSize, organizationName } = useAppContext();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isSheetOpen, setIsSheetOpen] = useState(false);
@@ -91,9 +91,12 @@ function ShipShapeLedger() {
             <div className="flex-1">
                 <div className="flex items-center gap-3 mb-1">
                   {!isMobile && <Ship className="h-8 w-8 text-primary" />}
-                  <h1 className="text-2xl sm:text-3xl font-bold text-primary font-headline">
-                    ShipShape Ledger
-                  </h1>
+                  <div>
+                    <h1 className="text-2xl sm:text-3xl font-bold text-primary font-headline">
+                      ShipShape Ledger
+                    </h1>
+                    {organizationName && <p className="text-lg font-bold text-muted-foreground">{organizationName}</p>}
+                  </div>
                 </div>
                 <p className="text-muted-foreground text-sm sm:text-base">
                   Your all-in-one ledger for cash, bank, and stock management.

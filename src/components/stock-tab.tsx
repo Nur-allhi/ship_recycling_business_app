@@ -15,7 +15,7 @@ import {
   TableFooter as TableFoot,
 } from "@/components/ui/table"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { ArrowUpCircle, ArrowDownCircle, Pencil, History, Trash2, CheckSquare, ChevronLeft, ChevronRight, Eye, EyeOff } from "lucide-react"
+import { ArrowUpCircle, ArrowDownCircle, Pencil, History, Trash2, CheckSquare, ChevronLeft, ChevronRight, Eye, EyeOff, ArrowUpDown } from "lucide-react"
 import type { StockItem, StockTransaction } from "@/lib/types"
 import { EditTransactionSheet } from "./edit-transaction-sheet"
 import { DeleteConfirmationDialog } from "./delete-confirmation-dialog"
@@ -25,6 +25,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useIsMobile } from "@/hooks/use-mobile"
 import { Badge } from "./ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+
+type SortKey = keyof StockTransaction | 'totalValue' | null;
+type SortDirection = 'asc' | 'desc';
+
 
 export function StockTab() {
   const { stockItems, stockTransactions, deleteStockTransaction, deleteMultipleStockTransactions, currency, showStockValue } = useAppContext()
@@ -36,14 +40,45 @@ export function StockTab() {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [showActions, setShowActions] = useState(false);
+  const [sortKey, setSortKey] = useState<SortKey>('date');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const isMobile = useIsMobile();
+  
+  const handleSort = (key: SortKey) => {
+    if (sortKey === key) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortKey(key);
+      setSortDirection('asc');
+    }
+  };
+
+  const sortedTransactions = useMemo(() => {
+    if (!sortKey) return stockTransactions;
+
+    return [...stockTransactions].sort((a, b) => {
+      const aValue = sortKey === 'totalValue' ? a.weight * a.pricePerKg : a[sortKey as keyof StockTransaction];
+      const bValue = sortKey === 'totalValue' ? b.weight * b.pricePerKg : b[sortKey as keyof StockTransaction];
+      
+      let result = 0;
+      if (typeof aValue === 'string' && typeof bValue === 'string') {
+        result = aValue.localeCompare(bValue);
+      } else if (typeof aValue === 'number' && typeof bValue === 'number') {
+        result = aValue - bValue;
+      } else if (sortKey === 'date') {
+        result = new Date(a.date).getTime() - new Date(b.date).getTime();
+      }
+
+      return sortDirection === 'asc' ? result : -result;
+    });
+  }, [stockTransactions, sortKey, sortDirection]);
 
   const filteredByMonth = useMemo(() => {
-    return stockTransactions.filter(tx => {
+    return sortedTransactions.filter(tx => {
         const txDate = new Date(tx.date);
         return txDate.getFullYear() === currentMonth.getFullYear() && txDate.getMonth() === currentMonth.getMonth();
     })
-  }, [stockTransactions, currentMonth]);
+  }, [sortedTransactions, currentMonth]);
 
   const paginatedTransactions = useMemo(() => {
     const startIndex = (currentPage - 1) * itemsPerPage;
@@ -130,6 +165,11 @@ export function StockTab() {
     setCurrentPage(1);
   }
 
+  const renderSortArrow = (key: SortKey) => {
+    if (sortKey !== key) return <ArrowUpDown className="ml-2 h-4 w-4 opacity-50" />;
+    return sortDirection === 'asc' ? <ArrowUpCircle className="ml-2 h-4 w-4" /> : <ArrowDownCircle className="ml-2 h-4 w-4" />;
+  };
+
   const renderDesktopHistory = () => (
      <div className="overflow-x-auto">
       <Table>
@@ -144,13 +184,13 @@ export function StockTab() {
                     />
                 </TableHead>
             )}
-            <TableHead>Date</TableHead>
-            <TableHead>Type</TableHead>
-            <TableHead>Item</TableHead>
+             <TableHead><Button variant="ghost" onClick={() => handleSort('date')}>Date {renderSortArrow('date')}</Button></TableHead>
+             <TableHead><Button variant="ghost" onClick={() => handleSort('type')}>Type {renderSortArrow('type')}</Button></TableHead>
+             <TableHead><Button variant="ghost" onClick={() => handleSort('stockItemName')}>Item {renderSortArrow('stockItemName')}</Button></TableHead>
             <TableHead>Description</TableHead>
-            <TableHead className="text-right">Weight</TableHead>
-            <TableHead className="text-right">Price/kg</TableHead>
-            {showStockValue && <TableHead className="text-right">Total Value</TableHead>}
+            <TableHead className="text-right"><Button variant="ghost" onClick={() => handleSort('weight')}>Weight {renderSortArrow('weight')}</Button></TableHead>
+            <TableHead className="text-right"><Button variant="ghost" onClick={() => handleSort('pricePerKg')}>Price/kg {renderSortArrow('pricePerKg')}</Button></TableHead>
+            {showStockValue && <TableHead className="text-right"><Button variant="ghost" onClick={() => handleSort('totalValue')}>Total Value {renderSortArrow('totalValue')}</Button></TableHead>}
             {showActions && <TableHead className="text-right">Actions</TableHead>}
           </TableRow>
         </TableHeader>
@@ -169,7 +209,7 @@ export function StockTab() {
                 )}
                 <TableCell>
                    <div className="flex items-center gap-2">
-                    <span className="font-mono">{new Date(tx.date).toLocaleDateString()}</span>
+                    <span className="font-mono">{format(new Date(tx.date), 'dd-MM-yyyy')}</span>
                     {tx.lastEdited && (
                       <TooltipProvider>
                         <Tooltip>
@@ -250,7 +290,7 @@ export function StockTab() {
 
                     <div className="flex justify-between items-center pt-2">
                         <div className="text-xs text-muted-foreground flex items-center gap-1 font-mono">
-                            {new Date(tx.date).toLocaleDateString()}
+                            {format(new Date(tx.date), 'dd-MM-yyyy')}
                             {tx.lastEdited && (
                             <TooltipProvider>
                                 <Tooltip>
