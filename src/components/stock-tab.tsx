@@ -77,7 +77,10 @@ export function StockTab() {
   };
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', { style: 'currency', currency: currency }).format(amount)
+    if (currency === 'BDT') {
+      return `৳${new Intl.NumberFormat('en-US').format(amount)}`;
+    }
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency: currency, currencyDisplay: 'symbol' }).format(amount)
   }
 
   const handleSelectAll = (checked: boolean) => {
