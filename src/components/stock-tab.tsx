@@ -351,13 +351,12 @@ export function StockTab() {
                     </div>
                 </div>
                 <div className="flex flex-col sm:flex-row items-center justify-between gap-2 pt-4">
-                    <div className="flex items-center gap-2 sm:order-last">
-                        {selectedTxIds.length > 0 && (
-                            <Button size="sm" variant="destructive" onClick={handleMultiDeleteClick}>
-                                <Trash2 className="mr-2 h-4 w-4" /> ({selectedTxIds.length})
-                            </Button>
-                        )}
-                        <TooltipProvider>
+                    <div className="flex items-center gap-2">
+                        <Button size="sm" variant={isSelectionMode ? "secondary" : "outline"} onClick={toggleSelectionMode}>
+                            <CheckSquare className="mr-2 h-4 w-4" />
+                            {isSelectionMode ? 'Cancel' : 'Select'}
+                        </Button>
+                         <TooltipProvider>
                             <Tooltip>
                                 <TooltipTrigger asChild>
                                 <Button size="sm" variant="outline" onClick={() => setShowActions(!showActions)}>
@@ -370,11 +369,12 @@ export function StockTab() {
                             </Tooltip>
                         </TooltipProvider>
                     </div>
-                     <div className="flex items-center gap-2 justify-center flex-1">
-                        <Button size="sm" variant={isSelectionMode ? "secondary" : "outline"} onClick={toggleSelectionMode}>
-                            <CheckSquare className="mr-2 h-4 w-4" />
-                            {isSelectionMode ? 'Cancel' : 'Select'}
-                        </Button>
+                     <div className="flex items-center gap-2">
+                        {selectedTxIds.length > 0 && (
+                            <Button size="sm" variant="destructive" onClick={handleMultiDeleteClick}>
+                                <Trash2 className="mr-2 h-4 w-4" /> ({selectedTxIds.length})
+                            </Button>
+                        )}
                     </div>
                 </div>
             </CardHeader>
