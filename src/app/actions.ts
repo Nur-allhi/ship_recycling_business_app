@@ -109,6 +109,13 @@ export async function initializeSheets() {
         return { success: true };
     } catch (error: any) {
         console.error("Failed to initialize sheets:", error);
+        if (error.message && error.message.includes('Unable to parse range')) {
+            const missingSheet = error.message.split("'")[1]?.split("!")[0];
+            return {
+                success: false,
+                error: `The sheet "${missingSheet}" does not seem to exist. Please create the following sheets in your Google Sheet document and try again: Cash, Bank, Stock Transactions, Initial Stock.`
+            };
+        }
         return { success: false, error: error.message };
     }
 }
