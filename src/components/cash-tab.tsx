@@ -16,7 +16,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { ArrowUpCircle, ArrowDownCircle, ArrowRightLeft, Pencil, History, Trash2 } from "lucide-react"
+import { ArrowUpCircle, ArrowDownCircle, ArrowRightLeft, Pencil, History, Trash2, CheckSquare } from "lucide-react"
 import type { CashTransaction } from "@/lib/types"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetTrigger } from "@/components/ui/sheet"
 import { EditTransactionSheet } from "./edit-transaction-sheet"
@@ -29,6 +29,7 @@ export function CashTab() {
   const [editSheetState, setEditSheetState] = useState<{isOpen: boolean, transaction: CashTransaction | null}>({ isOpen: false, transaction: null});
   const [deleteDialogState, setDeleteDialogState] = useState<{isOpen: boolean, txId: string | null, txIds: string[] | null}>({ isOpen: false, txId: null, txIds: null });
   const [selectedTxIds, setSelectedTxIds] = useState<string[]>([]);
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
 
   const handleEditClick = (tx: CashTransaction) => {
     setEditSheetState({ isOpen: true, transaction: tx });
@@ -51,6 +52,7 @@ export function CashTab() {
         setSelectedTxIds([]);
     }
     setDeleteDialogState({ isOpen: false, txId: null, txIds: null });
+    setIsSelectionMode(false);
   };
 
   const formatCurrency = (amount: number) => {
@@ -83,6 +85,12 @@ export function CashTab() {
       }
   }
 
+  const toggleSelectionMode = () => {
+    setIsSelectionMode(!isSelectionMode);
+    if (isSelectionMode) {
+      setSelectedTxIds([]);
+    }
+  }
 
   return (
     <>
@@ -100,6 +108,10 @@ export function CashTab() {
                     <Trash2 className="mr-2 h-4 w-4" /> Delete ({selectedTxIds.length})
                 </Button>
             )}
+            <Button variant="outline" onClick={toggleSelectionMode}>
+                <CheckSquare className="mr-2 h-4 w-4" />
+                {isSelectionMode ? 'Cancel' : 'Select'}
+            </Button>
             <Sheet open={isTransferSheetOpen} onOpenChange={setIsTransferSheetOpen}>
                 <SheetTrigger asChild>
                     <Button variant="outline" className="w-full sm:w-auto"><ArrowRightLeft className="mr-2 h-4 w-4" />Transfer</Button>
@@ -125,13 +137,15 @@ export function CashTab() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-[50px]">
-                    <Checkbox 
-                        onCheckedChange={(checked) => handleSelectAll(Boolean(checked))}
-                        checked={selectedTxIds.length === cashTransactions.length && cashTransactions.length > 0}
-                        aria-label="Select all rows"
-                    />
-                </TableHead>
+                {isSelectionMode && (
+                  <TableHead className="w-[50px]">
+                      <Checkbox 
+                          onCheckedChange={(checked) => handleSelectAll(Boolean(checked))}
+                          checked={selectedTxIds.length === cashTransactions.length && cashTransactions.length > 0}
+                          aria-label="Select all rows"
+                      />
+                  </TableHead>
+                )}
                 <TableHead>Date</TableHead>
                 <TableHead>Description</TableHead>
                 <TableHead>Category</TableHead>
@@ -143,13 +157,15 @@ export function CashTab() {
               {cashTransactions.length > 0 ? (
                 cashTransactions.map((tx: CashTransaction) => (
                   <TableRow key={tx.id} data-state={selectedTxIds.includes(tx.id) && "selected"}>
-                    <TableCell>
-                        <Checkbox 
-                            onCheckedChange={(checked) => handleSelectRow(tx.id, Boolean(checked))}
-                            checked={selectedTxIds.includes(tx.id)}
-                            aria-label="Select row"
-                        />
-                    </TableCell>
+                    {isSelectionMode && (
+                      <TableCell>
+                          <Checkbox 
+                              onCheckedChange={(checked) => handleSelectRow(tx.id, Boolean(checked))}
+                              checked={selectedTxIds.includes(tx.id)}
+                              aria-label="Select row"
+                          />
+                      </TableCell>
+                    )}
                     <TableCell>
                       <div className="flex items-center gap-2">
                         <span>{new Date(tx.date).toLocaleDateString()}</span>
@@ -191,7 +207,7 @@ export function CashTab() {
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center h-24">No cash transactions yet.</TableCell>
+                  <TableCell colSpan={isSelectionMode ? 6 : 5} className="text-center h-24">No cash transactions yet.</TableCell>
                 </TableRow>
               )}
             </TableBody>

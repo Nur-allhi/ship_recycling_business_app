@@ -14,7 +14,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { ArrowUpCircle, ArrowDownCircle, Pencil, History, Trash2 } from "lucide-react"
+import { ArrowUpCircle, ArrowDownCircle, Pencil, History, Trash2, CheckSquare } from "lucide-react"
 import type { StockItem, StockTransaction } from "@/lib/types"
 import { EditTransactionSheet } from "./edit-transaction-sheet"
 import { DeleteConfirmationDialog } from "./delete-confirmation-dialog"
@@ -25,6 +25,7 @@ export function StockTab() {
   const [editSheetState, setEditSheetState] = useState<{isOpen: boolean, transaction: StockTransaction | null}>({ isOpen: false, transaction: null});
   const [deleteDialogState, setDeleteDialogState] = useState<{isOpen: boolean, txId: string | null, txIds: string[] | null}>({ isOpen: false, txId: null, txIds: null });
   const [selectedTxIds, setSelectedTxIds] = useState<string[]>([]);
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
 
   const handleEditClick = (tx: StockTransaction) => {
     setEditSheetState({ isOpen: true, transaction: tx });
@@ -47,6 +48,7 @@ export function StockTab() {
         setSelectedTxIds([]);
     }
     setDeleteDialogState({ isOpen: false, txId: null, txIds: null });
+    setIsSelectionMode(false);
   };
 
   const formatCurrency = (amount: number) => {
@@ -67,6 +69,13 @@ export function StockTab() {
       } else {
           setSelectedTxIds(prev => prev.filter(id => id !== txId));
       }
+  }
+
+  const toggleSelectionMode = () => {
+    setIsSelectionMode(!isSelectionMode);
+    if (isSelectionMode) {
+      setSelectedTxIds([]);
+    }
   }
 
   return (
@@ -115,24 +124,32 @@ export function StockTab() {
                     <CardTitle>Stock Transaction History</CardTitle>
                     <CardDescription>Recent purchases and sales.</CardDescription>
                 </div>
-                {selectedTxIds.length > 0 && (
-                    <Button variant="destructive" onClick={handleMultiDeleteClick}>
-                        <Trash2 className="mr-2 h-4 w-4" /> Delete ({selectedTxIds.length})
+                <div className="flex gap-2">
+                    {selectedTxIds.length > 0 && (
+                        <Button variant="destructive" onClick={handleMultiDeleteClick}>
+                            <Trash2 className="mr-2 h-4 w-4" /> Delete ({selectedTxIds.length})
+                        </Button>
+                    )}
+                    <Button variant="outline" onClick={toggleSelectionMode}>
+                        <CheckSquare className="mr-2 h-4 w-4" />
+                        {isSelectionMode ? 'Cancel' : 'Select'}
                     </Button>
-                )}
+                </div>
             </CardHeader>
             <CardContent>
               <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-[50px]">
-                        <Checkbox 
-                            onCheckedChange={(checked) => handleSelectAll(Boolean(checked))}
-                            checked={selectedTxIds.length === stockTransactions.length && stockTransactions.length > 0}
-                            aria-label="Select all rows"
-                        />
-                    </TableHead>
+                    {isSelectionMode && (
+                        <TableHead className="w-[50px]">
+                            <Checkbox 
+                                onCheckedChange={(checked) => handleSelectAll(Boolean(checked))}
+                                checked={selectedTxIds.length === stockTransactions.length && stockTransactions.length > 0}
+                                aria-label="Select all rows"
+                            />
+                        </TableHead>
+                    )}
                     <TableHead>Date</TableHead>
                     <TableHead>Type</TableHead>
                     <TableHead>Item</TableHead>
@@ -147,13 +164,15 @@ export function StockTab() {
                   {stockTransactions.length > 0 ? (
                     stockTransactions.map((tx: StockTransaction) => (
                       <TableRow key={tx.id} data-state={selectedTxIds.includes(tx.id) && "selected"}>
-                        <TableCell>
-                            <Checkbox 
-                                onCheckedChange={(checked) => handleSelectRow(tx.id, Boolean(checked))}
-                                checked={selectedTxIds.includes(tx.id)}
-                                aria-label="Select row"
-                            />
-                        </TableCell>
+                        {isSelectionMode && (
+                            <TableCell>
+                                <Checkbox 
+                                    onCheckedChange={(checked) => handleSelectRow(tx.id, Boolean(checked))}
+                                    checked={selectedTxIds.includes(tx.id)}
+                                    aria-label="Select row"
+                                />
+                            </TableCell>
+                        )}
                         <TableCell>
                            <div className="flex items-center gap-2">
                             <span>{new Date(tx.date).toLocaleDateString()}</span>
@@ -197,7 +216,7 @@ export function StockTab() {
                       </TableRow>
                     ))
                   ) : (
-                    <TableRow><TableCell colSpan={9} className="text-center h-24">No stock transactions yet.</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={isSelectionMode ? 9 : 8} className="text-center h-24">No stock transactions yet.</TableCell></TableRow>
                   )}
                 </TableBody>
               </Table>
