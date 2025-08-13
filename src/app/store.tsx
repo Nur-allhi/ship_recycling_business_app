@@ -93,8 +93,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const reloadData = useCallback(async () => {
     try {
-        setState(prev => ({ ...prev, initialBalanceSet: false })); // Show loading indicator
-        
         const fetchData = async (range: string, sheetName: string) => {
           try {
             return await readSheetData({ range });
