@@ -4,6 +4,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import type { CashTransaction, BankTransaction, StockItem, StockTransaction } from '@/lib/types';
 import { useToast } from "@/hooks/use-toast"
+import { Button } from '@/components/ui/button';
 
 type FontSize = 'sm' | 'base' | 'lg';
 
@@ -345,8 +346,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const deleteCashTransaction = (txId: string) => {
+    let txToDelete: CashTransaction | undefined;
     setState(prev => {
-        const txToDelete = prev.cashTransactions.find(tx => tx.id === txId);
+        txToDelete = prev.cashTransactions.find(tx => tx.id === txId);
         if (!txToDelete) return prev;
 
         const newBalance = txToDelete.type === 'income' 
@@ -361,6 +363,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
             cashTransactions: newTransactions,
         };
     });
+    
+    if (txToDelete) {
+      const originalTx = txToDelete;
+      toast({
+        title: "Transaction deleted",
+        action: (
+          <Button variant="secondary" onClick={() => {
+            setState(prev => {
+              const restoredBalance = originalTx.type === 'income' ? prev.cashBalance + originalTx.amount : prev.cashBalance - originalTx.amount;
+              const restoredTxs = [...prev.cashTransactions, originalTx].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+              return { ...prev, cashBalance: restoredBalance, cashTransactions: restoredTxs };
+            });
+          }}>Undo</Button>
+        )
+      });
+    }
   };
 
   const deleteBankTransaction = (txId: string) => {

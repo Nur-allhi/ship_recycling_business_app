@@ -5,6 +5,7 @@ export interface Transaction {
   amount: number;
   category: string;
   lastEdited?: string;
+  deletedAt?: string;
 }
 
 export interface CashTransaction extends Transaction {
@@ -32,4 +33,5 @@ export interface StockTransaction {
   paymentMethod: 'cash' | 'bank';
   description?: string;
   lastEdited?: string;
+  deletedAt?: string;
 }
