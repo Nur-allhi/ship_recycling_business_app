@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -53,8 +53,8 @@ const formSchema = z.object({
         if (!data.weight || data.weight <= 0) {
             ctx.addIssue({ code: 'custom', message: 'Weight must be positive.', path: ['weight'] });
         }
-        if (!data.pricePerKg || data.pricePerKg <= 0) {
-            ctx.addIssue({ code: 'custom', message: 'Price must be positive.', path: ['pricePerKg'] });
+        if (!data.pricePerKg || data.pricePerKg < 0) { // Price can be 0 for some cases
+            ctx.addIssue({ code: 'custom', message: 'Price must be non-negative.', path: ['pricePerKg'] });
         }
         if (!data.paymentMethod) {
             ctx.addIssue({ code: 'custom', message: 'Payment method is required.', path: ['paymentMethod'] });
@@ -85,11 +85,6 @@ interface UnifiedTransactionFormProps {
   setDialogOpen: (open: boolean) => void;
 }
 
-const cashIncomeCategories = ['Salary'];
-const cashExpenseCategories = ['Groceries', 'Transport', 'Utilities'];
-const bankDepositCategories = ['Deposit'];
-const bankWithdrawalCategories = ['Withdrawal'];
-
 export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionFormProps) {
   const { 
     addCashTransaction, 
@@ -113,37 +108,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
   });
 
   const transactionType = watch('transactionType');
-  const category = watch('category');
-  const [showDirection, setShowDirection] = useState(false);
-
-  useEffect(() => {
-    if (transactionType === 'cash' && category) {
-      if (cashIncomeCategories.includes(category)) {
-        setValue('inOutType', 'in');
-        setShowDirection(false);
-      } else if (cashExpenseCategories.includes(category)) {
-        setValue('inOutType', 'out');
-        setShowDirection(false);
-      } else {
-        setValue('inOutType', undefined);
-        setShowDirection(true);
-      }
-    } else if (transactionType === 'bank' && category) {
-        if (bankDepositCategories.includes(category)) {
-            setValue('inOutType', 'in');
-            setShowDirection(false);
-        } else if (bankWithdrawalCategories.includes(category)) {
-            setValue('inOutType', 'out');
-            setShowDirection(false);
-        } else {
-            setValue('inOutType', undefined);
-            setShowDirection(true);
-        }
-    } else {
-        setShowDirection(false);
-    }
-  }, [category, transactionType, setValue]);
-
+  const [isNewStockItem, setIsNewStockItem] = useState(false);
 
   const onSubmit = (data: FormData) => {
     const transactionDate = data.date.toISOString();
@@ -197,6 +162,8 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
     setDialogOpen(false);
   };
 
+  const currentCategories = transactionType === 'cash' ? cashCategories : bankCategories;
+
   return (
     <>
       <DialogHeader>
@@ -239,7 +206,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                   <Separator />
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div className="space-y-2">
-                          <Label htmlFor="amount">Amount</Label>
+                          <Label htmlFor="amount">{transactionType.startsWith('stock') ? 'Total Cost / Revenue' : 'Amount'}</Label>
                           <Input id="amount" type="number" step="0.01" {...register('amount')} placeholder="0.00"/>
                           {errors.amount && <p className="text-sm text-destructive">{errors.amount.message}</p>}
                           </div>
@@ -296,7 +263,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                                       <Select onValueChange={field.onChange} value={field.value}>
                                           <SelectTrigger><SelectValue placeholder="Select a category" /></SelectTrigger>
                                           <SelectContent>
-                                              {(transactionType === 'cash' ? cashCategories : bankCategories).map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                                              {currentCategories.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
                                           </SelectContent>
                                       </Select>
                                   )}
@@ -304,7 +271,6 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                               {errors.category && <p className="text-sm text-destructive">{errors.category.message}</p>}
                           </div>
 
-                          {showDirection && (
                           <div className="space-y-2">
                               <Label>Direction</Label>
                               <Controller 
@@ -314,46 +280,75 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                                       <RadioGroup onValueChange={field.onChange} value={field.value} className="flex pt-2 gap-4">
                                           <Label htmlFor="in" className="flex items-center gap-2 cursor-pointer">
                                               <RadioGroupItem value="in" id="in" />
-                                              In
+                                              {transactionType === 'cash' ? 'Income' : 'Deposit'}
                                           </Label>
                                           <Label htmlFor="out" className="flex items-center gap-2 cursor-pointer">
                                               <RadioGroupItem value="out" id="out" />
-                                              Out
+                                               {transactionType === 'cash' ? 'Expense' : 'Withdrawal'}
                                           </Label>
                                       </RadioGroup>
                                   )}
                               />
                               {errors.inOutType && <p className="text-sm text-destructive">{errors.inOutType.message}</p>}
                           </div>
-                          )}
                       </div>
                   )}
 
                   {(transactionType === 'stock_purchase' || transactionType === 'stock_sale') && (
                       <div className="space-y-4 pt-4">
-                      <Separator />
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div className="space-y-2">
+                          <Separator />
+                           <div className="space-y-2">
                               <Label>Item Name</Label>
-                              {transactionType === 'stock_purchase' ? (
+                              {transactionType === 'stock_purchase' && !isNewStockItem ? (
+                                <div className="flex items-center gap-2">
+                                <Controller
+                                    control={control}
+                                    name="stockItemName"
+                                    render={({ field }) => (
+                                        <Select onValueChange={field.onChange} value={field.value}>
+                                            <SelectTrigger><SelectValue placeholder="Select existing item" /></SelectTrigger>
+                                            <SelectContent>
+                                                {stockItems.filter(i => i.weight > 0).map(item => <SelectItem key={item.id} value={item.name}>{item.name}</SelectItem>)}
+                                            </SelectContent>
+                                        </Select>
+                                    )}
+                                />
+                                <Button type="button" variant="outline" onClick={() => setIsNewStockItem(true)}>New</Button>
+                                </div>
+                              ) : transactionType === 'stock_purchase' && isNewStockItem ? (
+                                <div className="flex items-center gap-2">
                                   <Input {...register('stockItemName')} placeholder="e.g. Rice"/>
+                                  <Button type="button" variant="outline" onClick={() => setIsNewStockItem(false)}>Existing</Button>
+                                </div>
                               ) : (
-                                  <Controller
-                                      control={control}
-                                      name="stockItemName"
-                                      render={({ field }) => (
-                                          <Select onValueChange={field.onChange} value={field.value}>
-                                              <SelectTrigger><SelectValue placeholder="Select item to sell" /></SelectTrigger>
-                                              <SelectContent>
-                                                  {stockItems.map(item => <SelectItem key={item.id} value={item.name}>{item.name}</SelectItem>)}
-                                              </SelectContent>
-                                          </Select>
-                                      )}
-                                  />
+                                <Controller
+                                    control={control}
+                                    name="stockItemName"
+                                    render={({ field }) => (
+                                        <Select onValueChange={field.onChange} value={field.value}>
+                                            <SelectTrigger><SelectValue placeholder="Select item to sell" /></SelectTrigger>
+                                            <SelectContent>
+                                                {stockItems.filter(i => i.weight > 0).map(item => <SelectItem key={item.id} value={item.name}>{item.name}</SelectItem>)}
+                                            </SelectContent>
+                                        </Select>
+                                    )}
+                                />
                               )}
                               {errors.stockItemName && <p className="text-sm text-destructive">{errors.stockItemName.message}</p>}
                           </div>
-                          <div className="space-y-2">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <div className="space-y-2">
+                                  <Label>Weight (kg)</Label>
+                                  <Input type="number" step="0.01" {...register('weight')} placeholder="0.00"/>
+                                  {errors.weight && <p className="text-sm text-destructive">{errors.weight.message}</p>}
+                              </div>
+                              <div className="space-y-2">
+                                  <Label>Price per kg</Label>
+                                  <Input type="number" step="0.01" {...register('pricePerKg')} placeholder="0.00"/>
+                                  {errors.pricePerKg && <p className="text-sm text-destructive">{errors.pricePerKg.message}</p>}
+                              </div>
+                          </div>
+                           <div className="space-y-2">
                               <Label>Payment Method</Label>
                               <Controller 
                                   control={control}
@@ -367,19 +362,6 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                               />
                               {errors.paymentMethod && <p className="text-sm text-destructive">{errors.paymentMethod.message}</p>}
                           </div>
-                      </div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div className="space-y-2">
-                              <Label>Weight (kg)</Label>
-                              <Input type="number" step="0.01" {...register('weight')} placeholder="0.00"/>
-                              {errors.weight && <p className="text-sm text-destructive">{errors.weight.message}</p>}
-                          </div>
-                          <div className="space-y-2">
-                              <Label>Price per kg</Label>
-                              <Input type="number" step="0.01" {...register('pricePerKg')} placeholder="0.00"/>
-                              {errors.pricePerKg && <p className="text-sm text-destructive">{errors.pricePerKg.message}</p>}
-                          </div>
-                      </div>
                       </div>
                   )}
 
@@ -404,9 +386,11 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
               </div>
           )}
             <div className="flex justify-end pt-4">
-              <Button type="submit" className="w-full sm:w-auto">Record Transaction</Button>
+              <Button type="submit" className="w-full sm:w-auto" disabled={!transactionType}>Record Transaction</Button>
           </div>
       </form>
     </>
   );
 }
+
+    
