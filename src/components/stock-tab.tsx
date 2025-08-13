@@ -80,6 +80,8 @@ export function StockTab() {
   }
 
   const totalStockValue = stockItems.reduce((acc, item) => acc + (item.weight * item.purchasePricePerKg), 0);
+  const totalStockWeight = stockItems.reduce((acc, item) => acc + item.weight, 0);
+  const weightedAveragePrice = totalStockWeight > 0 ? totalStockValue / totalStockWeight : 0;
 
   return (
     <>
@@ -119,7 +121,9 @@ export function StockTab() {
                    {stockItems.length > 0 && (
                      <TableFooter>
                         <TableRow>
-                          <TableCell colSpan={3} className="text-right font-bold">Total Stock Value</TableCell>
+                          <TableCell className="text-right font-bold">Totals</TableCell>
+                          <TableCell className="text-right font-bold">{totalStockWeight.toFixed(2)} kg</TableCell>
+                          <TableCell className="text-right font-bold">{formatCurrency(weightedAveragePrice)}</TableCell>
                           <TableCell className="text-right font-bold">{formatCurrency(totalStockValue)}</TableCell>
                         </TableRow>
                       </TableFooter>
