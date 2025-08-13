@@ -12,6 +12,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  TableFooter,
 } from "@/components/ui/table"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { ArrowUpCircle, ArrowDownCircle, Pencil, History, Trash2, CheckSquare } from "lucide-react"
@@ -78,6 +79,8 @@ export function StockTab() {
     }
   }
 
+  const totalStockValue = stockItems.reduce((acc, item) => acc + (item.weight * item.purchasePricePerKg), 0);
+
   return (
     <>
       <div className="space-y-6">
@@ -113,6 +116,14 @@ export function StockTab() {
                       </TableRow>
                     )}
                   </TableBody>
+                   {stockItems.length > 0 && (
+                     <TableFooter>
+                        <TableRow>
+                          <TableCell colSpan={3} className="text-right font-bold">Total Stock Value</TableCell>
+                          <TableCell className="text-right font-bold">{formatCurrency(totalStockValue)}</TableCell>
+                        </TableRow>
+                      </TableFooter>
+                   )}
                 </Table>
               </div>
             </CardContent>
