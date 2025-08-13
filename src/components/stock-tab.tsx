@@ -24,8 +24,6 @@ import { format, subMonths, addMonths } from "date-fns"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { Badge } from "./ui/badge"
-import { Switch } from "./ui/switch"
-import { Label } from "./ui/label"
 
 export function StockTab() {
   const { stockItems, stockTransactions, deleteStockTransaction, deleteMultipleStockTransactions, currency } = useAppContext()
@@ -36,7 +34,7 @@ export function StockTab() {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
-  const [showActions, setShowActions] = useState(true);
+  const showActions = true;
   const isMobile = useIsMobile();
 
   const filteredByMonth = useMemo(() => {
@@ -365,10 +363,6 @@ export function StockTab() {
                             <CheckSquare className="mr-2 h-4 w-4" />
                             {isSelectionMode ? 'Cancel' : 'Select'}
                         </Button>
-                        <div className="flex items-center space-x-2">
-                            <Switch id="show-actions-stock" checked={showActions} onCheckedChange={setShowActions} />
-                            <Label htmlFor="show-actions-stock" className="text-sm">Actions</Label>
-                        </div>
                     </div>
                 </div>
             </CardHeader>

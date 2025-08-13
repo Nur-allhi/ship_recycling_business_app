@@ -33,8 +33,6 @@ import { format, subMonths, addMonths } from "date-fns"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { Badge } from "./ui/badge"
-import { Switch } from "./ui/switch"
-
 
 export function BankTab() {
   const { bankBalance, bankTransactions, transferFunds, deleteBankTransaction, deleteMultipleBankTransactions, currency } = useAppContext()
@@ -46,7 +44,7 @@ export function BankTab() {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
-  const [showActions, setShowActions] = useState(true);
+  const showActions = true;
   const isMobile = useIsMobile();
 
   const filteredByMonth = useMemo(() => {
@@ -331,10 +329,6 @@ export function BankTab() {
                             </form>
                         </SheetContent>
                     </Sheet>
-                     <div className="flex items-center space-x-2">
-                        <Switch id="show-actions-bank" checked={showActions} onCheckedChange={setShowActions} />
-                        <Label htmlFor="show-actions-bank" className="text-sm">Actions</Label>
-                    </div>
                 </div>
             </div>
         </CardHeader>
