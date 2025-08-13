@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge"
 import { Plus, Trash2 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 export function SettingsTab() {
   const {
@@ -72,115 +73,128 @@ export function SettingsTab() {
 
 
   return (
-    <div className="grid gap-6 max-w-2xl mx-auto">
-      <Card>
-        <CardHeader>
-          <CardTitle>Initial Balances</CardTitle>
-          <CardDescription>Set your starting cash and bank balances. This should be done once.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="cash-balance">Initial Cash Balance</Label>
-            <Input id="cash-balance" type="number" defaultValue={cashBalance} ref={cashBalanceRef} />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="bank-balance">Initial Bank Balance</Label>
-            <Input id="bank-balance" type="number" defaultValue={bankBalance} ref={bankBalanceRef} />
-          </div>
-          <Button onClick={handleBalanceSave}>Save Balances</Button>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Wastage Settings</CardTitle>
-          <CardDescription>Set a default wastage percentage for stock sales. This is applied to the weight of the sold item.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="wastage-percentage">Wastage Percentage (%)</Label>
-            <Input id="wastage-percentage" type="number" step="0.01" defaultValue={wastagePercentage} ref={wastageRef} />
-          </div>
-          <Button onClick={handleWastageSave}>Save Wastage Setting</Button>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Category Management</CardTitle>
-          <CardDescription>Customize categories for your transactions.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          <div>
-            <h3 className="font-semibold mb-2">Cash Categories</h3>
-            <div className="flex gap-2 mb-3">
-              <Input placeholder="New cash category" ref={cashCategoryRef} />
-              <Button size="icon" onClick={() => handleAddCategory('cash')}><Plus className="h-4 w-4" /></Button>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {cashCategories.map(cat => (
-                <Badge key={cat} variant="secondary" className="flex items-center gap-2">
-                  {cat}
-                  <button onClick={() => deleteCategory('cash', cat)} className="rounded-full hover:bg-muted-foreground/20">
-                    <Trash2 className="h-3 w-3" />
-                  </button>
-                </Badge>
-              ))}
-            </div>
-          </div>
-          <Separator />
-          <div>
-            <h3 className="font-semibold mb-2">Bank Categories</h3>
-            <div className="flex gap-2 mb-3">
-              <Input placeholder="New bank category" ref={bankCategoryRef} />
-              <Button size="icon" onClick={() => handleAddCategory('bank')}><Plus className="h-4 w-4" /></Button>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {bankCategories.map(cat => (
-                <Badge key={cat} variant="secondary" className="flex items-center gap-2">
-                  {cat}
-                  <button onClick={() => deleteCategory('bank', cat)} className="rounded-full hover:bg-muted-foreground/20">
-                    <Trash2 className="h-3 w-3" />
-                  </button>
-                </Badge>
-              ))}
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Appearance</CardTitle>
-          <CardDescription>Adjust the look and feel of the app.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div>
-            <Label>Font Size</Label>
-            <ToggleGroup type="single" value={fontSize} onValueChange={(value) => { if (value) setFontSize(value as any) }} className="mt-2">
-              <ToggleGroupItem value="sm" aria-label="Small text">Small</ToggleGroupItem>
-              <ToggleGroupItem value="base" aria-label="Normal text">Normal</ToggleGroupItem>
-              <ToggleGroupItem value="lg" aria-label="Large text">Large</ToggleGroupItem>
-            </ToggleGroup>
-          </div>
-          <div>
-            <Label>Currency</Label>
-             <Select value={currency} onValueChange={handleCurrencyChange}>
-                <SelectTrigger className="w-[180px] mt-2">
-                    <SelectValue placeholder="Select currency" />
-                </SelectTrigger>
-                <SelectContent>
-                    <SelectItem value="USD">USD ($)</SelectItem>
-                    <SelectItem value="EUR">EUR (€)</SelectItem>
-                    <SelectItem value="GBP">GBP (£)</SelectItem>
-                    <SelectItem value="JPY">JPY (¥)</SelectItem>
-                    <SelectItem value="INR">INR (₹)</SelectItem>
-                    <SelectItem value="BDT">BDT (৳)</SelectItem>
-                </SelectContent>
-            </Select>
-          </div>
-        </CardContent>
-      </Card>
+    <div className="max-w-2xl mx-auto">
+      <Tabs defaultValue="appearance" className="w-full">
+        <TabsList className="grid w-full grid-cols-4">
+          <TabsTrigger value="balances">Balances</TabsTrigger>
+          <TabsTrigger value="wastage">Wastage</TabsTrigger>
+          <TabsTrigger value="categories">Categories</TabsTrigger>
+          <TabsTrigger value="appearance">Appearance</TabsTrigger>
+        </TabsList>
+        <TabsContent value="balances">
+          <Card>
+            <CardHeader>
+              <CardTitle>Initial Balances</CardTitle>
+              <CardDescription>Set your starting cash and bank balances. This should be done once.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="cash-balance">Initial Cash Balance</Label>
+                <Input id="cash-balance" type="number" defaultValue={cashBalance} ref={cashBalanceRef} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="bank-balance">Initial Bank Balance</Label>
+                <Input id="bank-balance" type="number" defaultValue={bankBalance} ref={bankBalanceRef} />
+              </div>
+              <Button onClick={handleBalanceSave}>Save Balances</Button>
+            </CardContent>
+          </Card>
+        </TabsContent>
+        <TabsContent value="wastage">
+           <Card>
+            <CardHeader>
+              <CardTitle>Wastage Settings</CardTitle>
+              <CardDescription>Set a default wastage percentage for stock sales. This is applied to the weight of the sold item.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="wastage-percentage">Wastage Percentage (%)</Label>
+                <Input id="wastage-percentage" type="number" step="0.01" defaultValue={wastagePercentage} ref={wastageRef} />
+              </div>
+              <Button onClick={handleWastageSave}>Save Wastage Setting</Button>
+            </CardContent>
+          </Card>
+        </TabsContent>
+        <TabsContent value="categories">
+           <Card>
+            <CardHeader>
+              <CardTitle>Category Management</CardTitle>
+              <CardDescription>Customize categories for your transactions.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div>
+                <h3 className="font-semibold mb-2">Cash Categories</h3>
+                <div className="flex gap-2 mb-3">
+                  <Input placeholder="New cash category" ref={cashCategoryRef} />
+                  <Button size="icon" onClick={() => handleAddCategory('cash')}><Plus className="h-4 w-4" /></Button>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {cashCategories.map(cat => (
+                    <Badge key={cat} variant="secondary" className="flex items-center gap-2">
+                      {cat}
+                      <button onClick={() => deleteCategory('cash', cat)} className="rounded-full hover:bg-muted-foreground/20">
+                        <Trash2 className="h-3 w-3" />
+                      </button>
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+              <Separator />
+              <div>
+                <h3 className="font-semibold mb-2">Bank Categories</h3>
+                <div className="flex gap-2 mb-3">
+                  <Input placeholder="New bank category" ref={bankCategoryRef} />
+                  <Button size="icon" onClick={() => handleAddCategory('bank')}><Plus className="h-4 w-4" /></Button>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {bankCategories.map(cat => (
+                    <Badge key={cat} variant="secondary" className="flex items-center gap-2">
+                      {cat}
+                      <button onClick={() => deleteCategory('bank', cat)} className="rounded-full hover:bg-muted-foreground/20">
+                        <Trash2 className="h-3 w-3" />
+                      </button>
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+        <TabsContent value="appearance">
+          <Card>
+            <CardHeader>
+              <CardTitle>Appearance</CardTitle>
+              <CardDescription>Adjust the look and feel of the app.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <Label>Font Size</Label>
+                <ToggleGroup type="single" value={fontSize} onValueChange={(value) => { if (value) setFontSize(value as any) }} className="mt-2">
+                  <ToggleGroupItem value="sm" aria-label="Small text">Small</ToggleGroupItem>
+                  <ToggleGroupItem value="base" aria-label="Normal text">Normal</ToggleGroupItem>
+                  <ToggleGroupItem value="lg" aria-label="Large text">Large</ToggleGroupItem>
+                </ToggleGroup>
+              </div>
+              <div>
+                <Label>Currency</Label>
+                <Select value={currency} onValueChange={handleCurrencyChange}>
+                    <SelectTrigger className="w-[180px] mt-2">
+                        <SelectValue placeholder="Select currency" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="USD">USD ($)</SelectItem>
+                        <SelectItem value="EUR">EUR (€)</SelectItem>
+                        <SelectItem value="GBP">GBP (£)</SelectItem>
+                        <SelectItem value="JPY">JPY (¥)</SelectItem>
+                        <SelectItem value="INR">INR (₹)</SelectItem>
+                        <SelectItem value="BDT">BDT (৳)</SelectItem>
+                    </SelectContent>
+                </Select>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   )
 }
