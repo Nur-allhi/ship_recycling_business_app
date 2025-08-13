@@ -215,7 +215,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           }
 
           // Apply new transaction
-          const newTx: CashTransaction = { ...updatedTxData, id: originalTx.id, date: originalTx.date };
+          const newTx: CashTransaction = { ...updatedTxData, id: originalTx.id, date: originalTx.date, lastEdited: new Date().toISOString() };
           if (newTx.type === 'income') {
               newCashBalance += newTx.amount;
           } else {
@@ -243,7 +243,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           }
 
           // Apply new transaction
-          const newTx: BankTransaction = { ...updatedTxData, id: originalTx.id, date: originalTx.date };
+          const newTx: BankTransaction = { ...updatedTxData, id: originalTx.id, date: originalTx.date, lastEdited: new Date().toISOString() };
           if (newTx.type === 'deposit') {
               newBankBalance += newTx.amount;
           } else {
@@ -279,7 +279,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           tempState.bankBalance = initialBankTxs.reduce((acc, tx) => acc + tx.amount, 0);
 
 
-          const allTxs = [...otherStockTxs, { ...updatedTxData, id: originalTx.id, date: originalTx.date }].sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+          const allTxs = [...otherStockTxs, { ...updatedTxData, id: originalTx.id, date: originalTx.date, lastEdited: new Date().toISOString() }].sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
           for (const tx of allTxs) {
               const costOrProceeds = tx.weight * tx.pricePerKg;

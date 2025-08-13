@@ -4,6 +4,7 @@ export interface Transaction {
   description: string;
   amount: number;
   category: string;
+  lastEdited?: string;
 }
 
 export interface CashTransaction extends Transaction {
@@ -30,4 +31,5 @@ export interface StockTransaction {
   pricePerKg: number;
   paymentMethod: 'cash' | 'bank';
   description?: string;
+  lastEdited?: string;
 }

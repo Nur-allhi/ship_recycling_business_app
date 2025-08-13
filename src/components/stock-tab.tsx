@@ -13,7 +13,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { ArrowUpCircle, ArrowDownCircle, Pencil } from "lucide-react"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { ArrowUpCircle, ArrowDownCircle, Pencil, History } from "lucide-react"
 import type { StockItem, StockTransaction } from "@/lib/types"
 import { EditTransactionSheet } from "./edit-transaction-sheet"
 
@@ -93,7 +94,23 @@ export function StockTab() {
                   {stockTransactions.length > 0 ? (
                     stockTransactions.map((tx: StockTransaction) => (
                       <TableRow key={tx.id}>
-                        <TableCell>{new Date(tx.date).toLocaleDateString()}</TableCell>
+                        <TableCell>
+                           <div className="flex items-center gap-2">
+                            <span>{new Date(tx.date).toLocaleDateString()}</span>
+                            {tx.lastEdited && (
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger>
+                                    <History className="h-3 w-3 text-muted-foreground" />
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p>Edited on: {new Date(tx.lastEdited).toLocaleString()}</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            )}
+                          </div>
+                        </TableCell>
                         <TableCell>
                           <span className={`capitalize px-2 py-1 text-xs font-semibold rounded-full flex items-center w-fit ${tx.type === 'purchase' ? 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300' : 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300'}`}>
                             {tx.type === 'purchase' ? <ArrowDownCircle className="mr-1 h-3 w-3" /> : <ArrowUpCircle className="mr-1 h-3 w-3" />}

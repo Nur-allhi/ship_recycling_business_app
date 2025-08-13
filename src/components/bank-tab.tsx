@@ -23,7 +23,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { ArrowUpCircle, ArrowDownCircle, ArrowRightLeft, Pencil } from "lucide-react"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { ArrowUpCircle, ArrowDownCircle, ArrowRightLeft, Pencil, History } from "lucide-react"
 import type { BankTransaction } from "@/lib/types"
 import { EditTransactionSheet } from "./edit-transaction-sheet"
 
@@ -96,7 +97,23 @@ export function BankTab() {
                   {bankTransactions.length > 0 ? (
                   bankTransactions.map((tx: BankTransaction) => (
                       <TableRow key={tx.id}>
-                      <TableCell>{new Date(tx.date).toLocaleDateString()}</TableCell>
+                      <TableCell>
+                         <div className="flex items-center gap-2">
+                          <span>{new Date(tx.date).toLocaleDateString()}</span>
+                          {tx.lastEdited && (
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger>
+                                  <History className="h-3 w-3 text-muted-foreground" />
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p>Edited on: {new Date(tx.lastEdited).toLocaleString()}</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          )}
+                        </div>
+                      </TableCell>
                       <TableCell className="font-medium">{tx.description}</TableCell>
                       <TableCell>{tx.category}</TableCell>
                       <TableCell className={`text-right font-semibold ${tx.type === 'deposit' ? 'text-accent' : 'text-destructive'}`}>
