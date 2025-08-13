@@ -5,7 +5,7 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import type { CashTransaction, BankTransaction, StockItem, StockTransaction } from '@/lib/types';
 import { useToast } from "@/hooks/use-toast"
 import { Button } from '@/components/ui/button';
-import { readSheetData } from '@/ai/flows/sheet-reader-flow';
+import { readSheetData } from '@/app/actions';
 
 type FontSize = 'sm' | 'base' | 'lg';
 
