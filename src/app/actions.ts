@@ -36,7 +36,9 @@ const createSupabaseClient = async (serviceRole = false) => {
 const ReadDataInputSchema = z.object({
   tableName: z.string(),
   select: z.string().optional().default('*'),
+  userId: z.string().optional(), // Add userId for filtering
 });
+
 
 export async function readData(input: z.infer<typeof ReadDataInputSchema>) {
   const supabase = await createSupabaseClient();
@@ -48,6 +50,11 @@ export async function readData(input: z.infer<typeof ReadDataInputSchema>) {
   if (['cash_transactions', 'bank_transactions', 'stock_transactions'].includes(input.tableName)) {
     query = query.is('deletedAt', null);
   }
+  
+  if (input.userId && ['cash_transactions', 'bank_transactions', 'stock_transactions'].includes(input.tableName)) {
+      query = query.eq('user_id', input.userId);
+  }
+
 
   const { data, error } = await query;
 

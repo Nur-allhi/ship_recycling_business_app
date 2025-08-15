@@ -104,6 +104,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
 
   const reloadData = useCallback(async () => {
+    if (!state.user) return;
     try {
         const [cashData, bankData, stockTransactionsData, initialStockData, categoriesData] = await Promise.all([
             readData({ tableName: 'cash_transactions' }),
@@ -206,7 +207,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
         setState(prev => ({ ...prev, initialBalanceSet: true }));
       }
-  }, [toast]);
+  }, [toast, state.user]);
   
   const loadRecycleBinData = useCallback(async () => {
     try {
@@ -250,7 +251,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const session = await getSession();
         if (session) {
             setState(prev => ({...prev, user: session}));
-            await reloadData();
+            // reloadData is called in the next useEffect when user is set
         } else {
             router.push('/login');
         }
@@ -259,7 +260,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     loadUser();
 
-  }, [reloadData, router]);
+  }, [router]);
+  
+   useEffect(() => {
+    if (state.user && !state.initialBalanceSet) {
+        reloadData();
+    }
+   }, [state.user, state.initialBalanceSet, reloadData]);
+
 
   useEffect(() => {
     if (isInitialized) {
