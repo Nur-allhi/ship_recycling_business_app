@@ -36,7 +36,7 @@ const createSupabaseClient = async (serviceRole = false) => {
 const ReadDataInputSchema = z.object({
   tableName: z.string(),
   select: z.string().optional().default('*'),
-  userId: z.string().optional(), // Add userId for filtering
+  userId: z.string().optional(),
 });
 
 
@@ -51,6 +51,7 @@ export async function readData(input: z.infer<typeof ReadDataInputSchema>) {
     query = query.is('deletedAt', null);
   }
   
+  // Only filter by user_id if it's provided and the table is user-specific
   if (input.userId && ['cash_transactions', 'bank_transactions', 'stock_transactions'].includes(input.tableName)) {
       query = query.eq('user_id', input.userId);
   }
@@ -58,16 +59,32 @@ export async function readData(input: z.infer<typeof ReadDataInputSchema>) {
 
   const { data, error } = await query;
 
-  if (error) throw new Error(error.message);
+  if (error) {
+    // If the error is that user_id column doesn't exist, we can ignore it for now
+    // as the user might not have run the migration yet.
+    if (error.code === '42703' && error.message.includes('user_id')) {
+        console.warn(`Warning: column 'user_id' not found in '${input.tableName}'. Returning all data.`);
+        const { data: allData, error: allError } = await supabase.from(input.tableName).select(input.select).is('deletedAt', null);
+        if(allError) throw new Error(allError.message);
+        return allData;
+    }
+    throw new Error(error.message);
+  }
   return data;
 }
 
 export async function readDeletedData(input: z.infer<typeof ReadDataInputSchema>) {
     const supabase = await createSupabaseClient();
-    const { data, error } = await supabase
+    let query = supabase
         .from(input.tableName)
         .select(input.select)
         .not('deletedAt', 'is', null); // Only fetch soft-deleted items
+    
+    if (input.userId && ['cash_transactions', 'bank_transactions', 'stock_transactions'].includes(input.tableName)) {
+      query = query.eq('user_id', input.userId);
+    }
+
+    const { data, error } = await query;
 
     if (error) throw new Error(error.message);
     return data;
@@ -144,9 +161,14 @@ export async function exportAllData() {
     const supabase = await createSupabaseClient();
     const tables = ['cash_transactions', 'bank_transactions', 'stock_transactions', 'initial_stock', 'categories'];
     const exportedData: Record<string, any[]> = {};
+    const session = await getSession();
 
     for (const tableName of tables) {
-        const { data, error } = await supabase.from(tableName).select('*');
+        let query = supabase.from(tableName).select('*');
+        if (session?.id && ['cash_transactions', 'bank_transactions', 'stock_transactions'].includes(tableName)) {
+            query = query.eq('user_id', session.id);
+        }
+        const { data, error } = await query;
         if (error) throw new Error(`Error exporting ${tableName}: ${error.message}`);
         exportedData[tableName] = data;
     }
@@ -160,19 +182,31 @@ const ImportDataSchema = z.record(z.array(z.record(z.any())));
 export async function batchImportData(dataToImport: z.infer<typeof ImportDataSchema>) {
     const supabase = await createSupabaseClient(true); // Use service role for import
     const tables = ['cash_transactions', 'bank_transactions', 'stock_transactions', 'initial_stock', 'categories', 'users'];
+    const session = await getSession();
+    if (!session) throw new Error("No active session for import.");
     
     try {
-        // Clear existing data (except users)
-        for (const tableName of tables.filter(t => t !== 'users').reverse()) {
-            const { error: deleteError } = await supabase.from(tableName).delete().neq('id', '00000000-0000-0000-0000-000000000000');
+        // Clear existing data for the current user
+        for (const tableName of ['cash_transactions', 'bank_transactions', 'stock_transactions'].reverse()) {
+            const { error: deleteError } = await supabase.from(tableName).delete().eq('user_id', session.id);
             if (deleteError) throw new Error(`Failed to clear ${tableName}: ${deleteError.message}`);
         }
+        // Clear non-user-specific data
+        for (const tableName of ['initial_stock', 'categories'].reverse()) {
+             const { error: deleteError } = await supabase.from(tableName).delete().neq('id', '00000000-0000-0000-0000-000000000000');
+            if (deleteError) throw new Error(`Failed to clear ${tableName}: ${deleteError.message}`);
+        }
+
 
         // Import new data
         for (const tableName of tables) {
              if (tableName === 'users') continue; // Don't import users this way for security
             const records = dataToImport[tableName];
             if (records && records.length > 0) {
+                 if (['cash_transactions', 'bank_transactions', 'stock_transactions'].includes(tableName)) {
+                    // Assign current user_id to all imported transactions
+                    records.forEach(r => r.user_id = session.id);
+                }
                 const { error: insertError } = await supabase.from(tableName).upsert(records);
                 if (insertError) throw new Error(`Failed to import to ${tableName}: ${insertError.message}`);
             }
@@ -187,10 +221,19 @@ export async function batchImportData(dataToImport: z.infer<typeof ImportDataSch
 export async function deleteAllData() {
     const supabase = await createSupabaseClient(true); // Use service role to delete
     const tables = ['cash_transactions', 'bank_transactions', 'stock_transactions', 'initial_stock', 'categories'];
+    const session = await getSession();
+    if (!session) throw new Error("No active session to delete data.");
     try {
-        for (const tableName of tables) {
-            const { error } = await supabase.from(tableName).delete().neq('id', '00000000-0000-0000-0000-000000000000');
+        for (const tableName of ['cash_transactions', 'bank_transactions', 'stock_transactions']) {
+            const { error } = await supabase.from(tableName).delete().eq('user_id', session.id);
             if (error) {
+                console.error(`Error deleting from ${tableName}:`, error);
+                throw new Error(`Failed to delete data from ${tableName}.`);
+            }
+        }
+         for (const tableName of ['initial_stock', 'categories']) {
+            const { error } = await supabase.from(tableName).delete().neq('id', '00000000-0000-0000-0000-000000000000');
+             if (error) {
                 console.error(`Error deleting from ${tableName}:`, error);
                 throw new Error(`Failed to delete data from ${tableName}.`);
             }

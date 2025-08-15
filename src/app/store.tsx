@@ -43,9 +43,9 @@ interface AppState {
 interface AppContextType extends AppState {
   reloadData: () => Promise<void>;
   loadRecycleBinData: () => Promise<void>;
-  addCashTransaction: (tx: Omit<CashTransaction, 'id' | 'createdAt' | 'deletedAt'>) => void;
-  addBankTransaction: (tx: Omit<BankTransaction, 'id' | 'createdAt' | 'deletedAt'>) => void;
-  addStockTransaction: (tx: Omit<StockTransaction, 'id' | 'createdAt' | 'deletedAt'>) => void;
+  addCashTransaction: (tx: Omit<CashTransaction, 'id' | 'createdAt' | 'deletedAt' | 'user_id'>) => void;
+  addBankTransaction: (tx: Omit<BankTransaction, 'id' | 'createdAt' | 'deletedAt' | 'user_id'>) => void;
+  addStockTransaction: (tx: Omit<StockTransaction, 'id' | 'createdAt' | 'deletedAt' | 'user_id'>) => void;
   editCashTransaction: (originalTx: CashTransaction, updatedTxData: Partial<Omit<CashTransaction, 'id' | 'date'>>) => void;
   editBankTransaction: (originalTx: BankTransaction, updatedTxData: Partial<Omit<BankTransaction, 'id' | 'date'>>) => void;
   editStockTransaction: (originalTx: StockTransaction, updatedTxData: Partial<Omit<StockTransaction, 'id' | 'date'>>) => void;
@@ -115,7 +115,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
     };
     checkSession();
-  }, [pathname, router]);
+  }, [pathname]);
 
   const reloadData = useCallback(async () => {
     if (!state.user) return;
@@ -205,34 +205,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
       } catch (error: any) {
         console.error("Failed to load data", error);
-        if (error.message.includes('relation') && error.message.includes('does not exist')) {
-            toast({
-                variant: 'destructive',
-                title: 'Database tables not found!',
-                description: 'Please ensure you have created the required tables in your Supabase project.'
-            });
-        } else {
-            toast({
-                variant: 'destructive',
-                title: 'Failed to load data',
-                description: 'Could not connect to Supabase. Check your console for details and verify your credentials.'
-            });
-        }
+        toast({
+            variant: 'destructive',
+            title: 'Failed to load data',
+            description: 'Could not connect to Supabase. Check your console for details and verify your credentials.'
+        });
       }
   }, [toast, state.user]);
   
   useEffect(() => {
-    if (state.user) {
+    if (state.user && state.initialBalanceSet) {
         reloadData();
     }
-  }, [state.user, reloadData]);
+  }, [state.user, state.initialBalanceSet, reloadData]);
   
   const loadRecycleBinData = useCallback(async () => {
+    if(!state.user) return;
     try {
         const [deletedCashData, deletedBankData, deletedStockData] = await Promise.all([
-            readDeletedData({ tableName: 'cash_transactions' }),
-            readDeletedData({ tableName: 'bank_transactions' }),
-            readDeletedData({ tableName: 'stock_transactions' }),
+            readDeletedData({ tableName: 'cash_transactions', userId: state.user.id }),
+            readDeletedData({ tableName: 'bank_transactions', userId: state.user.id }),
+            readDeletedData({ tableName: 'stock_transactions', userId: state.user.id }),
         ]);
 
         setState(prev => ({
@@ -250,7 +243,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             description: 'Could not fetch deleted items. Please try again later.'
         });
     }
-  }, [toast]);
+  }, [toast, state.user]);
 
   useEffect(() => {
       try {
@@ -280,9 +273,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
   }, [state.fontSize, state.bodyFont, state.numberFont, state.wastagePercentage, state.currency, state.showStockValue]);
   
-  const addCashTransaction = async (tx: Omit<CashTransaction, 'id' | 'createdAt' | 'deletedAt'>) => {
+  const addCashTransaction = async (tx: Omit<CashTransaction, 'id' | 'createdAt' | 'deletedAt' | 'user_id'>) => {
     try {
-      await appendData({ tableName: 'cash_transactions', data: { ...tx, user_id: state.user?.id } });
+      if (!state.user) throw new Error("User not authenticated");
+      await appendData({ tableName: 'cash_transactions', data: { ...tx, user_id: state.user.id } });
       toast({ title: "Success", description: "Cash transaction added."});
       await reloadData();
     } catch (error) {
@@ -291,9 +285,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const addBankTransaction = async (tx: Omit<BankTransaction, 'id' | 'createdAt' | 'deletedAt'>) => {
+  const addBankTransaction = async (tx: Omit<BankTransaction, 'id' | 'createdAt' | 'deletedAt' | 'user_id'>) => {
      try {
-      await appendData({ tableName: 'bank_transactions', data: { ...tx, user_id: state.user?.id } });
+      if (!state.user) throw new Error("User not authenticated");
+      await appendData({ tableName: 'bank_transactions', data: { ...tx, user_id: state.user.id } });
       toast({ title: "Success", description: "Bank transaction added."});
       await reloadData();
     } catch (error) {
@@ -302,9 +297,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
   
-  const addStockTransaction = async (tx: Omit<StockTransaction, 'id' | 'createdAt' | 'deletedAt'>) => {
+  const addStockTransaction = async (tx: Omit<StockTransaction, 'id' | 'createdAt' | 'deletedAt' | 'user_id'>) => {
     try {
-      const [newStockTx] = await appendData({ tableName: 'stock_transactions', data: { ...tx, user_id: state.user?.id } });
+      if (!state.user) throw new Error("User not authenticated");
+      const [newStockTx] = await appendData({ tableName: 'stock_transactions', data: { ...tx, user_id: state.user.id } });
       if (!newStockTx) throw new Error("Stock transaction creation failed.");
 
       const totalValue = tx.weight * tx.pricePerKg;
@@ -532,8 +528,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const setInitialBalances = async (cash: number, bank: number) => {
       try {
           const commonData = { user_id: state.user?.id };
-          await addCashTransaction({ date: new Date().toISOString(), type: 'income', amount: cash, description: 'Initial Balance', category: 'Initial Balance', ...commonData});
-          await addBankTransaction({ date: new Date().toISOString(), type: 'deposit', amount: bank, description: 'Initial Balance', category: 'Initial Balance', ...commonData});
+          await addCashTransaction({ date: new Date().toISOString(), type: 'income', amount: cash, description: 'Initial Balance', category: 'Initial Balance'});
+          await addBankTransaction({ date: new Date().toISOString(), type: 'deposit', amount: bank, description: 'Initial Balance', category: 'Initial Balance'});
           toast({ title: "Initial balances set." });
           await reloadData();
       } catch (e) {
@@ -615,8 +611,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const logout = async () => {
     await removeSession();
-    setState(initialAppState); // Reset state to initial
     router.push('/login');
+    // A hard reload is better to ensure all state is cleared.
+    window.location.href = '/login';
   };
 
   const setFontSize = (size: FontSize) => setState(prev => ({ ...prev, fontSize: size }));
@@ -657,8 +654,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
     handleExport,
     handleImport,
     handleDeleteAllData,
-logout,
+    logout,
   };
+
+  if (!state.initialBalanceSet) {
+    return (
+        <div className="flex items-center justify-center min-h-screen bg-background">
+            <div className="flex flex-col items-center gap-4">
+                <Logo className="h-16 w-16 text-primary animate-pulse" />
+                <p className="text-muted-foreground">Initializing...</p>
+            </div>
+        </div>
+    );
+  }
   
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 }
