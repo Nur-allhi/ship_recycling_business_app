@@ -283,7 +283,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                  <div>
                                     {dateField}
-                                </div>
+                                 </div>
                                 <div className="space-y-2">
                                     <Label htmlFor="amount-bank">Amount</Label>
                                     <Input id="amount-bank" type="number" step="0.01" {...register('amount')} placeholder="0.00"/>
@@ -327,6 +327,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                             </TabsContent>
                             
                             <TabsContent value="stock" className="m-0 space-y-4 animate-fade-in">
+                                {dateField}
                                 <div className="space-y-2">
                                     <Label>Transaction Type</Label>
                                      <Controller 
@@ -447,7 +448,6 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                                         {errors.description && <p className="text-sm text-destructive">{errors.description.message}</p>}
                                     </div>
                                 )}
-                                {(transactionType === 'stock') && dateField}
                                 
                             </div>
                         )}
@@ -461,5 +461,3 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
     </>
   );
 }
-
-    
