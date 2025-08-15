@@ -22,7 +22,6 @@ import { cn } from '@/lib/utils';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import type { CashTransaction, BankTransaction } from '@/lib/types';
-import { logoPngData } from '@/lib/logo-data';
 
 
 interface PdfExportDialogProps {
@@ -74,18 +73,6 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
         return `${prefix} ${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     }
 
-    try {
-      const logoBase64 = `data:image/png;base64,${logoPngData}`;
-      doc.addImage(logoBase64, 'PNG', pageMargins.left, 15, 20, 20);
-    } catch (e) {
-      console.error("Failed to add logo to PDF:", e);
-      toast({
-        variant: 'destructive',
-        title: 'Logo Error',
-        description: 'Could not add logo to the PDF. The file may be corrupt.'
-      });
-    }
-
     if (dataSource === 'cash') title = 'Cash Ledger';
     if (dataSource === 'bank') title = 'Bank Ledger';
     if (dataSource === 'stock') title = 'Stock Transactions';
@@ -103,7 +90,7 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
     
     if (organizationName) {
       doc.setFont('helvetica', 'bold');
-      doc.text(organizationName, pageMargins.left + 25, headerYPos);
+      doc.text(organizationName, pageMargins.left, headerYPos);
     }
     
     doc.setFont('helvetica', 'normal');
