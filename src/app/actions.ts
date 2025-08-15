@@ -144,3 +144,21 @@ export async function batchImportData(dataToImport: z.infer<typeof ImportDataSch
         throw error;
     }
 }
+
+export async function deleteAllData() {
+    const tables = ['cash_transactions', 'bank_transactions', 'stock_transactions', 'initial_stock', 'categories'];
+    try {
+        for (const tableName of tables) {
+            // The `neq` is a hack to delete all rows without violating foreign key constraints if any are ever added.
+            const { error } = await supabase.from(tableName).delete().neq('id', '00000000-0000-0000-0000-000000000000');
+            if (error) {
+                console.error(`Error deleting from ${tableName}:`, error);
+                throw new Error(`Failed to delete data from ${tableName}.`);
+            }
+        }
+        return { success: true };
+    } catch (error) {
+        console.error("Failed to delete all data:", error);
+        throw error;
+    }
+}

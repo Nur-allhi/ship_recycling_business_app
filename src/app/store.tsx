@@ -4,7 +4,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import type { CashTransaction, BankTransaction, StockItem, StockTransaction } from '@/lib/types';
 import { useToast } from "@/hooks/use-toast"
-import { readData, appendData, updateData, deleteData, readDeletedData, restoreData, exportAllData, batchImportData } from '@/app/actions';
+import { readData, appendData, updateData, deleteData, readDeletedData, restoreData, exportAllData, batchImportData, deleteAllData } from '@/app/actions';
 import { format } from 'date-fns';
 import { supabase } from '@/lib/supabase';
 import { saveAs } from 'file-saver';
@@ -64,6 +64,7 @@ interface AppContextType extends AppState {
   addInitialStockItem: (item: { name: string; weight: number; pricePerKg: number }) => void;
   handleExport: () => void;
   handleImport: (file: File) => void;
+  handleDeleteAllData: () => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -113,7 +114,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const initialCashTx = cashTransactions.find(tx => tx.category === 'Initial Balance');
         const initialBankTx = bankTransactions.find(tx => tx.category === 'Initial Balance');
         
-        if (initialCashTx || initialBankTx) {
+        if (initialCashTx || initialBankTx || initialStockData.length > 0) {
           needsInitialBalance = false;
         }
 
@@ -594,6 +595,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
     };
     reader.readAsText(file);
   };
+  
+  const handleDeleteAllData = async () => {
+    try {
+        await deleteAllData();
+        toast({ title: 'All Data Deleted', description: 'Your ledger has been reset.' });
+        await reloadData();
+    } catch (error: any) {
+        console.error(error);
+        toast({ variant: 'destructive', title: 'Deletion Failed', description: error.message });
+    }
+  };
 
   const setFontSize = (size: FontSize) => setState(prev => ({ ...prev, fontSize: size }));
   const setBodyFont = (font: string) => setState(prev => ({ ...prev, bodyFont: font }));
@@ -632,6 +644,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     addInitialStockItem,
     handleExport,
     handleImport,
+    handleDeleteAllData,
   };
 
   return <AppContext.Provider value={value}>{isInitialized ? children : <div className="flex items-center justify-center min-h-screen">Loading...</div>}</AppContext.Provider>;
