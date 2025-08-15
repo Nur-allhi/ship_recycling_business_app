@@ -4,18 +4,14 @@ import { cn } from '@/lib/utils';
 
 const Logo = ({ className }: { className?: string }) => {
   return (
-    <div className={cn('relative', className)}>
-      <Image
-        src="/logo.png"
-        alt="ShipShape Ledger Logo"
-        fill
-        sizes="100%"
-        style={{
-          objectFit: 'contain',
-        }}
-        priority // Load the logo quickly
-      />
-    </div>
+    <Image
+      src="/logo.png"
+      alt="ShipShape Ledger Logo"
+      width={0}
+      height={0}
+      className={cn("w-full h-auto", className)}
+      priority 
+    />
   );
 };
 
