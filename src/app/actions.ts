@@ -8,7 +8,6 @@ import { createSession, getSession } from '@/lib/auth';
 
 // Helper function to create a Supabase client.
 // Can be configured to use the service_role key for admin-level access.
-// When not using service role, it will try to impersonate the logged-in user.
 const createSupabaseClient = async (serviceRole = false) => {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -18,32 +17,19 @@ const createSupabaseClient = async (serviceRole = false) => {
         throw new Error("Supabase URL, Anon Key, or Service Role Key is missing from environment variables.");
     }
     
-    // For privileged operations, use the service key
+    // For privileged operations or when RLS is handled by user ID filters, use the service key.
+    // This is a trusted server environment.
     if (serviceRole) {
         return createClient(supabaseUrl, supabaseServiceKey, {
             auth: { persistSession: false },
         });
     }
 
-    // For user-level operations, use the anon key and the user's session
-    const session = await getSession();
-    if (!session) {
-         // This will happen for non-logged-in users, which is fine for public read access.
-        // The RLS policies will handle what they can and cannot see.
-        return createClient(supabaseUrl, supabaseAnonKey, {
-            auth: { persistSession: false }
-        });
-    }
-    
-    // We don't have a Supabase-specific JWT, so we can't create an authenticated client this way.
-    // Instead, we will rely on RLS with the user ID passed in a secure way if needed,
-    // or use the serviceRole client for protected actions.
-    // For now, most RLS is based on `auth.jwt()->>'role' = 'admin'` which requires a service client.
-    // The read access is for `authenticated`, but we aren't using Supabase auth.
-    // Let's create a client that assumes admin/service role for all actions for now
-    // as the UI already restricts functionality based on role.
+    // For general server-side access, we will use the service role key to bypass RLS
+    // as the application logic itself will enforce data visibility based on the user's session.
+    // This is simpler and more reliable than impersonation with the current setup.
     return createClient(supabaseUrl, supabaseServiceKey, {
-        auth: { persistSession: false },
+        auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
     });
 }
 
