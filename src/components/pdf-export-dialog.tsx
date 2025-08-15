@@ -23,7 +23,6 @@ import { cn } from '@/lib/utils';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import type { CashTransaction, BankTransaction } from '@/lib/types';
-import { logoPngData } from '@/lib/logo-data';
 
 
 interface PdfExportDialogProps {
@@ -75,36 +74,30 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
         return `${prefix} ${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     }
 
-    // Header
-    try {
-      const logoBase64 = `data:image/png;base64,${logoPngData}`;
-      doc.addImage(logoBase64, 'PNG', pageMargins.left, 15, 30, 20);
-    } catch (e) {
-      console.error("Failed to add logo to PDF:", e);
-      toast({
-        variant: 'destructive',
-        title: 'Logo Error',
-        description: 'Could not add the logo to the PDF. Ensure logo.png is in the /public folder.'
-      })
-    }
-    
     if (dataSource === 'cash') title = 'Cash Ledger';
     if (dataSource === 'bank') title = 'Bank Ledger';
     if (dataSource === 'stock') title = 'Stock Transactions';
-
-    doc.setFontSize(16);
+    
+    const headerYPos = 15;
+    
+    // Header
+    doc.setFontSize(18);
     doc.setFont('helvetica', 'bold');
-    doc.text(title, pageCenter, 22, { align: 'center' });
+    doc.text(title, pageCenter, headerYPos + 7, { align: 'center' });
     doc.setFont('helvetica', 'normal');
 
     const rightAlignX = doc.internal.pageSize.getWidth() - pageMargins.right;
     doc.setFontSize(9);
     
-    doc.setFont('helvetica', 'bold');
-    doc.text(`From: ${format(dateRange.from, 'dd-MM-yyyy')}`, rightAlignX, 20, { align: 'right' });
-    doc.text(`To: ${format(dateRange.to, 'dd-MM-yyyy')}`, rightAlignX, 25, { align: 'right' });
+    if (organizationName) {
+      doc.setFont('helvetica', 'bold');
+      doc.text(organizationName, pageMargins.left, headerYPos);
+    }
+    
     doc.setFont('helvetica', 'normal');
-    doc.text(`Generated: ${format(generationDate, 'dd-MM-yyyy HH:mm')}`, rightAlignX, 30, { align: 'right' });
+    doc.text(`From: ${format(dateRange.from, 'dd-MM-yyyy')}`, rightAlignX, headerYPos, { align: 'right' });
+    doc.text(`To: ${format(dateRange.to, 'dd-MM-yyyy')}`, rightAlignX, headerYPos + 5, { align: 'right' });
+    doc.text(`Generated: ${format(generationDate, 'dd-MM-yyyy HH:mm')}`, rightAlignX, headerYPos + 10, { align: 'right' });
 
     
     if (dataSource === 'cash' || dataSource === 'bank') {
@@ -174,7 +167,7 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
     }
 
     doc.autoTable({
-        startY: 45,
+        startY: 40,
         head: tableHeaders,
         body: tableData,
         theme: 'grid',
@@ -292,5 +285,3 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
     </Dialog>
   );
 }
-
-    
