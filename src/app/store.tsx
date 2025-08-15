@@ -106,7 +106,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const loadUserAndSettings = async () => {
-      // Load settings from local storage first
       try {
         const storedSettings = localStorage.getItem('ha-mim-iron-mart-settings');
         if (storedSettings) {
@@ -117,18 +116,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
         console.error("Could not parse settings from local storage", e);
       }
 
-      // Then, check for a session
       const session = await getSession();
-      if (session) {
-        setState(prev => ({ ...prev, user: session }));
-      }
       
-      // Mark initialization as complete regardless of session status
+      setState(prev => ({ ...prev, user: session, initialBalanceSet: true }));
       setIsInitialized(true);
     };
 
     loadUserAndSettings();
-  }, [pathname]); // Rerun on path change to handle post-login refresh
+  }, [pathname]);
 
   useEffect(() => {
     if (isInitialized && !state.user && pathname !== '/login') {
@@ -140,9 +135,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!state.user) return;
     try {
         const [cashData, bankData, stockTransactionsData, initialStockData, categoriesData] = await Promise.all([
-            readData({ tableName: 'cash_transactions' }),
-            readData({ tableName: 'bank_transactions' }),
-            readData({ tableName: 'stock_transactions' }),
+            readData({ tableName: 'cash_transactions', userId: state.user.id }),
+            readData({ tableName: 'bank_transactions', userId: state.user.id }),
+            readData({ tableName: 'stock_transactions', userId: state.user.id }),
             readData({ tableName: 'initial_stock' }),
             readData({ tableName: 'categories' }),
         ]);
@@ -218,7 +213,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
             cashBalance: finalCashBalance,
             bankBalance: finalBankBalance,
             needsInitialBalance,
-            initialBalanceSet: true, // Mark as ready to render main UI
             cashCategories: cashCategories.length > 0 ? cashCategories : prev.cashCategories,
             bankCategories: bankCategories.length > 0 ? bankCategories : prev.bankCategories,
         }));
