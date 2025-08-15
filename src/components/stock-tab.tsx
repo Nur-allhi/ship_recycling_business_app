@@ -189,7 +189,7 @@ export function StockTab() {
             <TableHead><Button variant="ghost" onClick={() => handleSort('date')}>Date {renderSortArrow('date')}</Button></TableHead>
             <TableHead><Button variant="ghost" onClick={() => handleSort('description')}>Description {renderSortArrow('description')}</Button></TableHead>
             <TableHead><Button variant="ghost" onClick={() => handleSort('stockItemName')}>Item {renderSortArrow('stockItemName')}</Button></TableHead>
-            <TableHead className="text-right"><Button variant="ghost" onClick={() => handleSort('weight')}>Weight {renderSortArrow('weight')}</Button></TableHead>
+            <TableHead className="text-right"><Button variant="ghost" onClick={() => handleSort('weight')}>Weight (kg) {renderSortArrow('weight')}</Button></TableHead>
             <TableHead><Button variant="ghost" onClick={() => handleSort('type')}>Type {renderSortArrow('type')}</Button></TableHead>
             <TableHead className="text-right"><Button variant="ghost" onClick={() => handleSort('pricePerKg')}>Price/kg {renderSortArrow('pricePerKg')}</Button></TableHead>
             {showStockValue && <TableHead className="text-right"><Button variant="ghost" onClick={() => handleSort('totalValue')}>Total Value {renderSortArrow('totalValue')}</Button></TableHead>}

@@ -30,6 +30,14 @@ interface PdfExportDialogProps {
 
 type DataSource = 'cash' | 'bank' | 'stock';
 
+// Extend the jsPDF interface to include autoTable
+declare module 'jspdf' {
+    interface jsPDF {
+        autoTable: (options: any) => jsPDF;
+    }
+}
+
+
 export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
   const { cashTransactions, bankTransactions, stockTransactions, currency, organizationName } = useAppContext();
   const { toast } = useToast();
@@ -57,9 +65,11 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
     }
 
     const doc = new jsPDF();
+    const pageCenter = doc.internal.pageSize.getWidth() / 2;
     let tableData: any[] = [];
-    let tableHeaders: string[] = [];
+    let tableHeaders: any[] = [];
     let title = '';
+    let columnStyles: any = {};
 
     const filteredData = (data: any[]) => {
         return data.filter(tx => {
@@ -71,54 +81,75 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
     switch (dataSource) {
         case 'cash':
             title = 'Cash Transactions';
-            tableHeaders = ['Date', 'Description', 'Category', 'Type', 'Amount'];
+            tableHeaders = [['Date', 'Description', 'Category', 'Type', 'Amount']];
             tableData = filteredData(cashTransactions).map(tx => [
                 format(new Date(tx.date), 'dd-MM-yyyy'),
                 tx.description,
                 tx.category,
                 tx.type,
-                formatCurrency(tx.amount)
+                { content: formatCurrency(tx.amount), styles: { halign: 'right' } }
             ]);
+            columnStyles = { 4: { halign: 'right' } };
             break;
         case 'bank':
             title = 'Bank Transactions';
-            tableHeaders = ['Date', 'Description', 'Category', 'Type', 'Amount'];
+            tableHeaders = [['Date', 'Description', 'Category', 'Type', 'Amount']];
             tableData = filteredData(bankTransactions).map(tx => [
                 format(new Date(tx.date), 'dd-MM-yyyy'),
                 tx.description,
                 tx.category,
                 tx.type,
-                formatCurrency(tx.amount)
+                { content: formatCurrency(tx.amount), styles: { halign: 'right' } }
             ]);
+             columnStyles = { 4: { halign: 'right' } };
             break;
         case 'stock':
             title = 'Stock Transactions';
-            tableHeaders = ['Date', 'Item', 'Type', 'Weight (kg)', 'Price/kg', 'Total Value'];
+            tableHeaders = [['Date', 'Description', 'Item', 'Type', 'Weight (kg)', 'Price/kg', 'Total Value']];
             tableData = filteredData(stockTransactions).map(tx => [
                 format(new Date(tx.date), 'dd-MM-yyyy'),
+                tx.description || '',
                 tx.stockItemName,
                 tx.type,
-                tx.weight.toFixed(2),
-                formatCurrency(tx.pricePerKg),
-                formatCurrency(tx.weight * tx.pricePerKg)
+                { content: tx.weight.toFixed(2), styles: { halign: 'right' } },
+                { content: formatCurrency(tx.pricePerKg), styles: { halign: 'right' } },
+                { content: formatCurrency(tx.weight * tx.pricePerKg), styles: { halign: 'right' } }
             ]);
+            columnStyles = { 
+                4: { halign: 'right' },
+                5: { halign: 'right' },
+                6: { halign: 'right' },
+            };
             break;
     }
-
+    
+    // Main Title
     doc.setFontSize(18);
-    doc.text(organizationName || 'ShipShape Ledger', 14, 22);
+    doc.text(organizationName || 'ShipShape Ledger', pageCenter, 22, { align: 'center' });
+    
+    // Report Title
     doc.setFontSize(14);
-    doc.text(title, 14, 30);
+    doc.text(title, pageCenter, 30, { align: 'center' });
+    
+    // Date Range
     doc.setFontSize(10);
-    doc.text(
-      `From: ${format(dateRange.from, 'dd-MM-yyyy')} To: ${format(dateRange.to, 'dd-MM-yyyy')}`,
-      14, 36
-    );
+    doc.setFont('helvetica', 'bold');
+    const dateText = `From: ${format(dateRange.from, 'dd-MM-yyyy')}   To: ${format(dateRange.to, 'dd-MM-yyyy')}`;
+    doc.text(dateText, pageCenter, 36, { align: 'center' });
+    doc.setFont('helvetica', 'normal');
 
-    (doc as any).autoTable({
-        startY: 40,
-        head: [tableHeaders],
+
+    doc.autoTable({
+        startY: 45,
+        head: tableHeaders,
         body: tableData,
+        theme: 'grid', // Use 'grid' for borders
+        headStyles: {
+            fillColor: [34, 49, 63], // A dark blue for the header
+            textColor: 255,
+            fontStyle: 'bold',
+        },
+        columnStyles: columnStyles,
     });
 
     doc.save(`${dataSource}_report_${format(new Date(), 'yyyy-MM-dd')}.pdf`);
