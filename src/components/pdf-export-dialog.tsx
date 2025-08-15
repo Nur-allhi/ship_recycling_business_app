@@ -22,7 +22,6 @@ import { cn } from '@/lib/utils';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import type { CashTransaction, BankTransaction } from '@/lib/types';
-import { logoPngData } from '@/lib/logo-data';
 
 
 interface PdfExportDialogProps {
@@ -76,41 +75,39 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
 
     // Header
     try {
-      const logoBase64 = `data:image/png;base64,${logoPngData}`;
-      doc.addImage(logoBase64, 'PNG', pageMargins.left, 15, 20, 20);
+      if (dataSource === 'cash') title = 'Cash Ledger';
+      if (dataSource === 'bank') title = 'Bank Ledger';
+      if (dataSource === 'stock') title = 'Stock Transactions';
+      
+      const headerYPos = 15;
+      
+      doc.setFontSize(18);
+      doc.setFont('helvetica', 'bold');
+      doc.text(title, pageCenter, headerYPos, { align: 'center' });
+      doc.setFont('helvetica', 'normal');
+
+      const rightAlignX = doc.internal.pageSize.getWidth() - pageMargins.right;
+      doc.setFontSize(9);
+      
+      if (organizationName) {
+        doc.setFont('helvetica', 'bold');
+        doc.text(organizationName, pageMargins.left, headerYPos - 5);
+      }
+      
+      doc.setFont('helvetica', 'normal');
+      doc.text(`From: ${format(dateRange.from, 'dd-MM-yyyy')}`, rightAlignX, headerYPos, { align: 'right' });
+      doc.text(`To: ${format(dateRange.to, 'dd-MM-yyyy')}`, rightAlignX, headerYPos + 5, { align: 'right' });
+      doc.text(`Generated: ${format(generationDate, 'dd-MM-yyyy HH:mm')}`, rightAlignX, headerYPos + 10, { align: 'right' });
+
     } catch (e) {
-      console.error("Failed to add logo to PDF:", e);
+      console.error("Failed to build PDF header:", e);
       toast({
         variant: 'destructive',
-        title: 'Logo Error',
-        description: 'Could not add the logo to the PDF.'
+        title: 'PDF Error',
+        description: 'Could not generate the PDF header.'
       })
     }
     
-    if (dataSource === 'cash') title = 'Cash Ledger';
-    if (dataSource === 'bank') title = 'Bank Ledger';
-    if (dataSource === 'stock') title = 'Stock Transactions';
-    
-    const headerYPos = 15;
-    
-    doc.setFontSize(18);
-    doc.setFont('helvetica', 'bold');
-    doc.text(title, pageCenter, headerYPos + 12, { align: 'center' });
-    doc.setFont('helvetica', 'normal');
-
-    const rightAlignX = doc.internal.pageSize.getWidth() - pageMargins.right;
-    doc.setFontSize(9);
-    
-    if (organizationName) {
-      doc.setFont('helvetica', 'bold');
-      doc.text(organizationName, pageMargins.left + 24, headerYPos + 4);
-    }
-    
-    doc.setFont('helvetica', 'normal');
-    doc.text(`From: ${format(dateRange.from, 'dd-MM-yyyy')}`, rightAlignX, headerYPos, { align: 'right' });
-    doc.text(`To: ${format(dateRange.to, 'dd-MM-yyyy')}`, rightAlignX, headerYPos + 5, { align: 'right' });
-    doc.text(`Generated: ${format(generationDate, 'dd-MM-yyyy HH:mm')}`, rightAlignX, headerYPos + 10, { align: 'right' });
-
     
     if (dataSource === 'cash' || dataSource === 'bank') {
         const allTxs: (CashTransaction | BankTransaction)[] = dataSource === 'cash' ? [...cashTransactions] : [...bankTransactions];
