@@ -179,7 +179,7 @@ export function BankTab() {
         <TableHeader>
             <TableRow>
             {isSelectionMode && (
-              <TableHead className="w-[50px]">
+              <TableHead className="w-[50px] text-center">
                   <Checkbox 
                       onCheckedChange={(checked) => handleSelectAll(Boolean(checked))}
                       checked={selectedTxs.length === paginatedTransactions.length && paginatedTransactions.length > 0}
@@ -187,19 +187,19 @@ export function BankTab() {
                   />
               </TableHead>
             )}
-            <TableHead>
+            <TableHead className="text-center">
                 <Button variant="ghost" onClick={() => handleSort('date')}>Date {renderSortArrow('date')}</Button>
             </TableHead>
-            <TableHead>
+            <TableHead className="text-center">
                 <Button variant="ghost" onClick={() => handleSort('description')}>Description {renderSortArrow('description')}</Button>
             </TableHead>
-            <TableHead>
+            <TableHead className="text-center">
                 <Button variant="ghost" onClick={() => handleSort('category')}>Category {renderSortArrow('category')}</Button>
             </TableHead>
-            <TableHead className="text-right">
+            <TableHead className="text-center">
                  <Button variant="ghost" onClick={() => handleSort('amount')}>Amount {renderSortArrow('amount')}</Button>
             </TableHead>
-            {showActions && <TableHead className="text-right">Actions</TableHead>}
+            {showActions && <TableHead className="text-center">Actions</TableHead>}
             </TableRow>
         </TableHeader>
         <TableBody>
@@ -207,7 +207,7 @@ export function BankTab() {
             paginatedTransactions.map((tx: BankTransaction) => (
                 <TableRow key={tx.id} data-state={selectedTxIds.includes(tx.id) && "selected"}>
                 {isSelectionMode && (
-                  <TableCell>
+                  <TableCell className="text-center">
                       <Checkbox 
                           onCheckedChange={(checked) => handleSelectRow(tx, Boolean(checked))}
                           checked={selectedTxIds.includes(tx.id)}
@@ -215,8 +215,8 @@ export function BankTab() {
                       />
                   </TableCell>
                 )}
-                <TableCell>
-                   <div className="flex items-center gap-2">
+                <TableCell className="text-center">
+                   <div className="flex items-center justify-center gap-2">
                     <span className="font-mono">{format(new Date(tx.date), 'dd-MM-yyyy')}</span>
                     {tx.lastEdited && (
                       <TooltipProvider>
@@ -232,17 +232,17 @@ export function BankTab() {
                     )}
                   </div>
                 </TableCell>
-                <TableCell className="font-medium">{tx.description}</TableCell>
-                <TableCell>{tx.category}</TableCell>
-                <TableCell className={`text-right font-semibold font-mono ${tx.type === 'deposit' ? 'text-accent' : 'text-destructive'}`}>
-                    <div className="flex items-center justify-end gap-2">
+                <TableCell className="font-medium text-left">{tx.description}</TableCell>
+                <TableCell className="text-center">{tx.category}</TableCell>
+                <TableCell className={`text-center font-semibold font-mono ${tx.type === 'deposit' ? 'text-accent' : 'text-destructive'}`}>
+                    <div className="flex items-center justify-center gap-2">
                     {tx.type === 'deposit' ? <ArrowUpCircle /> : <ArrowDownCircle />}
                     {formatCurrency(tx.amount)}
                     </div>
                 </TableCell>
                 {showActions && (
-                  <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-2">
+                  <TableCell className="text-center">
+                      <div className="flex items-center justify-center gap-2">
                         <Button variant="ghost" size="icon" onClick={() => handleEditClick(tx)}>
                             <Pencil className="h-4 w-4" />
                             <span className="sr-only">Edit</span>
