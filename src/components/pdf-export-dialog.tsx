@@ -22,7 +22,7 @@ import { format, startOfMonth, endOfMonth } from 'date-fns';
 import { cn } from '@/lib/utils';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
-import type { CashTransaction, BankTransaction } from '@/lib/types';
+import type { CashTransaction, BankTransaction, StockTransaction } from '@/lib/types';
 
 
 interface PdfExportDialogProps {
@@ -60,7 +60,6 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
 
     const doc = new jsPDF();
     
-    const pageCenter = doc.internal.pageSize.getWidth() / 2;
     const pageMargins = { left: 15, right: 15, top: 20, bottom: 20 };
     let tableData: any[] = [];
     let tableHeaders: any[] = [];
@@ -72,6 +71,12 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
         // The space is intentional for readability
         return `${prefix} ${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     }
+    
+    const fromDate = new Date(dateRange.from);
+    fromDate.setHours(0,0,0,0);
+
+    const toDate = new Date(dateRange.to);
+    toDate.setHours(23,59,59,999);
 
     // Header
     try {
@@ -81,23 +86,22 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
       if (dataSource === 'stock') title = 'Stock Transactions';
       
       const headerYPos = 15;
-      
-      doc.setFont('Helvetica', 'bold');
-      doc.setFontSize(18);
-      doc.text("Ha-Mim Iron Mart", pageCenter, headerYPos, { align: 'center' });
-      
-      doc.setFont('Helvetica', 'normal');
-      doc.setFontSize(14);
-      doc.text(title, pageCenter, headerYPos + 8, { align: 'center' });
-
       const rightAlignX = doc.internal.pageSize.getWidth() - pageMargins.right;
       
       doc.setFont('Helvetica', 'normal');
       doc.setFontSize(9);
+      doc.text(`From: ${format(dateRange.from, 'dd-MM-yyyy')}`, pageMargins.left, headerYPos);
+      doc.text(`To: ${format(dateRange.to, 'dd-MM-yyyy')}`, pageMargins.left, headerYPos + 5);
+      doc.text(`Generated: ${format(generationDate, 'dd-MM-yyyy HH:mm')}`, pageMargins.left, headerYPos + 10);
       
-      doc.text(`From: ${format(dateRange.from, 'dd-MM-yyyy')}`, rightAlignX, headerYPos, { align: 'right' });
-      doc.text(`To: ${format(dateRange.to, 'dd-MM-yyyy')}`, rightAlignX, headerYPos + 5, { align: 'right' });
-      doc.text(`Generated: ${format(generationDate, 'dd-MM-yyyy HH:mm')}`, rightAlignX, headerYPos + 10, { align: 'right' });
+      doc.setFont('Helvetica', 'bold');
+      doc.setFontSize(18);
+      doc.text("Ha-Mim Iron Mart", rightAlignX, headerYPos, { align: 'right' });
+      
+      doc.setFont('Helvetica', 'normal');
+      doc.setFontSize(14);
+      doc.text(title, rightAlignX, headerYPos + 8, { align: 'right' });
+
 
     } catch (e) {
       console.error("Failed to build PDF header:", e);
@@ -112,12 +116,6 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
     if (dataSource === 'cash' || dataSource === 'bank') {
         const allTxs: (CashTransaction | BankTransaction)[] = dataSource === 'cash' ? [...cashTransactions] : [...bankTransactions];
         
-        const fromDate = new Date(dateRange.from);
-        fromDate.setHours(0,0,0,0);
-
-        const toDate = new Date(dateRange.to);
-        toDate.setHours(23,59,59,999);
-
         const txsBeforeRange = allTxs.filter(tx => new Date(tx.date) < fromDate);
         
         let balance = txsBeforeRange.reduce((acc, tx) => {
@@ -141,15 +139,15 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
             }
             return acc;
         }, { totalCredit: 0, totalDebit: 0 });
-
-        // Add totals to the header
+        
+        const rightAlignX = doc.internal.pageSize.getWidth() - pageMargins.right;
         doc.setFont('Helvetica', 'normal');
         doc.setFontSize(9);
-        doc.text(`Total Credit:`, pageMargins.left, 20);
-        doc.text(`Total Debit:`, pageMargins.left, 25);
+        doc.text(`Total Credit:`, rightAlignX - 50, 30, { align: 'left'});
+        doc.text(`Total Debit:`, rightAlignX - 50, 35, { align: 'left'});
         doc.setFont('Courier', 'normal');
-        doc.text(formatCurrencyForPdf(totalCredit), pageMargins.left + 25, 20);
-        doc.text(formatCurrencyForPdf(totalDebit), pageMargins.left + 25, 25);
+        doc.text(formatCurrencyForPdf(totalCredit), rightAlignX, 30, { align: 'right'});
+        doc.text(formatCurrencyForPdf(totalDebit), rightAlignX, 35, { align: 'right'});
         
         tableHeaders = [['Date', 'Description', 'Category', 'Debit', 'Credit', 'Balance']];
         tableData = txsInRange.map(tx => {
@@ -173,36 +171,67 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
         };
 
     } else { // Stock
-        tableHeaders = [['Date', 'Description', 'Item', 'Type', 'Weight (kg)', 'Price/kg', 'Total Value']];
-        tableData = stockTransactions
+        const txsInRange = stockTransactions
             .filter(tx => {
                 const txDate = new Date(tx.date);
-                const fromDate = new Date(dateRange.from);
-                fromDate.setHours(0,0,0,0);
-                const toDate = new Date(dateRange.to);
-                toDate.setHours(23,59,59,999);
                 return txDate >= fromDate && txDate <= toDate;
             })
-            .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-            .map(tx => [
+            .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+        const { totalPurchase, totalSale } = txsInRange.reduce((acc, tx) => {
+            if (tx.type === 'purchase') {
+                acc.totalPurchase += tx.weight * tx.pricePerKg;
+            } else {
+                acc.totalSale += tx.weight * tx.pricePerKg;
+            }
+            return acc;
+        }, { totalPurchase: 0, totalSale: 0 });
+
+        const rightAlignX = doc.internal.pageSize.getWidth() - pageMargins.right;
+        doc.setFont('Helvetica', 'normal');
+        doc.setFontSize(9);
+        doc.text(`Total Purchase:`, rightAlignX - 50, 30, { align: 'left'});
+        doc.text(`Total Sale:`, rightAlignX - 50, 35, { align: 'left'});
+        doc.setFont('Courier', 'normal');
+        doc.text(formatCurrencyForPdf(totalPurchase), rightAlignX, 30, { align: 'right'});
+        doc.text(formatCurrencyForPdf(totalSale), rightAlignX, 35, { align: 'right'});
+
+        tableHeaders = [['Date', 'Description', 'Item', 'Purchase (kg)', 'Sale (kg)', 'Price/kg', 'Balance (kg)']];
+
+        const itemBalances: Record<string, number> = {};
+
+        tableData = txsInRange.map(tx => {
+            if (itemBalances[tx.stockItemName] === undefined) {
+                itemBalances[tx.stockItemName] = 0;
+            }
+            
+            if (tx.type === 'purchase') {
+                itemBalances[tx.stockItemName] += tx.weight;
+            } else {
+                itemBalances[tx.stockItemName] -= tx.weight;
+            }
+
+            return [
                 format(new Date(tx.date), 'dd-MM-yyyy'),
                 tx.description || '',
                 tx.stockItemName,
-                tx.type,
-                tx.weight.toFixed(2),
+                tx.type === 'purchase' ? tx.weight.toFixed(2) : '',
+                tx.type === 'sale' ? tx.weight.toFixed(2) : '',
                 formatCurrencyForPdf(tx.pricePerKg),
-                formatCurrencyForPdf(tx.weight * tx.pricePerKg)
-            ]);
+                itemBalances[tx.stockItemName].toFixed(2)
+            ];
+        });
         columnStyles = { 
+            3: { halign: 'right', font: 'Courier', textColor: [0,0,0] },
             4: { halign: 'right', font: 'Courier', textColor: [0,0,0] },
             5: { halign: 'right', font: 'Courier', textColor: [0,0,0] },
-            6: { halign: 'right', font: 'Courier', textColor: [0,0,0] },
+            6: { halign: 'right', font: 'Courier', fontStyle: 'bold', textColor: [0,0,0] },
             0: { font: 'Courier', textColor: [0,0,0] } // Date column
         };
     }
 
     doc.autoTable({
-        startY: 40,
+        startY: 45,
         head: tableHeaders,
         body: tableData,
         theme: 'grid',
