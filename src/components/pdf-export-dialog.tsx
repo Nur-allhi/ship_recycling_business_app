@@ -65,6 +65,7 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
     let tableHeaders: any[] = [];
     let title = '';
     let columnStyles: any = {};
+    const generationDate = new Date();
     
     const formatNumber = (num: number) => num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     
@@ -82,12 +83,19 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
     doc.setFontSize(18);
     doc.text(organizationName || 'ShipShape Ledger', pageCenter, 22, { align: 'center' });
     
-    // Date Range
+    // Report Title
+    doc.setFontSize(14);
+    doc.text(title, pageCenter, 30, { align: 'center' });
+
+    // Date Range and Generation Time
     doc.setFontSize(10);
-    doc.setFont('helvetica', 'bold');
     const dateText = `From: ${format(dateRange.from, 'dd-MM-yyyy')}   To: ${format(dateRange.to, 'dd-MM-yyyy')}`;
+    doc.setFont('helvetica', 'bold');
     doc.text(dateText, pageCenter, 36, { align: 'center' });
     doc.setFont('helvetica', 'normal');
+    const generatedText = `Generated on: ${format(generationDate, 'dd-MM-yyyy HH:mm:ss')}`;
+    doc.text(generatedText, pageCenter, 42, { align: 'center' });
+
 
     if (dataSource === 'cash' || dataSource === 'bank') {
         const allTxs: (CashTransaction | BankTransaction)[] = dataSource === 'cash' ? [...cashTransactions] : [...bankTransactions];
@@ -157,12 +165,12 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
         };
     }
     
-    // Report Title
+    // Re-render the title now that it's determined
     doc.setFontSize(14);
     doc.text(title, pageCenter, 30, { align: 'center' });
 
     doc.autoTable({
-        startY: 45,
+        startY: 50,
         head: tableHeaders,
         body: tableData,
         theme: 'grid', // Use 'grid' for borders
@@ -172,6 +180,23 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
             fontStyle: 'bold',
         },
         columnStyles: columnStyles,
+        didDrawPage: (data) => {
+            // Footer
+            const pageCount = doc.internal.pages.length;
+            doc.setFontSize(8);
+            doc.setTextColor(150);
+            doc.text(
+                'System Generated Report',
+                data.settings.margin.left,
+                doc.internal.pageSize.getHeight() - 10
+            );
+            doc.text(
+                `Page ${data.pageNumber} of ${pageCount - 1}`,
+                doc.internal.pageSize.getWidth() - data.settings.margin.right,
+                doc.internal.pageSize.getHeight() - 10,
+                { align: 'right' }
+            );
+        },
     });
 
     doc.save(`${dataSource}_report_${format(new Date(), 'yyyy-MM-dd')}.pdf`);
