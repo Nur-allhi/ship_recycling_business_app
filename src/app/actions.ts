@@ -6,23 +6,38 @@ import { cookies } from 'next/headers';
 import { z } from 'zod';
 import { createSession } from '@/lib/auth';
 
-// Helper function to create a Supabase client with the user's session
-const createSupabaseClient = () => {
+// Helper function to create a Supabase client.
+// Can be configured to use the service_role key for admin-level access.
+const createSupabaseClient = (serviceRole = false) => {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    const supabaseKey = serviceRole
+        ? process.env.SUPABASE_SERVICE_ROLE_KEY
+        : process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    
+    const options: any = {
+        auth: { persistSession: false },
+    };
 
-    if (!supabaseUrl || !supabaseAnonKey) {
+    if (!supabaseUrl || !supabaseKey) {
+        if (serviceRole && !supabaseKey) {
+            throw new Error("Supabase Service Role Key is missing. Please add SUPABASE_SERVICE_ROLE_KEY to your environment variables.");
+        }
         throw new Error("Supabase URL or Anon Key is missing from environment variables.");
     }
     
-    return createClient(supabaseUrl, supabaseAnonKey, {
-        auth: { persistSession: false },
-        global: {
-            headers: {
-                Authorization: `Bearer ${cookies().get('session')?.value || ''}`
-            }
+    // If not using service role, use the user's session token for RLS
+    if (!serviceRole) {
+        const sessionCookie = cookies().get('session')?.value;
+        if (sessionCookie) {
+            options.global = {
+                headers: {
+                    Authorization: `Bearer ${sessionCookie}`
+                }
+            };
         }
-    });
+    }
+    
+    return createClient(supabaseUrl, supabaseKey, options);
 }
 
 const ReadDataInputSchema = z.object({
@@ -143,26 +158,21 @@ export async function exportAllData() {
 const ImportDataSchema = z.record(z.array(z.record(z.any())));
 
 export async function batchImportData(dataToImport: z.infer<typeof ImportDataSchema>) {
-    const supabase = createSupabaseClient();
-    const tables = ['cash_transactions', 'bank_transactions', 'stock_transactions', 'initial_stock', 'categories'];
-    
-    // Use a transaction to ensure all-or-nothing import
-    // Note: Supabase JS library doesn't directly support multi-table transactions in this way.
-    // A db function would be better. For now, we execute sequentially and hope for the best.
+    const supabase = createSupabaseClient(true); // Use service role for import
+    const tables = ['cash_transactions', 'bank_transactions', 'stock_transactions', 'initial_stock', 'categories', 'users'];
     
     try {
-        // Clear existing data in reverse order of dependency
-        for (const tableName of [...tables].reverse()) {
-            const { error: deleteError } = await supabase.from(tableName).delete().neq('id', '00000000-0000-0000-0000-000000000000'); // A bit of a hack to delete all
+        // Clear existing data (except users)
+        for (const tableName of tables.filter(t => t !== 'users').reverse()) {
+            const { error: deleteError } = await supabase.from(tableName).delete().neq('id', '00000000-0000-0000-0000-000000000000');
             if (deleteError) throw new Error(`Failed to clear ${tableName}: ${deleteError.message}`);
         }
 
         // Import new data
         for (const tableName of tables) {
+             if (tableName === 'users') continue; // Don't import users this way for security
             const records = dataToImport[tableName];
             if (records && records.length > 0) {
-                 // Supabase requires `id` to be omitted on insert if it's auto-generated, unless you specify upsert.
-                 // We will assume the backup contains IDs and they should be preserved.
                 const { error: insertError } = await supabase.from(tableName).upsert(records);
                 if (insertError) throw new Error(`Failed to import to ${tableName}: ${insertError.message}`);
             }
@@ -175,11 +185,10 @@ export async function batchImportData(dataToImport: z.infer<typeof ImportDataSch
 }
 
 export async function deleteAllData() {
-    const supabase = createSupabaseClient();
+    const supabase = createSupabaseClient(true); // Use service role to delete
     const tables = ['cash_transactions', 'bank_transactions', 'stock_transactions', 'initial_stock', 'categories'];
     try {
         for (const tableName of tables) {
-            // The `neq` is a hack to delete all rows without violating foreign key constraints if any are ever added.
             const { error } = await supabase.from(tableName).delete().neq('id', '00000000-0000-0000-0000-000000000000');
             if (error) {
                 console.error(`Error deleting from ${tableName}:`, error);
@@ -201,7 +210,9 @@ const LoginInputSchema = z.object({
 });
 
 export async function login(input: z.infer<typeof LoginInputSchema>) {
-    const supabase = createSupabaseClient();
+    // Use the service role client to bypass RLS for login check
+    const supabase = createSupabaseClient(true); 
+    
     const { data: user, error } = await supabase
         .from('users')
         .select('*')
@@ -218,6 +229,7 @@ export async function login(input: z.infer<typeof LoginInputSchema>) {
         throw new Error("Invalid username or password.");
     }
     
+    // Don't include password in the session cookie
     const { password, ...sessionData } = user;
     await createSession(sessionData);
     return { success: true };
@@ -237,7 +249,8 @@ const AddUserInputSchema = z.object({
 });
 
 export async function addUser(input: z.infer<typeof AddUserInputSchema>) {
-    const supabase = createSupabaseClient();
+    // Adding a user should be a privileged operation
+    const supabase = createSupabaseClient(true);
     const { error } = await supabase.from('users').insert([input]);
     if (error) {
         if (error.code === '23505') { // unique_violation
@@ -249,7 +262,8 @@ export async function addUser(input: z.infer<typeof AddUserInputSchema>) {
 }
 
 export async function deleteUser(id: string) {
-    const supabase = createSupabaseClient();
+    // Deleting a user should be a privileged operation
+    const supabase = createSupabaseClient(true);
     const { error } = await supabase.from('users').delete().eq('id', id);
     if (error) throw new Error(error.message);
     return { success: true };
