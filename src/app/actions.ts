@@ -30,10 +30,18 @@ const createSupabaseClient = async (serviceRole = false) => {
     const session = await getSession();
     const accessToken = session?.accessToken;
 
+    if (!accessToken) {
+        // This will happen for non-logged-in users, which is fine for public read access.
+        // The RLS policies will handle what they can and cannot see.
+        return createClient(supabaseUrl, supabaseAnonKey, {
+            auth: { persistSession: false }
+        });
+    }
+
     return createClient(supabaseUrl, supabaseAnonKey, {
         global: {
             headers: {
-                Authorization: `Bearer ${accessToken || supabaseAnonKey}`,
+                Authorization: `Bearer ${accessToken}`,
             },
         },
         auth: {
@@ -213,10 +221,7 @@ const LoginInputSchema = z.object({
 
 export async function login(input: z.infer<typeof LoginInputSchema>) {
     // This is a special client that can bypass RLS to check the password
-    const supabase = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.SUPABASE_SERVICE_ROLE_KEY!
-    );
+    const supabase = await createSupabaseClient(true);
     
     const { data: user, error: userError } = await supabase
         .from('users')
@@ -262,7 +267,7 @@ export async function login(input: z.infer<typeof LoginInputSchema>) {
 }
 
 export async function getUsers() {
-    const supabase = await createSupabaseClient();
+    const supabase = await createSupabaseClient(true);
     const { data, error } = await supabase.from('users').select('id, username, role');
     if (error) throw new Error(error.message);
     return data;
