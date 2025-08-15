@@ -23,7 +23,6 @@ import { cn } from '@/lib/utils';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import type { CashTransaction, BankTransaction } from '@/lib/types';
-import { logoPngData } from '@/lib/logo-data';
 
 
 interface PdfExportDialogProps {
@@ -40,6 +39,18 @@ declare module 'jspdf' {
     }
 }
 
+// Function to fetch an image and convert it to Base64
+const toBase64 = async (url: string) => {
+    const response = await fetch(url);
+    const blob = await response.blob();
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+    });
+};
+
 
 export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
   const { cashTransactions, bankTransactions, stockTransactions, currency, organizationName } = useAppContext();
@@ -50,7 +61,7 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
     to: endOfMonth(new Date()),
   });
 
-  const handleExport = () => {
+  const handleExport = async () => {
     if (!dateRange.from || !dateRange.to) {
         toast({
             variant: 'destructive',
@@ -78,14 +89,15 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
 
     // Header
     try {
-      const logoBase64 = `data:image/png;base64,${logoPngData}`;
+      const logoUrl = `${window.location.origin}/logo.png`;
+      const logoBase64 = await toBase64(logoUrl) as string;
       doc.addImage(logoBase64, 'PNG', pageMargins.left, 15, 30, 20);
     } catch (e) {
       console.error("Failed to add logo to PDF:", e);
       toast({
         variant: 'destructive',
         title: 'Logo Error',
-        description: 'Could not add the logo to the PDF. It may be corrupt.'
+        description: 'Could not add the logo to the PDF. Ensure logo.png is in the /public folder.'
       })
     }
     
