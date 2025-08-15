@@ -6,8 +6,8 @@ import { AppProvider } from '@/app/store';
 import { LayoutProvider } from '@/components/layout-provider';
 
 export const metadata: Metadata = {
-  title: 'ShipShape Ledger',
-  description: 'Track your cash, bank, and stock transactions with ease.',
+  title: 'Ha-Mim Iron Mart',
+  description: 'Manage your inventory, sales, and finances for Ha-Mim Iron Mart.',
 };
 
 const fontUrls = [

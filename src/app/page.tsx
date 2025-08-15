@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect } from 'react';
@@ -68,7 +69,7 @@ function ShipShapeLedger() {
                  <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
                     <SheetTrigger asChild>
                         <Button variant="outline" size="icon">
-                            <Logo className="h-6 w-6" isAnimated={false} />
+                            <Logo className="h-6 w-6" />
                         </Button>
                     </SheetTrigger>
                     <SheetContent side="left" className="w-64 p-4">
@@ -79,7 +80,7 @@ function ShipShapeLedger() {
                          <div className="flex items-center gap-3 mb-6">
                             <Logo className="h-8 w-8 text-primary" />
                             <h1 className="text-xl font-bold text-primary font-headline">
-                                ShipShape
+                                Ha-Mim Iron Mart
                             </h1>
                         </div>
                         <nav className="flex flex-col gap-1">
@@ -106,13 +107,13 @@ function ShipShapeLedger() {
                   {!isMobile && <Logo className="h-10 w-10 text-primary" />}
                   <div>
                     <h1 className="text-2xl sm:text-3xl font-bold text-primary font-headline">
-                      ShipShape Ledger
+                      Ha-Mim Iron Mart
                     </h1>
                     {organizationName && <p className="text-lg font-bold text-muted-foreground">{organizationName}</p>}
                   </div>
                 </div>
                 <p className="text-muted-foreground text-sm sm:text-base">
-                  Your all-in-one ledger for cash, bank, and stock management.
+                  Your all-in-one platform for managing sales, inventory, and finances.
                 </p>
             </div>
           </div>

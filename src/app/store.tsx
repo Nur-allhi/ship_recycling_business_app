@@ -90,7 +90,7 @@ const initialAppState: AppState = {
   wastagePercentage: 0,
   currency: 'BDT',
   showStockValue: false,
-  organizationName: '',
+  organizationName: 'Ha-Mim Iron Mart',
 };
 
 export function AppProvider({ children }: { children: ReactNode }) {
@@ -231,7 +231,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
      try {
-      const storedSettings = localStorage.getItem('shipshape-ledger-settings');
+      const storedSettings = localStorage.getItem('ha-mim-iron-mart-settings');
       let settings = {};
       if (storedSettings) {
         settings = JSON.parse(storedSettings);
@@ -257,7 +257,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             showStockValue: state.showStockValue,
             organizationName: state.organizationName,
         }
-        localStorage.setItem('shipshape-ledger-settings', JSON.stringify(settingsToStore));
+        localStorage.setItem('ha-mim-iron-mart-settings', JSON.stringify(settingsToStore));
       } catch (error) {
         console.error("Failed to save settings to localStorage", error);
       }
@@ -553,9 +553,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       const data = await exportAllData();
       const zip = new JSZip();
-      zip.file("shipshape-ledger-backup.json", JSON.stringify(data, null, 2));
+      zip.file("ha-mim-iron-mart-backup.json", JSON.stringify(data, null, 2));
       const blob = await zip.generateAsync({ type: "blob" });
-      saveAs(blob, `shipshape-ledger-backup-${format(new Date(), 'yyyy-MM-dd')}.zip`);
+      saveAs(blob, `ha-mim-iron-mart-backup-${format(new Date(), 'yyyy-MM-dd')}.zip`);
       toast({ title: "Export Successful", description: "Your data has been exported." });
     } catch (error: any) {
       console.error(error);
@@ -571,7 +571,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             // Handle zip files
             if (file.name.endsWith('.zip')) {
                 const zip = await JSZip.loadAsync(file);
-                const jsonFile = zip.file("shipshape-ledger-backup.json");
+                const jsonFile = zip.file("ha-mim-iron-mart-backup.json");
                 if (!jsonFile) {
                     throw new Error("Backup JSON file not found in the zip archive.");
                 }
