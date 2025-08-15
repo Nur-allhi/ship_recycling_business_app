@@ -86,7 +86,7 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
       if (dataSource === 'stock') title = 'Stock Transactions';
       
       const headerYPos = 15;
-      const rightAlignX = doc.internal.pageSize.getWidth() - pageMargins.right;
+      const centerX = doc.internal.pageSize.getWidth() / 2;
       
       doc.setFont('Helvetica', 'normal');
       doc.setFontSize(9);
@@ -96,11 +96,11 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
       
       doc.setFont('Helvetica', 'bold');
       doc.setFontSize(18);
-      doc.text("Ha-Mim Iron Mart", rightAlignX, headerYPos, { align: 'right' });
+      doc.text("Ha-Mim Iron Mart", centerX, headerYPos, { align: 'center' });
       
       doc.setFont('Helvetica', 'normal');
       doc.setFontSize(14);
-      doc.text(title, rightAlignX, headerYPos + 8, { align: 'right' });
+      doc.text(title, centerX, headerYPos + 8, { align: 'center' });
 
 
     } catch (e) {
@@ -355,5 +355,3 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
     </Dialog>
   );
 }
-
-    
