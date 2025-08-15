@@ -85,22 +85,20 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
       if (dataSource === 'bank') title = 'Bank Ledger';
       if (dataSource === 'stock') title = 'Stock Transactions';
       
-      const headerYPos = 15;
       const centerX = doc.internal.pageSize.getWidth() / 2;
-      
-      doc.setFont('Helvetica', 'normal');
-      doc.setFontSize(9);
-      doc.text(`From: ${format(dateRange.from, 'dd-MM-yyyy')}`, pageMargins.left, headerYPos);
-      doc.text(`To: ${format(dateRange.to, 'dd-MM-yyyy')}`, pageMargins.left, headerYPos + 5);
-      doc.text(`Generated: ${format(generationDate, 'dd-MM-yyyy HH:mm')}`, pageMargins.left, headerYPos + 10);
       
       doc.setFont('Helvetica', 'bold');
       doc.setFontSize(18);
-      doc.text("Ha-Mim Iron Mart", centerX, headerYPos, { align: 'center' });
+      doc.text("Ha-Mim Iron Mart", centerX, 15, { align: 'center' });
       
       doc.setFont('Helvetica', 'normal');
       doc.setFontSize(14);
-      doc.text(title, centerX, headerYPos + 8, { align: 'center' });
+      doc.text(title, centerX, 23, { align: 'center' });
+      
+      doc.setFont('Helvetica', 'normal');
+      doc.setFontSize(9);
+      const dateText = `From: ${format(dateRange.from, 'dd-MM-yyyy')}   To: ${format(dateRange.to, 'dd-MM-yyyy')}   (Generated: ${format(generationDate, 'dd-MM-yyyy HH:mm')})`;
+      doc.text(dateText, centerX, 30, { align: 'center' });
 
 
     } catch (e) {
@@ -143,11 +141,11 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
         const rightAlignX = doc.internal.pageSize.getWidth() - pageMargins.right;
         doc.setFont('Helvetica', 'normal');
         doc.setFontSize(9);
-        doc.text(`Total Credit:`, rightAlignX - 50, 30, { align: 'left'});
-        doc.text(`Total Debit:`, rightAlignX - 50, 35, { align: 'left'});
+        doc.text(`Total Credit:`, rightAlignX - 50, 20, { align: 'left'});
+        doc.text(`Total Debit:`, rightAlignX - 50, 25, { align: 'left'});
         doc.setFont('Courier', 'normal');
-        doc.text(formatCurrencyForPdf(totalCredit), rightAlignX, 30, { align: 'right'});
-        doc.text(formatCurrencyForPdf(totalDebit), rightAlignX, 35, { align: 'right'});
+        doc.text(formatCurrencyForPdf(totalCredit), rightAlignX, 20, { align: 'right'});
+        doc.text(formatCurrencyForPdf(totalDebit), rightAlignX, 25, { align: 'right'});
         
         tableHeaders = [['Date', 'Description', 'Category', 'Debit', 'Credit', 'Balance']];
         tableData = txsInRange.map(tx => {
@@ -178,23 +176,23 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
             })
             .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
-        const { totalPurchase, totalSale } = txsInRange.reduce((acc, tx) => {
+        const { totalPurchaseValue, totalSaleValue } = txsInRange.reduce((acc, tx) => {
             if (tx.type === 'purchase') {
-                acc.totalPurchase += tx.weight * tx.pricePerKg;
+                acc.totalPurchaseValue += tx.weight * tx.pricePerKg;
             } else {
-                acc.totalSale += tx.weight * tx.pricePerKg;
+                acc.totalSaleValue += tx.weight * tx.pricePerKg;
             }
             return acc;
-        }, { totalPurchase: 0, totalSale: 0 });
+        }, { totalPurchaseValue: 0, totalSaleValue: 0 });
 
         const rightAlignX = doc.internal.pageSize.getWidth() - pageMargins.right;
         doc.setFont('Helvetica', 'normal');
         doc.setFontSize(9);
-        doc.text(`Total Purchase:`, rightAlignX - 50, 30, { align: 'left'});
-        doc.text(`Total Sale:`, rightAlignX - 50, 35, { align: 'left'});
+        doc.text(`Total Purchase:`, rightAlignX - 50, 20, { align: 'left'});
+        doc.text(`Total Sale:`, rightAlignX - 50, 25, { align: 'left'});
         doc.setFont('Courier', 'normal');
-        doc.text(formatCurrencyForPdf(totalPurchase), rightAlignX, 30, { align: 'right'});
-        doc.text(formatCurrencyForPdf(totalSale), rightAlignX, 35, { align: 'right'});
+        doc.text(formatCurrencyForPdf(totalPurchaseValue), rightAlignX, 20, { align: 'right'});
+        doc.text(formatCurrencyForPdf(totalSaleValue), rightAlignX, 25, { align: 'right'});
 
         tableHeaders = [['Date', 'Description', 'Item', 'Purchase (kg)', 'Sale (kg)', 'Price/kg', 'Balance (kg)']];
 
@@ -202,7 +200,11 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
 
         tableData = txsInRange.map(tx => {
             if (itemBalances[tx.stockItemName] === undefined) {
-                itemBalances[tx.stockItemName] = 0;
+                // Find initial balance for this item before the date range
+                const txsBeforeRange = stockTransactions.filter(t => 
+                    t.stockItemName === tx.stockItemName && new Date(t.date) < fromDate
+                );
+                itemBalances[tx.stockItemName] = txsBeforeRange.reduce((acc, t) => acc + (t.type === 'purchase' ? t.weight : -t.weight), 0);
             }
             
             if (tx.type === 'purchase') {
@@ -231,7 +233,7 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
     }
 
     doc.autoTable({
-        startY: 45,
+        startY: 40,
         head: tableHeaders,
         body: tableData,
         theme: 'grid',
