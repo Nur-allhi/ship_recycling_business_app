@@ -10,10 +10,16 @@ const ReadDataInputSchema = z.object({
 });
 
 export async function readData(input: z.infer<typeof ReadDataInputSchema>) {
-  const { data, error } = await supabase
+  let query = supabase
     .from(input.tableName)
-    .select(input.select)
-    .is('deletedAt', null); // Only fetch non-deleted items
+    .select(input.select);
+
+  // Only apply the soft-delete filter to tables that have the column
+  if (['cash_transactions', 'bank_transactions', 'stock_transactions'].includes(input.tableName)) {
+    query = query.is('deletedAt', null);
+  }
+
+  const { data, error } = await query;
 
   if (error) throw new Error(error.message);
   return data;

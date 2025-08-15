@@ -482,16 +482,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const deleteCategory = async (type: 'cash' | 'bank', category: string) => {
-    // This is more complex with a database, would need to find the category's ID first.
-    // For now, let's keep it simple and just remove from local state. A real implementation
-    // would require a proper ID-based deletion.
-    console.warn("Deleting categories from the database is not fully implemented yet.");
+    // Deleting from the database is complex. It requires finding the category's ID first
+    // and ensuring no transactions are using it. For now, we only update the local state
+    // to avoid leaving the app in a broken state. A proper implementation would need a
+    // more robust backend approach, possibly with a check for existing usage.
+    console.warn("Database deletion for categories is not implemented. Removing from local state only.");
     setState(prev => {
       const categories = type === 'cash' ? prev.cashCategories : prev.bankCategories;
       const newCategories = categories.filter(c => c !== category);
-       return type === 'cash'
-        ? { ...prev, cashCategories: newCategories }
-        : { ...prev, bankCategories: newCategories };
+       if (type === 'cash') {
+        return { ...prev, cashCategories: newCategories };
+       }
+       return { ...prev, bankCategories: newCategories };
     });
   };
 
