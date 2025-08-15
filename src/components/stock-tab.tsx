@@ -186,11 +186,11 @@ export function StockTab() {
                     />
                 </TableHead>
             )}
-             <TableHead><Button variant="ghost" onClick={() => handleSort('date')}>Date {renderSortArrow('date')}</Button></TableHead>
-             <TableHead><Button variant="ghost" onClick={() => handleSort('type')}>Type {renderSortArrow('type')}</Button></TableHead>
-             <TableHead><Button variant="ghost" onClick={() => handleSort('stockItemName')}>Item {renderSortArrow('stockItemName')}</Button></TableHead>
-            <TableHead>Description</TableHead>
+            <TableHead><Button variant="ghost" onClick={() => handleSort('date')}>Date {renderSortArrow('date')}</Button></TableHead>
+            <TableHead><Button variant="ghost" onClick={() => handleSort('description')}>Description {renderSortArrow('description')}</Button></TableHead>
+            <TableHead><Button variant="ghost" onClick={() => handleSort('stockItemName')}>Item {renderSortArrow('stockItemName')}</Button></TableHead>
             <TableHead className="text-right"><Button variant="ghost" onClick={() => handleSort('weight')}>Weight {renderSortArrow('weight')}</Button></TableHead>
+            <TableHead><Button variant="ghost" onClick={() => handleSort('type')}>Type {renderSortArrow('type')}</Button></TableHead>
             <TableHead className="text-right"><Button variant="ghost" onClick={() => handleSort('pricePerKg')}>Price/kg {renderSortArrow('pricePerKg')}</Button></TableHead>
             {showStockValue && <TableHead className="text-right"><Button variant="ghost" onClick={() => handleSort('totalValue')}>Total Value {renderSortArrow('totalValue')}</Button></TableHead>}
             {showActions && <TableHead className="text-right">Actions</TableHead>}
@@ -226,15 +226,15 @@ export function StockTab() {
                     )}
                   </div>
                 </TableCell>
+                <TableCell>{tx.description}</TableCell>
+                <TableCell className="font-medium">{tx.stockItemName}</TableCell>
+                <TableCell className="text-right font-mono">{tx.weight.toFixed(2)} kg</TableCell>
                 <TableCell>
                   <span className={`capitalize px-2 py-1 text-xs font-semibold rounded-full flex items-center w-fit ${tx.type === 'purchase' ? 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300' : 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300'}`}>
                     {tx.type === 'purchase' ? <ArrowDownCircle className="mr-1 h-3 w-3" /> : <ArrowUpCircle className="mr-1 h-3 w-3" />}
                     {tx.type}
                   </span>
                 </TableCell>
-                <TableCell className="font-medium">{tx.stockItemName}</TableCell>
-                <TableCell>{tx.description}</TableCell>
-                <TableCell className="text-right font-mono">{tx.weight.toFixed(2)} kg</TableCell>
                 <TableCell className="text-right font-mono">{formatCurrency(tx.pricePerKg)}</TableCell>
                 {showStockValue && <TableCell className={`text-right font-semibold font-mono ${tx.type === 'purchase' ? 'text-destructive' : 'text-accent'}`}>{formatCurrency(tx.weight * tx.pricePerKg)}</TableCell>}
                 {showActions && (
@@ -492,5 +492,3 @@ export function StockTab() {
     </>
   )
 }
-
-    
