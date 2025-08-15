@@ -10,7 +10,7 @@ import { supabase } from '@/lib/supabase';
 import { saveAs } from 'file-saver';
 import JSZip from 'jszip';
 import { getSession, removeSession } from '@/lib/auth';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import Logo from '@/components/logo';
 
 
@@ -102,36 +102,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AppState>(initialAppState);
   const { toast } = useToast();
   const router = useRouter();
+  const pathname = usePathname();
 
   useEffect(() => {
     const checkSessionAndLoadData = async () => {
       try {
         const session = await getSession();
-        setState(prev => ({ ...prev, user: session }));
-        if (session) {
-          // If a session exists, we can consider the app "initialized" for rendering UI.
-          // Data will be loaded subsequently.
-          setState(prev => ({ ...prev, initialBalanceSet: true }));
-        } else {
-          // If no session, we're likely on the login page. App is also "initialized".
-          setState(prev => ({ ...prev, initialBalanceSet: true }));
-        }
+        setState(prev => ({ ...prev, user: session, initialBalanceSet: true }));
       } catch (error) {
         console.error("Failed to get session", error);
-        // Even on error, allow the app to render to avoid getting stuck.
         setState(prev => ({ ...prev, initialBalanceSet: true })); 
       }
     };
     checkSessionAndLoadData();
-  }, []);
+  }, [pathname]);
 
-  const reloadData = useCallback(async () => {
-    if (!state.user) return;
+  const reloadData = useCallback(async (optimisticState?: AppState) => {
+    const currentState = optimisticState || state;
+    if (!currentState.user) return;
     try {
         const [cashData, bankData, stockTransactionsData, initialStockData, categoriesData] = await Promise.all([
-            readData({ tableName: 'cash_transactions', userId: state.user.id }),
-            readData({ tableName: 'bank_transactions', userId: state.user.id }),
-            readData({ tableName: 'stock_transactions', userId: state.user.id }),
+            readData({ tableName: 'cash_transactions', userId: currentState.user.id }),
+            readData({ tableName: 'bank_transactions', userId: currentState.user.id }),
+            readData({ tableName: 'stock_transactions', userId: currentState.user.id }),
             readData({ tableName: 'initial_stock' }),
             readData({ tableName: 'categories' }),
         ]);
@@ -213,7 +206,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
       } catch (error: any) {
         console.error("Failed to load data", error);
-        if (!error.message.includes('user_id')) {
+        // Only show toast if it's not a 'user_id' column error during initial setup
+        if (!error.message.includes('user_id') && !error.message.includes('relation "users" does not exist')) {
           toast({
               variant: 'destructive',
               title: 'Failed to load data',
@@ -221,7 +215,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           });
         }
       }
-  }, [toast, state.user]);
+  }, [toast, state]);
   
   useEffect(() => {
     if (state.user && state.initialBalanceSet) {
@@ -284,32 +278,91 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [state.fontSize, state.bodyFont, state.numberFont, state.wastagePercentage, state.currency, state.showStockValue]);
   
   const addCashTransaction = async (tx: Omit<CashTransaction, 'id' | 'createdAt' | 'deletedAt' | 'user_id'>) => {
+    if (!state.user) {
+        toast({ variant: 'destructive', title: "Error", description: "User not authenticated"});
+        return;
+    }
+    const tempId = `temp-${Date.now()}`;
+    const newTx: CashTransaction = {
+      ...tx,
+      id: tempId,
+      createdAt: new Date().toISOString(),
+      user_id: state.user.id,
+    };
+  
+    // Optimistic update
+    const previousState = state;
+    setState(prevState => {
+      const updatedTransactions = [newTx, ...prevState.cashTransactions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      const newBalance = prevState.cashBalance + (newTx.type === 'income' ? newTx.amount : -newTx.amount);
+      return {
+        ...prevState,
+        cashTransactions: updatedTransactions,
+        cashBalance: newBalance,
+      };
+    });
+
     try {
-      if (!state.user) throw new Error("User not authenticated");
-      await appendData({ tableName: 'cash_transactions', data: { ...tx, user_id: state.user.id } });
-      toast({ title: "Success", description: "Cash transaction added."});
-      await reloadData();
+      const [savedTx] = await appendData({ tableName: 'cash_transactions', data: { ...tx, user_id: state.user.id } });
+      // Replace temporary transaction with the one from the server
+      setState(prevState => ({
+        ...prevState,
+        cashTransactions: prevState.cashTransactions.map(t => t.id === tempId ? { ...savedTx, date: new Date(savedTx.date).toISOString() } : t),
+      }));
     } catch (error) {
       console.error(error);
       toast({ variant: 'destructive', title: "Error", description: "Failed to add cash transaction."});
+      // Rollback on error
+      setState(previousState);
     }
   };
 
   const addBankTransaction = async (tx: Omit<BankTransaction, 'id' | 'createdAt' | 'deletedAt' | 'user_id'>) => {
-     try {
-      if (!state.user) throw new Error("User not authenticated");
-      await appendData({ tableName: 'bank_transactions', data: { ...tx, user_id: state.user.id } });
-      toast({ title: "Success", description: "Bank transaction added."});
-      await reloadData();
+    if (!state.user) {
+        toast({ variant: 'destructive', title: "Error", description: "User not authenticated"});
+        return;
+    }
+    const tempId = `temp-${Date.now()}`;
+    const newTx: BankTransaction = {
+      ...tx,
+      id: tempId,
+      createdAt: new Date().toISOString(),
+      user_id: state.user.id,
+    };
+
+    const previousState = state;
+    setState(prevState => {
+        const updatedTransactions = [newTx, ...prevState.bankTransactions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        const newBalance = prevState.bankBalance + (newTx.type === 'deposit' ? newTx.amount : -newTx.amount);
+        return {
+            ...prevState,
+            bankTransactions: updatedTransactions,
+            bankBalance: newBalance,
+        };
+    });
+
+    try {
+        const [savedTx] = await appendData({ tableName: 'bank_transactions', data: { ...tx, user_id: state.user.id } });
+        setState(prevState => ({
+            ...prevState,
+            bankTransactions: prevState.bankTransactions.map(t => t.id === tempId ? { ...savedTx, date: new Date(savedTx.date).toISOString() } : t),
+        }));
     } catch (error) {
-      console.error(error);
-      toast({ variant: 'destructive', title: "Error", description: "Failed to add bank transaction."});
+        console.error(error);
+        toast({ variant: 'destructive', title: "Error", description: "Failed to add bank transaction."});
+        setState(previousState);
     }
   };
   
   const addStockTransaction = async (tx: Omit<StockTransaction, 'id' | 'createdAt' | 'deletedAt' | 'user_id'>) => {
+    if (!state.user) {
+        toast({ variant: 'destructive', title: "Error", description: "User not authenticated"});
+        return;
+    }
+
+    // Since stock updates are complex and involve financial transactions,
+    // we will perform the backend update first and then reload all data for consistency.
     try {
-      if (!state.user) throw new Error("User not authenticated");
       const [newStockTx] = await appendData({ tableName: 'stock_transactions', data: { ...tx, user_id: state.user.id } });
       if (!newStockTx) throw new Error("Stock transaction creation failed.");
 
@@ -325,18 +378,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
       };
 
       if (tx.paymentMethod === 'cash') {
-          await addCashTransaction({
-              ...financialTxData,
-              type: tx.type === 'purchase' ? 'expense' : 'income',
-          });
+          await appendData({ tableName: 'cash_transactions', data: { ...financialTxData, type: tx.type === 'purchase' ? 'expense' : 'income', user_id: state.user.id }});
       } else { // bank
-          await addBankTransaction({
-              ...financialTxData,
-              type: tx.type === 'purchase' ? 'withdrawal' : 'deposit',
-          });
+          await appendData({ tableName: 'bank_transactions', data: { ...financialTxData, type: tx.type === 'purchase' ? 'withdrawal' : 'deposit', user_id: state.user.id }});
       }
-
+      
       toast({ title: "Success", description: "Stock transaction and financial entry added."});
+      await reloadData(); // Full reload to ensure stock calculations are correct
     } catch (error) {
       console.error(error);
       toast({ variant: 'destructive', title: "Error", description: "Failed to add stock transaction."});
@@ -494,6 +542,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
      const transactionDate = date || new Date().toISOString();
      const description = from === 'cash' ? 'Transfer to Bank' : 'Transfer from Bank';
      
+     // Optimistic UI for transfers
+     const previousState = state;
+     const tempIdCash = `temp-cash-${Date.now()}`;
+     const tempIdBank = `temp-bank-${Date.now()}`;
+
+     setState(prevState => {
+        const cashTx = { date: transactionDate, type: from === 'cash' ? 'expense' : 'income', amount, description, category: 'Transfer', id: tempIdCash, createdAt: new Date().toISOString(), user_id: prevState.user!.id };
+        const bankTx = { date: transactionDate, type: from === 'cash' ? 'deposit' : 'withdrawal', amount, description, category: 'Transfer', id: tempIdBank, createdAt: new Date().toISOString(), user_id: prevState.user!.id };
+        
+        return {
+            ...prevState,
+            cashTransactions: [cashTx, ...prevState.cashTransactions].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+            bankTransactions: [bankTx, ...prevState.bankTransactions].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+            cashBalance: prevState.cashBalance + (from === 'bank' ? amount : -amount),
+            bankBalance: prevState.bankBalance + (from === 'cash' ? amount : -amount),
+        };
+     });
+
      try {
         if(from === 'cash') {
             await addCashTransaction({ date: transactionDate, type: 'expense', amount, description, category: 'Transfer'});
@@ -503,9 +569,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
             await addCashTransaction({ date: transactionDate, type: 'income', amount, description, category: 'Transfer'});
         }
         toast({ title: "Success", description: "Fund transfer completed."});
+        // We can reload here to get the real IDs from the server, replacing temp ones
+        await reloadData();
      } catch (error) {
         console.error(error);
         toast({ variant: 'destructive', title: "Error", description: "Failed to complete fund transfer."});
+        setState(previousState); // Rollback on error
      }
   };
 
@@ -621,7 +690,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const logout = async () => {
     await removeSession();
-    setState(prev => ({...initialAppState, initialBalanceSet: true}));
+    setState({...initialAppState, initialBalanceSet: true, user: null});
     router.push('/login');
     window.location.href = '/login';
   };

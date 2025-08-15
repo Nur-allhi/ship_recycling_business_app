@@ -52,7 +52,7 @@ export async function readData(input: z.infer<typeof ReadDataInputSchema>) {
   }
   
   // Only filter by user_id if it's provided and the table is user-specific
-  if (input.userId && ['cash_transactions', 'bank_transactions', 'stock_transactions'].includes(input.tableName)) {
+  if (input.userId && ['cash_transactions', 'bank_transactions', 'stock_transactions', 'categories', 'initial_stock'].includes(input.tableName)) {
       query = query.eq('user_id', input.userId);
   }
 
@@ -66,7 +66,7 @@ export async function readData(input: z.infer<typeof ReadDataInputSchema>) {
         console.warn(`Warning: column 'user_id' not found in '${input.tableName}'. Returning all data.`);
         const { data: allData, error: allError } = await supabase.from(input.tableName).select(input.select).is('deletedAt', null);
         if(allError) throw new Error(allError.message);
-        return allData;
+        return allData || [];
     }
     throw new Error(error.message);
   }
@@ -165,11 +165,23 @@ export async function exportAllData() {
 
     for (const tableName of tables) {
         let query = supabase.from(tableName).select('*');
-        if (session?.id && ['cash_transactions', 'bank_transactions', 'stock_transactions'].includes(tableName)) {
-            query = query.eq('user_id', session.id);
+        if (session?.id) {
+             let shouldFilter = ['cash_transactions', 'bank_transactions', 'stock_transactions', 'categories', 'initial_stock'].includes(tableName);
+             if (shouldFilter) {
+                query = query.eq('user_id', session.id);
+             }
         }
         const { data, error } = await query;
-        if (error) throw new Error(`Error exporting ${tableName}: ${error.message}`);
+        if (error) {
+             if (error.code === '42703' && error.message.includes('user_id')) {
+                console.warn(`Warning during export: column 'user_id' not found in '${tableName}'. Exporting all data for this table.`);
+                const { data: allData, error: allError } = await supabase.from(tableName).select('*');
+                 if (allError) throw new Error(`Error re-exporting ${tableName}: ${allError.message}`);
+                 exportedData[tableName] = allData;
+                 continue;
+            }
+            throw new Error(`Error exporting ${tableName}: ${error.message}`);
+        }
         exportedData[tableName] = data;
     }
 
@@ -187,14 +199,15 @@ export async function batchImportData(dataToImport: z.infer<typeof ImportDataSch
     
     try {
         // Clear existing data for the current user
-        for (const tableName of ['cash_transactions', 'bank_transactions', 'stock_transactions'].reverse()) {
+        for (const tableName of ['cash_transactions', 'bank_transactions', 'stock_transactions', 'initial_stock', 'categories'].reverse()) {
             const { error: deleteError } = await supabase.from(tableName).delete().eq('user_id', session.id);
-            if (deleteError) throw new Error(`Failed to clear ${tableName}: ${deleteError.message}`);
-        }
-        // Clear non-user-specific data
-        for (const tableName of ['initial_stock', 'categories'].reverse()) {
-             const { error: deleteError } = await supabase.from(tableName).delete().gt('id', '0'); // A safer way to attempt to delete all
-            if (deleteError) throw new Error(`Failed to clear ${tableName}: ${deleteError.message}`);
+            if (deleteError) {
+                 if (deleteError.code === '42703' && deleteError.message.includes('user_id')) {
+                    console.warn(`User_id not found on ${tableName} for clearing, this may be ok.`);
+                 } else {
+                    throw new Error(`Failed to clear ${tableName}: ${deleteError.message}`);
+                 }
+            }
         }
 
 
@@ -203,10 +216,8 @@ export async function batchImportData(dataToImport: z.infer<typeof ImportDataSch
              if (tableName === 'users') continue; // Don't import users this way for security
             const records = dataToImport[tableName];
             if (records && records.length > 0) {
-                 if (['cash_transactions', 'bank_transactions', 'stock_transactions'].includes(tableName)) {
-                    // Assign current user_id to all imported transactions
-                    records.forEach(r => r.user_id = session.id);
-                }
+                 // Assign current user_id to all imported transactions
+                 records.forEach(r => r.user_id = session.id);
                 const { error: insertError } = await supabase.from(tableName).upsert(records);
                 if (insertError) throw new Error(`Failed to import to ${tableName}: ${insertError.message}`);
             }
@@ -224,25 +235,20 @@ export async function deleteAllData() {
     const session = await getSession();
     if (!session) throw new Error("No active session to delete data.");
     try {
-        for (const tableName of ['cash_transactions', 'bank_transactions', 'stock_transactions']) {
+        for (const tableName of tables) {
             const { error } = await supabase.from(tableName).delete().eq('user_id', session.id);
             if (error) {
-                console.error(`Error deleting from ${tableName}:`, error);
-                throw new Error(`Failed to delete data from ${tableName}.`);
-            }
-        }
-         for (const tableName of ['initial_stock', 'categories']) {
-            // This is a common pattern to delete all rows. We match any id.
-            const { error } = await supabase.from(tableName).delete().gt('id', 0);
-             if (error) {
-                console.error(`Error deleting from ${tableName}:`, error);
-                throw new Error(`Failed to delete data from ${tableName}.`);
+                 if (error.code === '42703' && error.message.includes('user_id')) {
+                    console.warn(`User_id not found on ${tableName} for deletion, this may be ok.`);
+                 } else {
+                    console.error(`Error deleting from ${tableName}:`, error);
+                    throw new Error(`Failed to delete data from ${tableName}.`);
+                 }
             }
         }
         return { success: true };
     } catch (error: any) {
         console.error("Failed to delete all data:", error);
-        // Re-throw with a more specific message if possible
         throw new Error(error.message || "An unknown error occurred during data deletion.");
     }
 }
