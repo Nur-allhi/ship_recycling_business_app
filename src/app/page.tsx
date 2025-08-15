@@ -4,7 +4,7 @@
 import { useState, useEffect } from 'react';
 import { useAppContext } from './store';
 import { cn } from '@/lib/utils';
-import { Ship, Wallet, Landmark, Boxes, Settings, PlusCircle, AlertTriangle, Loader2 } from 'lucide-react';
+import { Wallet, Landmark, Boxes, Settings, PlusCircle, AlertTriangle, Loader2 } from 'lucide-react';
 import { DashboardTab } from '@/components/dashboard-tab';
 import { CashTab } from '@/components/cash-tab';
 import { BankTab } from '@/components/bank-tab';
@@ -18,6 +18,7 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { InitialBalanceDialog } from '@/components/initial-balance-dialog';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Logo } from '@/components/logo';
 
 const fontClasses = {
   sm: 'text-sm',
@@ -51,7 +52,7 @@ function ShipShapeLedger() {
     return (
       <div className="flex items-center justify-center min-h-screen bg-background">
         <div className="flex flex-col items-center gap-4">
-            <Ship className="h-12 w-12 text-primary animate-pulse" />
+            <Logo className="h-12 w-12 text-primary animate-pulse" />
             <p className="text-muted-foreground">Loading your ledger...</p>
         </div>
       </div>
@@ -68,7 +69,7 @@ function ShipShapeLedger() {
                  <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
                     <SheetTrigger asChild>
                         <Button variant="outline" size="icon">
-                            <Ship className="h-6 w-6" />
+                            <Logo className="h-6 w-6" />
                         </Button>
                     </SheetTrigger>
                     <SheetContent side="left" className="w-64 p-4">
@@ -77,7 +78,7 @@ function ShipShapeLedger() {
                            <SheetDescription className="sr-only">Select a tab to view your financial data.</SheetDescription>
                         </SheetHeader>
                          <div className="flex items-center gap-3 mb-6">
-                            <Ship className="h-8 w-8 text-primary" />
+                            <Logo className="h-8 w-8 text-primary" />
                             <h1 className="text-xl font-bold text-primary font-headline">
                                 ShipShape Ledger
                             </h1>
@@ -103,7 +104,7 @@ function ShipShapeLedger() {
             )}
             <div className="flex-1">
                 <div className="flex items-center gap-3 mb-1">
-                  {!isMobile && <Ship className="h-8 w-8 text-primary" />}
+                  {!isMobile && <Logo className="h-8 w-8 text-primary" />}
                   <div>
                     <h1 className="text-2xl sm:text-3xl font-bold text-primary font-headline">
                       ShipShape Ledger
