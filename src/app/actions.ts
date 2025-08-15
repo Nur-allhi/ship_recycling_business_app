@@ -193,7 +193,7 @@ export async function batchImportData(dataToImport: z.infer<typeof ImportDataSch
         }
         // Clear non-user-specific data
         for (const tableName of ['initial_stock', 'categories'].reverse()) {
-             const { error: deleteError } = await supabase.from(tableName).delete().neq('id', '00000000-0000-0000-0000-000000000000');
+             const { error: deleteError } = await supabase.from(tableName).delete().gt('id', '0'); // A safer way to attempt to delete all
             if (deleteError) throw new Error(`Failed to clear ${tableName}: ${deleteError.message}`);
         }
 
@@ -232,16 +232,18 @@ export async function deleteAllData() {
             }
         }
          for (const tableName of ['initial_stock', 'categories']) {
-            const { error } = await supabase.from(tableName).delete().neq('id', '00000000-0000-0000-0000-000000000000');
+            // This is a common pattern to delete all rows. We match any id.
+            const { error } = await supabase.from(tableName).delete().gt('id', 0);
              if (error) {
                 console.error(`Error deleting from ${tableName}:`, error);
                 throw new Error(`Failed to delete data from ${tableName}.`);
             }
         }
         return { success: true };
-    } catch (error) {
+    } catch (error: any) {
         console.error("Failed to delete all data:", error);
-        throw error;
+        // Re-throw with a more specific message if possible
+        throw new Error(error.message || "An unknown error occurred during data deletion.");
     }
 }
 
