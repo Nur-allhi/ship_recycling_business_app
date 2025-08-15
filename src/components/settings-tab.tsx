@@ -144,12 +144,12 @@ export function SettingsTab() {
   }
 
   const handleOrgNameSave = () => {
-      const name = orgNameRef.current?.value;
-      if (name) {
-          setOrganizationName(name);
-          toast({title: "Organization Name Updated"});
-      }
-  }
+    const name = orgNameRef.current?.value;
+    if (name) {
+        setOrganizationName(name);
+        toast({title: "Organization Name Updated"});
+    }
+  };
 
   return (
     <div className="max-w-2xl mx-auto">
