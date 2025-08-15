@@ -59,15 +59,6 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
     }
 
     const doc = new jsPDF();
-
-    // Add fonts - jsPDF requires fonts to be added to the document before use.
-    // The font files themselves are loaded via Google Fonts in layout.tsx.
-    // The names used here ('Roboto-Slab', 'Roboto-Mono') are arbitrary identifiers for jsPDF.
-    // We assume the browser has loaded them.
-    doc.addFont('RobotoSlab-Regular.ttf', 'Roboto Slab', 'normal');
-    doc.addFont('RobotoSlab-Bold.ttf', 'Roboto Slab', 'bold');
-    doc.addFont('RobotoMono-Regular.ttf', 'Roboto Mono', 'normal');
-    doc.addFont('RobotoMono-Bold.ttf', 'Roboto Mono', 'bold');
     
     const pageCenter = doc.internal.pageSize.getWidth() / 2;
     const pageMargins = { left: 15, right: 15, top: 20, bottom: 20 };
@@ -91,17 +82,17 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
       
       const headerYPos = 15;
       
-      doc.setFont('Roboto Slab', 'bold');
+      doc.setFont('Helvetica', 'bold');
       doc.setFontSize(18);
       doc.text("Ha-Mim Iron Mart", pageCenter, headerYPos, { align: 'center' });
       
-      doc.setFont('Roboto Slab', 'normal');
+      doc.setFont('Helvetica', 'normal');
       doc.setFontSize(14);
       doc.text(title, pageCenter, headerYPos + 8, { align: 'center' });
 
       const rightAlignX = doc.internal.pageSize.getWidth() - pageMargins.right;
       
-      doc.setFont('Roboto Slab', 'normal');
+      doc.setFont('Helvetica', 'normal');
       doc.setFontSize(9);
       
       doc.text(`From: ${format(dateRange.from, 'dd-MM-yyyy')}`, rightAlignX, headerYPos, { align: 'right' });
@@ -152,11 +143,11 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
         }, { totalCredit: 0, totalDebit: 0 });
 
         // Add totals to the header
-        doc.setFont('Roboto Slab', 'normal');
+        doc.setFont('Helvetica', 'normal');
         doc.setFontSize(9);
         doc.text(`Total Credit:`, pageMargins.left, 20);
         doc.text(`Total Debit:`, pageMargins.left, 25);
-        doc.setFont('Roboto Mono', 'normal');
+        doc.setFont('Courier', 'normal');
         doc.text(formatCurrencyForPdf(totalCredit), pageMargins.left + 25, 20);
         doc.text(formatCurrencyForPdf(totalDebit), pageMargins.left + 25, 25);
         
@@ -175,10 +166,10 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
         });
 
         columnStyles = { 
-            3: { halign: 'right', font: 'Roboto Mono' },
-            4: { halign: 'right', font: 'Roboto Mono' },
-            5: { halign: 'right', font: 'Roboto Mono', fontStyle: 'bold' },
-            0: { font: 'Roboto Mono' } // Date column
+            3: { halign: 'right', font: 'Courier' },
+            4: { halign: 'right', font: 'Courier' },
+            5: { halign: 'right', font: 'Courier', fontStyle: 'bold' },
+            0: { font: 'Courier' } // Date column
         };
 
     } else { // Stock
@@ -198,10 +189,10 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
                 formatCurrencyForPdf(tx.weight * tx.pricePerKg)
             ]);
         columnStyles = { 
-            4: { halign: 'right', font: 'Roboto Mono' },
-            5: { halign: 'right', font: 'Roboto Mono' },
-            6: { halign: 'right', font: 'Roboto Mono' },
-            0: { font: 'Roboto Mono' } // Date column
+            4: { halign: 'right', font: 'Courier' },
+            5: { halign: 'right', font: 'Courier' },
+            6: { halign: 'right', font: 'Courier' },
+            0: { font: 'Courier' } // Date column
         };
     }
 
@@ -211,7 +202,7 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
         body: tableData,
         theme: 'grid',
         styles: {
-            font: 'Roboto Slab',
+            font: 'Helvetica',
             fontSize: 9,
         },
         headStyles: {
@@ -223,7 +214,7 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
         columnStyles: columnStyles,
         didDrawPage: (data) => {
             // Footer
-            doc.setFont('Roboto Slab', 'normal');
+            doc.setFont('Helvetica', 'normal');
             doc.setFontSize(8);
             doc.setTextColor(150);
             doc.text(
