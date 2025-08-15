@@ -64,7 +64,6 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
     const pageMargins = { left: 15, right: 15, top: 20, bottom: 20 };
     let tableData: any[] = [];
     let tableHeaders: any[] = [];
-    let title = '';
     let columnStyles: any = {};
     const generationDate = new Date();
     
@@ -76,6 +75,7 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
 
     // Header
     try {
+      let title = '';
       if (dataSource === 'cash') title = 'Cash Ledger';
       if (dataSource === 'bank') title = 'Bank Ledger';
       if (dataSource === 'stock') title = 'Stock Transactions';
@@ -151,7 +151,7 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
         doc.text(formatCurrencyForPdf(totalCredit), pageMargins.left + 25, 20);
         doc.text(formatCurrencyForPdf(totalDebit), pageMargins.left + 25, 25);
         
-        tableHeaders = [['Date', 'Description', 'Category', 'Credit', 'Debit', 'Balance']];
+        tableHeaders = [['Date', 'Description', 'Category', 'Debit', 'Credit', 'Balance']];
         tableData = txsInRange.map(tx => {
             const isCredit = tx.type === 'income' || tx.type === 'deposit';
             balance += isCredit ? tx.amount : -tx.amount;
@@ -159,17 +159,17 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
                 format(new Date(tx.date), 'dd-MM-yyyy'),
                 tx.description,
                 tx.category,
-                isCredit ? formatCurrencyForPdf(tx.amount) : '',
                 !isCredit ? formatCurrencyForPdf(tx.amount) : '',
+                isCredit ? formatCurrencyForPdf(tx.amount) : '',
                 formatCurrencyForPdf(balance),
             ]
         });
 
         columnStyles = { 
-            3: { halign: 'right', font: 'Courier' },
-            4: { halign: 'right', font: 'Courier' },
-            5: { halign: 'right', font: 'Courier', fontStyle: 'bold' },
-            0: { font: 'Courier' } // Date column
+            3: { halign: 'right', font: 'Courier', textColor: [0,0,0] },
+            4: { halign: 'right', font: 'Courier', textColor: [0,0,0] },
+            5: { halign: 'right', font: 'Courier', fontStyle: 'bold', textColor: [0,0,0] },
+            0: { font: 'Courier', textColor: [0,0,0] } // Date column
         };
 
     } else { // Stock
@@ -177,8 +177,13 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
         tableData = stockTransactions
             .filter(tx => {
                 const txDate = new Date(tx.date);
-                return txDate >= dateRange.from! && txDate <= dateRange.to!;
+                const fromDate = new Date(dateRange.from);
+                fromDate.setHours(0,0,0,0);
+                const toDate = new Date(dateRange.to);
+                toDate.setHours(23,59,59,999);
+                return txDate >= fromDate && txDate <= toDate;
             })
+            .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
             .map(tx => [
                 format(new Date(tx.date), 'dd-MM-yyyy'),
                 tx.description || '',
@@ -189,10 +194,10 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
                 formatCurrencyForPdf(tx.weight * tx.pricePerKg)
             ]);
         columnStyles = { 
-            4: { halign: 'right', font: 'Courier' },
-            5: { halign: 'right', font: 'Courier' },
-            6: { halign: 'right', font: 'Courier' },
-            0: { font: 'Courier' } // Date column
+            4: { halign: 'right', font: 'Courier', textColor: [0,0,0] },
+            5: { halign: 'right', font: 'Courier', textColor: [0,0,0] },
+            6: { halign: 'right', font: 'Courier', textColor: [0,0,0] },
+            0: { font: 'Courier', textColor: [0,0,0] } // Date column
         };
     }
 
@@ -204,6 +209,7 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
         styles: {
             font: 'Helvetica',
             fontSize: 9,
+            textColor: [0,0,0],
         },
         headStyles: {
             fillColor: [34, 49, 63],
@@ -320,3 +326,5 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
     </Dialog>
   );
 }
+
+    
