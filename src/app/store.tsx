@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
@@ -9,7 +10,7 @@ import { supabase } from '@/lib/supabase';
 import { saveAs } from 'file-saver';
 import JSZip from 'jszip';
 import { getSession, removeSession } from '@/lib/auth';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import Logo from '@/components/logo';
 
 
@@ -101,16 +102,47 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [isInitialized, setIsInitialized] = useState(false);
   const { toast } = useToast();
   const router = useRouter();
+  const pathname = usePathname();
+
+  useEffect(() => {
+    const loadUserAndSettings = async () => {
+      // Load settings from local storage first
+      try {
+        const storedSettings = localStorage.getItem('ha-mim-iron-mart-settings');
+        if (storedSettings) {
+          const settings = JSON.parse(storedSettings);
+          setState(prev => ({ ...prev, ...settings }));
+        }
+      } catch (e) {
+        console.error("Could not parse settings from local storage", e);
+      }
+
+      // Then, check for a session
+      const session = await getSession();
+      if (session) {
+        setState(prev => ({ ...prev, user: session }));
+      }
+      
+      // Mark initialization as complete regardless of session status
+      setIsInitialized(true);
+    };
+
+    loadUserAndSettings();
+  }, [pathname]); // Rerun on path change to handle post-login refresh
+
+  useEffect(() => {
+    if (isInitialized && !state.user && pathname !== '/login') {
+      router.push('/login');
+    }
+  }, [isInitialized, state.user, pathname, router]);
 
   const reloadData = useCallback(async () => {
     if (!state.user) return;
     try {
-        const userId = state.user.role === 'admin' ? undefined : state.user.id;
-
         const [cashData, bankData, stockTransactionsData, initialStockData, categoriesData] = await Promise.all([
-            readData({ tableName: 'cash_transactions', userId }),
-            readData({ tableName: 'bank_transactions', userId }),
-            readData({ tableName: 'stock_transactions', userId }),
+            readData({ tableName: 'cash_transactions' }),
+            readData({ tableName: 'bank_transactions' }),
+            readData({ tableName: 'stock_transactions' }),
             readData({ tableName: 'initial_stock' }),
             readData({ tableName: 'categories' }),
         ]);
@@ -186,6 +218,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             cashBalance: finalCashBalance,
             bankBalance: finalBankBalance,
             needsInitialBalance,
+            initialBalanceSet: true, // Mark as ready to render main UI
             cashCategories: cashCategories.length > 0 ? cashCategories : prev.cashCategories,
             bankCategories: bankCategories.length > 0 ? bankCategories : prev.bankCategories,
         }));
@@ -207,6 +240,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
       }
   }, [toast, state.user]);
+  
+  useEffect(() => {
+    if (state.user && isInitialized) {
+        reloadData();
+    }
+  }, [state.user, isInitialized, reloadData]);
   
   const loadRecycleBinData = useCallback(async () => {
     try {
@@ -233,45 +272,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [toast]);
 
-
-  useEffect(() => {
-     try {
-      const storedSettings = localStorage.getItem('ha-mim-iron-mart-settings');
-      let settings = {};
-      if (storedSettings) {
-        settings = JSON.parse(storedSettings);
-      }
-      setState(prev => ({ ...prev, ...settings }));
-    } catch (e) {
-        console.error("Could not parse settings from local storage", e)
-    }
-
-    const loadUser = async () => {
-        const session = await getSession();
-        if (session) {
-            // Set user and mark app as ready to render the main UI
-            setState(prev => ({...prev, user: session, initialBalanceSet: true})); 
-        } else {
-            router.push('/login');
-            // If no session, still mark as "initialized" to unblock the login page render
-            setIsInitialized(true); 
-        }
-    }
-
-    loadUser();
-
-  }, [router]);
-  
-   useEffect(() => {
-    if (state.user) {
-        // Now that the user is confirmed, load their data in the background.
-        reloadData();
-        // Mark as initialized to save settings, etc.
-        setIsInitialized(true);
-    }
-   }, [state.user, reloadData]);
-
-
   useEffect(() => {
     if (isInitialized) {
       try {
@@ -292,8 +292,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   
   const addCashTransaction = async (tx: Omit<CashTransaction, 'id' | 'createdAt' | 'deletedAt'>) => {
     try {
-      const dataToInsert = state.user ? { ...tx, user_id: state.user.id } : tx;
-      await appendData({ tableName: 'cash_transactions', data: dataToInsert });
+      await appendData({ tableName: 'cash_transactions', data: { ...tx, user_id: state.user?.id } });
       toast({ title: "Success", description: "Cash transaction added."});
       await reloadData();
     } catch (error) {
@@ -304,8 +303,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const addBankTransaction = async (tx: Omit<BankTransaction, 'id' | 'createdAt' | 'deletedAt'>) => {
      try {
-      const dataToInsert = state.user ? { ...tx, user_id: state.user.id } : tx;
-      await appendData({ tableName: 'bank_transactions', data: dataToInsert });
+      await appendData({ tableName: 'bank_transactions', data: { ...tx, user_id: state.user?.id } });
       toast({ title: "Success", description: "Bank transaction added."});
       await reloadData();
     } catch (error) {
@@ -316,8 +314,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   
   const addStockTransaction = async (tx: Omit<StockTransaction, 'id' | 'createdAt' | 'deletedAt'>) => {
     try {
-      const dataToInsert = state.user ? { ...tx, user_id: state.user.id } : tx;
-      const [newStockTx] = await appendData({ tableName: 'stock_transactions', data: dataToInsert });
+      const [newStockTx] = await appendData({ tableName: 'stock_transactions', data: { ...tx, user_id: state.user?.id } });
       if (!newStockTx) throw new Error("Stock transaction creation failed.");
 
       const totalValue = tx.weight * tx.pricePerKg;
@@ -344,7 +341,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
 
       toast({ title: "Success", description: "Stock transaction and financial entry added."});
-      // reloadData is already called by addCash/BankTransaction, so no need to call it again here.
     } catch (error) {
       console.error(error);
       toast({ variant: 'destructive', title: "Error", description: "Failed to add stock transaction."});
@@ -375,9 +371,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const editStockTransaction = async (originalTx: StockTransaction, updatedTxData: Partial<Omit<StockTransaction, 'id' | 'date'>>) => {
       try {
-        // This function is tricky because changing weight/price should update the linked financial tx.
-        // For now, we show a toast to prompt the user to do it manually.
-        // A more advanced implementation would handle this automatically.
         await updateData({ tableName: 'stock_transactions', id: originalTx.id, data: updatedTxData });
         toast({ 
             title: "Success", 
@@ -422,17 +415,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const deleteStockTransaction = async (tx: StockTransaction) => {
     try {
         await deleteData({ tableName: "stock_transactions", id: tx.id });
-
-        // Find and soft delete the linked financial transaction.
-        // This needs to check both active and deleted items in case the linked item is already in the recycle bin.
-        const { data: allCashTxs, error: cashErr } = await supabase.from('cash_transactions').select('id, deletedAt').eq('linkedStockTxId', tx.id);
-        if (cashErr) console.error("Error checking cash tx:", cashErr.message);
+        const { data: allCashTxs } = await supabase.from('cash_transactions').select('id, deletedAt').eq('linkedStockTxId', tx.id);
         if (allCashTxs && allCashTxs.length > 0 && !allCashTxs[0].deletedAt) {
             await deleteData({ tableName: "cash_transactions", id: allCashTxs[0].id });
         }
 
-        const { data: allBankTxs, error: bankErr } = await supabase.from('bank_transactions').select('id, deletedAt').eq('linkedStockTxId', tx.id);
-        if (bankErr) console.error("Error checking bank tx:", bankErr.message);
+        const { data: allBankTxs } = await supabase.from('bank_transactions').select('id, deletedAt').eq('linkedStockTxId', tx.id);
         if (allBankTxs && allBankTxs.length > 0 && !allBankTxs[0].deletedAt) {
             await deleteData({ tableName: "bank_transactions", id: allBankTxs[0].id });
         }
@@ -458,8 +446,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
          
         if (txType === 'stock') {
-            // Find the linked cash or bank transaction based on the stock transaction's ID
-            // We need to check the recycle bin, so we can't use readData directly, we check all rows.
             const { data: cashTx } = await supabase.from('cash_transactions').select('id, deletedAt').eq('linkedStockTxId', id).maybeSingle();
             if (cashTx) await restoreData({ tableName: 'cash_transactions', id: cashTx.id });
 
@@ -521,7 +507,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
             await addCashTransaction({ date: transactionDate, type: 'income', amount, description, category: 'Transfer'});
         }
         toast({ title: "Success", description: "Fund transfer completed."});
-        // reloadData is called by add...Transaction
      } catch (error) {
         console.error(error);
         toast({ variant: 'destructive', title: "Error", description: "Failed to complete fund transfer."});
@@ -598,7 +583,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     reader.onload = async (event) => {
         try {
             let jsonString = event.target?.result as string;
-            // Handle zip files
             if (file.name.endsWith('.zip')) {
                 const zip = await JSZip.loadAsync(file);
                 const jsonFile = zip.file("ha-mim-iron-mart-backup.json");
@@ -609,7 +593,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
             }
             const data = JSON.parse(jsonString);
             
-            // Basic validation
             const requiredTables = ['cash_transactions', 'bank_transactions', 'stock_transactions', 'initial_stock', 'categories'];
             for(const table of requiredTables) {
                 if(!Array.isArray(data[table])) {
@@ -687,7 +670,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     logout,
   };
 
-  if (!isInitialized && !state.user) {
+  if (!isInitialized) {
     return <div className="flex items-center justify-center min-h-screen"><Logo className="h-16 w-16 text-primary animate-pulse" /></div>;
   }
   
@@ -701,3 +684,5 @@ export function useAppContext() {
   }
   return context;
 }
+
+    
