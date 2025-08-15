@@ -11,6 +11,7 @@ import { saveAs } from 'file-saver';
 import JSZip from 'jszip';
 import { getSession, removeSession } from '@/lib/auth';
 import { useRouter } from 'next/navigation';
+import Logo from '@/components/logo';
 
 
 type FontSize = 'sm' | 'base' | 'lg';
@@ -681,3 +682,5 @@ export function useAppContext() {
   }
   return context;
 }
+
+    
