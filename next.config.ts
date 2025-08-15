@@ -17,8 +17,6 @@ const nextConfig: NextConfig = {
         pathname: '/**',
       },
     ],
-    // Allow serving local images
-    domains: ['localhost'],
   },
 };
 
