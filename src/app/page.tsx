@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect } from 'react';
@@ -48,7 +47,9 @@ function ShipShapeLedger() {
     }
   }
 
-  if (!initialBalanceSet || !user) {
+  // This check ensures we show a loading screen while the user session is being validated.
+  // `initialBalanceSet` is now a proxy for "is the app ready to render?"
+  if (!initialBalanceSet) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-background">
         <div className="flex flex-col items-center gap-4">
@@ -115,7 +116,7 @@ function ShipShapeLedger() {
                   </div>
                 </div>
                 <p className="text-muted-foreground text-sm sm:text-base">
-                  Welcome, {user.username} ({user.role})
+                  Welcome, {user?.username} ({user?.role})
                 </p>
             </div>
           </div>

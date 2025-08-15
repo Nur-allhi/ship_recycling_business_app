@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
@@ -186,7 +185,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
             stockTransactions: stockTransactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
             cashBalance: finalCashBalance,
             bankBalance: finalBankBalance,
-            initialBalanceSet: true,
             needsInitialBalance,
             cashCategories: cashCategories.length > 0 ? cashCategories : prev.cashCategories,
             bankCategories: bankCategories.length > 0 ? bankCategories : prev.bankCategories,
@@ -207,7 +205,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
                 description: 'Could not connect to Supabase. Check your console for details and verify your credentials.'
             });
         }
-        setState(prev => ({ ...prev, initialBalanceSet: true }));
       }
   }, [toast, state.user]);
   
@@ -252,11 +249,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const loadUser = async () => {
         const session = await getSession();
         if (session) {
-            setState(prev => ({...prev, user: session, initialBalanceSet: true})); // Set initialBalanceSet to true immediately
+            // Set user and mark app as ready to render the main UI
+            setState(prev => ({...prev, user: session, initialBalanceSet: true})); 
         } else {
             router.push('/login');
+            // If no session, still mark as "initialized" to unblock the login page render
+            setIsInitialized(true); 
         }
-        setIsInitialized(true);
     }
 
     loadUser();
@@ -265,8 +264,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   
    useEffect(() => {
     if (state.user) {
-        // Load data in the background after the UI has rendered
+        // Now that the user is confirmed, load their data in the background.
         reloadData();
+        // Mark as initialized to save settings, etc.
+        setIsInitialized(true);
     }
    }, [state.user, reloadData]);
 
@@ -686,7 +687,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     logout,
   };
 
-  if (!isInitialized) {
+  if (!isInitialized && !state.user) {
     return <div className="flex items-center justify-center min-h-screen"><Logo className="h-16 w-16 text-primary animate-pulse" /></div>;
   }
   
