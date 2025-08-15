@@ -55,8 +55,6 @@ export function SettingsTab() {
     setCurrency,
     showStockValue,
     setShowStockValue,
-    organizationName,
-    setOrganizationName,
   } = useAppContext()
   const { toast } = useToast()
 
@@ -65,7 +63,6 @@ export function SettingsTab() {
   const cashCategoryRef = useRef<HTMLInputElement>(null)
   const bankCategoryRef = useRef<HTMLInputElement>(null)
   const wastageRef = useRef<HTMLInputElement>(null)
-  const orgNameRef = useRef<HTMLInputElement>(null)
   
   const stockItemNameRef = useRef<HTMLInputElement>(null)
   const stockWeightRef = useRef<HTMLInputElement>(null)
@@ -144,19 +141,10 @@ export function SettingsTab() {
     setNumberFont(value);
   }
 
-  const handleOrgNameSave = () => {
-    const name = orgNameRef.current?.value;
-    if (name) {
-        setOrganizationName(name);
-        toast({title: "Organization Name Updated"});
-    }
-  };
-
   return (
     <div className="max-w-2xl mx-auto">
       <Tabs defaultValue="appearance" className="w-full">
         <TabsList className="flex flex-wrap h-auto">
-          <TabsTrigger value="general">General</TabsTrigger>
           <TabsTrigger value="balances">Initial Balances</TabsTrigger>
           <TabsTrigger value="wastage">Wastage</TabsTrigger>
           <TabsTrigger value="categories">Categories</TabsTrigger>
@@ -164,21 +152,6 @@ export function SettingsTab() {
           <TabsTrigger value="recycle_bin">Recycle Bin</TabsTrigger>
           <TabsTrigger value="export_import">Export/Import</TabsTrigger>
         </TabsList>
-        <TabsContent value="general">
-             <Card>
-                <CardHeader>
-                <CardTitle>General Settings</CardTitle>
-                <CardDescription>Set your organization's name.</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                <div className="space-y-2">
-                    <Label htmlFor="org-name">Organization Name</Label>
-                    <Input id="org-name" type="text" defaultValue={organizationName} ref={orgNameRef} />
-                </div>
-                <Button onClick={handleOrgNameSave}>Save Name</Button>
-                </CardContent>
-            </Card>
-        </TabsContent>
         <TabsContent value="balances">
           <Card>
             <CardHeader>

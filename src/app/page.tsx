@@ -35,7 +35,7 @@ const navItems = [
 ]
 
 function ShipShapeLedger() {
-  const { fontSize, organizationName, initialBalanceSet, needsInitialBalance } = useAppContext();
+  const { fontSize, initialBalanceSet, needsInitialBalance } = useAppContext();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isSheetOpen, setIsSheetOpen] = useState(false);
@@ -109,7 +109,6 @@ function ShipShapeLedger() {
                     <h1 className="text-2xl sm:text-3xl font-bold text-primary font-headline">
                       Ha-Mim Iron Mart
                     </h1>
-                    {organizationName && <p className="text-lg font-bold text-muted-foreground">{organizationName}</p>}
                   </div>
                 </div>
                 <p className="text-muted-foreground text-sm sm:text-base">

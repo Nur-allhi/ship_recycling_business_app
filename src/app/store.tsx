@@ -33,7 +33,6 @@ interface AppState {
   wastagePercentage: number;
   currency: string;
   showStockValue: boolean;
-  organizationName: string;
 }
 
 interface AppContextType extends AppState {
@@ -61,7 +60,6 @@ interface AppContextType extends AppState {
   setWastagePercentage: (percentage: number) => void;
   setCurrency: (currency: string) => void;
   setShowStockValue: (show: boolean) => void;
-  setOrganizationName: (name: string) => void;
   setInitialBalances: (cash: number, bank: number) => void;
   addInitialStockItem: (item: { name: string; weight: number; pricePerKg: number }) => void;
   handleExport: () => void;
@@ -90,7 +88,6 @@ const initialAppState: AppState = {
   wastagePercentage: 0,
   currency: 'BDT',
   showStockValue: false,
-  organizationName: 'Ha-Mim Iron Mart',
 };
 
 export function AppProvider({ children }: { children: ReactNode }) {
@@ -255,14 +252,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
             wastagePercentage: state.wastagePercentage,
             currency: state.currency,
             showStockValue: state.showStockValue,
-            organizationName: state.organizationName,
         }
         localStorage.setItem('ha-mim-iron-mart-settings', JSON.stringify(settingsToStore));
       } catch (error) {
         console.error("Failed to save settings to localStorage", error);
       }
     }
-  }, [state.fontSize, state.bodyFont, state.numberFont, state.wastagePercentage, state.currency, state.showStockValue, state.organizationName, isInitialized]);
+  }, [state.fontSize, state.bodyFont, state.numberFont, state.wastagePercentage, state.currency, state.showStockValue, isInitialized]);
   
   const addCashTransaction = async (tx: Omit<CashTransaction, 'id' | 'createdAt' | 'deletedAt'>) => {
     try {
@@ -605,7 +601,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const setWastagePercentage = (percentage: number) => setState(prev => ({ ...prev, wastagePercentage: percentage }));
   const setCurrency = (currency: string) => setState(prev => ({ ...prev, currency }));
   const setShowStockValue = (show: boolean) => setState(prev => ({ ...prev, showStockValue: show }));
-  const setOrganizationName = (name: string) => setState(prev => ({...prev, organizationName: name}));
 
   const value: AppContextType = {
     ...state,
@@ -633,7 +628,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setWastagePercentage,
     setCurrency,
     setShowStockValue,
-    setOrganizationName,
     setInitialBalances,
     addInitialStockItem,
     handleExport,

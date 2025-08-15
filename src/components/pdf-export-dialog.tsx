@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState } from 'react';
@@ -39,7 +40,7 @@ declare module 'jspdf' {
 }
 
 export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
-  const { cashTransactions, bankTransactions, stockTransactions, currency, organizationName } = useAppContext();
+  const { cashTransactions, bankTransactions, stockTransactions, currency } = useAppContext();
   const { toast } = useToast();
   const [dataSource, setDataSource] = useState<DataSource>('cash');
   const [dateRange, setDateRange] = useState<{ from: Date; to: Date }>({
@@ -83,16 +84,14 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
       
       doc.setFontSize(18);
       doc.setFont('helvetica', 'bold');
-      doc.text(title, pageCenter, headerYPos, { align: 'center' });
+      doc.text("Ha-Mim Iron Mart", pageCenter, headerYPos, { align: 'center' });
       doc.setFont('helvetica', 'normal');
+      doc.setFontSize(14);
+      doc.text(title, pageCenter, headerYPos + 8, { align: 'center' });
+
 
       const rightAlignX = doc.internal.pageSize.getWidth() - pageMargins.right;
       doc.setFontSize(9);
-      
-      if (organizationName) {
-        doc.setFont('helvetica', 'bold');
-        doc.text(organizationName, pageMargins.left, headerYPos - 5);
-      }
       
       doc.setFont('helvetica', 'normal');
       doc.text(`From: ${format(dateRange.from, 'dd-MM-yyyy')}`, rightAlignX, headerYPos, { align: 'right' });
