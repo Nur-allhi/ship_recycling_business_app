@@ -250,7 +250,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const session = await getSession();
         if (session) {
             setState(prev => ({...prev, user: session}));
-            reloadData();
+            await reloadData();
         } else {
             router.push('/login');
         }
@@ -627,7 +627,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const logout = async () => {
     await removeSession();
-    setState(prev => ({...prev, user: null}));
+    setState(prev => ({...prev, user: null, initialBalanceSet: false}));
     router.push('/login');
   };
 
@@ -672,7 +672,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     logout,
   };
 
-  return <AppContext.Provider value={value}>{isInitialized ? children : <div className="flex items-center justify-center min-h-screen"><Logo className="h-16 w-16 text-primary animate-pulse" /></div>}</AppContext.Provider>;
+  if (!isInitialized) {
+    return <div className="flex items-center justify-center min-h-screen"><Logo className="h-16 w-16 text-primary animate-pulse" /></div>;
+  }
+  
+  return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 }
 
 export function useAppContext() {

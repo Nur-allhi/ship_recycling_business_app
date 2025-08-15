@@ -10,6 +10,7 @@ import { createSession, getSession } from '@/lib/auth';
 // Can be configured to use the service_role key for admin-level access.
 // When not using service role, it will try to impersonate the logged-in user.
 const createSupabaseClient = async (serviceRole = false) => {
+    const cookieStore = cookies();
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
     const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -18,42 +19,27 @@ const createSupabaseClient = async (serviceRole = false) => {
         throw new Error("Supabase URL, Anon Key, or Service Role Key is missing from environment variables.");
     }
     
-    // If we need the service role, we initialize with the service key directly.
+    // For privileged operations, use the service key
     if (serviceRole) {
         return createClient(supabaseUrl, supabaseServiceKey, {
             auth: { persistSession: false },
         });
     }
 
-    // For regular user requests, we start with the anon key
-    // and then attempt to impersonate the logged-in user.
-    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-        auth: { persistSession: false },
-    });
+    // For user-level operations, use the anon key and the user's session
+    const session = await getSession();
+    const accessToken = session?.accessToken;
 
-    const user = await getSession();
-    if (user) {
-        // Impersonate the user for RLS by using the service_role key
-        // and setting the 'request.jwt.sub' to the user's ID.
-        return createClient(supabaseUrl, supabaseServiceKey, {
-            auth: {
-                persistSession: false,
-                autoRefreshToken: false,
-                detectSessionInUrl: false,
+    return createClient(supabaseUrl, supabaseAnonKey, {
+        global: {
+            headers: {
+                Authorization: `Bearer ${accessToken || supabaseAnonKey}`,
             },
-            // This is the key part for server-side RLS
-            global: {
-                headers: {
-                    Authorization: `Bearer ${supabaseServiceKey}`,
-                    'x-real-ip': '127.0.0.1', // Mock IP, can be anything
-                    'x-forwarded-for': `{"role":"authenticated", "sub":"${user.id}", "user_id":"${user.id}", "aud":"authenticated", "user_role": "${user.role}"}`
-                },
-            },
-        });
-    }
-    
-    // Fallback to a regular anon client if no user session
-    return supabase;
+        },
+        auth: {
+             persistSession: false,
+        }
+    });
 }
 
 const ReadDataInputSchema = z.object({
@@ -226,16 +212,19 @@ const LoginInputSchema = z.object({
 });
 
 export async function login(input: z.infer<typeof LoginInputSchema>) {
-    // Use the service role client to bypass RLS for login check
-    const supabase = await createSupabaseClient(true); 
+    // This is a special client that can bypass RLS to check the password
+    const supabase = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
     
-    const { data: user, error } = await supabase
+    const { data: user, error: userError } = await supabase
         .from('users')
-        .select('*')
+        .select('id, password, role')
         .eq('username', input.username)
         .single();
     
-    if (error || !user) {
+    if (userError || !user) {
         throw new Error("Invalid username or password.");
     }
 
@@ -245,8 +234,29 @@ export async function login(input: z.infer<typeof LoginInputSchema>) {
         throw new Error("Invalid username or password.");
     }
     
-    // Don't include password in the session cookie
-    const { password, ...sessionData } = user;
+    const { data: { session }, error: sessionError } = await supabase.auth.admin.generateLink({
+        type: 'magiclink',
+        email: `${input.username}@example.com`, // dummy email
+        options: {
+            data: {
+                id: user.id,
+                role: user.role,
+                username: input.username,
+            }
+        }
+    });
+
+    if(sessionError || !session) {
+        throw new Error("Could not create a session for the user.");
+    }
+
+    const sessionData = {
+        id: user.id,
+        username: input.username,
+        role: user.role,
+        accessToken: session.access_token,
+    }
+    
     await createSession(sessionData);
     return { success: true };
 }
@@ -284,5 +294,3 @@ export async function deleteUser(id: string) {
     if (error) throw new Error(error.message);
     return { success: true };
 }
-
-    

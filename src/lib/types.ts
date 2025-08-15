@@ -44,5 +44,5 @@ export interface User {
     id: string;
     username: string;
     role: 'admin' | 'user';
-    password?: string; // Only available on server
+    accessToken?: string; // JWT token
 }
