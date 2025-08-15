@@ -23,6 +23,7 @@ import { cn } from '@/lib/utils';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import type { CashTransaction, BankTransaction } from '@/lib/types';
+import { logoSvgData } from '@/lib/logo-data';
 
 
 interface PdfExportDialogProps {
@@ -61,6 +62,7 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
 
     const doc = new jsPDF();
     const pageCenter = doc.internal.pageSize.getWidth() / 2;
+    const pageMargins = { left: 15, right: 15, top: 20, bottom: 20 };
     let tableData: any[] = [];
     let tableHeaders: any[] = [];
     let title = '';
@@ -69,34 +71,31 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
     
     const formatNumber = (num: number) => num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     
-    const formatPdfCurrency = (amount: number) => {
-        const prefix = currency === 'BDT' ? 'BDT' : currency;
-        return `${prefix} ${formatNumber(amount)}`;
-    }
-    
     const formatNumberOrCurrencyForPdf = (value: number) => {
         const prefix = currency === 'BDT' ? 'BDT' : currency;
         return `${prefix} ${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     }
 
-    // Main Title
-    doc.setFontSize(18);
-    doc.text(organizationName || 'ShipShape Ledger', pageCenter, 22, { align: 'center' });
+    // Header
+    const logoBase64 = `data:image/svg+xml;base64,${btoa(logoSvgData)}`;
+    doc.addImage(logoBase64, 'SVG', pageMargins.left, 15, 30, 20);
     
-    // Report Title
-    doc.setFontSize(14);
-    doc.text(title, pageCenter, 30, { align: 'center' });
+    if (dataSource === 'cash') title = 'Cash Ledger';
+    if (dataSource === 'bank') title = 'Bank Ledger';
+    if (dataSource === 'stock') title = 'Stock Transactions';
 
-    // Date Range and Generation Time
-    doc.setFontSize(10);
-    const dateText = `From: ${format(dateRange.from, 'dd-MM-yyyy')}   To: ${format(dateRange.to, 'dd-MM-yyyy')}`;
+    doc.setFontSize(16);
     doc.setFont('helvetica', 'bold');
-    doc.text(dateText, pageCenter, 36, { align: 'center' });
+    doc.text(title, pageCenter, 22, { align: 'center' });
     doc.setFont('helvetica', 'normal');
-    const generatedText = `Generated on: ${format(generationDate, 'dd-MM-yyyy HH:mm:ss')}`;
-    doc.text(generatedText, pageCenter, 42, { align: 'center' });
 
+    const rightAlignX = doc.internal.pageSize.getWidth() - pageMargins.right;
+    doc.setFontSize(9);
+    doc.text(`From: ${format(dateRange.from, 'dd-MM-yyyy')}`, rightAlignX, 20, { align: 'right' });
+    doc.text(`To: ${format(dateRange.to, 'dd-MM-yyyy')}`, rightAlignX, 25, { align: 'right' });
+    doc.text(`Generated: ${format(generationDate, 'dd-MM-yyyy HH:mm')}`, rightAlignX, 30, { align: 'right' });
 
+    
     if (dataSource === 'cash' || dataSource === 'bank') {
         const allTxs: (CashTransaction | BankTransaction)[] = dataSource === 'cash' ? [...cashTransactions] : [...bankTransactions];
         
@@ -120,7 +119,6 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
             })
             .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
         
-        title = dataSource === 'cash' ? 'Cash Ledger' : 'Bank Ledger';
         tableHeaders = [['Date', 'Description', 'Category', 'In', 'Out', 'Balance']];
         tableData = txsInRange.map(tx => {
             const isIncome = tx.type === 'income' || tx.type === 'deposit';
@@ -129,9 +127,9 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
                 format(new Date(tx.date), 'dd-MM-yyyy'),
                 tx.description,
                 tx.category,
-                { content: isIncome ? formatNumberOrCurrencyForPdf(tx.amount) : '', styles: { halign: 'right' } },
-                { content: !isIncome ? formatNumberOrCurrencyForPdf(tx.amount) : '', styles: { halign: 'right' } },
-                { content: formatNumberOrCurrencyForPdf(balance), styles: { halign: 'right' } },
+                isIncome ? formatNumberOrCurrencyForPdf(tx.amount) : '',
+                !isIncome ? formatNumberOrCurrencyForPdf(tx.amount) : '',
+                formatNumberOrCurrencyForPdf(balance),
             ]
         });
 
@@ -142,7 +140,6 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
         };
 
     } else { // Stock
-        title = 'Stock Transactions';
         tableHeaders = [['Date', 'Description', 'Item', 'Type', 'Weight (kg)', 'Price/kg', 'Total Value']];
         tableData = stockTransactions
             .filter(tx => {
@@ -154,9 +151,9 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
                 tx.description || '',
                 tx.stockItemName,
                 tx.type,
-                { content: tx.weight.toFixed(2), styles: { halign: 'right' } },
-                { content: formatPdfCurrency(tx.pricePerKg), styles: { halign: 'right' } },
-                { content: formatPdfCurrency(tx.weight * tx.pricePerKg), styles: { halign: 'right' } }
+                tx.weight.toFixed(2),
+                formatNumberOrCurrencyForPdf(tx.pricePerKg),
+                formatNumberOrCurrencyForPdf(tx.weight * tx.pricePerKg)
             ]);
         columnStyles = { 
             4: { halign: 'right' },
@@ -164,18 +161,14 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
             6: { halign: 'right' },
         };
     }
-    
-    // Re-render the title now that it's determined
-    doc.setFontSize(14);
-    doc.text(title, pageCenter, 30, { align: 'center' });
 
     doc.autoTable({
-        startY: 50,
+        startY: 45,
         head: tableHeaders,
         body: tableData,
-        theme: 'grid', // Use 'grid' for borders
+        theme: 'grid',
         headStyles: {
-            fillColor: [34, 49, 63], // A dark blue for the header
+            fillColor: [34, 49, 63],
             textColor: 255,
             fontStyle: 'bold',
         },
