@@ -78,6 +78,8 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
     const toDate = new Date(dateRange.to);
     toDate.setHours(23,59,59,999);
 
+    let finalY = 0;
+
     // Header
     try {
       let title = '';
@@ -86,20 +88,25 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
       if (dataSource === 'stock') title = 'Stock Transactions';
       
       const centerX = doc.internal.pageSize.getWidth() / 2;
-      
+      const rightAlignX = doc.internal.pageSize.getWidth() - pageMargins.right;
+
+      // Centered Titles
       doc.setFont('Helvetica', 'bold');
       doc.setFontSize(18);
       doc.text("Ha-Mim Iron Mart", centerX, 15, { align: 'center' });
       
       doc.setFont('Helvetica', 'normal');
       doc.setFontSize(14);
-      doc.text(title, centerX, 23, { align: 'center' });
-      
+      doc.text(title, centerX, 22, { align: 'center' });
+
+      // Left Aligned Dates
       doc.setFont('Helvetica', 'normal');
       doc.setFontSize(9);
-      const dateText = `From: ${format(dateRange.from, 'dd-MM-yyyy')}   To: ${format(dateRange.to, 'dd-MM-yyyy')}   (Generated: ${format(generationDate, 'dd-MM-yyyy HH:mm')})`;
-      doc.text(dateText, centerX, 30, { align: 'center' });
-
+      doc.text(`From: ${format(dateRange.from, 'dd-MM-yyyy')}`, pageMargins.left, 15);
+      doc.text(`To: ${format(dateRange.to, 'dd-MM-yyyy')}`, pageMargins.left, 20);
+      doc.text(`Generated: ${format(generationDate, 'dd-MM-yyyy HH:mm')}`, pageMargins.left, 25);
+      
+      finalY = 35; // Starting Y for the table
 
     } catch (e) {
       console.error("Failed to build PDF header:", e);
@@ -141,11 +148,11 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
         const rightAlignX = doc.internal.pageSize.getWidth() - pageMargins.right;
         doc.setFont('Helvetica', 'normal');
         doc.setFontSize(9);
-        doc.text(`Total Credit:`, rightAlignX - 50, 20, { align: 'left'});
-        doc.text(`Total Debit:`, rightAlignX - 50, 25, { align: 'left'});
+        doc.text(`Total Credit:`, rightAlignX - 45, 15, { align: 'left'});
+        doc.text(`Total Debit:`, rightAlignX - 45, 20, { align: 'left'});
         doc.setFont('Courier', 'normal');
-        doc.text(formatCurrencyForPdf(totalCredit), rightAlignX, 20, { align: 'right'});
-        doc.text(formatCurrencyForPdf(totalDebit), rightAlignX, 25, { align: 'right'});
+        doc.text(formatCurrencyForPdf(totalCredit), rightAlignX, 15, { align: 'right'});
+        doc.text(formatCurrencyForPdf(totalDebit), rightAlignX, 20, { align: 'right'});
         
         tableHeaders = [['Date', 'Description', 'Category', 'Debit', 'Credit', 'Balance']];
         tableData = txsInRange.map(tx => {
@@ -188,11 +195,11 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
         const rightAlignX = doc.internal.pageSize.getWidth() - pageMargins.right;
         doc.setFont('Helvetica', 'normal');
         doc.setFontSize(9);
-        doc.text(`Total Purchase:`, rightAlignX - 50, 20, { align: 'left'});
-        doc.text(`Total Sale:`, rightAlignX - 50, 25, { align: 'left'});
+        doc.text(`Total Purchase:`, rightAlignX - 45, 15, { align: 'left'});
+        doc.text(`Total Sale:`, rightAlignX - 45, 20, { align: 'left'});
         doc.setFont('Courier', 'normal');
-        doc.text(formatCurrencyForPdf(totalPurchaseValue), rightAlignX, 20, { align: 'right'});
-        doc.text(formatCurrencyForPdf(totalSaleValue), rightAlignX, 25, { align: 'right'});
+        doc.text(formatCurrencyForPdf(totalPurchaseValue), rightAlignX, 15, { align: 'right'});
+        doc.text(formatCurrencyForPdf(totalSaleValue), rightAlignX, 20, { align: 'right'});
 
         tableHeaders = [['Date', 'Description', 'Item', 'Purchase (kg)', 'Sale (kg)', 'Price/kg', 'Balance (kg)']];
 
@@ -233,7 +240,7 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
     }
 
     doc.autoTable({
-        startY: 40,
+        startY: finalY,
         head: tableHeaders,
         body: tableData,
         theme: 'grid',
