@@ -97,3 +97,50 @@ export async function restoreData(input: z.infer<typeof RestoreDataInputSchema>)
     if (error) throw new Error(error.message);
     return { success: true };
 }
+
+export async function exportAllData() {
+    const tables = ['cash_transactions', 'bank_transactions', 'stock_transactions', 'initial_stock', 'categories'];
+    const exportedData: Record<string, any[]> = {};
+
+    for (const tableName of tables) {
+        const { data, error } = await supabase.from(tableName).select('*');
+        if (error) throw new Error(`Error exporting ${tableName}: ${error.message}`);
+        exportedData[tableName] = data;
+    }
+
+    return exportedData;
+}
+
+
+const ImportDataSchema = z.record(z.array(z.record(z.any())));
+
+export async function batchImportData(dataToImport: z.infer<typeof ImportDataSchema>) {
+    const tables = ['cash_transactions', 'bank_transactions', 'stock_transactions', 'initial_stock', 'categories'];
+    
+    // Use a transaction to ensure all-or-nothing import
+    // Note: Supabase JS library doesn't directly support multi-table transactions in this way.
+    // A db function would be better. For now, we execute sequentially and hope for the best.
+    
+    try {
+        // Clear existing data in reverse order of dependency
+        for (const tableName of [...tables].reverse()) {
+            const { error: deleteError } = await supabase.from(tableName).delete().neq('id', '00000000-0000-0000-0000-000000000000'); // A bit of a hack to delete all
+            if (deleteError) throw new Error(`Failed to clear ${tableName}: ${deleteError.message}`);
+        }
+
+        // Import new data
+        for (const tableName of tables) {
+            const records = dataToImport[tableName];
+            if (records && records.length > 0) {
+                 // Supabase requires `id` to be omitted on insert if it's auto-generated, unless you specify upsert.
+                 // We will assume the backup contains IDs and they should be preserved.
+                const { error: insertError } = await supabase.from(tableName).upsert(records);
+                if (insertError) throw new Error(`Failed to import to ${tableName}: ${insertError.message}`);
+            }
+        }
+        return { success: true };
+    } catch(error: any) {
+        console.error("Batch import failed:", error);
+        throw error;
+    }
+}

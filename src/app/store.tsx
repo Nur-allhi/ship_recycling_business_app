@@ -4,9 +4,12 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import type { CashTransaction, BankTransaction, StockItem, StockTransaction } from '@/lib/types';
 import { useToast } from "@/hooks/use-toast"
-import { readData, appendData, updateData, deleteData, readDeletedData, restoreData } from '@/app/actions';
+import { readData, appendData, updateData, deleteData, readDeletedData, restoreData, exportAllData, batchImportData } from '@/app/actions';
 import { format } from 'date-fns';
 import { supabase } from '@/lib/supabase';
+import { saveAs } from 'file-saver';
+import JSZip from 'jszip';
+
 
 type FontSize = 'sm' | 'base' | 'lg';
 
@@ -61,6 +64,8 @@ interface AppContextType extends AppState {
   setOrganizationName: (name: string) => void;
   setInitialBalances: (cash: number, bank: number) => void;
   addInitialStockItem: (item: { name: string; weight: number; pricePerKg: number }) => void;
+  handleExport: () => void;
+  handleImport: (file: File) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -389,21 +394,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
         await deleteData({ tableName: "stock_transactions", id: tx.id });
 
-        // Find and soft delete the linked financial transaction, even if it's already soft-deleted
-        // We use {select: '*', head: true} to check for existence without fetching the whole row, but that's advanced.
-        // A simple select is fine here.
-        const { data: cashTx, error: cashErr } = await supabase.from('cash_transactions').select('id').eq('linkedStockTxId', tx.id).maybeSingle();
+        // Find and soft delete the linked financial transaction.
+        // This needs to check both active and deleted items in case the linked item is already in the recycle bin.
+        const { data: allCashTxs, error: cashErr } = await supabase.from('cash_transactions').select('id, deletedAt').eq('linkedStockTxId', tx.id);
         if (cashErr) console.error("Error checking cash tx:", cashErr.message);
-        if (cashTx) {
-            await deleteData({ tableName: "cash_transactions", id: cashTx.id });
+        if (allCashTxs && allCashTxs.length > 0 && !allCashTxs[0].deletedAt) {
+            await deleteData({ tableName: "cash_transactions", id: allCashTxs[0].id });
         }
 
-        const { data: bankTx, error: bankErr } = await supabase.from('bank_transactions').select('id').eq('linkedStockTxId', tx.id).maybeSingle();
+        const { data: allBankTxs, error: bankErr } = await supabase.from('bank_transactions').select('id, deletedAt').eq('linkedStockTxId', tx.id);
         if (bankErr) console.error("Error checking bank tx:", bankErr.message);
-        if (bankTx) {
-            await deleteData({ tableName: "bank_transactions", id: bankTx.id });
+        if (allBankTxs && allBankTxs.length > 0 && !allBankTxs[0].deletedAt) {
+            await deleteData({ tableName: "bank_transactions", id: allBankTxs[0].id });
         }
-
+        
         toast({ title: "Stock Transaction Deleted", description: "The corresponding financial entry was also moved to the recycle bin."});
         await reloadData();
     } catch(error) {
@@ -545,6 +549,56 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
   }
 
+  const handleExport = async () => {
+    try {
+      const data = await exportAllData();
+      const zip = new JSZip();
+      zip.file("shipshape-ledger-backup.json", JSON.stringify(data, null, 2));
+      const blob = await zip.generateAsync({ type: "blob" });
+      saveAs(blob, `shipshape-ledger-backup-${format(new Date(), 'yyyy-MM-dd')}.zip`);
+      toast({ title: "Export Successful", description: "Your data has been exported." });
+    } catch (error: any) {
+      console.error(error);
+      toast({ variant: 'destructive', title: "Export Failed", description: error.message });
+    }
+  };
+
+  const handleImport = async (file: File) => {
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+        try {
+            let jsonString = event.target?.result as string;
+            // Handle zip files
+            if (file.name.endsWith('.zip')) {
+                const zip = await JSZip.loadAsync(file);
+                const jsonFile = zip.file("shipshape-ledger-backup.json");
+                if (!jsonFile) {
+                    throw new Error("Backup JSON file not found in the zip archive.");
+                }
+                jsonString = await jsonFile.async("string");
+            }
+            const data = JSON.parse(jsonString);
+            
+            // Basic validation
+            const requiredTables = ['cash_transactions', 'bank_transactions', 'stock_transactions', 'initial_stock', 'categories'];
+            for(const table of requiredTables) {
+                if(!Array.isArray(data[table])) {
+                    throw new Error(`Invalid backup file format. Missing or invalid '${table}' data.`);
+                }
+            }
+
+            await batchImportData(data);
+            toast({ title: "Import Successful", description: "Your data has been restored from backup." });
+            await reloadData();
+
+        } catch (error: any) {
+            console.error(error);
+            toast({ variant: 'destructive', title: "Import Failed", description: error.message });
+        }
+    };
+    reader.readAsText(file);
+  };
+
   const setFontSize = (size: FontSize) => setState(prev => ({ ...prev, fontSize: size }));
   const setBodyFont = (font: string) => setState(prev => ({ ...prev, bodyFont: font }));
   const setNumberFont = (font: string) => setState(prev => ({ ...prev, numberFont: font }));
@@ -582,6 +636,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setOrganizationName,
     setInitialBalances,
     addInitialStockItem,
+    handleExport,
+    handleImport,
   };
 
   return <AppContext.Provider value={value}>{isInitialized ? children : <div className="flex items-center justify-center min-h-screen">Loading...</div>}</AppContext.Provider>;

@@ -15,6 +15,7 @@ import { useToast } from "@/hooks/use-toast"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { RecycleBinTab } from "./recycle-bin-tab"
+import { ExportImportTab } from "./export-import-tab"
 
 const bodyFontOptions = [
     { name: "Inter", value: "Inter, sans-serif" },
@@ -161,6 +162,7 @@ export function SettingsTab() {
           <TabsTrigger value="categories">Categories</TabsTrigger>
           <TabsTrigger value="appearance">Appearance</TabsTrigger>
           <TabsTrigger value="recycle_bin">Recycle Bin</TabsTrigger>
+          <TabsTrigger value="export_import">Export/Import</TabsTrigger>
         </TabsList>
         <TabsContent value="general">
              <Card>
@@ -361,8 +363,10 @@ export function SettingsTab() {
         <TabsContent value="recycle_bin">
           <RecycleBinTab />
         </TabsContent>
+        <TabsContent value="export_import">
+            <ExportImportTab />
+        </TabsContent>
       </Tabs>
     </div>
   )
 }
-
