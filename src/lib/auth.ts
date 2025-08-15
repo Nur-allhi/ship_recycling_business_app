@@ -15,10 +15,16 @@ export async function createSession(payload: SessionPayload) {
   const sessionPayload = JSON.stringify(payload);
   cookies().set('session', sessionPayload, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    // The `secure` flag is required for `sameSite: 'none'`.
+    // We set it to true for all environments because the editor preview
+    // operates in a cross-site context.
+    secure: true, 
     maxAge: 60 * 60 * 24, // 1 day
-    path: '/', // Ensure cookie is valid for all paths
-    sameSite: 'lax',
+    path: '/',
+    // This is the critical change. 'lax' (the default) prevents the cookie
+    // from being sent in a cross-site iframe context (the editor preview).
+    // 'none' allows the cookie to be sent, fixing the login loop.
+    sameSite: 'none',
   });
 }
 
