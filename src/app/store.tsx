@@ -387,16 +387,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
   
   const deleteStockTransaction = async (tx: StockTransaction) => {
     try {
-        // Soft delete the stock transaction itself
         await deleteData({ tableName: "stock_transactions", id: tx.id });
 
-        // Find and soft delete the linked financial transaction
-        const { data: cashTx } = await supabase.from('cash_transactions').select('id').eq('linkedStockTxId', tx.id).maybeSingle();
+        // Find and soft delete the linked financial transaction, even if it's already soft-deleted
+        // We use {select: '*', head: true} to check for existence without fetching the whole row, but that's advanced.
+        // A simple select is fine here.
+        const { data: cashTx, error: cashErr } = await supabase.from('cash_transactions').select('id').eq('linkedStockTxId', tx.id).maybeSingle();
+        if (cashErr) console.error("Error checking cash tx:", cashErr.message);
         if (cashTx) {
             await deleteData({ tableName: "cash_transactions", id: cashTx.id });
         }
 
-        const { data: bankTx } = await supabase.from('bank_transactions').select('id').eq('linkedStockTxId', tx.id).maybeSingle();
+        const { data: bankTx, error: bankErr } = await supabase.from('bank_transactions').select('id').eq('linkedStockTxId', tx.id).maybeSingle();
+        if (bankErr) console.error("Error checking bank tx:", bankErr.message);
         if (bankTx) {
             await deleteData({ tableName: "bank_transactions", id: bankTx.id });
         }
@@ -412,12 +415,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const restoreTransaction = async (txType: 'cash' | 'bank' | 'stock', id: string) => {
     const tableName = `${txType}_transactions`;
     try {
-        // Restore the main transaction
         await restoreData({ tableName, id });
 
-        // Check for and restore linked transactions
         if (txType === 'cash' || txType === 'bank') {
-            // Find the financial transaction that was just restored
             const { data: finTx } = await supabase.from(tableName).select('linkedStockTxId').eq('id', id).maybeSingle();
             if (finTx?.linkedStockTxId) {
                  await restoreData({ tableName: 'stock_transactions', id: finTx.linkedStockTxId });
@@ -425,12 +425,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
          
         if (txType === 'stock') {
-             // Find the linked cash or bank transaction based on the stock transaction's ID
-             // We need to check the recycle bin, so we can't use readData directly
-            const { data: cashTx } = await supabase.from('cash_transactions').select('id, deletedAt').eq('linkedStockTxId', id).not('deletedAt', 'is', null).maybeSingle();
+            // Find the linked cash or bank transaction based on the stock transaction's ID
+            // We need to check the recycle bin, so we can't use readData directly, we check all rows.
+            const { data: cashTx } = await supabase.from('cash_transactions').select('id, deletedAt').eq('linkedStockTxId', id).maybeSingle();
             if (cashTx) await restoreData({ tableName: 'cash_transactions', id: cashTx.id });
 
-            const { data: bankTx } = await supabase.from('bank_transactions').select('id, deletedAt').eq('linkedStockTxId', id).not('deletedAt', 'is', null).maybeSingle();
+            const { data: bankTx } = await supabase.from('bank_transactions').select('id, deletedAt').eq('linkedStockTxId', id).maybeSingle();
             if (bankTx) await restoreData({ tableName: 'bank_transactions', id: bankTx.id });
         }
         
@@ -444,10 +444,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const deleteMultipleCashTransactions = async (txs: CashTransaction[]) => {
      try {
-        // Use Promise.all to run deletions in parallel for better performance
         await Promise.all(txs.map(tx => deleteCashTransaction(tx)));
         toast({ title: "Success", description: `${txs.length} cash transaction(s) deleted.`});
-        await reloadData(); // Single reload after all deletions are done
+        await reloadData();
     } catch(error) {
         console.error(error);
         toast({ variant: 'destructive', title: "Error", description: "Failed to delete multiple cash transactions."});
@@ -511,10 +510,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const deleteCategory = async (type: 'cash' | 'bank', category: string) => {
-    // Deleting from the database is complex. It requires finding the category's ID first
-    // and ensuring no transactions are using it. For now, we only update the local state
-    // to avoid leaving the app in a broken state. A proper implementation would need a
-    // more robust backend approach, possibly with a check for existing usage.
     console.warn("Database deletion for categories is not implemented. Removing from local state only.");
     setState(prev => {
       const categories = type === 'cash' ? prev.cashCategories : prev.bankCategories;
@@ -599,5 +594,3 @@ export function useAppContext() {
   }
   return context;
 }
-
-    
