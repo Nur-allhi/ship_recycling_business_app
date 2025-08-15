@@ -9,7 +9,6 @@ export interface SessionPayload {
     id: string;
     username: string;
     role: 'admin' | 'user';
-    accessToken: string;
 }
 
 export async function createSession(payload: SessionPayload) {
