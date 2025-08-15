@@ -37,7 +37,8 @@ export function LoginForm() {
     try {
       await login(data);
       toast({ title: "Login Successful", description: "Welcome back!" });
-      router.refresh(); // Important to re-fetch server components and session
+      // Force a hard reload to ensure all state is re-initialized
+      window.location.href = '/'; 
     } catch (error: any) {
       toast({
         variant: 'destructive',
