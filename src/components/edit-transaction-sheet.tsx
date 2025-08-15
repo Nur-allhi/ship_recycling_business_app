@@ -160,18 +160,18 @@ export function EditTransactionSheet({ isOpen, setIsOpen, transaction, transacti
                 </SheetDescription>
             </SheetHeader>
              {isStockDerivedTx && (
-                <Alert variant="destructive" className="mt-4">
-                  <AlertTitle>Editing Restricted</AlertTitle>
+                <Alert variant="default" className="mt-4 bg-yellow-50 border-yellow-200 text-yellow-800">
+                  <AlertTitle>Linked Transaction</AlertTitle>
                   <AlertDescription>
-                    This financial entry was created automatically from a stock transaction. To edit it, please modify or delete the original transaction in the Stock tab.
+                    This transaction is linked to a stock movement. Deleting this will also delete the associated stock entry. Editing is restricted to prevent data inconsistency.
                   </AlertDescription>
                 </Alert>
               )}
                {isStock && (
-                <Alert variant="destructive" className="mt-4">
+                <Alert variant="default" className="mt-4 bg-yellow-50 border-yellow-200 text-yellow-800">
                   <AlertTitle>Editing Caution</AlertTitle>
                   <AlertDescription>
-                    Editing this stock transaction will not automatically update the linked cash or bank entry. Changing the payment method here is disabled to prevent data inconsistency.
+                    Editing this stock transaction will not automatically update the linked cash or bank entry. Please edit the financial entry separately if amounts change.
                   </AlertDescription>
                 </Alert>
               )}
@@ -283,5 +283,3 @@ export function EditTransactionSheet({ isOpen, setIsOpen, transaction, transacti
     </Sheet>
   );
 }
-
-    

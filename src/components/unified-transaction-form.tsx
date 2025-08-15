@@ -185,6 +185,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                   render={({ field }) => (
                       <Select onValueChange={(value) => {
                           field.onChange(value);
+                          setIsNewStockItem(false);
                           reset({
                               date: new Date(),
                               amount: undefined,
@@ -262,41 +263,43 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
              <div className="space-y-4 animate-fade-in">
                 <div className="space-y-2">
                     <Label>Item Name</Label>
-                    {transactionType === 'stock_purchase' && !isNewStockItem ? (
-                      <div className="flex items-center gap-2">
-                      <Controller
-                          control={control}
-                          name="stockItemName"
-                          render={({ field }) => (
-                              <Select onValueChange={field.onChange} value={field.value}>
-                                  <SelectTrigger><SelectValue placeholder="Select existing item" /></SelectTrigger>
-                                  <SelectContent>
-                                      {stockItems.filter(i => i.weight > 0).map(item => <SelectItem key={item.id} value={item.name}>{item.name}</SelectItem>)}
-                                  </SelectContent>
-                              </Select>
-                          )}
-                      />
-                      <Button type="button" variant="outline" onClick={() => setIsNewStockItem(true)}>New</Button>
-                      </div>
-                    ) : transactionType === 'stock_purchase' && isNewStockItem ? (
-                      <div className="flex items-center gap-2">
-                        <Input {...register('stockItemName')} placeholder="e.g. Rice"/>
-                        <Button type="button" variant="outline" onClick={() => setIsNewStockItem(false)}>Existing</Button>
-                      </div>
-                    ) : (
-                      <Controller
-                          control={control}
-                          name="stockItemName"
-                          render={({ field }) => (
-                              <Select onValueChange={field.onChange} value={field.value}>
-                                  <SelectTrigger><SelectValue placeholder="Select item to sell" /></SelectTrigger>
-                                  <SelectContent>
-                                      {stockItems.filter(i => i.weight > 0).map(item => <SelectItem key={item.id} value={item.name}>{item.name}</SelectItem>)}
-                                  </SelectContent>
-                              </Select>
-                          )}
-                      />
-                    )}
+                     {transactionType === 'stock_purchase' && (
+                        <div className="flex items-center gap-2">
+                            {isNewStockItem ? (
+                                <Input {...register('stockItemName')} placeholder="e.g. Rice"/>
+                            ) : (
+                                 <Controller
+                                    control={control}
+                                    name="stockItemName"
+                                    render={({ field }) => (
+                                        <Select onValueChange={field.onChange} value={field.value}>
+                                            <SelectTrigger><SelectValue placeholder="Select existing item" /></SelectTrigger>
+                                            <SelectContent>
+                                                {stockItems.map(item => <SelectItem key={item.id} value={item.name}>{item.name}</SelectItem>)}
+                                            </SelectContent>
+                                        </Select>
+                                    )}
+                                />
+                            )}
+                            <Button type="button" variant="outline" size="sm" onClick={() => setIsNewStockItem(prev => !prev)}>
+                                {isNewStockItem ? 'Select Existing' : 'Add New Item'}
+                            </Button>
+                        </div>
+                     )}
+                     {transactionType === 'stock_sale' && (
+                        <Controller
+                            control={control}
+                            name="stockItemName"
+                            render={({ field }) => (
+                                <Select onValueChange={field.onChange} value={field.value}>
+                                    <SelectTrigger><SelectValue placeholder="Select item to sell" /></SelectTrigger>
+                                    <SelectContent>
+                                        {stockItems.filter(i => i.weight > 0).map(item => <SelectItem key={item.id} value={item.name}>{item.name}</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
+                            )}
+                        />
+                     )}
                     {errors.stockItemName && <p className="text-sm text-destructive">{errors.stockItemName.message}</p>}
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -405,5 +408,3 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
     </>
   );
 }
-
-    

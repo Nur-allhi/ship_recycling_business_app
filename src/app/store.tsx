@@ -6,6 +6,7 @@ import type { CashTransaction, BankTransaction, StockItem, StockTransaction } fr
 import { useToast } from "@/hooks/use-toast"
 import { readData, appendData, updateData, deleteData, readDeletedData, restoreData } from '@/app/actions';
 import { format } from 'date-fns';
+import { supabase } from '@/lib/supabase';
 
 type FontSize = 'sm' | 'base' | 'lg';
 
@@ -286,7 +287,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (!newStockTx) throw new Error("Stock transaction creation failed.");
 
       const totalValue = tx.weight * tx.pricePerKg;
-      const description = `${tx.type === 'purchase' ? 'Purchase' : 'Sale'} of ${tx.stockItemName}`;
+      const description = `${tx.type === 'purchase' ? 'Purchase' : 'Sale'} of ${tx.weight}kg of ${tx.stockItemName}`;
       const category = tx.type === 'purchase' ? 'Stock Purchase' : 'Stock Sale';
       const financialTxData = {
           date: tx.date,
@@ -340,8 +341,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const editStockTransaction = async (originalTx: StockTransaction, updatedTxData: Partial<Omit<StockTransaction, 'id' | 'date'>>) => {
       try {
+        // This function is tricky because changing weight/price should update the linked financial tx.
+        // For now, we show a toast to prompt the user to do it manually.
+        // A more advanced implementation would handle this automatically.
         await updateData({ tableName: 'stock_transactions', id: originalTx.id, data: updatedTxData });
-        toast({ title: "Success", description: "Stock transaction updated. Please manually update the corresponding financial transaction."});
+        toast({ 
+            title: "Success", 
+            description: "Stock transaction updated. Please manually update the corresponding financial transaction if amount has changed.",
+            duration: 5000,
+        });
         await reloadData();
       } catch (error) {
         console.error(error);
@@ -351,11 +359,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const deleteCashTransaction = async (tx: CashTransaction) => {
     try {
+        // If this cash tx is linked to a stock tx, delete the stock tx as well.
         if(tx.linkedStockTxId) {
              await deleteData({ tableName: "stock_transactions", id: tx.linkedStockTxId });
         }
         await deleteData({ tableName: "cash_transactions", id: tx.id });
-        toast({ title: "Success", description: "Cash transaction deleted."});
+        toast({ title: "Success", description: "Cash transaction and any linked stock entry have been moved to the recycle bin."});
         await reloadData();
     } catch(error) {
         console.error(error);
@@ -365,11 +374,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const deleteBankTransaction = async (tx: BankTransaction) => {
     try {
+        // If this bank tx is linked to a stock tx, delete the stock tx as well.
         if(tx.linkedStockTxId) {
              await deleteData({ tableName: "stock_transactions", id: tx.linkedStockTxId });
         }
         await deleteData({ tableName: "bank_transactions", id: tx.id });
-        toast({ title: "Success", description: "Bank transaction deleted."});
+        toast({ title: "Success", description: "Bank transaction and any linked stock entry have been moved to the recycle bin."});
         await reloadData();
     } catch(error) {
         console.error(error);
@@ -380,18 +390,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const deleteStockTransaction = async (tx: StockTransaction) => {
     try {
         // Find and delete the linked financial transaction first
-        const { data: cashTx } = await supabase.from('cash_transactions').select('id').eq('linkedStockTxId', tx.id).single();
+        const { data: cashTx } = await supabase.from('cash_transactions').select('id').eq('linkedStockTxId', tx.id).maybeSingle();
         if (cashTx) {
             await deleteData({ tableName: "cash_transactions", id: cashTx.id });
         }
 
-        const { data: bankTx } = await supabase.from('bank_transactions').select('id').eq('linkedStockTxId', tx.id).single();
+        const { data: bankTx } = await supabase.from('bank_transactions').select('id').eq('linkedStockTxId', tx.id).maybeSingle();
         if (bankTx) {
             await deleteData({ tableName: "bank_transactions", id: bankTx.id });
         }
 
         await deleteData({ tableName: "stock_transactions", id: tx.id });
-        toast({ title: "Stock Transaction Deleted", description: "The corresponding financial entry was also deleted."});
+        toast({ title: "Stock Transaction Deleted", description: "The corresponding financial entry was also moved to the recycle bin."});
         await reloadData();
     } catch(error) {
         console.error(error);
@@ -402,21 +412,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const restoreTransaction = async (txType: 'cash' | 'bank' | 'stock', id: string) => {
     const tableName = `${txType}_transactions`;
     try {
+        // Restore the main transaction
+        await restoreData({ tableName, id });
+
+        // Check for and restore linked transactions
         if (txType === 'cash' || txType === 'bank') {
-            const {data: finTx} = await supabase.from(tableName).select('linkedStockTxId').eq('id', id).single();
+            // Find the financial transaction that was just restored
+            const { data: finTx } = await supabase.from(tableName).select('linkedStockTxId').eq('id', id).maybeSingle();
             if (finTx?.linkedStockTxId) {
                  await restoreData({ tableName: 'stock_transactions', id: finTx.linkedStockTxId });
             }
         }
-         if (txType === 'stock') {
-            const { data: cashTx } = await supabase.from('cash_transactions').select('id').eq('linkedStockTxId', id).single();
+         
+        if (txType === 'stock') {
+             // Find the linked cash or bank transaction based on the stock transaction's ID
+            const { data: cashTx } = await supabase.from('cash_transactions').select('id').eq('linkedStockTxId', id).maybeSingle();
             if (cashTx) await restoreData({ tableName: 'cash_transactions', id: cashTx.id });
 
-            const { data: bankTx } = await supabase.from('bank_transactions').select('id').eq('linkedStockTxId', id).single();
+            const { data: bankTx } = await supabase.from('bank_transactions').select('id').eq('linkedStockTxId', id).maybeSingle();
             if (bankTx) await restoreData({ tableName: 'bank_transactions', id: bankTx.id });
         }
         
-        await restoreData({ tableName, id });
         toast({ title: "Transaction Restored", description: "The item and any linked transactions have been restored." });
         await Promise.all([reloadData(), loadRecycleBinData()]);
     } catch (error) {
@@ -427,11 +443,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const deleteMultipleCashTransactions = async (txs: CashTransaction[]) => {
      try {
-        for(const tx of txs) {
-            await deleteCashTransaction(tx);
-        }
-        toast({ title: "Success", description: `${txs.length} cash transactions deleted.`});
-        await reloadData();
+        // Use Promise.all to run deletions in parallel for better performance
+        await Promise.all(txs.map(tx => deleteCashTransaction(tx)));
+        toast({ title: "Success", description: `${txs.length} cash transaction(s) deleted.`});
+        await reloadData(); // Single reload after all deletions are done
     } catch(error) {
         console.error(error);
         toast({ variant: 'destructive', title: "Error", description: "Failed to delete multiple cash transactions."});
@@ -440,10 +455,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const deleteMultipleBankTransactions = async (txs: BankTransaction[]) => {
     try {
-        for(const tx of txs) {
-            await deleteBankTransaction(tx);
-        }
-        toast({ title: "Success", description: `${txs.length} bank transactions deleted.`});
+        await Promise.all(txs.map(tx => deleteBankTransaction(tx)));
+        toast({ title: "Success", description: `${txs.length} bank transaction(s) deleted.`});
         await reloadData();
     } catch(error) {
         console.error(error);
@@ -453,10 +466,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const deleteMultipleStockTransactions = async (txs: StockTransaction[]) => {
     try {
-        for(const tx of txs) {
-            await deleteStockTransaction(tx);
-        }
-        toast({ title: "Success", description: `${txs.length} stock transactions deleted.`});
+        await Promise.all(txs.map(tx => deleteStockTransaction(tx)));
+        toast({ title: "Success", description: `${txs.length} stock transaction(s) deleted.`});
         await reloadData();
     } catch(error) {
         console.error(error);
@@ -587,5 +598,3 @@ export function useAppContext() {
   }
   return context;
 }
-
-    
