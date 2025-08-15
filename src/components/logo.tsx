@@ -1,18 +1,26 @@
-// To use your own logo, replace the content of the <svg>
-// with the code for your own SVG file.
+import React from "react";
 
-export function Logo({ className }: { className?: string }) {
+// To use your own logo, paste your SVG code inside the <svg> tag below.
+// Make sure your SVG has a `viewBox` attribute and does not have fixed `width` or `height` attributes
+// so that it can be resized dynamically. The `className` will handle sizing.
+
+const Logo = ({ className }: { className?: string }) => {
   return (
     <svg
-      className={className}
       xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 100 100"
-      width="100"
-      height="100"
-      fill="currentColor"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
     >
-      <path d="M50,5A45,45,0,1,0,95,50,45,45,0,0,0,50,5Zm0,82A37,37,0,1,1,87,50,37,37,0,0,1,50,87Z" />
-      <path d="M50,23.5a26.5,26.5,0,1,0,26.5,26.5A26.5,26.5,0,0,0,50,23.5Zm0,45A18.5,18.5,0,1,1,68.5,50,18.5,18.5,0,0,1,50,68.5Z" />
+      <path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z" />
+      <path d="m3.3 7 8.7 5 8.7-5" />
+      <path d="M12 22V12" />
     </svg>
   );
-}
+};
+
+export default Logo;

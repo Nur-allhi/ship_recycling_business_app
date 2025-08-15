@@ -18,7 +18,7 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { InitialBalanceDialog } from '@/components/initial-balance-dialog';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Logo } from '@/components/logo';
+import Logo from '@/components/logo';
 
 const fontClasses = {
   sm: 'text-sm',
