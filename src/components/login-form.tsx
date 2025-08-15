@@ -4,7 +4,6 @@
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -24,7 +23,6 @@ const formSchema = z.object({
 type FormData = z.infer<typeof formSchema>;
 
 export function LoginForm() {
-  const router = useRouter();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
 
@@ -37,7 +35,7 @@ export function LoginForm() {
     try {
       await login(data);
       toast({ title: "Login Successful", description: "Welcome back!" });
-      // Force a hard reload to ensure all state is re-initialized
+      // Force a hard reload to ensure all state is re-initialized and the new cookie is sent.
       window.location.href = '/'; 
     } catch (error: any) {
       toast({

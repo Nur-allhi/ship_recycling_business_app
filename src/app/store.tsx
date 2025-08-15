@@ -10,7 +10,7 @@ import { supabase } from '@/lib/supabase';
 import { saveAs } from 'file-saver';
 import JSZip from 'jszip';
 import { getSession, removeSession } from '@/lib/auth';
-import { useRouter, usePathname } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import Logo from '@/components/logo';
 
 
@@ -102,20 +102,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AppState>(initialAppState);
   const { toast } = useToast();
   const router = useRouter();
-  const pathname = usePathname();
 
   useEffect(() => {
-    const checkSession = async () => {
+    const checkSessionAndLoadData = async () => {
       try {
         const session = await getSession();
-        setState(prev => ({ ...prev, user: session, initialBalanceSet: true }));
+        setState(prev => ({ ...prev, user: session }));
+        if (session) {
+          // If a session exists, we can consider the app "initialized" for rendering UI.
+          // Data will be loaded subsequently.
+          setState(prev => ({ ...prev, initialBalanceSet: true }));
+        } else {
+          // If no session, we're likely on the login page. App is also "initialized".
+          setState(prev => ({ ...prev, initialBalanceSet: true }));
+        }
       } catch (error) {
         console.error("Failed to get session", error);
-        setState(prev => ({ ...prev, initialBalanceSet: true })); // Still allow app to render
+        // Even on error, allow the app to render to avoid getting stuck.
+        setState(prev => ({ ...prev, initialBalanceSet: true })); 
       }
     };
-    checkSession();
-  }, [pathname]);
+    checkSessionAndLoadData();
+  }, []);
 
   const reloadData = useCallback(async () => {
     if (!state.user) return;
@@ -205,11 +213,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
       } catch (error: any) {
         console.error("Failed to load data", error);
-        toast({
-            variant: 'destructive',
-            title: 'Failed to load data',
-            description: 'Could not connect to Supabase. Check your console for details and verify your credentials.'
-        });
+        if (!error.message.includes('user_id')) {
+          toast({
+              variant: 'destructive',
+              title: 'Failed to load data',
+              description: 'Could not connect to Supabase. Check your console for details and verify your credentials.'
+          });
+        }
       }
   }, [toast, state.user]);
   
@@ -527,7 +537,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const setInitialBalances = async (cash: number, bank: number) => {
       try {
-          const commonData = { user_id: state.user?.id };
+          if (!state.user) throw new Error("User not authenticated");
           await addCashTransaction({ date: new Date().toISOString(), type: 'income', amount: cash, description: 'Initial Balance', category: 'Initial Balance'});
           await addBankTransaction({ date: new Date().toISOString(), type: 'deposit', amount: bank, description: 'Initial Balance', category: 'Initial Balance'});
           toast({ title: "Initial balances set." });
@@ -611,8 +621,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const logout = async () => {
     await removeSession();
+    setState(prev => ({...initialAppState, initialBalanceSet: true}));
     router.push('/login');
-    // A hard reload is better to ensure all state is cleared.
     window.location.href = '/login';
   };
 
