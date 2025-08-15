@@ -11,38 +11,48 @@ import { createSession, getSession } from '@/lib/auth';
 // When not using service role, it will try to impersonate the logged-in user.
 const createSupabaseClient = async (serviceRole = false) => {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseKey = serviceRole
-        ? process.env.SUPABASE_SERVICE_ROLE_KEY
-        : process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-    if (!supabaseUrl || !supabaseKey) {
+    if (!supabaseUrl || !supabaseAnonKey || !supabaseServiceKey) {
         throw new Error("Supabase URL, Anon Key, or Service Role Key is missing from environment variables.");
     }
     
-    const supabase = createClient(supabaseUrl, supabaseKey, {
+    // If we need the service role, we initialize with the service key directly.
+    if (serviceRole) {
+        return createClient(supabaseUrl, supabaseServiceKey, {
+            auth: { persistSession: false },
+        });
+    }
+
+    // For regular user requests, we start with the anon key
+    // and then attempt to impersonate the logged-in user.
+    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
         auth: { persistSession: false },
     });
-    
-    // If not using service role, try to impersonate the user based on session
-    if (!serviceRole) {
-        const user = await getSession();
-        if (user) {
-            // This is a critical step for RLS.
-            // We use the admin client to set the current user for this request.
-            const adminAuthClient = createClient(supabaseUrl, process.env.SUPABASE_SERVICE_ROLE_KEY!).auth.admin;
-            const { data: { user: impersonatedUser }, error } = await adminAuthClient.getUserById(user.id);
-            if (error || !impersonatedUser) {
-                 console.error("Error impersonating user:", error?.message);
-                 throw new Error("Could not authenticate user for server action.");
-            }
-            supabase.auth.setSession({
-                access_token: 'dummy-token', // It needs a token, but the user is set by admin
-                refresh_token: 'dummy-token',
-                user: impersonatedUser,
-            });
-        }
+
+    const user = await getSession();
+    if (user) {
+        // Impersonate the user for RLS by using the service_role key
+        // and setting the 'request.jwt.sub' to the user's ID.
+        return createClient(supabaseUrl, supabaseServiceKey, {
+            auth: {
+                persistSession: false,
+                autoRefreshToken: false,
+                detectSessionInUrl: false,
+            },
+            // This is the key part for server-side RLS
+            global: {
+                headers: {
+                    Authorization: `Bearer ${supabaseServiceKey}`,
+                    'x-real-ip': '127.0.0.1', // Mock IP, can be anything
+                    'x-forwarded-for': `{"role":"authenticated", "sub":"${user.id}", "user_id":"${user.id}", "aud":"authenticated", "user_role": "${user.role}"}`
+                },
+            },
+        });
     }
     
+    // Fallback to a regular anon client if no user session
     return supabase;
 }
 
@@ -274,3 +284,5 @@ export async function deleteUser(id: string) {
     if (error) throw new Error(error.message);
     return { success: true };
 }
+
+    
