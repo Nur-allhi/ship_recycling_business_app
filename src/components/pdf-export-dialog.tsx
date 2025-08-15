@@ -47,13 +47,6 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
     to: endOfMonth(new Date()),
   });
 
-  const formatCurrency = (amount: number) => {
-    if (currency === 'BDT') {
-      return `৳${new Intl.NumberFormat('en-US').format(amount)}`;
-    }
-    return new Intl.NumberFormat('en-US', { style: 'currency', currency: currency, currencyDisplay: 'symbol' }).format(amount)
-  }
-
   const handleExport = () => {
     if (!dateRange.from || !dateRange.to) {
         toast({
@@ -70,6 +63,13 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
     let tableHeaders: any[] = [];
     let title = '';
     let columnStyles: any = {};
+    
+    const formatNumber = (num: number) => num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    
+    const formatPdfCurrency = (amount: number) => {
+        const prefix = currency === 'BDT' ? 'BDT' : currency;
+        return `${prefix} ${formatNumber(amount)}`;
+    }
 
     const filteredData = (data: any[]) => {
         return data.filter(tx => {
@@ -87,7 +87,7 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
                 tx.description,
                 tx.category,
                 tx.type,
-                { content: formatCurrency(tx.amount), styles: { halign: 'right' } }
+                { content: formatPdfCurrency(tx.amount), styles: { halign: 'right' } }
             ]);
             columnStyles = { 4: { halign: 'right' } };
             break;
@@ -99,7 +99,7 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
                 tx.description,
                 tx.category,
                 tx.type,
-                { content: formatCurrency(tx.amount), styles: { halign: 'right' } }
+                { content: formatPdfCurrency(tx.amount), styles: { halign: 'right' } }
             ]);
              columnStyles = { 4: { halign: 'right' } };
             break;
@@ -112,8 +112,8 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
                 tx.stockItemName,
                 tx.type,
                 { content: tx.weight.toFixed(2), styles: { halign: 'right' } },
-                { content: formatCurrency(tx.pricePerKg), styles: { halign: 'right' } },
-                { content: formatCurrency(tx.weight * tx.pricePerKg), styles: { halign: 'right' } }
+                { content: formatPdfCurrency(tx.pricePerKg), styles: { halign: 'right' } },
+                { content: formatPdfCurrency(tx.weight * tx.pricePerKg), styles: { halign: 'right' } }
             ]);
             columnStyles = { 
                 4: { halign: 'right' },
