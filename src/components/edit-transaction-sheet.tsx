@@ -44,7 +44,6 @@ const formSchema = z.object({
       if (!data.stockItemName) ctx.addIssue({ code: 'custom', message: 'Stock item name is required.', path: ['stockItemName'] });
       if (!data.weight) ctx.addIssue({ code: 'custom', message: 'Weight must be positive.', path: ['weight'] });
       if (!data.pricePerKg) ctx.addIssue({ code: 'custom', message: 'Price must be positive.', path: ['pricePerKg'] });
-      if (!data.paymentMethod) ctx.addIssue({ code: 'custom', message: 'Payment method is required.', path: ['paymentMethod'] });
     } else { // It's a cash/bank transaction
       if (!data.amount) ctx.addIssue({ code: 'custom', message: 'Amount must be positive.', path: ['amount'] });
       if (!data.description) ctx.addIssue({ code: 'custom', message: 'Description is required.', path: ['description'] });
@@ -117,32 +116,31 @@ export function EditTransactionSheet({ isOpen, setIsOpen, transaction, transacti
   const onSubmit = (data: FormData) => {
     if (!transaction) return;
 
-    if (isCash && 'rowIndex' in transaction) {
+    if (isCash && 'id' in transaction) {
       editCashTransaction(transaction as CashTransaction, {
         type: data.inOutType === 'in' ? 'income' : 'expense',
         amount: data.amount!,
         description: data.description!,
         category: data.category!,
       });
-    } else if (isBank && 'rowIndex' in transaction) {
+    } else if (isBank && 'id' in transaction) {
       editBankTransaction(transaction as BankTransaction, {
         type: data.inOutType === 'in' ? 'deposit' : 'withdrawal',
         amount: data.amount!,
         description: data.description!,
         category: data.category!,
       });
-    } else if (isStock && 'rowIndex' in transaction) {
+    } else if (isStock && 'id' in transaction) {
         editStockTransaction(transaction as StockTransaction, {
             type: data.type!,
             stockItemName: data.stockItemName!,
             weight: data.weight!,
             pricePerKg: data.pricePerKg!,
-            paymentMethod: data.paymentMethod!,
             description: data.description,
         });
     }
 
-    toast({ title: "Transaction Update Requested", description: "Updating your transaction in the sheet." });
+    toast({ title: "Transaction Update Requested", description: "Updating your transaction." });
     setIsOpen(false);
   };
   
@@ -170,7 +168,7 @@ export function EditTransactionSheet({ isOpen, setIsOpen, transaction, transacti
                 <Alert variant="destructive" className="mt-4">
                   <AlertTitle>Editing Caution</AlertTitle>
                   <AlertDescription>
-                    Editing this stock transaction will not automatically update the linked cash or bank entry. Please update the financial record manually if you change the value.
+                    Editing this stock transaction will not automatically update the linked cash or bank entry. Changing the payment method here is disabled to prevent data inconsistency.
                   </AlertDescription>
                 </Alert>
               )}
@@ -249,13 +247,12 @@ export function EditTransactionSheet({ isOpen, setIsOpen, transaction, transacti
                                 control={control}
                                 name="paymentMethod"
                                 render={({ field }) => (
-                                     <RadioGroup onValueChange={field.onChange} value={field.value} className="flex pt-2 gap-4">
-                                        <Label htmlFor="cash" className="flex items-center gap-2 cursor-pointer"><RadioGroupItem value="cash" id="cash" /><span>Cash</span></Label>
-                                        <Label htmlFor="bank" className="flex items-center gap-2 cursor-pointer"><RadioGroupItem value="bank" id="bank" /><span>Bank</span></Label>
+                                     <RadioGroup onValueChange={field.onChange} value={field.value} className="flex pt-2 gap-4" disabled>
+                                        <Label htmlFor="cash" className="flex items-center gap-2 cursor-not-allowed"><RadioGroupItem value="cash" id="cash" /><span>Cash</span></Label>
+                                        <Label htmlFor="bank" className="flex items-center gap-2 cursor-not-allowed"><RadioGroupItem value="bank" id="bank" /><span>Bank</span></Label>
                                     </RadioGroup>
                                 )}
                             />
-                            {errors.paymentMethod && <p className="text-sm text-destructive">{errors.paymentMethod.message}</p>}
                         </div>
                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                              <div className="space-y-2">

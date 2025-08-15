@@ -1,121 +1,66 @@
 
 'use server';
 
+import { supabase } from '@/lib/supabase';
 import { z } from 'zod';
-import { sheets, sheetId, getSheetIdByName } from '@/services/google-sheets';
 
-const ReadSheetInputSchema = z.object({
-  range: z.string().describe('The A1 notation of the range to retrieve values from. E.g., "Sheet1!A1:B2".'),
+const ReadDataInputSchema = z.object({
+  tableName: z.string(),
+  select: z.string().optional().default('*'),
 });
 
-export type ReadSheetInput = z.infer<typeof ReadSheetInputSchema>;
+export async function readData(input: z.infer<typeof ReadDataInputSchema>) {
+  const { data, error } = await supabase
+    .from(input.tableName)
+    .select(input.select);
 
-export async function readSheetData(input: ReadSheetInput) {
-    if (!sheetId) {
-        throw new Error('GOOGLE_SHEET_ID environment variable not set.');
-    }
-    const response = await sheets.spreadsheets.values.get({
-        spreadsheetId: sheetId,
-        range: input.range,
-    });
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+const AppendDataInputSchema = z.object({
+  tableName: z.string(),
+  data: z.record(z.any()),
+});
+
+export async function appendData(input: z.infer<typeof AppendDataInputSchema>) {
+  const { data, error } = await supabase
+    .from(input.tableName)
+    .insert([input.data])
+    .select();
+
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+const UpdateDataInputSchema = z.object({
+  tableName: z.string(),
+  id: z.string(),
+  data: z.record(z.any()),
+});
+
+export async function updateData(input: z.infer<typeof UpdateDataInputSchema>) {
+  const { data, error } = await supabase
+    .from(input.tableName)
+    .update(input.data)
+    .eq('id', input.id)
+    .select();
+
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+const DeleteDataInputSchema = z.object({
+  tableName: z.string(),
+  id: z.string(),
+});
+
+export async function deleteData(input: z.infer<typeof DeleteDataInputSchema>) {
+  const { error } = await supabase
+    .from(input.tableName)
+    .delete()
+    .eq('id', input.id);
     
-    return response.data.values || [];
-}
-
-const AppendSheetRowInputSchema = z.object({
-    range: z.string(),
-    values: z.array(z.any()),
-});
-
-export async function appendSheetRow(input: z.infer<typeof AppendSheetRowInputSchema>) {
-    if (!sheetId) throw new Error('GOOGLE_SHEET_ID is not set.');
-    
-    const response = await sheets.spreadsheets.values.append({
-        spreadsheetId: sheetId,
-        range: input.range,
-        valueInputOption: 'USER_ENTERED',
-        requestBody: {
-            values: [input.values],
-        }
-    });
-    return response.data;
-}
-
-
-const UpdateSheetRowInputSchema = z.object({
-    range: z.string(),
-    values: z.array(z.any()),
-});
-
-export async function updateSheetRow(input: z.infer<typeof UpdateSheetRowInputSchema>) {
-    if (!sheetId) throw new Error('GOOGLE_SHEET_ID is not set.');
-    
-    const response = await sheets.spreadsheets.values.update({
-        spreadsheetId: sheetId,
-        range: input.range,
-        valueInputOption: 'USER_ENTERED',
-        requestBody: {
-            values: [input.values],
-        }
-    });
-    return response.data;
-}
-
-const DeleteSheetRowInputSchema = z.object({
-    sheetName: z.string(),
-    rowIndex: z.number().int().positive(), // 1-based index
-});
-
-export async function deleteSheetRow(input: z.infer<typeof DeleteSheetRowInputSchema>) {
-    if (!sheetId) throw new Error('GOOGLE_SHEET_ID is not set.');
-
-    const GIDSHEETID = await getSheetIdByName(input.sheetName);
-    if (GIDSHEETID === null) {
-        throw new Error(`Sheet with name "${input.sheetName}" not found.`);
-    }
-
-    const response = await sheets.spreadsheets.batchUpdate({
-        spreadsheetId: sheetId,
-        requestBody: {
-            requests: [{
-                deleteDimension: {
-                    range: {
-                        sheetId: GIDSHEETID,
-                        dimension: 'ROWS',
-                        startIndex: input.rowIndex - 1, // API is 0-indexed
-                        endIndex: input.rowIndex,
-                    }
-                }
-            }]
-        }
-    });
-    return response.data;
-}
-
-export async function initializeSheets() {
-    try {
-        const cashHeaders = ['Date', 'Type', 'Amount', 'Description', 'Category'];
-        await updateSheetRow({ range: 'Cash!A1', values: cashHeaders });
-        
-        const bankHeaders = ['Date', 'Type', 'Amount', 'Description', 'Category'];
-        await updateSheetRow({ range: 'Bank!A1', values: bankHeaders });
-        
-        const stockTxHeaders = ['Date', 'Type', 'Item Name', 'Weight', 'Price/kg', 'Payment', 'Description'];
-        await updateSheetRow({ range: 'Stock Transactions!A1', values: stockTxHeaders });
-        
-        const initialStockHeaders = ['Item Name', 'Initial Weight', 'Average Purchase Price/kg'];
-        await updateSheetRow({ range: 'Initial Stock!A1', values: initialStockHeaders });
-        
-        return { success: true };
-    } catch (error: any) {
-        console.error("Failed to initialize sheets:", error);
-        if (error.message && error.message.includes('Unable to parse range')) {
-            const missingSheet = error.message.split("'")[1]?.split("!")[0];
-            return {
-                success: false,
-                error: `The sheet "${missingSheet}" does not seem to exist. Please create the following sheets in your Google Sheet document and try again: Cash, Bank, Stock Transactions, Initial Stock.`
-            };
-        }
-        return { success: false, error: error.message };
-    }
+  if (error) throw new Error(error.message);
+  return { success: true };
 }

@@ -1,7 +1,6 @@
 
 export interface Transaction {
   id: string;
-  rowIndex: number; // The row number in the Google Sheet (1-based index)
   date: string;
   description: string;
   amount: number;
@@ -20,7 +19,6 @@ export interface BankTransaction extends Transaction {
 
 export interface StockItem {
   id: string;
-  rowIndex: number;
   name: string;
   weight: number; // in kg
   purchasePricePerKg: number;
@@ -28,7 +26,6 @@ export interface StockItem {
 
 export interface StockTransaction {
   id: string;
-  rowIndex: number;
   date: string;
   stockItemName: string;
   type: 'purchase' | 'sale';

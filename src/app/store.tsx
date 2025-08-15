@@ -4,7 +4,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import type { CashTransaction, BankTransaction, StockItem, StockTransaction } from '@/lib/types';
 import { useToast } from "@/hooks/use-toast"
-import { readSheetData, appendSheetRow, updateSheetRow, deleteSheetRow } from '@/app/actions';
+import { readData, appendData, updateData, deleteData } from '@/app/actions';
 import { format } from 'date-fns';
 
 type FontSize = 'sm' | 'base' | 'lg';
@@ -23,7 +23,6 @@ interface AppState {
   numberFont: string;
   initialBalanceSet: boolean;
   needsInitialBalance: boolean;
-  needsSetup: boolean;
   wastagePercentage: number;
   currency: string;
   showStockValue: boolean;
@@ -32,12 +31,12 @@ interface AppState {
 
 interface AppContextType extends AppState {
   reloadData: () => Promise<void>;
-  addCashTransaction: (tx: Omit<CashTransaction, 'id' | 'rowIndex'>) => void;
-  addBankTransaction: (tx: Omit<BankTransaction, 'id' | 'rowIndex'>) => void;
-  addStockTransaction: (tx: Omit<StockTransaction, 'id' | 'rowIndex'>) => void;
-  editCashTransaction: (originalTx: CashTransaction, updatedTxData: Omit<CashTransaction, 'id' | 'date' | 'rowIndex'>) => void;
-  editBankTransaction: (originalTx: BankTransaction, updatedTxData: Omit<BankTransaction, 'id' | 'date' | 'rowIndex'>) => void;
-  editStockTransaction: (originalTx: StockTransaction, updatedTxData: Omit<StockTransaction, 'id'| 'date'| 'rowIndex'>) => void;
+  addCashTransaction: (tx: Omit<CashTransaction, 'id'>) => void;
+  addBankTransaction: (tx: Omit<BankTransaction, 'id'>) => void;
+  addStockTransaction: (tx: Omit<StockTransaction, 'id'>) => void;
+  editCashTransaction: (originalTx: CashTransaction, updatedTxData: Partial<Omit<CashTransaction, 'id' | 'date'>>) => void;
+  editBankTransaction: (originalTx: BankTransaction, updatedTxData: Partial<Omit<BankTransaction, 'id' | 'date'>>) => void;
+  editStockTransaction: (originalTx: StockTransaction, updatedTxData: Partial<Omit<StockTransaction, 'id' | 'date'>>) => void;
   deleteCashTransaction: (tx: CashTransaction) => void;
   deleteBankTransaction: (tx: BankTransaction) => void;
   deleteStockTransaction: (tx: StockTransaction) => void;
@@ -56,7 +55,6 @@ interface AppContextType extends AppState {
   setOrganizationName: (name: string) => void;
   setInitialBalances: (cash: number, bank: number) => void;
   addInitialStockItem: (item: { name: string; weight: number; pricePerKg: number }) => void;
-  setNeedsSetup: (needs: boolean) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -75,7 +73,6 @@ const initialAppState: AppState = {
   numberFont: "'Roboto Mono', monospace",
   initialBalanceSet: false,
   needsInitialBalance: false,
-  needsSetup: false,
   wastagePercentage: 0,
   currency: 'BDT',
   showStockValue: false,
@@ -87,84 +84,33 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [isInitialized, setIsInitialized] = useState(false);
   const { toast } = useToast();
 
-  const setNeedsSetup = (needs: boolean) => {
-    setState(prev => ({ ...prev, needsSetup: needs }));
-  }
-
   const reloadData = useCallback(async () => {
     try {
-        const fetchData = async (range: string, sheetName: string) => {
-          try {
-            return await readSheetData({ range });
-          } catch (error: any) {
-            if (error.message.includes("Unable to parse range")) {
-                 setState(prev => ({ ...prev, needsSetup: true }));
-            }
-            console.warn(`Could not read from sheet "${sheetName}". It might not exist yet. Returning empty array.`, error.message);
-            return []; // Return empty array to prevent crash
-          }
-        }
-        
-        const [cashData, bankData, stockTransactionsData, initialStockData] = await Promise.all([
-            fetchData('Cash!A2:E', 'Cash'),
-            fetchData('Bank!A2:E', 'Bank'),
-            fetchData('Stock Transactions!A2:G', 'Stock Transactions'),
-            fetchData('Initial Stock!A2:C', 'Initial Stock'),
+        const [cashData, bankData, stockTransactionsData, initialStockData, categoriesData] = await Promise.all([
+            readData({ tableName: 'cash_transactions' }),
+            readData({ tableName: 'bank_transactions' }),
+            readData({ tableName: 'stock_transactions' }),
+            readData({ tableName: 'initial_stock' }),
+            readData({ tableName: 'categories' }),
         ]);
         
         let needsInitialBalance = true;
 
-        const cashTransactions: CashTransaction[] = cashData
-            .map((row, index) => ({
-                id: `cash-${index}`,
-                rowIndex: index + 2,
-                date: row[0] ? new Date(row[0]).toISOString() : new Date().toISOString(),
-                type: row[1]?.toLowerCase() as 'income' | 'expense',
-                amount: parseFloat(row[2]) || 0,
-                description: row[3] || '',
-                category: row[4] || '',
-            }))
-            .filter(tx => tx.date && tx.type && !isNaN(tx.amount));
-        
-        const bankTransactions: BankTransaction[] = bankData
-             .map((row, index) => ({
-                id: `bank-${index}`,
-                rowIndex: index + 2,
-                date: row[0] ? new Date(row[0]).toISOString() : new Date().toISOString(),
-                type: row[1]?.toLowerCase() as 'deposit' | 'withdrawal',
-                amount: parseFloat(row[2]) || 0,
-                description: row[3] || '',
-                category: row[4] || '',
-            }))
-            .filter(tx => tx.date && tx.type && !isNaN(tx.amount));
-        
-        const initialCashTx = cashTransactions.find(tx => tx.category === 'Initial');
-        const initialBankTx = bankTransactions.find(tx => tx.category === 'Initial');
+        const cashTransactions: CashTransaction[] = cashData.map((tx: any) => ({...tx, date: new Date(tx.date).toISOString() }));
+        const bankTransactions: BankTransaction[] = bankData.map((tx: any) => ({...tx, date: new Date(tx.date).toISOString() }));
 
+        const initialCashTx = cashTransactions.find(tx => tx.category === 'Initial Balance');
+        const initialBankTx = bankTransactions.find(tx => tx.category === 'Initial Balance');
+        
         if (initialCashTx || initialBankTx) {
           needsInitialBalance = false;
         }
 
-        const stockTransactions: StockTransaction[] = stockTransactionsData
-            .map((row, index) => ({
-                id: `stock-tx-${index}`,
-                rowIndex: index + 2,
-                date: row[0] ? new Date(row[0]).toISOString() : new Date().toISOString(),
-                type: row[1]?.toLowerCase() as 'purchase' | 'sale',
-                stockItemName: row[2] || '',
-                weight: parseFloat(row[3]) || 0,
-                pricePerKg: parseFloat(row[4]) || 0,
-                paymentMethod: row[5]?.toLowerCase() as 'cash' | 'bank',
-                description: row[6] || '',
-            }))
-            .filter(tx => tx.date && tx.type && tx.stockItemName && !isNaN(tx.weight) && !isNaN(tx.pricePerKg));
+        const stockTransactions: StockTransaction[] = stockTransactionsData.map((tx: any) => ({...tx, date: new Date(tx.date).toISOString() }));
 
-        const initialStockItems: StockItem[] = initialStockData.map((row, index) => ({
-            id: `initial-stock-${index}`,
-            rowIndex: index + 2,
-            name: row[0] || '',
-            weight: parseFloat(row[1]) || 0,
-            purchasePricePerKg: parseFloat(row[2]) || 0,
+        const initialStockItems: StockItem[] = initialStockData.map((item: any) => ({
+            ...item,
+            id: item.id.toString(),
         }));
         
         const finalCashBalance = cashTransactions.reduce((acc, tx) => acc + (tx.type === 'income' ? tx.amount : -tx.amount), 0);
@@ -204,9 +150,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
             name,
             weight: data.weight,
             purchasePricePerKg: data.weight > 0 ? data.totalValue / data.weight : 0,
-            rowIndex: 0 // Not applicable for aggregated view
         }));
-
+        
+        const cashCategories = categoriesData.filter((c: any) => c.type === 'cash').map((c: any) => c.name);
+        const bankCategories = categoriesData.filter((c: any) => c.type === 'bank').map((c: any) => c.name);
 
         setState(prev => ({
             ...prev,
@@ -218,19 +165,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
             bankBalance: finalBankBalance,
             initialBalanceSet: true,
             needsInitialBalance,
-            needsSetup: state.needsSetup, // Persist needsSetup flag if already set
+            cashCategories: cashCategories.length > 0 ? cashCategories : prev.cashCategories,
+            bankCategories: bankCategories.length > 0 ? bankCategories : prev.bankCategories,
         }));
 
-      } catch (error) {
-        console.error("Failed to load data from Google Sheets", error);
-        toast({
-            variant: 'destructive',
-            title: 'Failed to load data',
-            description: 'Could not connect to Google Sheets. Please check your setup and sheet names (Cash, Bank, Stock Transactions, Initial Stock).'
-        });
-        setState(prev => ({ ...prev, initialBalanceSet: true, needsSetup: true }));
+      } catch (error: any) {
+        console.error("Failed to load data from Supabase", error);
+        if (error.message.includes('relation') && error.message.includes('does not exist')) {
+            toast({
+                variant: 'destructive',
+                title: 'Database tables not found!',
+                description: 'Please ensure you have created the required tables in your Supabase project.'
+            });
+        } else {
+            toast({
+                variant: 'destructive',
+                title: 'Failed to load data',
+                description: 'Could not connect to Supabase. Check your console for details and verify your credentials.'
+            });
+        }
+        setState(prev => ({ ...prev, initialBalanceSet: true }));
       }
-  }, [toast, state.needsSetup]);
+  }, [toast]);
 
 
   useEffect(() => {
@@ -260,23 +216,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
             currency: state.currency,
             showStockValue: state.showStockValue,
             organizationName: state.organizationName,
-            cashCategories: state.cashCategories,
-            bankCategories: state.bankCategories,
         }
         localStorage.setItem('shipshape-ledger-settings', JSON.stringify(settingsToStore));
       } catch (error) {
         console.error("Failed to save settings to localStorage", error);
       }
     }
-  }, [state, isInitialized]);
+  }, [state.fontSize, state.bodyFont, state.numberFont, state.wastagePercentage, state.currency, state.showStockValue, state.organizationName, isInitialized]);
   
-  const addCashTransaction = async (tx: Omit<CashTransaction, 'id' | 'rowIndex'>) => {
+  const addCashTransaction = async (tx: Omit<CashTransaction, 'id'>) => {
     try {
-      await appendSheetRow({
-        range: 'Cash!A:E',
-        values: [format(new Date(tx.date), 'MM/dd/yyyy'), tx.type, tx.amount, tx.description, tx.category]
-      });
-      toast({ title: "Success", description: "Cash transaction added to sheet."});
+      await appendData({ tableName: 'cash_transactions', data: tx });
+      toast({ title: "Success", description: "Cash transaction added."});
       await reloadData();
     } catch (error) {
       console.error(error);
@@ -284,13 +235,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const addBankTransaction = async (tx: Omit<BankTransaction, 'id' | 'rowIndex'>) => {
+  const addBankTransaction = async (tx: Omit<BankTransaction, 'id'>) => {
      try {
-      await appendSheetRow({
-        range: 'Bank!A:E',
-        values: [format(new Date(tx.date), 'MM/dd/yyyy'), tx.type, tx.amount, tx.description, tx.category]
-      });
-      toast({ title: "Success", description: "Bank transaction added to sheet."});
+      await appendData({ tableName: 'bank_transactions', data: tx });
+      toast({ title: "Success", description: "Bank transaction added."});
       await reloadData();
     } catch (error) {
       console.error(error);
@@ -298,15 +246,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
   
-  const addStockTransaction = async (tx: Omit<StockTransaction, 'id' | 'rowIndex'>) => {
+  const addStockTransaction = async (tx: Omit<StockTransaction, 'id'>) => {
      try {
-      // 1. Add the stock transaction itself
-      await appendSheetRow({
-        range: 'Stock Transactions!A:G',
-        values: [format(new Date(tx.date), 'MM/dd/yyyy'), tx.type, tx.stockItemName, tx.weight, tx.pricePerKg, tx.paymentMethod, tx.description]
-      });
+      await appendData({ tableName: 'stock_transactions', data: tx });
 
-      // 2. Add the corresponding financial transaction
       const totalValue = tx.weight * tx.pricePerKg;
       const description = `${tx.type === 'purchase' ? 'Purchase' : 'Sale'} of ${tx.stockItemName}`;
       const category = tx.type === 'purchase' ? 'Stock Purchase' : 'Stock Sale';
@@ -337,15 +280,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const editCashTransaction = async (originalTx: CashTransaction, updatedTxData: Omit<CashTransaction, 'id' | 'date' | 'rowIndex'>) => {
+  const editCashTransaction = async (originalTx: CashTransaction, updatedTxData: Partial<Omit<CashTransaction, 'id' | 'date'>>) => {
       try {
-        if(originalTx.rowIndex === 0) {
-            toast({ variant: 'destructive', title: "Error", description: "Cannot edit transactions generated from stock movements."});
-            return;
-        }
-        const range = `Cash!A${originalTx.rowIndex}:E${originalTx.rowIndex}`;
-        const values = [format(new Date(originalTx.date), 'MM/dd/yyyy'), updatedTxData.type, updatedTxData.amount, updatedTxData.description, updatedTxData.category];
-        await updateSheetRow({ range, values });
+        await updateData({ tableName: 'cash_transactions', id: originalTx.id, data: updatedTxData });
         toast({ title: "Success", description: "Cash transaction updated."});
         await reloadData();
       } catch (error) {
@@ -354,15 +291,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
   };
 
-  const editBankTransaction = async (originalTx: BankTransaction, updatedTxData: Omit<BankTransaction, 'id' | 'date' | 'rowIndex'>) => {
+  const editBankTransaction = async (originalTx: BankTransaction, updatedTxData: Partial<Omit<BankTransaction, 'id'| 'date'>>) => {
       try {
-        if(originalTx.rowIndex === 0) {
-            toast({ variant: 'destructive', title: "Error", description: "Cannot edit transactions generated from stock movements."});
-            return;
-        }
-        const range = `Bank!A${originalTx.rowIndex}:E${originalTx.rowIndex}`;
-        const values = [format(new Date(originalTx.date), 'MM/dd/yyyy'), updatedTxData.type, updatedTxData.amount, updatedTxData.description, updatedTxData.category];
-        await updateSheetRow({ range, values });
+        await updateData({ tableName: 'bank_transactions', id: originalTx.id, data: updatedTxData });
         toast({ title: "Success", description: "Bank transaction updated."});
         await reloadData();
       } catch (error) {
@@ -371,11 +302,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
   };
 
-  const editStockTransaction = async (originalTx: StockTransaction, updatedTxData: Omit<StockTransaction, 'id' | 'date' | 'rowIndex'>) => {
+  const editStockTransaction = async (originalTx: StockTransaction, updatedTxData: Partial<Omit<StockTransaction, 'id' | 'date'>>) => {
       try {
-        const range = `Stock Transactions!A${originalTx.rowIndex}:G${originalTx.rowIndex}`;
-        const values = [format(new Date(originalTx.date), 'MM/dd/yyyy'), updatedTxData.type, updatedTxData.stockItemName, updatedTxData.weight, updatedTxData.pricePerKg, updatedTxData.paymentMethod, updatedTxData.description];
-        await updateSheetRow({ range, values });
+        await updateData({ tableName: 'stock_transactions', id: originalTx.id, data: updatedTxData });
         toast({ title: "Success", description: "Stock transaction updated. Please manually update the corresponding financial transaction."});
         await reloadData();
       } catch (error) {
@@ -390,7 +319,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
              toast({ variant: 'destructive', title: "Deletion Prohibited", description: "This transaction came from a stock movement. Please delete the original stock transaction instead."});
              return;
         }
-        await deleteSheetRow({ sheetName: "Cash", rowIndex: tx.rowIndex });
+        await deleteData({ tableName: "cash_transactions", id: tx.id });
         toast({ title: "Success", description: "Cash transaction deleted."});
         await reloadData();
     } catch(error) {
@@ -405,7 +334,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
              toast({ variant: 'destructive', title: "Deletion Prohibited", description: "This transaction came from a stock movement. Please delete the original stock transaction instead."});
              return;
         }
-        await deleteSheetRow({ sheetName: "Bank", rowIndex: tx.rowIndex });
+        await deleteData({ tableName: "bank_transactions", id: tx.id });
         toast({ title: "Success", description: "Bank transaction deleted."});
         await reloadData();
     } catch(error) {
@@ -416,7 +345,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   
   const deleteStockTransaction = async (tx: StockTransaction) => {
     try {
-        await deleteSheetRow({ sheetName: "Stock Transactions", rowIndex: tx.rowIndex });
+        await deleteData({ tableName: "stock_transactions", id: tx.id });
         toast({ title: "Stock Transaction Deleted", description: "Please manually delete the corresponding entry from your Cash or Bank ledger."});
         await reloadData();
     } catch(error) {
@@ -431,9 +360,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
             toast({ variant: 'destructive', title: "Error", description: "Cannot delete transactions generated from stock movements in bulk."});
             return;
         }
-        const sortedTxs = [...txs].sort((a,b) => b.rowIndex - a.rowIndex);
-        for(const tx of sortedTxs) {
-            await deleteSheetRow({ sheetName: "Cash", rowIndex: tx.rowIndex });
+        for(const tx of txs) {
+            await deleteData({ tableName: "cash_transactions", id: tx.id });
         }
         toast({ title: "Success", description: `${txs.length} cash transactions deleted.`});
         await reloadData();
@@ -449,9 +377,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
             toast({ variant: 'destructive', title: "Error", description: "Cannot delete transactions generated from stock movements in bulk."});
             return;
         }
-        const sortedTxs = [...txs].sort((a,b) => b.rowIndex - a.rowIndex);
-        for(const tx of sortedTxs) {
-            await deleteSheetRow({ sheetName: "Bank", rowIndex: tx.rowIndex });
+        for(const tx of txs) {
+            await deleteData({ tableName: "bank_transactions", id: tx.id });
         }
         toast({ title: "Success", description: `${txs.length} bank transactions deleted.`});
         await reloadData();
@@ -463,9 +390,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const deleteMultipleStockTransactions = async (txs: StockTransaction[]) => {
     try {
-        const sortedTxs = [...txs].sort((a,b) => b.rowIndex - a.rowIndex);
-        for(const tx of sortedTxs) {
-            await deleteSheetRow({ sheetName: "Stock Transactions", rowIndex: tx.rowIndex });
+        for(const tx of txs) {
+            await deleteData({ tableName: "stock_transactions", id: tx.id });
         }
         toast({ title: "Success", description: `${txs.length} stock transactions deleted. Please manually delete corresponding financial entries.`});
         await reloadData();
@@ -476,63 +402,57 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const transferFunds = async (from: 'cash' | 'bank', amount: number, date?: string) => {
-     const transactionDate = date ? new Date(date) : new Date();
-     const formattedDate = format(transactionDate, 'MM/dd/yyyy');
+     const transactionDate = date || new Date().toISOString();
      const description = from === 'cash' ? 'Transfer to Bank' : 'Transfer from Bank';
      
      try {
         if(from === 'cash') {
-            await appendSheetRow({ range: 'Cash!A:E', values: [formattedDate, 'expense', amount, description, 'Transfer']});
-            await appendSheetRow({ range: 'Bank!A:E', values: [formattedDate, 'deposit', amount, description, 'Transfer']});
+            await addCashTransaction({ date: transactionDate, type: 'expense', amount, description, category: 'Transfer'});
+            await addBankTransaction({ date: transactionDate, type: 'deposit', amount, description, category: 'Transfer'});
         } else { // from bank
-            await appendSheetRow({ range: 'Bank!A:E', values: [formattedDate, 'withdrawal', amount, description, 'Transfer']});
-            await appendSheetRow({ range: 'Cash!A:E', values: [formattedDate, 'income', amount, description, 'Transfer']});
+            await addBankTransaction({ date: transactionDate, type: 'withdrawal', amount, description, category: 'Transfer'});
+            await addCashTransaction({ date: transactionDate, type: 'income', amount, description, category: 'Transfer'});
         }
         toast({ title: "Success", description: "Fund transfer completed."});
-        await reloadData();
+        // reloadData is called by add...Transaction
      } catch (error) {
         console.error(error);
         toast({ variant: 'destructive', title: "Error", description: "Failed to complete fund transfer."});
      }
   };
 
-  const addCategory = (type: 'cash' | 'bank', category: string) => {
-    setState(prev => {
-      const categories = type === 'cash' ? prev.cashCategories : prev.bankCategories;
-      if (categories.includes(category) || !category) return prev;
-      const newCategories = [...categories, category];
-      const newState = type === 'cash'
-        ? { ...prev, cashCategories: newCategories }
-        : { ...prev, bankCategories: newCategories };
-      
-      const storedSettings = JSON.parse(localStorage.getItem('shipshape-ledger-settings') || '{}');
-      storedSettings[`${type}Categories`] = newCategories;
-      localStorage.setItem('shipshape-ledger-settings', JSON.stringify(storedSettings));
-
-      return newState;
-    });
+  const addCategory = async (type: 'cash' | 'bank', category: string) => {
+    const categories = type === 'cash' ? state.cashCategories : state.bankCategories;
+    if (categories.includes(category) || !category) return;
+    
+    try {
+      await appendData({ tableName: 'categories', data: { name: category, type } });
+      toast({ title: "Success", description: "Category added." });
+      await reloadData();
+    } catch (error) {
+      console.error(error);
+      toast({ variant: 'destructive', title: "Error", description: "Failed to add category." });
+    }
   };
 
-  const deleteCategory = (type: 'cash' | 'bank', category: string) => {
+  const deleteCategory = async (type: 'cash' | 'bank', category: string) => {
+    // This is more complex with a database, would need to find the category's ID first.
+    // For now, let's keep it simple and just remove from local state. A real implementation
+    // would require a proper ID-based deletion.
+    console.warn("Deleting categories from the database is not fully implemented yet.");
     setState(prev => {
       const categories = type === 'cash' ? prev.cashCategories : prev.bankCategories;
       const newCategories = categories.filter(c => c !== category);
-       const newState = type === 'cash'
+       return type === 'cash'
         ? { ...prev, cashCategories: newCategories }
         : { ...prev, bankCategories: newCategories };
-      
-      const storedSettings = JSON.parse(localStorage.getItem('shipshape-ledger-settings') || '{}');
-      storedSettings[`${type}Categories`] = newCategories;
-      localStorage.setItem('shipshape-ledger-settings', JSON.stringify(storedSettings));
-
-      return newState;
     });
   };
 
   const setInitialBalances = async (cash: number, bank: number) => {
       try {
-          await appendSheetRow({ range: 'Cash!A:E', values: [format(new Date(), 'MM/dd/yyyy'), 'income', cash, 'Initial Balance', 'Initial']});
-          await appendSheetRow({ range: 'Bank!A:E', values: [format(new Date(), 'MM/dd/yyyy'), 'deposit', bank, 'Initial Balance', 'Initial']});
+          await addCashTransaction({ date: new Date().toISOString(), type: 'income', amount: cash, description: 'Initial Balance', category: 'Initial Balance'});
+          await addBankTransaction({ date: new Date().toISOString(), type: 'deposit', amount: bank, description: 'Initial Balance', category: 'Initial Balance'});
           toast({ title: "Initial balances set." });
           await reloadData();
       } catch (e) {
@@ -543,10 +463,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const addInitialStockItem = async (item: { name: string; weight: number; pricePerKg: number }) => {
       try {
-        await appendSheetRow({
-            range: 'Initial Stock!A:C',
-            values: [item.name, item.weight, item.pricePerKg]
-        });
+        await appendData({ tableName: 'initial_stock', data: item });
         toast({ title: "Initial stock item added." });
         await reloadData();
       } catch (e) {
@@ -590,7 +507,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setOrganizationName,
     setInitialBalances,
     addInitialStockItem,
-    setNeedsSetup,
   };
 
   return <AppContext.Provider value={value}>{isInitialized ? children : <div className="flex items-center justify-center min-h-screen">Loading...</div>}</AppContext.Provider>;
