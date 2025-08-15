@@ -14,6 +14,7 @@ import { Plus, Trash2, Eye, EyeOff } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { RecycleBinTab } from "./recycle-bin-tab"
 
 const bodyFontOptions = [
     { name: "Inter", value: "Inter, sans-serif" },
@@ -159,6 +160,7 @@ export function SettingsTab() {
           <TabsTrigger value="wastage">Wastage</TabsTrigger>
           <TabsTrigger value="categories">Categories</TabsTrigger>
           <TabsTrigger value="appearance">Appearance</TabsTrigger>
+          <TabsTrigger value="recycle_bin">Recycle Bin</TabsTrigger>
         </TabsList>
         <TabsContent value="general">
              <Card>
@@ -333,7 +335,7 @@ export function SettingsTab() {
                        <Select value={numberFont} onValueChange={handleNumberFontChange}>
                           <SelectTrigger>
                               <SelectValue placeholder="Select font" />
-                          </SelectTrigger>
+                          </Trigger>
                           <SelectContent>
                               {numberFontOptions.map(font => (
                                   <SelectItem key={font.name} value={font.value} style={{fontFamily: font.value}}>
@@ -355,6 +357,9 @@ export function SettingsTab() {
               </div>
             </CardContent>
           </Card>
+        </TabsContent>
+        <TabsContent value="recycle_bin">
+          <RecycleBinTab />
         </TabsContent>
       </Tabs>
     </div>

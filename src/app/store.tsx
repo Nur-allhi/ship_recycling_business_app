@@ -4,7 +4,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import type { CashTransaction, BankTransaction, StockItem, StockTransaction } from '@/lib/types';
 import { useToast } from "@/hooks/use-toast"
-import { readData, appendData, updateData, deleteData } from '@/app/actions';
+import { readData, appendData, updateData, deleteData, readDeletedData, restoreData } from '@/app/actions';
 import { format } from 'date-fns';
 
 type FontSize = 'sm' | 'base' | 'lg';
@@ -16,6 +16,9 @@ interface AppState {
   bankTransactions: BankTransaction[];
   stockItems: StockItem[];
   stockTransactions: StockTransaction[];
+  deletedCashTransactions: CashTransaction[];
+  deletedBankTransactions: BankTransaction[];
+  deletedStockTransactions: StockTransaction[];
   cashCategories: string[];
   bankCategories: string[];
   fontSize: FontSize;
@@ -31,6 +34,7 @@ interface AppState {
 
 interface AppContextType extends AppState {
   reloadData: () => Promise<void>;
+  loadRecycleBinData: () => Promise<void>;
   addCashTransaction: (tx: Omit<CashTransaction, 'id'>) => void;
   addBankTransaction: (tx: Omit<BankTransaction, 'id'>) => void;
   addStockTransaction: (tx: Omit<StockTransaction, 'id'>) => void;
@@ -43,6 +47,7 @@ interface AppContextType extends AppState {
   deleteMultipleCashTransactions: (txs: CashTransaction[]) => void;
   deleteMultipleBankTransactions: (txs: BankTransaction[]) => void;
   deleteMultipleStockTransactions: (txs: StockTransaction[]) => void;
+  restoreTransaction: (txType: 'cash' | 'bank' | 'stock', id: string) => void;
   transferFunds: (from: 'cash' | 'bank', amount: number, date?: string) => void;
   addCategory: (type: 'cash' | 'bank', category: string) => void;
   deleteCategory: (type: 'cash' | 'bank', category: string) => void;
@@ -66,6 +71,9 @@ const initialAppState: AppState = {
   bankTransactions: [],
   stockItems: [],
   stockTransactions: [],
+  deletedCashTransactions: [],
+  deletedBankTransactions: [],
+  deletedStockTransactions: [],
   cashCategories: ['Salary', 'Groceries', 'Transport', 'Utilities', 'Stock Purchase', 'Stock Sale'],
   bankCategories: ['Deposit', 'Withdrawal', 'Stock Purchase', 'Stock Sale'],
   fontSize: 'base',
@@ -187,6 +195,31 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
         setState(prev => ({ ...prev, initialBalanceSet: true }));
       }
+  }, [toast]);
+  
+  const loadRecycleBinData = useCallback(async () => {
+    try {
+        const [deletedCashData, deletedBankData, deletedStockData] = await Promise.all([
+            readDeletedData({ tableName: 'cash_transactions' }),
+            readDeletedData({ tableName: 'bank_transactions' }),
+            readDeletedData({ tableName: 'stock_transactions' }),
+        ]);
+
+        setState(prev => ({
+            ...prev,
+            deletedCashTransactions: deletedCashData.sort((a: any, b: any) => new Date(b.deletedAt).getTime() - new Date(a.deletedAt).getTime()),
+            deletedBankTransactions: deletedBankData.sort((a: any, b: any) => new Date(b.deletedAt).getTime() - new Date(a.deletedAt).getTime()),
+            deletedStockTransactions: deletedStockData.sort((a: any, b: any) => new Date(b.deletedAt).getTime() - new Date(a.deletedAt).getTime()),
+        }));
+
+    } catch (error) {
+        console.error("Failed to load recycle bin data", error);
+        toast({
+            variant: 'destructive',
+            title: 'Failed to load recycle bin',
+            description: 'Could not fetch deleted items. Please try again later.'
+        });
+    }
   }, [toast]);
 
 
@@ -354,6 +387,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
         toast({ variant: 'destructive', title: "Error", description: "Failed to delete stock transaction."});
     }
   };
+  
+  const restoreTransaction = async (txType: 'cash' | 'bank' | 'stock', id: string) => {
+    const tableName = `${txType}_transactions`;
+    try {
+        await restoreData({ tableName, id });
+        toast({ title: "Transaction Restored", description: "The item has been restored to its original ledger." });
+        await Promise.all([reloadData(), loadRecycleBinData()]);
+    } catch (error) {
+        console.error("Failed to restore transaction", error);
+        toast({ variant: 'destructive', title: "Error", description: "Failed to restore the transaction." });
+    }
+  };
 
   const deleteMultipleCashTransactions = async (txs: CashTransaction[]) => {
      try {
@@ -485,6 +530,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const value: AppContextType = {
     ...state,
     reloadData,
+    loadRecycleBinData,
     addCashTransaction,
     addBankTransaction,
     addStockTransaction,
@@ -497,6 +543,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     deleteMultipleCashTransactions,
     deleteMultipleBankTransactions,
     deleteMultipleStockTransactions,
+    restoreTransaction,
     transferFunds,
     addCategory,
     deleteCategory,
