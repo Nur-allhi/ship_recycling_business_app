@@ -78,9 +78,9 @@ function ShipShapeLedger() {
                            <SheetDescription className="sr-only">Select a tab to view your financial data.</SheetDescription>
                         </SheetHeader>
                          <div className="flex items-center gap-3 mb-6">
-                            <Logo className="h-8 w-8 text-primary" />
+                            <Logo className="h-8 w-8" />
                             <h1 className="text-xl font-bold text-primary font-headline">
-                                ShipShape Ledger
+                                ShipShape
                             </h1>
                         </div>
                         <nav className="flex flex-col gap-1">
@@ -104,7 +104,7 @@ function ShipShapeLedger() {
             )}
             <div className="flex-1">
                 <div className="flex items-center gap-3 mb-1">
-                  {!isMobile && <Logo className="h-8 w-8 text-primary" />}
+                  {!isMobile && <Logo className="h-10 w-10" />}
                   <div>
                     <h1 className="text-2xl sm:text-3xl font-bold text-primary font-headline">
                       ShipShape Ledger
