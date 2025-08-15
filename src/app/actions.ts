@@ -4,40 +4,46 @@
 import { createClient } from '@supabase/supabase-js';
 import { cookies } from 'next/headers';
 import { z } from 'zod';
-import { createSession } from '@/lib/auth';
+import { createSession, getSession } from '@/lib/auth';
 
 // Helper function to create a Supabase client.
 // Can be configured to use the service_role key for admin-level access.
-const createSupabaseClient = (serviceRole = false) => {
+// When not using service role, it will try to impersonate the logged-in user.
+const createSupabaseClient = async (serviceRole = false) => {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const supabaseKey = serviceRole
         ? process.env.SUPABASE_SERVICE_ROLE_KEY
         : process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-    
-    const options: any = {
-        auth: { persistSession: false },
-    };
 
     if (!supabaseUrl || !supabaseKey) {
-        if (serviceRole && !supabaseKey) {
-            throw new Error("Supabase Service Role Key is missing. Please add SUPABASE_SERVICE_ROLE_KEY to your environment variables.");
-        }
-        throw new Error("Supabase URL or Anon Key is missing from environment variables.");
+        throw new Error("Supabase URL, Anon Key, or Service Role Key is missing from environment variables.");
     }
     
-    // If not using service role, use the user's session token for RLS
+    const supabase = createClient(supabaseUrl, supabaseKey, {
+        auth: { persistSession: false },
+    });
+    
+    // If not using service role, try to impersonate the user based on session
     if (!serviceRole) {
-        const sessionCookie = cookies().get('session')?.value;
-        if (sessionCookie) {
-            options.global = {
-                headers: {
-                    Authorization: `Bearer ${sessionCookie}`
-                }
-            };
+        const user = await getSession();
+        if (user) {
+            // This is a critical step for RLS.
+            // We use the admin client to set the current user for this request.
+            const adminAuthClient = createClient(supabaseUrl, process.env.SUPABASE_SERVICE_ROLE_KEY!).auth.admin;
+            const { data: { user: impersonatedUser }, error } = await adminAuthClient.getUserById(user.id);
+            if (error || !impersonatedUser) {
+                 console.error("Error impersonating user:", error?.message);
+                 throw new Error("Could not authenticate user for server action.");
+            }
+            supabase.auth.setSession({
+                access_token: 'dummy-token', // It needs a token, but the user is set by admin
+                refresh_token: 'dummy-token',
+                user: impersonatedUser,
+            });
         }
     }
     
-    return createClient(supabaseUrl, supabaseKey, options);
+    return supabase;
 }
 
 const ReadDataInputSchema = z.object({
@@ -46,7 +52,7 @@ const ReadDataInputSchema = z.object({
 });
 
 export async function readData(input: z.infer<typeof ReadDataInputSchema>) {
-  const supabase = createSupabaseClient();
+  const supabase = await createSupabaseClient();
   let query = supabase
     .from(input.tableName)
     .select(input.select);
@@ -63,7 +69,7 @@ export async function readData(input: z.infer<typeof ReadDataInputSchema>) {
 }
 
 export async function readDeletedData(input: z.infer<typeof ReadDataInputSchema>) {
-    const supabase = createSupabaseClient();
+    const supabase = await createSupabaseClient();
     const { data, error } = await supabase
         .from(input.tableName)
         .select(input.select)
@@ -79,7 +85,7 @@ const AppendDataInputSchema = z.object({
 });
 
 export async function appendData(input: z.infer<typeof AppendDataInputSchema>) {
-  const supabase = createSupabaseClient();
+  const supabase = await createSupabaseClient();
   const { data, error } = await supabase
     .from(input.tableName)
     .insert([input.data])
@@ -96,7 +102,7 @@ const UpdateDataInputSchema = z.object({
 });
 
 export async function updateData(input: z.infer<typeof UpdateDataInputSchema>) {
-  const supabase = createSupabaseClient();
+  const supabase = await createSupabaseClient();
   const { data, error } = await supabase
     .from(input.tableName)
     .update(input.data)
@@ -114,7 +120,7 @@ const DeleteDataInputSchema = z.object({
 
 // This now performs a soft delete
 export async function deleteData(input: z.infer<typeof DeleteDataInputSchema>) {
-  const supabase = createSupabaseClient();
+  const supabase = await createSupabaseClient();
   const { error } = await supabase
     .from(input.tableName)
     .update({ deletedAt: new Date().toISOString() })
@@ -130,7 +136,7 @@ const RestoreDataInputSchema = z.object({
 });
 
 export async function restoreData(input: z.infer<typeof RestoreDataInputSchema>) {
-    const supabase = createSupabaseClient();
+    const supabase = await createSupabaseClient();
     const { error } = await supabase
         .from(input.tableName)
         .update({ deletedAt: null })
@@ -141,7 +147,7 @@ export async function restoreData(input: z.infer<typeof RestoreDataInputSchema>)
 }
 
 export async function exportAllData() {
-    const supabase = createSupabaseClient();
+    const supabase = await createSupabaseClient();
     const tables = ['cash_transactions', 'bank_transactions', 'stock_transactions', 'initial_stock', 'categories'];
     const exportedData: Record<string, any[]> = {};
 
@@ -158,7 +164,7 @@ export async function exportAllData() {
 const ImportDataSchema = z.record(z.array(z.record(z.any())));
 
 export async function batchImportData(dataToImport: z.infer<typeof ImportDataSchema>) {
-    const supabase = createSupabaseClient(true); // Use service role for import
+    const supabase = await createSupabaseClient(true); // Use service role for import
     const tables = ['cash_transactions', 'bank_transactions', 'stock_transactions', 'initial_stock', 'categories', 'users'];
     
     try {
@@ -185,7 +191,7 @@ export async function batchImportData(dataToImport: z.infer<typeof ImportDataSch
 }
 
 export async function deleteAllData() {
-    const supabase = createSupabaseClient(true); // Use service role to delete
+    const supabase = await createSupabaseClient(true); // Use service role to delete
     const tables = ['cash_transactions', 'bank_transactions', 'stock_transactions', 'initial_stock', 'categories'];
     try {
         for (const tableName of tables) {
@@ -211,7 +217,7 @@ const LoginInputSchema = z.object({
 
 export async function login(input: z.infer<typeof LoginInputSchema>) {
     // Use the service role client to bypass RLS for login check
-    const supabase = createSupabaseClient(true); 
+    const supabase = await createSupabaseClient(true); 
     
     const { data: user, error } = await supabase
         .from('users')
@@ -236,7 +242,7 @@ export async function login(input: z.infer<typeof LoginInputSchema>) {
 }
 
 export async function getUsers() {
-    const supabase = createSupabaseClient();
+    const supabase = await createSupabaseClient();
     const { data, error } = await supabase.from('users').select('id, username, role');
     if (error) throw new Error(error.message);
     return data;
@@ -250,7 +256,7 @@ const AddUserInputSchema = z.object({
 
 export async function addUser(input: z.infer<typeof AddUserInputSchema>) {
     // Adding a user should be a privileged operation
-    const supabase = createSupabaseClient(true);
+    const supabase = await createSupabaseClient(true);
     const { error } = await supabase.from('users').insert([input]);
     if (error) {
         if (error.code === '23505') { // unique_violation
@@ -263,23 +269,8 @@ export async function addUser(input: z.infer<typeof AddUserInputSchema>) {
 
 export async function deleteUser(id: string) {
     // Deleting a user should be a privileged operation
-    const supabase = createSupabaseClient(true);
+    const supabase = await createSupabaseClient(true);
     const { error } = await supabase.from('users').delete().eq('id', id);
     if (error) throw new Error(error.message);
     return { success: true };
-}
-
-export async function getSupabaseForClient() {
-    const supabase = createSupabaseClient();
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session) {
-        return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
-            global: {
-                headers: {
-                    Authorization: `Bearer ${session.access_token}`,
-                },
-            },
-        });
-    }
-    return supabase;
 }

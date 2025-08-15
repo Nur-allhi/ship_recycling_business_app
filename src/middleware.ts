@@ -6,16 +6,16 @@ export async function middleware(request: NextRequest) {
   const session = await getSession();
   const { pathname } = request.nextUrl;
 
-  // If user is trying to access login page but is already logged in,
-  // redirect them to the home page.
-  if (pathname.startsWith('/login') && session) {
-    return NextResponse.redirect(new URL('/', request.url));
+  const isPublicPath = pathname.startsWith('/login');
+
+  // If trying to access a protected route without a session, redirect to login
+  if (!isPublicPath && !session) {
+    return NextResponse.redirect(new URL('/login', request.url));
   }
 
-  // If user is trying to access any other page and is not logged in,
-  // redirect them to the login page.
-  if (!pathname.startsWith('/login') && !session) {
-    return NextResponse.redirect(new URL('/login', request.url));
+  // If trying to access the login page with a session, redirect to home
+  if (isPublicPath && session) {
+    return NextResponse.redirect(new URL('/', request.url));
   }
 
   return NextResponse.next();
