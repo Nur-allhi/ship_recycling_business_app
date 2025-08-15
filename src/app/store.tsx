@@ -359,11 +359,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const deleteCashTransaction = async (tx: CashTransaction) => {
     try {
-        // If this cash tx is linked to a stock tx, delete the stock tx as well.
+        await deleteData({ tableName: "cash_transactions", id: tx.id });
         if(tx.linkedStockTxId) {
              await deleteData({ tableName: "stock_transactions", id: tx.linkedStockTxId });
         }
-        await deleteData({ tableName: "cash_transactions", id: tx.id });
         toast({ title: "Success", description: "Cash transaction and any linked stock entry have been moved to the recycle bin."});
         await reloadData();
     } catch(error) {
@@ -374,11 +373,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const deleteBankTransaction = async (tx: BankTransaction) => {
     try {
-        // If this bank tx is linked to a stock tx, delete the stock tx as well.
+        await deleteData({ tableName: "bank_transactions", id: tx.id });
         if(tx.linkedStockTxId) {
              await deleteData({ tableName: "stock_transactions", id: tx.linkedStockTxId });
         }
-        await deleteData({ tableName: "bank_transactions", id: tx.id });
         toast({ title: "Success", description: "Bank transaction and any linked stock entry have been moved to the recycle bin."});
         await reloadData();
     } catch(error) {
@@ -389,7 +387,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   
   const deleteStockTransaction = async (tx: StockTransaction) => {
     try {
-        // Find and delete the linked financial transaction first
+        // Soft delete the stock transaction itself
+        await deleteData({ tableName: "stock_transactions", id: tx.id });
+
+        // Find and soft delete the linked financial transaction
         const { data: cashTx } = await supabase.from('cash_transactions').select('id').eq('linkedStockTxId', tx.id).maybeSingle();
         if (cashTx) {
             await deleteData({ tableName: "cash_transactions", id: cashTx.id });
@@ -400,7 +401,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
             await deleteData({ tableName: "bank_transactions", id: bankTx.id });
         }
 
-        await deleteData({ tableName: "stock_transactions", id: tx.id });
         toast({ title: "Stock Transaction Deleted", description: "The corresponding financial entry was also moved to the recycle bin."});
         await reloadData();
     } catch(error) {
@@ -426,10 +426,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
          
         if (txType === 'stock') {
              // Find the linked cash or bank transaction based on the stock transaction's ID
-            const { data: cashTx } = await supabase.from('cash_transactions').select('id').eq('linkedStockTxId', id).maybeSingle();
+             // We need to check the recycle bin, so we can't use readData directly
+            const { data: cashTx } = await supabase.from('cash_transactions').select('id, deletedAt').eq('linkedStockTxId', id).not('deletedAt', 'is', null).maybeSingle();
             if (cashTx) await restoreData({ tableName: 'cash_transactions', id: cashTx.id });
 
-            const { data: bankTx } = await supabase.from('bank_transactions').select('id').eq('linkedStockTxId', id).maybeSingle();
+            const { data: bankTx } = await supabase.from('bank_transactions').select('id, deletedAt').eq('linkedStockTxId', id).not('deletedAt', 'is', null).maybeSingle();
             if (bankTx) await restoreData({ tableName: 'bank_transactions', id: bankTx.id });
         }
         
