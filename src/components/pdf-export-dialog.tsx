@@ -22,6 +22,8 @@ import { format, startOfMonth, endOfMonth } from 'date-fns';
 import { cn } from '@/lib/utils';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
+import type { CashTransaction, BankTransaction } from '@/lib/types';
+
 
 interface PdfExportDialogProps {
   isOpen: boolean;
@@ -70,66 +72,15 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
         const prefix = currency === 'BDT' ? 'BDT' : currency;
         return `${prefix} ${formatNumber(amount)}`;
     }
-
-    const filteredData = (data: any[]) => {
-        return data.filter(tx => {
-            const txDate = new Date(tx.date);
-            return txDate >= dateRange.from! && txDate <= dateRange.to!;
-        });
-    }
-
-    switch (dataSource) {
-        case 'cash':
-            title = 'Cash Transactions';
-            tableHeaders = [['Date', 'Description', 'Category', 'Type', 'Amount']];
-            tableData = filteredData(cashTransactions).map(tx => [
-                format(new Date(tx.date), 'dd-MM-yyyy'),
-                tx.description,
-                tx.category,
-                tx.type,
-                { content: formatPdfCurrency(tx.amount), styles: { halign: 'right' } }
-            ]);
-            columnStyles = { 4: { halign: 'right' } };
-            break;
-        case 'bank':
-            title = 'Bank Transactions';
-            tableHeaders = [['Date', 'Description', 'Category', 'Type', 'Amount']];
-            tableData = filteredData(bankTransactions).map(tx => [
-                format(new Date(tx.date), 'dd-MM-yyyy'),
-                tx.description,
-                tx.category,
-                tx.type,
-                { content: formatPdfCurrency(tx.amount), styles: { halign: 'right' } }
-            ]);
-             columnStyles = { 4: { halign: 'right' } };
-            break;
-        case 'stock':
-            title = 'Stock Transactions';
-            tableHeaders = [['Date', 'Description', 'Item', 'Type', 'Weight (kg)', 'Price/kg', 'Total Value']];
-            tableData = filteredData(stockTransactions).map(tx => [
-                format(new Date(tx.date), 'dd-MM-yyyy'),
-                tx.description || '',
-                tx.stockItemName,
-                tx.type,
-                { content: tx.weight.toFixed(2), styles: { halign: 'right' } },
-                { content: formatPdfCurrency(tx.pricePerKg), styles: { halign: 'right' } },
-                { content: formatPdfCurrency(tx.weight * tx.pricePerKg), styles: { halign: 'right' } }
-            ]);
-            columnStyles = { 
-                4: { halign: 'right' },
-                5: { halign: 'right' },
-                6: { halign: 'right' },
-            };
-            break;
-    }
     
+    const formatNumberOrCurrencyForPdf = (value: number) => {
+        const prefix = currency === 'BDT' ? 'BDT' : currency;
+        return `${prefix} ${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    }
+
     // Main Title
     doc.setFontSize(18);
     doc.text(organizationName || 'ShipShape Ledger', pageCenter, 22, { align: 'center' });
-    
-    // Report Title
-    doc.setFontSize(14);
-    doc.text(title, pageCenter, 30, { align: 'center' });
     
     // Date Range
     doc.setFontSize(10);
@@ -138,6 +89,77 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
     doc.text(dateText, pageCenter, 36, { align: 'center' });
     doc.setFont('helvetica', 'normal');
 
+    if (dataSource === 'cash' || dataSource === 'bank') {
+        const allTxs: (CashTransaction | BankTransaction)[] = dataSource === 'cash' ? [...cashTransactions] : [...bankTransactions];
+        
+        const fromDate = new Date(dateRange.from);
+        fromDate.setHours(0,0,0,0);
+
+        const toDate = new Date(dateRange.to);
+        toDate.setHours(23,59,59,999);
+
+        const txsBeforeRange = allTxs.filter(tx => new Date(tx.date) < fromDate);
+        
+        let balance = txsBeforeRange.reduce((acc, tx) => {
+             const amount = (tx.type === 'income' || tx.type === 'deposit') ? tx.amount : -tx.amount;
+             return acc + amount;
+        }, 0);
+
+        const txsInRange = allTxs
+            .filter(tx => {
+                const txDate = new Date(tx.date);
+                return txDate >= fromDate && txDate <= toDate;
+            })
+            .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+        
+        title = dataSource === 'cash' ? 'Cash Ledger' : 'Bank Ledger';
+        tableHeaders = [['Date', 'Description', 'Category', 'In', 'Out', 'Balance']];
+        tableData = txsInRange.map(tx => {
+            const isIncome = tx.type === 'income' || tx.type === 'deposit';
+            balance += isIncome ? tx.amount : -tx.amount;
+            return [
+                format(new Date(tx.date), 'dd-MM-yyyy'),
+                tx.description,
+                tx.category,
+                { content: isIncome ? formatNumberOrCurrencyForPdf(tx.amount) : '', styles: { halign: 'right' } },
+                { content: !isIncome ? formatNumberOrCurrencyForPdf(tx.amount) : '', styles: { halign: 'right' } },
+                { content: formatNumberOrCurrencyForPdf(balance), styles: { halign: 'right' } },
+            ]
+        });
+
+        columnStyles = { 
+            3: { halign: 'right' },
+            4: { halign: 'right' },
+            5: { halign: 'right' },
+        };
+
+    } else { // Stock
+        title = 'Stock Transactions';
+        tableHeaders = [['Date', 'Description', 'Item', 'Type', 'Weight (kg)', 'Price/kg', 'Total Value']];
+        tableData = stockTransactions
+            .filter(tx => {
+                const txDate = new Date(tx.date);
+                return txDate >= dateRange.from! && txDate <= dateRange.to!;
+            })
+            .map(tx => [
+                format(new Date(tx.date), 'dd-MM-yyyy'),
+                tx.description || '',
+                tx.stockItemName,
+                tx.type,
+                { content: tx.weight.toFixed(2), styles: { halign: 'right' } },
+                { content: formatPdfCurrency(tx.pricePerKg), styles: { halign: 'right' } },
+                { content: formatPdfCurrency(tx.weight * tx.pricePerKg), styles: { halign: 'right' } }
+            ]);
+        columnStyles = { 
+            4: { halign: 'right' },
+            5: { halign: 'right' },
+            6: { halign: 'right' },
+        };
+    }
+    
+    // Report Title
+    doc.setFontSize(14);
+    doc.text(title, pageCenter, 30, { align: 'center' });
 
     doc.autoTable({
         startY: 45,
