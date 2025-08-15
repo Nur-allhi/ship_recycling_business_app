@@ -106,10 +106,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const reloadData = useCallback(async () => {
     if (!state.user) return;
     try {
+        const userId = state.user.role === 'admin' ? undefined : state.user.id;
+
         const [cashData, bankData, stockTransactionsData, initialStockData, categoriesData] = await Promise.all([
-            readData({ tableName: 'cash_transactions' }),
-            readData({ tableName: 'bank_transactions' }),
-            readData({ tableName: 'stock_transactions' }),
+            readData({ tableName: 'cash_transactions', userId }),
+            readData({ tableName: 'bank_transactions', userId }),
+            readData({ tableName: 'stock_transactions', userId }),
             readData({ tableName: 'initial_stock' }),
             readData({ tableName: 'categories' }),
         ]);
@@ -250,8 +252,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const loadUser = async () => {
         const session = await getSession();
         if (session) {
-            setState(prev => ({...prev, user: session}));
-            // reloadData is called in the next useEffect when user is set
+            setState(prev => ({...prev, user: session, initialBalanceSet: true})); // Set initialBalanceSet to true immediately
         } else {
             router.push('/login');
         }
@@ -263,10 +264,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [router]);
   
    useEffect(() => {
-    if (state.user && !state.initialBalanceSet) {
+    if (state.user) {
+        // Load data in the background after the UI has rendered
         reloadData();
     }
-   }, [state.user, state.initialBalanceSet, reloadData]);
+   }, [state.user, reloadData]);
 
 
   useEffect(() => {
@@ -289,7 +291,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   
   const addCashTransaction = async (tx: Omit<CashTransaction, 'id' | 'createdAt' | 'deletedAt'>) => {
     try {
-      await appendData({ tableName: 'cash_transactions', data: tx });
+      const dataToInsert = state.user ? { ...tx, user_id: state.user.id } : tx;
+      await appendData({ tableName: 'cash_transactions', data: dataToInsert });
       toast({ title: "Success", description: "Cash transaction added."});
       await reloadData();
     } catch (error) {
@@ -300,7 +303,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const addBankTransaction = async (tx: Omit<BankTransaction, 'id' | 'createdAt' | 'deletedAt'>) => {
      try {
-      await appendData({ tableName: 'bank_transactions', data: tx });
+      const dataToInsert = state.user ? { ...tx, user_id: state.user.id } : tx;
+      await appendData({ tableName: 'bank_transactions', data: dataToInsert });
       toast({ title: "Success", description: "Bank transaction added."});
       await reloadData();
     } catch (error) {
@@ -311,7 +315,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   
   const addStockTransaction = async (tx: Omit<StockTransaction, 'id' | 'createdAt' | 'deletedAt'>) => {
     try {
-      const [newStockTx] = await appendData({ tableName: 'stock_transactions', data: tx });
+      const dataToInsert = state.user ? { ...tx, user_id: state.user.id } : tx;
+      const [newStockTx] = await appendData({ tableName: 'stock_transactions', data: dataToInsert });
       if (!newStockTx) throw new Error("Stock transaction creation failed.");
 
       const totalValue = tx.weight * tx.pricePerKg;
@@ -550,8 +555,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const setInitialBalances = async (cash: number, bank: number) => {
       try {
-          await addCashTransaction({ date: new Date().toISOString(), type: 'income', amount: cash, description: 'Initial Balance', category: 'Initial Balance'});
-          await addBankTransaction({ date: new Date().toISOString(), type: 'deposit', amount: bank, description: 'Initial Balance', category: 'Initial Balance'});
+          const commonData = { user_id: state.user?.id };
+          await addCashTransaction({ date: new Date().toISOString(), type: 'income', amount: cash, description: 'Initial Balance', category: 'Initial Balance', ...commonData});
+          await addBankTransaction({ date: new Date().toISOString(), type: 'deposit', amount: bank, description: 'Initial Balance', category: 'Initial Balance', ...commonData});
           toast({ title: "Initial balances set." });
           await reloadData();
       } catch (e) {
@@ -635,7 +641,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const logout = async () => {
     await removeSession();
-    setState(prev => ({...prev, user: null, initialBalanceSet: false}));
+    setState(initialAppState); // Reset state to initial
     router.push('/login');
   };
 

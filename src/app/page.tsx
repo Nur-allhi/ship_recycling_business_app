@@ -52,7 +52,7 @@ function ShipShapeLedger() {
     return (
       <div className="flex items-center justify-center min-h-screen bg-background">
         <div className="flex flex-col items-center gap-4">
-            <Logo className="h-16 w-16 text-primary" />
+            <Logo className="h-16 w-16 text-primary animate-pulse" />
             <p className="text-muted-foreground">Loading your ledger...</p>
         </div>
       </div>
