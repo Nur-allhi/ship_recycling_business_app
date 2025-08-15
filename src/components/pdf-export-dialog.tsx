@@ -23,7 +23,6 @@ import { cn } from '@/lib/utils';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import type { CashTransaction, BankTransaction } from '@/lib/types';
-import { logoSvgData } from '@/lib/logo-data';
 
 
 interface PdfExportDialogProps {
@@ -77,9 +76,6 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
     }
 
     // Header
-    const logoBase64 = `data:image/svg+xml;base64,${btoa(logoSvgData)}`;
-    doc.addImage(logoBase64, 'SVG', pageMargins.left, 15, 30, 20);
-    
     if (dataSource === 'cash') title = 'Cash Ledger';
     if (dataSource === 'bank') title = 'Bank Ledger';
     if (dataSource === 'stock') title = 'Stock Transactions';
@@ -91,8 +87,11 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
 
     const rightAlignX = doc.internal.pageSize.getWidth() - pageMargins.right;
     doc.setFontSize(9);
+    
+    doc.setFont('helvetica', 'bold');
     doc.text(`From: ${format(dateRange.from, 'dd-MM-yyyy')}`, rightAlignX, 20, { align: 'right' });
     doc.text(`To: ${format(dateRange.to, 'dd-MM-yyyy')}`, rightAlignX, 25, { align: 'right' });
+    doc.setFont('helvetica', 'normal');
     doc.text(`Generated: ${format(generationDate, 'dd-MM-yyyy HH:mm')}`, rightAlignX, 30, { align: 'right' });
 
     
@@ -184,7 +183,7 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
                 doc.internal.pageSize.getHeight() - 10
             );
             doc.text(
-                `Page ${data.pageNumber} of ${pageCount - 1}`,
+                `Page ${data.pageNumber} of ${pageCount - 1 > 0 ? pageCount - 1 : 1}`,
                 doc.internal.pageSize.getWidth() - data.settings.margin.right,
                 doc.internal.pageSize.getHeight() - 10,
                 { align: 'right' }
