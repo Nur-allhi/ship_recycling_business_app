@@ -20,6 +20,7 @@ interface AppState {
   cashBalance: number;
   cashTransactions: CashTransaction[];
   bankBalance: number;
+
   bankTransactions: BankTransaction[];
   stockItems: StockItem[];
   stockTransactions: StockTransaction[];
@@ -99,37 +100,22 @@ const initialAppState: AppState = {
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AppState>(initialAppState);
-  const [isInitialized, setIsInitialized] = useState(false);
   const { toast } = useToast();
   const router = useRouter();
   const pathname = usePathname();
 
   useEffect(() => {
-    const loadUserAndSettings = async () => {
+    const checkSession = async () => {
       try {
-        const storedSettings = localStorage.getItem('ha-mim-iron-mart-settings');
-        if (storedSettings) {
-          const settings = JSON.parse(storedSettings);
-          setState(prev => ({ ...prev, ...settings }));
-        }
-      } catch (e) {
-        console.error("Could not parse settings from local storage", e);
+        const session = await getSession();
+        setState(prev => ({ ...prev, user: session, initialBalanceSet: true }));
+      } catch (error) {
+        console.error("Failed to get session", error);
+        setState(prev => ({ ...prev, initialBalanceSet: true })); // Still allow app to render
       }
-
-      const session = await getSession();
-      
-      setState(prev => ({ ...prev, user: session, initialBalanceSet: true }));
-      setIsInitialized(true);
     };
-
-    loadUserAndSettings();
-  }, [pathname]);
-
-  useEffect(() => {
-    if (isInitialized && !state.user && pathname !== '/login') {
-      router.push('/login');
-    }
-  }, [isInitialized, state.user, pathname, router]);
+    checkSession();
+  }, [pathname, router]);
 
   const reloadData = useCallback(async () => {
     if (!state.user) return;
@@ -236,10 +222,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [toast, state.user]);
   
   useEffect(() => {
-    if (state.user && isInitialized) {
+    if (state.user) {
         reloadData();
     }
-  }, [state.user, isInitialized, reloadData]);
+  }, [state.user, reloadData]);
   
   const loadRecycleBinData = useCallback(async () => {
     try {
@@ -267,7 +253,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [toast]);
 
   useEffect(() => {
-    if (isInitialized) {
+      try {
+        const storedSettings = localStorage.getItem('ha-mim-iron-mart-settings');
+        if (storedSettings) {
+          const settings = JSON.parse(storedSettings);
+          setState(prev => ({ ...prev, ...settings }));
+        }
+      } catch (e) {
+        console.error("Could not parse settings from local storage", e);
+      }
+  }, []);
+  
+  useEffect(() => {
       try {
         const settingsToStore = {
             fontSize: state.fontSize,
@@ -281,8 +278,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       } catch (error) {
         console.error("Failed to save settings to localStorage", error);
       }
-    }
-  }, [state.fontSize, state.bodyFont, state.numberFont, state.wastagePercentage, state.currency, state.showStockValue, isInitialized]);
+  }, [state.fontSize, state.bodyFont, state.numberFont, state.wastagePercentage, state.currency, state.showStockValue]);
   
   const addCashTransaction = async (tx: Omit<CashTransaction, 'id' | 'createdAt' | 'deletedAt'>) => {
     try {
@@ -661,12 +657,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     handleExport,
     handleImport,
     handleDeleteAllData,
-    logout,
+logout,
   };
-
-  if (!isInitialized) {
-    return <div className="flex items-center justify-center min-h-screen"><Logo className="h-16 w-16 text-primary animate-pulse" /></div>;
-  }
   
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 }
@@ -678,5 +670,3 @@ export function useAppContext() {
   }
   return context;
 }
-
-    

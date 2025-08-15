@@ -7,14 +7,14 @@ export async function middleware(request: NextRequest) {
 
   const isPublicPath = pathname === '/login';
 
-  // If the user is trying to access a protected route without a session cookie, redirect to login
-  if (!isPublicPath && !sessionCookie) {
-    return NextResponse.redirect(new URL('/login', request.url));
+  // If there's a session cookie and the user is on the login page, redirect to home
+  if (sessionCookie && isPublicPath) {
+    return NextResponse.redirect(new URL('/', request.url));
   }
 
-  // If the user is logged in and tries to access the login page, redirect to the home page
-  if (isPublicPath && sessionCookie) {
-    return NextResponse.redirect(new URL('/', request.url));
+  // If there's no session cookie and the user is not on the login page, redirect to login
+  if (!sessionCookie && !isPublicPath) {
+    return NextResponse.redirect(new URL('/login', request.url));
   }
 
   return NextResponse.next();
