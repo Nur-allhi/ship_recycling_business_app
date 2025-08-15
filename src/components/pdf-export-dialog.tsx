@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState } from 'react';
@@ -77,7 +76,7 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
 
     try {
       const logoBase64 = `data:image/png;base64,${logoPngData}`;
-      doc.addImage(logoBase64, 'PNG', pageMargins.left, 15, 30, 20);
+      doc.addImage(logoBase64, 'PNG', pageMargins.left, 15, 20, 20);
     } catch (e) {
       console.error("Failed to add logo to PDF:", e);
       toast({
@@ -104,7 +103,7 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
     
     if (organizationName) {
       doc.setFont('helvetica', 'bold');
-      doc.text(organizationName, pageMargins.left + 35, headerYPos);
+      doc.text(organizationName, pageMargins.left + 25, headerYPos);
     }
     
     doc.setFont('helvetica', 'normal');
