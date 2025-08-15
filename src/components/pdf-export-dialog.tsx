@@ -77,8 +77,17 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
     }
 
     // Header
-    const logoBase64 = `data:image/png;base64,${logoPngData}`;
-    doc.addImage(logoBase64, 'PNG', pageMargins.left, 15, 30, 20);
+    try {
+      const logoBase64 = `data:image/png;base64,${logoPngData}`;
+      doc.addImage(logoBase64, 'PNG', pageMargins.left, 15, 30, 20);
+    } catch (e) {
+      console.error("Failed to add logo to PDF:", e);
+      toast({
+        variant: 'destructive',
+        title: 'Logo Error',
+        description: 'Could not add the logo to the PDF. It may be corrupt.'
+      })
+    }
     
     if (dataSource === 'cash') title = 'Cash Ledger';
     if (dataSource === 'bank') title = 'Bank Ledger';
