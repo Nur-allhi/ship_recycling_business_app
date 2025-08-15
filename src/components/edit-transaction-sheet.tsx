@@ -122,6 +122,7 @@ export function EditTransactionSheet({ isOpen, setIsOpen, transaction, transacti
         amount: data.amount!,
         description: data.description!,
         category: data.category!,
+        lastEdited: new Date().toISOString()
       });
     } else if (isBank && 'id' in transaction) {
       editBankTransaction(transaction as BankTransaction, {
@@ -129,6 +130,7 @@ export function EditTransactionSheet({ isOpen, setIsOpen, transaction, transacti
         amount: data.amount!,
         description: data.description!,
         category: data.category!,
+        lastEdited: new Date().toISOString()
       });
     } else if (isStock && 'id' in transaction) {
         editStockTransaction(transaction as StockTransaction, {
@@ -137,6 +139,7 @@ export function EditTransactionSheet({ isOpen, setIsOpen, transaction, transacti
             weight: data.weight!,
             pricePerKg: data.pricePerKg!,
             description: data.description,
+            lastEdited: new Date().toISOString()
         });
     }
 
@@ -145,7 +148,7 @@ export function EditTransactionSheet({ isOpen, setIsOpen, transaction, transacti
   };
   
   const currentCategories = isCash ? cashCategories : bankCategories;
-  const isStockDerivedTx = (isCash || isBank) && ['Stock Purchase', 'Stock Sale'].includes((transaction as any).category);
+  const isStockDerivedTx = (isCash || isBank) && !!(transaction as any).linkedStockTxId;
 
   return (
     <Sheet open={isOpen} onOpenChange={setIsOpen}>
@@ -280,3 +283,5 @@ export function EditTransactionSheet({ isOpen, setIsOpen, transaction, transacti
     </Sheet>
   );
 }
+
+    

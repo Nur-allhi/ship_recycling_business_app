@@ -27,8 +27,7 @@ export function DeleteConfirmationDialog({ isOpen, setIsOpen, onConfirm, itemCou
         <AlertDialogHeader>
           <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
           <AlertDialogDescription>
-            This action cannot be undone. This will permanently delete {itemCount > 1 ? `${itemCount} transactions` : 'this transaction'}
-            from your Google Sheet.
+            This action will move {itemCount > 1 ? `${itemCount} items` : 'this item'} to the recycle bin. You can restore it later.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
@@ -41,3 +40,5 @@ export function DeleteConfirmationDialog({ isOpen, setIsOpen, onConfirm, itemCou
     </AlertDialog>
   );
 }
+
+    

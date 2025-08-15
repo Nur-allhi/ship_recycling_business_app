@@ -7,6 +7,8 @@ export interface Transaction {
   category: string;
   lastEdited?: string;
   deletedAt?: string;
+  linkedStockTxId?: string;
+  createdAt: string;
 }
 
 export interface CashTransaction extends Transaction {
@@ -35,4 +37,7 @@ export interface StockTransaction {
   description?: string;
   lastEdited?: string;
   deletedAt?: string;
+  createdAt: string;
 }
+
+    

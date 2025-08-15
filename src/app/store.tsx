@@ -35,9 +35,9 @@ interface AppState {
 interface AppContextType extends AppState {
   reloadData: () => Promise<void>;
   loadRecycleBinData: () => Promise<void>;
-  addCashTransaction: (tx: Omit<CashTransaction, 'id'>) => void;
-  addBankTransaction: (tx: Omit<BankTransaction, 'id'>) => void;
-  addStockTransaction: (tx: Omit<StockTransaction, 'id'>) => void;
+  addCashTransaction: (tx: Omit<CashTransaction, 'id' | 'createdAt' | 'deletedAt'>) => void;
+  addBankTransaction: (tx: Omit<BankTransaction, 'id' | 'createdAt' | 'deletedAt'>) => void;
+  addStockTransaction: (tx: Omit<StockTransaction, 'id' | 'createdAt' | 'deletedAt'>) => void;
   editCashTransaction: (originalTx: CashTransaction, updatedTxData: Partial<Omit<CashTransaction, 'id' | 'date'>>) => void;
   editBankTransaction: (originalTx: BankTransaction, updatedTxData: Partial<Omit<BankTransaction, 'id' | 'date'>>) => void;
   editStockTransaction: (originalTx: StockTransaction, updatedTxData: Partial<Omit<StockTransaction, 'id' | 'date'>>) => void;
@@ -258,7 +258,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [state.fontSize, state.bodyFont, state.numberFont, state.wastagePercentage, state.currency, state.showStockValue, state.organizationName, isInitialized]);
   
-  const addCashTransaction = async (tx: Omit<CashTransaction, 'id'>) => {
+  const addCashTransaction = async (tx: Omit<CashTransaction, 'id' | 'createdAt' | 'deletedAt'>) => {
     try {
       await appendData({ tableName: 'cash_transactions', data: tx });
       toast({ title: "Success", description: "Cash transaction added."});
@@ -269,7 +269,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const addBankTransaction = async (tx: Omit<BankTransaction, 'id'>) => {
+  const addBankTransaction = async (tx: Omit<BankTransaction, 'id' | 'createdAt' | 'deletedAt'>) => {
      try {
       await appendData({ tableName: 'bank_transactions', data: tx });
       toast({ title: "Success", description: "Bank transaction added."});
@@ -280,29 +280,31 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
   
-  const addStockTransaction = async (tx: Omit<StockTransaction, 'id'>) => {
-     try {
-      await appendData({ tableName: 'stock_transactions', data: tx });
+  const addStockTransaction = async (tx: Omit<StockTransaction, 'id' | 'createdAt' | 'deletedAt'>) => {
+    try {
+      const [newStockTx] = await appendData({ tableName: 'stock_transactions', data: tx });
+      if (!newStockTx) throw new Error("Stock transaction creation failed.");
 
       const totalValue = tx.weight * tx.pricePerKg;
       const description = `${tx.type === 'purchase' ? 'Purchase' : 'Sale'} of ${tx.stockItemName}`;
       const category = tx.type === 'purchase' ? 'Stock Purchase' : 'Stock Sale';
+      const financialTxData = {
+          date: tx.date,
+          amount: totalValue,
+          description,
+          category,
+          linkedStockTxId: newStockTx.id // Link financial tx to stock tx
+      };
 
       if (tx.paymentMethod === 'cash') {
           await addCashTransaction({
-              date: tx.date,
+              ...financialTxData,
               type: tx.type === 'purchase' ? 'expense' : 'income',
-              amount: totalValue,
-              description,
-              category
           });
       } else { // bank
           await addBankTransaction({
-              date: tx.date,
+              ...financialTxData,
               type: tx.type === 'purchase' ? 'withdrawal' : 'deposit',
-              amount: totalValue,
-              description,
-              category
           });
       }
 
@@ -349,9 +351,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const deleteCashTransaction = async (tx: CashTransaction) => {
     try {
-        if(['Stock Purchase', 'Stock Sale'].includes(tx.category)) {
-             toast({ variant: 'destructive', title: "Deletion Prohibited", description: "This transaction came from a stock movement. Please delete the original stock transaction instead."});
-             return;
+        if(tx.linkedStockTxId) {
+             await deleteData({ tableName: "stock_transactions", id: tx.linkedStockTxId });
         }
         await deleteData({ tableName: "cash_transactions", id: tx.id });
         toast({ title: "Success", description: "Cash transaction deleted."});
@@ -364,9 +365,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const deleteBankTransaction = async (tx: BankTransaction) => {
     try {
-         if(['Stock Purchase', 'Stock Sale'].includes(tx.category)) {
-             toast({ variant: 'destructive', title: "Deletion Prohibited", description: "This transaction came from a stock movement. Please delete the original stock transaction instead."});
-             return;
+        if(tx.linkedStockTxId) {
+             await deleteData({ tableName: "stock_transactions", id: tx.linkedStockTxId });
         }
         await deleteData({ tableName: "bank_transactions", id: tx.id });
         toast({ title: "Success", description: "Bank transaction deleted."});
@@ -379,20 +379,45 @@ export function AppProvider({ children }: { children: ReactNode }) {
   
   const deleteStockTransaction = async (tx: StockTransaction) => {
     try {
+        // Find and delete the linked financial transaction first
+        const { data: cashTx } = await supabase.from('cash_transactions').select('id').eq('linkedStockTxId', tx.id).single();
+        if (cashTx) {
+            await deleteData({ tableName: "cash_transactions", id: cashTx.id });
+        }
+
+        const { data: bankTx } = await supabase.from('bank_transactions').select('id').eq('linkedStockTxId', tx.id).single();
+        if (bankTx) {
+            await deleteData({ tableName: "bank_transactions", id: bankTx.id });
+        }
+
         await deleteData({ tableName: "stock_transactions", id: tx.id });
-        toast({ title: "Stock Transaction Deleted", description: "Please manually delete the corresponding entry from your Cash or Bank ledger."});
+        toast({ title: "Stock Transaction Deleted", description: "The corresponding financial entry was also deleted."});
         await reloadData();
     } catch(error) {
         console.error(error);
-        toast({ variant: 'destructive', title: "Error", description: "Failed to delete stock transaction."});
+        toast({ variant: 'destructive', title: "Error", description: "Failed to delete stock transaction and its linked financial entry."});
     }
   };
   
   const restoreTransaction = async (txType: 'cash' | 'bank' | 'stock', id: string) => {
     const tableName = `${txType}_transactions`;
     try {
+        if (txType === 'cash' || txType === 'bank') {
+            const {data: finTx} = await supabase.from(tableName).select('linkedStockTxId').eq('id', id).single();
+            if (finTx?.linkedStockTxId) {
+                 await restoreData({ tableName: 'stock_transactions', id: finTx.linkedStockTxId });
+            }
+        }
+         if (txType === 'stock') {
+            const { data: cashTx } = await supabase.from('cash_transactions').select('id').eq('linkedStockTxId', id).single();
+            if (cashTx) await restoreData({ tableName: 'cash_transactions', id: cashTx.id });
+
+            const { data: bankTx } = await supabase.from('bank_transactions').select('id').eq('linkedStockTxId', id).single();
+            if (bankTx) await restoreData({ tableName: 'bank_transactions', id: bankTx.id });
+        }
+        
         await restoreData({ tableName, id });
-        toast({ title: "Transaction Restored", description: "The item has been restored to its original ledger." });
+        toast({ title: "Transaction Restored", description: "The item and any linked transactions have been restored." });
         await Promise.all([reloadData(), loadRecycleBinData()]);
     } catch (error) {
         console.error("Failed to restore transaction", error);
@@ -402,12 +427,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const deleteMultipleCashTransactions = async (txs: CashTransaction[]) => {
      try {
-        if(txs.some(tx => ['Stock Purchase', 'Stock Sale'].includes(tx.category))) {
-            toast({ variant: 'destructive', title: "Error", description: "Cannot delete transactions generated from stock movements in bulk."});
-            return;
-        }
         for(const tx of txs) {
-            await deleteData({ tableName: "cash_transactions", id: tx.id });
+            await deleteCashTransaction(tx);
         }
         toast({ title: "Success", description: `${txs.length} cash transactions deleted.`});
         await reloadData();
@@ -419,12 +440,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const deleteMultipleBankTransactions = async (txs: BankTransaction[]) => {
     try {
-        if(txs.some(tx => ['Stock Purchase', 'Stock Sale'].includes(tx.category))) {
-            toast({ variant: 'destructive', title: "Error", description: "Cannot delete transactions generated from stock movements in bulk."});
-            return;
-        }
         for(const tx of txs) {
-            await deleteData({ tableName: "bank_transactions", id: tx.id });
+            await deleteBankTransaction(tx);
         }
         toast({ title: "Success", description: `${txs.length} bank transactions deleted.`});
         await reloadData();
@@ -437,9 +454,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const deleteMultipleStockTransactions = async (txs: StockTransaction[]) => {
     try {
         for(const tx of txs) {
-            await deleteData({ tableName: "stock_transactions", id: tx.id });
+            await deleteStockTransaction(tx);
         }
-        toast({ title: "Success", description: `${txs.length} stock transactions deleted. Please manually delete corresponding financial entries.`});
+        toast({ title: "Success", description: `${txs.length} stock transactions deleted.`});
         await reloadData();
     } catch(error) {
         console.error(error);
@@ -570,3 +587,5 @@ export function useAppContext() {
   }
   return context;
 }
+
+    
