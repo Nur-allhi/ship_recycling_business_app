@@ -12,7 +12,8 @@ const ReadDataInputSchema = z.object({
 export async function readData(input: z.infer<typeof ReadDataInputSchema>) {
   const { data, error } = await supabase
     .from(input.tableName)
-    .select(input.select);
+    .select(input.select)
+    .is('deletedAt', null); // Only fetch non-deleted items
 
   if (error) throw new Error(error.message);
   return data;
@@ -55,10 +56,11 @@ const DeleteDataInputSchema = z.object({
   id: z.string(),
 });
 
+// This now performs a soft delete
 export async function deleteData(input: z.infer<typeof DeleteDataInputSchema>) {
   const { error } = await supabase
     .from(input.tableName)
-    .delete()
+    .update({ deletedAt: new Date().toISOString() })
     .eq('id', input.id);
     
   if (error) throw new Error(error.message);
