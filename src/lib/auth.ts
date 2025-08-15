@@ -17,7 +17,7 @@ export async function createSession(payload: SessionPayload) {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     maxAge: 60 * 60 * 24, // 1 day
-    path: '/',
+    path: '/', // Ensure cookie is valid for all paths
     sameSite: 'lax',
   });
 }
