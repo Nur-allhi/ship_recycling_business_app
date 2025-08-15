@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { Upload, Download, AlertTriangle } from "lucide-react";
+import { Upload, Download, AlertTriangle, FileText } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -21,12 +21,14 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Alert, AlertTitle, AlertDescription } from "./ui/alert";
+import { PdfExportDialog } from "./pdf-export-dialog";
 
 
 export function ExportImportTab() {
   const { handleExport, handleImport } = useAppContext();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [isPdfDialogOpen, setIsPdfDialogOpen] = useState(false);
 
   const onFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files && event.target.files.length > 0) {
@@ -41,63 +43,71 @@ export function ExportImportTab() {
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Export / Import Data</CardTitle>
-        <CardDescription>
-          Backup your entire ledger data to a file, or restore it from a backup.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-8">
-        {/* Export Section */}
-        <div className="space-y-4">
-          <h3 className="font-semibold text-lg flex items-center"><Download className="mr-2 h-5 w-5" /> Export All Data</h3>
-          <p className="text-sm text-muted-foreground">
-            Click the button below to download a single backup file containing all your cash, bank, and stock data. Keep this file in a safe place.
-          </p>
-          <Button onClick={handleExport}>
-            Export Data
-          </Button>
-        </div>
-
-        <Separator />
-
-        {/* Import Section */}
-        <div className="space-y-4">
-           <h3 className="font-semibold text-lg flex items-center"><Upload className="mr-2 h-5 w-5" /> Import Data from Backup</h3>
-           <Alert variant="destructive">
-             <AlertTriangle className="h-4 w-4" />
-             <AlertTitle>Warning: This is a destructive action.</AlertTitle>
-             <AlertDescription>
-                Importing a backup file will <span className="font-bold">erase all current data</span> in your ledger and replace it with the contents of the backup. This action cannot be undone.
-             </AlertDescription>
-           </Alert>
-          <div className="space-y-2">
-            <Label htmlFor="import-file">Backup File (.json or .zip)</Label>
-            <Input id="import-file" type="file" ref={fileInputRef} onChange={onFileChange} accept=".json,.zip" />
+    <>
+      <Card>
+        <CardHeader>
+          <CardTitle>Export / Import Data</CardTitle>
+          <CardDescription>
+            Export ledger data to PDF, or backup/restore your entire ledger.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-8">
+          {/* Export Section */}
+          <div className="space-y-4">
+            <h3 className="font-semibold text-lg flex items-center"><Download className="mr-2 h-5 w-5" /> Export Data</h3>
+            <div className="flex flex-col sm:flex-row gap-4">
+               <Button onClick={() => setIsPdfDialogOpen(true)}>
+                  <FileText className="mr-2 h-4 w-4" /> Export to PDF
+               </Button>
+                <Button onClick={handleExport} variant="outline">
+                  Create Full Backup (.zip)
+                </Button>
+            </div>
+            <p className="text-sm text-muted-foreground">
+                Export a PDF for specific ledgers and date ranges, or create a full backup of all data for restoration purposes.
+            </p>
           </div>
 
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button variant="destructive" disabled={!selectedFile}>
-                Import Data and Overwrite Everything
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  This will permanently delete all your current ledger data and replace it with the data from the selected backup file. This action cannot be undone.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={triggerImport}>Yes, I understand. Overwrite my data.</AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-        </div>
-      </CardContent>
-    </Card>
+          <Separator />
+
+          {/* Import Section */}
+          <div className="space-y-4">
+            <h3 className="font-semibold text-lg flex items-center"><Upload className="mr-2 h-5 w-5" /> Restore from Backup</h3>
+            <Alert variant="destructive">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertTitle>Warning: This is a destructive action.</AlertTitle>
+              <AlertDescription>
+                  Restoring from a backup file will <span className="font-bold">erase all current data</span> in your ledger and replace it with the contents of the backup. This action cannot be undone. Only use files that were generated by the "Create Full Backup" feature.
+              </AlertDescription>
+            </Alert>
+            <div className="space-y-2">
+              <Label htmlFor="import-file">Backup File (.zip)</Label>
+              <Input id="import-file" type="file" ref={fileInputRef} onChange={onFileChange} accept=".zip" />
+            </div>
+
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="destructive" disabled={!selectedFile}>
+                  Restore from Backup and Overwrite
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will permanently delete all your current ledger data and replace it with the data from the selected backup file. This action cannot be undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={triggerImport}>Yes, I understand. Overwrite my data.</AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
+        </CardContent>
+      </Card>
+      <PdfExportDialog isOpen={isPdfDialogOpen} setIsOpen={setIsPdfDialogOpen} />
+    </>
   );
 }
