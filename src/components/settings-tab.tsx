@@ -335,7 +335,7 @@ export function SettingsTab() {
                        <Select value={numberFont} onValueChange={handleNumberFontChange}>
                           <SelectTrigger>
                               <SelectValue placeholder="Select font" />
-                          </Trigger>
+                          </SelectTrigger>
                           <SelectContent>
                               {numberFontOptions.map(font => (
                                   <SelectItem key={font.name} value={font.value} style={{fontFamily: font.value}}>
@@ -365,3 +365,4 @@ export function SettingsTab() {
     </div>
   )
 }
+
