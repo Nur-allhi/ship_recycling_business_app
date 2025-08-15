@@ -111,6 +111,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const initialStockItems: StockItem[] = initialStockData.map((item: any) => ({
             ...item,
             id: item.id.toString(),
+            purchasePricePerKg: item.purchasePricePerKg,
         }));
         
         const finalCashBalance = cashTransactions.reduce((acc, tx) => acc + (tx.type === 'income' ? tx.amount : -tx.amount), 0);
@@ -463,7 +464,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const addInitialStockItem = async (item: { name: string; weight: number; pricePerKg: number }) => {
       try {
-        await appendData({ tableName: 'initial_stock', data: item });
+        const { name, weight, pricePerKg } = item;
+        await appendData({ tableName: 'initial_stock', data: { name, weight, purchasePricePerKg: pricePerKg } });
         toast({ title: "Initial stock item added." });
         await reloadData();
       } catch (e) {
