@@ -18,17 +18,33 @@ export function RecycleBinTab() {
         deletedStockTransactions,
         restoreTransaction,
         currency,
+        user
     } = useAppContext();
 
     useEffect(() => {
-        loadRecycleBinData();
-    }, [loadRecycleBinData]);
+        if(user?.role === 'admin') {
+            loadRecycleBinData();
+        }
+    }, [loadRecycleBinData, user]);
 
     const formatCurrency = (amount: number) => {
         if (currency === 'BDT') {
           return `৳${new Intl.NumberFormat('en-US').format(amount)}`;
         }
         return new Intl.NumberFormat('en-US', { style: 'currency', currency: currency, currencyDisplay: 'symbol' }).format(amount)
+    }
+
+    if(user?.role !== 'admin') {
+        return (
+            <Card>
+                <CardHeader>
+                    <CardTitle>Access Denied</CardTitle>
+                    <CardDescription>
+                        You do not have permission to view the recycle bin.
+                    </CardDescription>
+                </CardHeader>
+            </Card>
+        )
     }
 
     return (

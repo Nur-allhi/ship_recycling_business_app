@@ -31,7 +31,7 @@ type SortKey = keyof CashTransaction | null;
 type SortDirection = 'asc' | 'desc';
 
 export function CashTab() {
-  const { cashBalance, cashTransactions, transferFunds, deleteCashTransaction, deleteMultipleCashTransactions, currency } = useAppContext()
+  const { cashBalance, cashTransactions, transferFunds, deleteCashTransaction, deleteMultipleCashTransactions, currency, user } = useAppContext()
   const [isTransferSheetOpen, setIsTransferSheetOpen] = useState(false)
   const [editSheetState, setEditSheetState] = useState<{isOpen: boolean, transaction: CashTransaction | null}>({ isOpen: false, transaction: null});
   const [deleteDialogState, setDeleteDialogState] = useState<{isOpen: boolean, txToDelete: CashTransaction | null, txsToDelete: CashTransaction[] | null}>({ isOpen: false, txToDelete: null, txsToDelete: null });
@@ -44,6 +44,7 @@ export function CashTab() {
   const [sortKey, setSortKey] = useState<SortKey>('date');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const isMobile = useIsMobile();
+  const isAdmin = user?.role === 'admin';
 
   const handleSort = (key: SortKey) => {
     if (sortKey === key) {
@@ -343,7 +344,7 @@ export function CashTab() {
               </Button>
             </div>
           </div>
-          <div className="flex flex-col items-center justify-center gap-2 pt-4">
+          {isAdmin && <div className="flex flex-col items-center justify-center gap-2 pt-4">
               <div className="flex flex-wrap items-center justify-center gap-2">
                   <Button size="sm" variant={isSelectionMode ? "secondary" : "outline"} onClick={toggleSelectionMode}>
                       <CheckSquare className="mr-2 h-4 w-4" />
@@ -385,7 +386,7 @@ export function CashTab() {
                       </Button>
                   )}
               </div>
-          </div>
+          </div>}
         </CardHeader>
         <CardContent>
            {isMobile ? renderMobileView() : renderDesktopView()}
@@ -416,7 +417,7 @@ export function CashTab() {
           </CardFooter>
         )}
       </Card>
-      {editSheetState.transaction && (
+      {isAdmin && editSheetState.transaction && (
         <EditTransactionSheet 
           isOpen={editSheetState.isOpen}
           setIsOpen={(isOpen) => setEditSheetState({ isOpen, transaction: isOpen ? editSheetState.transaction : null })}
@@ -433,5 +434,3 @@ export function CashTab() {
     </>
   )
 }
-
-    

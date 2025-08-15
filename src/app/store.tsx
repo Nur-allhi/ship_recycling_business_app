@@ -2,13 +2,15 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
-import type { CashTransaction, BankTransaction, StockItem, StockTransaction } from '@/lib/types';
+import type { CashTransaction, BankTransaction, StockItem, StockTransaction, User } from '@/lib/types';
 import { useToast } from "@/hooks/use-toast"
 import { readData, appendData, updateData, deleteData, readDeletedData, restoreData, exportAllData, batchImportData, deleteAllData } from '@/app/actions';
 import { format } from 'date-fns';
 import { supabase } from '@/lib/supabase';
 import { saveAs } from 'file-saver';
 import JSZip from 'jszip';
+import { getSession, removeSession } from '@/lib/auth';
+import { useRouter } from 'next/navigation';
 
 
 type FontSize = 'sm' | 'base' | 'lg';
@@ -33,6 +35,7 @@ interface AppState {
   wastagePercentage: number;
   currency: string;
   showStockValue: boolean;
+  user: User | null;
 }
 
 interface AppContextType extends AppState {
@@ -65,6 +68,7 @@ interface AppContextType extends AppState {
   handleExport: () => void;
   handleImport: (file: File) => void;
   handleDeleteAllData: () => void;
+  logout: () => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -89,12 +93,14 @@ const initialAppState: AppState = {
   wastagePercentage: 0,
   currency: 'BDT',
   showStockValue: false,
+  user: null,
 };
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AppState>(initialAppState);
   const [isInitialized, setIsInitialized] = useState(false);
   const { toast } = useToast();
+  const router = useRouter();
 
   const reloadData = useCallback(async () => {
     try {
@@ -239,9 +245,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
         console.error("Could not parse settings from local storage", e)
     }
 
-    reloadData();
-    setIsInitialized(true);
-  }, [reloadData]);
+    const loadUser = async () => {
+        const session = await getSession();
+        if (session) {
+            setState(prev => ({...prev, user: session}));
+            reloadData();
+        } else {
+            router.push('/login');
+        }
+        setIsInitialized(true);
+    }
+
+    loadUser();
+
+  }, [reloadData, router]);
 
   useEffect(() => {
     if (isInitialized) {
@@ -607,6 +624,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const logout = async () => {
+    await removeSession();
+    setState(prev => ({...prev, user: null}));
+    router.push('/login');
+  };
+
   const setFontSize = (size: FontSize) => setState(prev => ({ ...prev, fontSize: size }));
   const setBodyFont = (font: string) => setState(prev => ({ ...prev, bodyFont: font }));
   const setNumberFont = (font: string) => setState(prev => ({ ...prev, numberFont: font }));
@@ -645,9 +668,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     handleExport,
     handleImport,
     handleDeleteAllData,
+    logout,
   };
 
-  return <AppContext.Provider value={value}>{isInitialized ? children : <div className="flex items-center justify-center min-h-screen">Loading...</div>}</AppContext.Provider>;
+  return <AppContext.Provider value={value}>{isInitialized ? children : <div className="flex items-center justify-center min-h-screen"><Logo className="h-16 w-16 text-primary animate-pulse" /></div>}</AppContext.Provider>;
 }
 
 export function useAppContext() {

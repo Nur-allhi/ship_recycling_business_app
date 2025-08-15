@@ -31,7 +31,7 @@ type SortDirection = 'asc' | 'desc';
 
 
 export function StockTab() {
-  const { stockItems, stockTransactions, deleteStockTransaction, deleteMultipleStockTransactions, currency, showStockValue } = useAppContext()
+  const { stockItems, stockTransactions, deleteStockTransaction, deleteMultipleStockTransactions, currency, showStockValue, user } = useAppContext()
   const [editSheetState, setEditSheetState] = useState<{isOpen: boolean, transaction: StockTransaction | null}>({ isOpen: false, transaction: null});
   const [deleteDialogState, setDeleteDialogState] = useState<{isOpen: boolean, txToDelete: StockTransaction | null, txsToDelete: StockTransaction[] | null}>({ isOpen: false, txToDelete: null, txsToDelete: null });
   const [selectedTxs, setSelectedTxs] = useState<StockTransaction[]>([]);
@@ -43,6 +43,7 @@ export function StockTab() {
   const [sortKey, setSortKey] = useState<SortKey>('date');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const isMobile = useIsMobile();
+  const isAdmin = user?.role === 'admin';
   
   const handleSort = (key: SortKey) => {
     if (sortKey === key) {
@@ -355,7 +356,7 @@ export function StockTab() {
                                 </Button>
                             </div>
                         </div>
-                        <div className="flex flex-col items-center justify-center gap-2 pt-4">
+                        {isAdmin && <div className="flex flex-col items-center justify-center gap-2 pt-4">
                             <div className="flex flex-wrap items-center justify-center gap-2">
                                 <Button size="sm" variant={isSelectionMode ? "secondary" : "outline"} onClick={toggleSelectionMode}>
                                     <CheckSquare className="mr-2 h-4 w-4" />
@@ -379,7 +380,7 @@ export function StockTab() {
                                     </Button>
                                 )}
                             </div>
-                        </div>
+                        </div>}
                     </CardHeader>
                     <CardContent>
                     {filteredByMonth.length > 0 && (
@@ -475,7 +476,7 @@ export function StockTab() {
             </TabsContent>
         </Tabs>
       </div>
-      {editSheetState.transaction && (
+      {isAdmin && editSheetState.transaction && (
         <EditTransactionSheet 
           isOpen={editSheetState.isOpen}
           setIsOpen={(isOpen) => setEditSheetState({ isOpen, transaction: isOpen ? editSheetState.transaction : null })}
@@ -492,5 +493,3 @@ export function StockTab() {
     </>
   )
 }
-
-    

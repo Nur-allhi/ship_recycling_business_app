@@ -16,6 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { RecycleBinTab } from "./recycle-bin-tab"
 import { ExportImportTab } from "./export-import-tab"
+import { UserManagementTab } from "./user-management-tab"
 
 const bodyFontOptions = [
     { name: "Inter", value: "Inter, sans-serif" },
@@ -37,6 +38,7 @@ const numberFontOptions = [
 
 export function SettingsTab() {
   const {
+    user,
     setInitialBalances,
     addInitialStockItem,
     fontSize,
@@ -67,6 +69,8 @@ export function SettingsTab() {
   const stockItemNameRef = useRef<HTMLInputElement>(null)
   const stockWeightRef = useRef<HTMLInputElement>(null)
   const stockPriceRef = useRef<HTMLInputElement>(null)
+
+  const isAdmin = user?.role === 'admin';
 
   const handleBalanceSave = () => {
     const cash = parseFloat(cashBalanceRef.current?.value || '')
@@ -145,14 +149,16 @@ export function SettingsTab() {
     <div className="max-w-2xl mx-auto">
       <Tabs defaultValue="appearance" className="w-full">
         <TabsList className="flex flex-wrap h-auto">
-          <TabsTrigger value="balances">Initial Balances</TabsTrigger>
-          <TabsTrigger value="wastage">Wastage</TabsTrigger>
-          <TabsTrigger value="categories">Categories</TabsTrigger>
+          {isAdmin && <TabsTrigger value="balances">Initial Balances</TabsTrigger>}
+          {isAdmin && <TabsTrigger value="wastage">Wastage</TabsTrigger>}
+          {isAdmin && <TabsTrigger value="categories">Categories</TabsTrigger>}
           <TabsTrigger value="appearance">Appearance</TabsTrigger>
-          <TabsTrigger value="recycle_bin">Recycle Bin</TabsTrigger>
+          {isAdmin && <TabsTrigger value="recycle_bin">Recycle Bin</TabsTrigger>}
           <TabsTrigger value="export_import">Export/Import</TabsTrigger>
+          {isAdmin && <TabsTrigger value="user_management">User Management</TabsTrigger>}
         </TabsList>
-        <TabsContent value="balances">
+        
+        {isAdmin && <TabsContent value="balances">
           <Card>
             <CardHeader>
               <CardTitle>Initial Balances</CardTitle>
@@ -196,8 +202,9 @@ export function SettingsTab() {
                 </div>
             </CardContent>
           </Card>
-        </TabsContent>
-        <TabsContent value="wastage">
+        </TabsContent>}
+
+        {isAdmin && <TabsContent value="wastage">
            <Card>
             <CardHeader>
               <CardTitle>Wastage Settings</CardTitle>
@@ -211,8 +218,9 @@ export function SettingsTab() {
               <Button onClick={handleWastageSave}>Save Wastage Setting</Button>
             </CardContent>
           </Card>
-        </TabsContent>
-        <TabsContent value="categories">
+        </TabsContent>}
+
+        {isAdmin && <TabsContent value="categories">
            <Card>
             <CardHeader>
               <CardTitle>Category Management</CardTitle>
@@ -256,7 +264,8 @@ export function SettingsTab() {
               </div>
             </CardContent>
           </Card>
-        </TabsContent>
+        </TabsContent>}
+
         <TabsContent value="appearance">
           <Card>
             <CardHeader>
@@ -333,12 +342,19 @@ export function SettingsTab() {
             </CardContent>
           </Card>
         </TabsContent>
-        <TabsContent value="recycle_bin">
+
+        {isAdmin && <TabsContent value="recycle_bin">
           <RecycleBinTab />
-        </TabsContent>
+        </TabsContent>}
+
         <TabsContent value="export_import">
             <ExportImportTab />
         </TabsContent>
+
+        {isAdmin && <TabsContent value="user_management">
+            <UserManagementTab />
+        </TabsContent>}
+
       </Tabs>
     </div>
   )

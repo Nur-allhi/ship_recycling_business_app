@@ -3,6 +3,7 @@
 
 import { supabase } from '@/lib/supabase';
 import { z } from 'zod';
+import { createSession } from '@/lib/auth';
 
 const ReadDataInputSchema = z.object({
   tableName: z.string(),
@@ -161,4 +162,62 @@ export async function deleteAllData() {
         console.error("Failed to delete all data:", error);
         throw error;
     }
+}
+
+// --- Auth Actions ---
+
+const LoginInputSchema = z.object({
+    username: z.string(),
+    password: z.string(),
+});
+
+export async function login(input: z.infer<typeof LoginInputSchema>) {
+    const { data: user, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('username', input.username)
+        .single();
+    
+    if (error || !user) {
+        throw new Error("Invalid username or password.");
+    }
+
+    // IMPORTANT: In a real app, you MUST hash passwords.
+    // This is a major security vulnerability.
+    if (user.password !== input.password) {
+        throw new Error("Invalid username or password.");
+    }
+    
+    const { password, ...sessionData } = user;
+    await createSession(sessionData);
+    return { success: true };
+}
+
+export async function getUsers() {
+    const { data, error } = await supabase.from('users').select('id, username, role');
+    if (error) throw new Error(error.message);
+    return data;
+}
+
+const AddUserInputSchema = z.object({
+    username: z.string().min(3),
+    password: z.string().min(6),
+    role: z.enum(['admin', 'user']),
+});
+
+export async function addUser(input: z.infer<typeof AddUserInputSchema>) {
+    const { error } = await supabase.from('users').insert([input]);
+    if (error) {
+        if (error.code === '23505') { // unique_violation
+            throw new Error('Username already exists.');
+        }
+        throw new Error(error.message);
+    }
+    return { success: true };
+}
+
+export async function deleteUser(id: string) {
+    const { error } = await supabase.from('users').delete().eq('id', id);
+    if (error) throw new Error(error.message);
+    return { success: true };
 }

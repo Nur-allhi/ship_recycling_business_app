@@ -25,10 +25,11 @@ import { PdfExportDialog } from "./pdf-export-dialog";
 
 
 export function ExportImportTab() {
-  const { handleExport, handleImport, handleDeleteAllData } = useAppContext();
+  const { handleExport, handleImport, handleDeleteAllData, user } = useAppContext();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isPdfDialogOpen, setIsPdfDialogOpen] = useState(false);
+  const isAdmin = user?.role === 'admin';
 
   const onFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files && event.target.files.length > 0) {
@@ -79,7 +80,7 @@ export function ExportImportTab() {
         <CardHeader>
           <CardTitle>Export / Import Data</CardTitle>
           <CardDescription>
-            Export, import, or reset your entire ledger.
+            Export your ledger data or restore from a backup.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-8">
@@ -90,85 +91,91 @@ export function ExportImportTab() {
                <Button onClick={() => setIsPdfDialogOpen(true)}>
                   <FileText className="mr-2 h-4 w-4" /> Export to PDF
                </Button>
+               {isAdmin && 
                 <Button onClick={handleExport} variant="outline">
                   Create Full Backup (.zip)
                 </Button>
+               }
             </div>
             <p className="text-sm text-muted-foreground">
-                Export a PDF for specific ledgers and date ranges, or create a full backup of all data for restoration purposes.
+                Export a PDF for specific ledgers and date ranges. Admins can create a full backup for restoration.
             </p>
           </div>
 
-          <Separator />
+          {isAdmin && (
+            <>
+              <Separator />
 
-          {/* Import Section */}
-          <div className="space-y-4">
-            <h3 className="font-semibold text-lg flex items-center"><Upload className="mr-2 h-5 w-5" /> Restore from Backup</h3>
-            <Alert variant="destructive">
-              <AlertTriangle className="h-4 w-4" />
-              <AlertTitle>Warning: This is a destructive action.</AlertTitle>
-              <AlertDescription>
-                  Restoring from a backup file will <span className="font-bold">erase all current data</span> in your ledger and replace it with the contents of the backup. This action cannot be undone.
-              </AlertDescription>
-            </Alert>
-            <div className="space-y-2">
-              <Label htmlFor="import-file">Backup File (.zip)</Label>
-              <Input id="import-file" type="file" ref={fileInputRef} onChange={onFileChange} accept=".zip" />
-            </div>
+              {/* Import Section */}
+              <div className="space-y-4">
+                <h3 className="font-semibold text-lg flex items-center"><Upload className="mr-2 h-5 w-5" /> Restore from Backup</h3>
+                <Alert variant="destructive">
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertTitle>Warning: This is a destructive action.</AlertTitle>
+                  <AlertDescription>
+                      Restoring from a backup file will <span className="font-bold">erase all current data</span> in your ledger and replace it with the contents of the backup. This action cannot be undone.
+                  </AlertDescription>
+                </Alert>
+                <div className="space-y-2">
+                  <Label htmlFor="import-file">Backup File (.zip)</Label>
+                  <Input id="import-file" type="file" ref={fileInputRef} onChange={onFileChange} accept=".zip" />
+                </div>
 
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button variant="destructive" disabled={!selectedFile}>
-                  Restore and Overwrite Data
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    This will permanently delete all your current ledger data and replace it with the data from the selected backup file. This action cannot be undone.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction onClick={triggerImport}>Yes, I understand. Overwrite my data.</AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-          </div>
-          
-          <Separator />
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="destructive" disabled={!selectedFile}>
+                      Restore and Overwrite Data
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        This will permanently delete all your current ledger data and replace it with the data from the selected backup file. This action cannot be undone.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction onClick={triggerImport}>Yes, I understand. Overwrite my data.</AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </div>
+              
+              <Separator />
 
-          {/* Reset Section */}
-          <div className="space-y-4">
-            <h3 className="font-semibold text-lg flex items-center"><Trash className="mr-2 h-5 w-5" /> Reset Ledger</h3>
-             <Alert variant="destructive">
-              <AlertTriangle className="h-4 w-4" />
-              <AlertTitle>Warning: This will delete everything.</AlertTitle>
-              <AlertDescription>
-                  This action will permanently <span className="font-bold">erase all of your ledger data</span>, including cash, bank, and stock transactions, categories, and initial balances. This action cannot be undone.
-              </AlertDescription>
-            </Alert>
-             <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button variant="destructive">
-                  Delete All Data and Reset Application
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    This is your final confirmation. Clicking "Yes" will permanently delete all data. This action cannot be undone.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction onClick={triggerDeleteAll}>Yes, delete all my data.</AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-          </div>
+              {/* Reset Section */}
+              <div className="space-y-4">
+                <h3 className="font-semibold text-lg flex items-center"><Trash className="mr-2 h-5 w-5" /> Reset Ledger</h3>
+                <Alert variant="destructive">
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertTitle>Warning: This will delete everything.</AlertTitle>
+                  <AlertDescription>
+                      This action will permanently <span className="font-bold">erase all of your ledger data</span>, including cash, bank, and stock transactions, categories, and initial balances. This action cannot be undone.
+                  </AlertDescription>
+                </Alert>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="destructive">
+                      Delete All Data and Reset Application
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        This is your final confirmation. Clicking "Yes" will permanently delete all data. This action cannot be undone.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction onClick={triggerDeleteAll}>Yes, delete all my data.</AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </div>
+            </>
+          )}
 
         </CardContent>
       </Card>

@@ -40,4 +40,9 @@ export interface StockTransaction {
   createdAt: string;
 }
 
-    
+export interface User {
+    id: string;
+    username: string;
+    role: 'admin' | 'user';
+    password?: string; // Only available on server
+}
