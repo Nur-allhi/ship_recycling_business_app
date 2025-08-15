@@ -23,6 +23,7 @@ import { cn } from '@/lib/utils';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import type { CashTransaction, BankTransaction } from '@/lib/types';
+import { logoPngData } from '@/lib/logo-data';
 
 
 interface PdfExportDialogProps {
@@ -76,6 +77,9 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
     }
 
     // Header
+    const logoBase64 = `data:image/png;base64,${logoPngData}`;
+    doc.addImage(logoBase64, 'PNG', pageMargins.left, 15, 30, 20);
+    
     if (dataSource === 'cash') title = 'Cash Ledger';
     if (dataSource === 'bank') title = 'Bank Ledger';
     if (dataSource === 'stock') title = 'Stock Transactions';
