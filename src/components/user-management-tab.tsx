@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -107,7 +107,7 @@ export function UserManagementTab() {
                     </div>
                      <div className="space-y-2">
                         <Label>Role</Label>
-                         <z.Controller
+                         <Controller
                             control={control}
                             name="role"
                             render={({ field }) => (

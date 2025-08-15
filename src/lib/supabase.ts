@@ -12,13 +12,10 @@ if (!supabaseAnonKey) {
   throw new Error("Missing env.NEXT_PUBLIC_SUPABASE_ANON_KEY");
 }
 
+// This client is safe to be used on the client-side
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-    db: {
-        schema: 'public',
-    },
     auth: {
-        persistSession: true
+        persistSession: false,
     }
 });
-
     

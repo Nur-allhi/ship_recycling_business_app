@@ -1,9 +1,29 @@
 
 'use server';
 
-import { supabase } from '@/lib/supabase';
+import { createClient } from '@supabase/supabase-js';
+import { cookies } from 'next/headers';
 import { z } from 'zod';
 import { createSession } from '@/lib/auth';
+
+// Helper function to create a Supabase client with the user's session
+const createSupabaseClient = () => {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+    if (!supabaseUrl || !supabaseAnonKey) {
+        throw new Error("Supabase URL or Anon Key is missing from environment variables.");
+    }
+    
+    return createClient(supabaseUrl, supabaseAnonKey, {
+        auth: { persistSession: false },
+        global: {
+            headers: {
+                Authorization: `Bearer ${cookies().get('session')?.value || ''}`
+            }
+        }
+    });
+}
 
 const ReadDataInputSchema = z.object({
   tableName: z.string(),
@@ -11,6 +31,7 @@ const ReadDataInputSchema = z.object({
 });
 
 export async function readData(input: z.infer<typeof ReadDataInputSchema>) {
+  const supabase = createSupabaseClient();
   let query = supabase
     .from(input.tableName)
     .select(input.select);
@@ -27,6 +48,7 @@ export async function readData(input: z.infer<typeof ReadDataInputSchema>) {
 }
 
 export async function readDeletedData(input: z.infer<typeof ReadDataInputSchema>) {
+    const supabase = createSupabaseClient();
     const { data, error } = await supabase
         .from(input.tableName)
         .select(input.select)
@@ -42,6 +64,7 @@ const AppendDataInputSchema = z.object({
 });
 
 export async function appendData(input: z.infer<typeof AppendDataInputSchema>) {
+  const supabase = createSupabaseClient();
   const { data, error } = await supabase
     .from(input.tableName)
     .insert([input.data])
@@ -58,6 +81,7 @@ const UpdateDataInputSchema = z.object({
 });
 
 export async function updateData(input: z.infer<typeof UpdateDataInputSchema>) {
+  const supabase = createSupabaseClient();
   const { data, error } = await supabase
     .from(input.tableName)
     .update(input.data)
@@ -75,6 +99,7 @@ const DeleteDataInputSchema = z.object({
 
 // This now performs a soft delete
 export async function deleteData(input: z.infer<typeof DeleteDataInputSchema>) {
+  const supabase = createSupabaseClient();
   const { error } = await supabase
     .from(input.tableName)
     .update({ deletedAt: new Date().toISOString() })
@@ -90,6 +115,7 @@ const RestoreDataInputSchema = z.object({
 });
 
 export async function restoreData(input: z.infer<typeof RestoreDataInputSchema>) {
+    const supabase = createSupabaseClient();
     const { error } = await supabase
         .from(input.tableName)
         .update({ deletedAt: null })
@@ -100,6 +126,7 @@ export async function restoreData(input: z.infer<typeof RestoreDataInputSchema>)
 }
 
 export async function exportAllData() {
+    const supabase = createSupabaseClient();
     const tables = ['cash_transactions', 'bank_transactions', 'stock_transactions', 'initial_stock', 'categories'];
     const exportedData: Record<string, any[]> = {};
 
@@ -116,6 +143,7 @@ export async function exportAllData() {
 const ImportDataSchema = z.record(z.array(z.record(z.any())));
 
 export async function batchImportData(dataToImport: z.infer<typeof ImportDataSchema>) {
+    const supabase = createSupabaseClient();
     const tables = ['cash_transactions', 'bank_transactions', 'stock_transactions', 'initial_stock', 'categories'];
     
     // Use a transaction to ensure all-or-nothing import
@@ -147,6 +175,7 @@ export async function batchImportData(dataToImport: z.infer<typeof ImportDataSch
 }
 
 export async function deleteAllData() {
+    const supabase = createSupabaseClient();
     const tables = ['cash_transactions', 'bank_transactions', 'stock_transactions', 'initial_stock', 'categories'];
     try {
         for (const tableName of tables) {
@@ -172,6 +201,7 @@ const LoginInputSchema = z.object({
 });
 
 export async function login(input: z.infer<typeof LoginInputSchema>) {
+    const supabase = createSupabaseClient();
     const { data: user, error } = await supabase
         .from('users')
         .select('*')
@@ -194,6 +224,7 @@ export async function login(input: z.infer<typeof LoginInputSchema>) {
 }
 
 export async function getUsers() {
+    const supabase = createSupabaseClient();
     const { data, error } = await supabase.from('users').select('id, username, role');
     if (error) throw new Error(error.message);
     return data;
@@ -206,6 +237,7 @@ const AddUserInputSchema = z.object({
 });
 
 export async function addUser(input: z.infer<typeof AddUserInputSchema>) {
+    const supabase = createSupabaseClient();
     const { error } = await supabase.from('users').insert([input]);
     if (error) {
         if (error.code === '23505') { // unique_violation
@@ -217,7 +249,23 @@ export async function addUser(input: z.infer<typeof AddUserInputSchema>) {
 }
 
 export async function deleteUser(id: string) {
+    const supabase = createSupabaseClient();
     const { error } = await supabase.from('users').delete().eq('id', id);
     if (error) throw new Error(error.message);
     return { success: true };
+}
+
+export async function getSupabaseForClient() {
+    const supabase = createSupabaseClient();
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session) {
+        return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
+            global: {
+                headers: {
+                    Authorization: `Bearer ${session.access_token}`,
+                },
+            },
+        });
+    }
+    return supabase;
 }

@@ -190,7 +190,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }));
 
       } catch (error: any) {
-        console.error("Failed to load data from Supabase", error);
+        console.error("Failed to load data", error);
         if (error.message.includes('relation') && error.message.includes('does not exist')) {
             toast({
                 variant: 'destructive',
@@ -682,5 +682,3 @@ export function useAppContext() {
   }
   return context;
 }
-
-    
