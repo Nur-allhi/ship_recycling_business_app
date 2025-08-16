@@ -115,33 +115,47 @@ const initialAppState: AppState = {
   totalReceivables: 0,
 };
 
-const getInitialState = (): AppState => {
+const getInitialState = (user: User | null): AppState => {
+    let state = { ...initialAppState };
     try {
         const storedSettings = localStorage.getItem('ha-mim-iron-mart-settings');
         if (storedSettings) {
             const settings = JSON.parse(storedSettings);
-            return { ...initialAppState, ...settings };
+            state = { ...state, ...settings };
+        }
+        
+        if (user?.id) {
+            const dashboardCache = localStorage.getItem(`ha-mim-iron-mart-dashboard-${user.id}`);
+            if (dashboardCache) {
+                const { cashBalance, bankBalance, stockItems } = JSON.parse(dashboardCache);
+                state.cashBalance = cashBalance ?? 0;
+                state.bankBalance = bankBalance ?? 0;
+                state.stockItems = stockItems ?? [];
+            }
         }
     } catch (e) {
         console.error("Could not parse settings from local storage", e);
     }
-    return initialAppState;
+    return state;
 }
 
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<AppState>(getInitialState());
+  const [state, setState] = useState<AppState>(initialAppState);
   const [sessionChecked, setSessionChecked] = useState(false);
   const { toast } = useToast();
   const router = useRouter();
   const pathname = usePathname();
 
   const logout = useCallback(async () => {
+    if(state.user) {
+        localStorage.removeItem(`ha-mim-iron-mart-dashboard-${state.user.id}`);
+    }
     await serverLogout();
     localStorage.removeItem('ha-mim-iron-mart-settings');
     setState({...initialAppState, user: null});
     window.location.href = '/login';
-  }, []);
+  }, [state.user]);
 
   const handleApiError = useCallback((error: any) => {
     const isAuthError = error.message.includes('JWT') || error.message.includes('Unauthorized') || error.message.includes("SESSION_EXPIRED");
@@ -166,7 +180,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const checkSessionAndLoadData = async () => {
       try {
         const session = await getSession();
-        setState(prev => ({ ...prev, user: session }));
+        setState(getInitialState(session));
       } catch (error) {
         console.error("Failed to get session", error);
       } finally {
@@ -326,6 +340,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
             totalPayables,
             totalReceivables,
         }));
+        
+        // Cache dashboard data after successful load
+        try {
+            const dashboardCache = {
+                cashBalance: finalCashBalance,
+                bankBalance: finalBankBalance,
+                stockItems: aggregatedStockItems,
+            };
+            localStorage.setItem(`ha-mim-iron-mart-dashboard-${state.user?.id}`, JSON.stringify(dashboardCache));
+        } catch (e) {
+            console.error("Could not write to dashboard cache", e);
+        }
 
       } catch (error: any) {
         console.error("Failed to load data during promise resolution:", error);
@@ -369,7 +395,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   
   const addCashTransaction = async (tx: Omit<CashTransaction, 'id' | 'createdAt' | 'deletedAt' | 'user_id'>) => {
     try {
-      const newTx = await appendData({ tableName: 'cash_transactions', data: { ...tx } });
+      const newTx = await appendData({ tableName: 'cash_transactions', data: { ...tx }, select: '*' });
       if (newTx) {
           setState(prev => {
               const newTxs = [newTx, ...prev.cashTransactions].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
@@ -389,7 +415,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const addBankTransaction = async (tx: Omit<BankTransaction, 'id' | 'createdAt' | 'deletedAt' | 'user_id'>) => {
     try {
-        const newTx = await appendData({ tableName: 'bank_transactions', data: { ...tx } });
+        const newTx = await appendData({ tableName: 'bank_transactions', data: { ...tx }, select: '*' });
         if (newTx) {
             setState(prev => {
                 const newTxs = [newTx, ...prev.bankTransactions].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
@@ -411,17 +437,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       const { contact_id, contact_name, ...stockTxData } = tx;
 
-      const newStockTx = await appendData({ tableName: 'stock_transactions', data: stockTxData });
+      const newStockTx = await appendData({ tableName: 'stock_transactions', data: stockTxData, select: '*' });
       if (!newStockTx) throw new Error("Stock transaction creation failed. The 'stock_transactions' table may not exist.");
       
       const totalValue = tx.weight * tx.pricePerKg;
 
-      if (tx.paymentMethod === 'credit' && contact_id) {
+      if (tx.paymentMethod === 'credit' && contact_id && contact_name) {
           const ledgerType = tx.type === 'purchase' ? 'payable' : 'receivable';
           const description = `${tx.type === 'purchase' ? 'Purchase' : 'Sale'} of ${tx.weight}kg of ${tx.stockItemName} on credit`;
           
-          if (!contact_name) throw new Error("Could not find contact name for credit transaction.");
-
           await addLedgerTransaction({
               type: ledgerType,
               description,
@@ -745,7 +769,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return null;
     }
     try {
-      const newVendor = await appendData({ tableName: 'vendors', data: { name } });
+      const newVendor = await appendData({ tableName: 'vendors', data: { name }, select: '*' });
       if (!newVendor) {
         toast({ variant: 'destructive', title: 'Setup Incomplete', description: "Could not save to the 'vendors' table. Please ensure it exists in your database and RLS is configured." });
         return null;
@@ -772,6 +796,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const newClient = await appendData({
         tableName: 'clients',
         data: { name },
+        select: '*'
       });
       if (!newClient) {
         toast({
@@ -800,18 +825,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const newTx = await appendData({ tableName: 'ap_ar_transactions', data: { ...tx, status: 'unpaid', paid_amount: 0 }, select: '*, installments:payment_installments(*)' });
         if(!newTx) throw new Error("Could not create ledger transaction.");
         
-        setState(prev => {
-            const newLedgerTxs = [newTx, ...prev.ledgerTransactions].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-            const totalPayables = newLedgerTxs.filter(t => t.type === 'payable' && t.status !== 'paid').reduce((acc, t) => acc + (t.amount - t.paid_amount), 0);
-            const totalReceivables = newLedgerTxs.filter(t => t.type === 'receivable' && t.status !== 'paid').reduce((acc, t) => acc + (t.amount - t.paid_amount), 0);
-
-            return {
-                ...prev,
-                ledgerTransactions: newLedgerTxs,
-                totalPayables,
-                totalReceivables
-            }
-        });
+        await reloadLedger();
         
         return newTx;
     } catch (error: any) {
