@@ -28,6 +28,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Separator } from './ui/separator';
+import { Badge } from '@/components/ui/badge';
 
 const newUserSchema = z.object({
   username: z.string().min(3, "Username must be at least 3 characters."),
