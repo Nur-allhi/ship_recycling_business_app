@@ -334,7 +334,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             totalPayables,
             totalReceivables,
         }));
-      } catch (error) {
+      } catch (error: any) {
         console.error("Failed to load data during promise resolution:", error);
         setState(prev => ({...prev, initialBalanceSet: true}));
         handleApiError(error);
@@ -344,8 +344,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (state.user && !isLoading) {
         reloadData({ force: !state.initialBalanceSet });
-    } else if (!isLoading) {
-        setState(prev => ({...prev, initialBalanceSet: true, needsInitialBalance: !state.user}));
+    } else if (!isLoading && !state.user) { // Added this check
+        setState(prev => ({...prev, initialBalanceSet: true, needsInitialBalance: true }));
     }
   }, [state.user, isLoading, reloadData, state.initialBalanceSet]);
   
@@ -406,6 +406,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (tx.paymentMethod === 'credit' && contact_id) {
           const ledgerType = tx.type === 'purchase' ? 'payable' : 'receivable';
           const description = `${tx.type === 'purchase' ? 'Purchase' : 'Sale'} of ${tx.weight}kg of ${tx.stockItemName} on credit`;
+          const contactList = tx.type === 'purchase' ? state.vendors : state.clients;
+          const finalContactName = contact_name || contactList.find(c => c.id === contact_id)?.name;
+
+          if (!finalContactName) {
+            throw new Error(`Could not find a name for the selected ${tx.type === 'purchase' ? 'vendor' : 'client'}.`);
+          }
           
           await addLedgerTransaction({
               type: ledgerType,
@@ -413,7 +419,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
               amount: totalValue,
               date: tx.date,
               contact_id: contact_id,
-              contact_name: contact_name!,
+              contact_name: finalContactName,
           });
       } else {
           const description = `${tx.type === 'purchase' ? 'Purchase' : 'Sale'} of ${tx.weight}kg of ${tx.stockItemName}`;
@@ -879,5 +885,3 @@ export function useAppContext() {
   }
   return context;
 }
-
-    
