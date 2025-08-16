@@ -18,7 +18,7 @@ import {
 } from '@/components/ui/select';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useToast } from '@/hooks/use-toast';
-import { CalendarIcon, PlusCircle, Wallet, Landmark, Boxes, ArrowRightLeft, CreditCard } from 'lucide-react';
+import { CalendarIcon, Plus, PlusCircle, Wallet, Landmark, Boxes, ArrowRightLeft, CreditCard } from 'lucide-react';
 import { DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
