@@ -20,6 +20,7 @@ import { FileText, ArrowRight } from "lucide-react";
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import { useToast } from "@/hooks/use-toast";
+import { robotoSlabBase64 } from "@/lib/fonts";
 
 interface ContactHistoryDialogProps {
   isOpen: boolean;
@@ -75,21 +76,25 @@ export function ContactHistoryDialog({ isOpen, setIsOpen, contact, contactType }
   }
 
   const formatCurrencyForPdf = (amount: number) => {
-    if (amount === 0) return '-';
+    if (amount === 0 || !amount) return '-';
     const prefix = currency === 'BDT' ? '৳' : currency === 'USD' ? '$' : currency === 'EUR' ? '€' : currency === 'GBP' ? '£' : currency === 'JPY' ? '¥' : currency === 'INR' ? '₹' : '';
     return `${prefix} ${amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
   
   const handleExportPdf = () => {
     const doc = new jsPDF();
+
+    // Add the font to jsPDF
+    doc.addFileToVFS('RobotoSlab-Regular.ttf', robotoSlabBase64);
+    doc.addFont('RobotoSlab-Regular.ttf', 'RobotoSlab', 'normal');
+    doc.setFont('RobotoSlab');
+
     const pageMargins = { top: 20, right: 15, bottom: 20, left: 15 };
     const centerX = doc.internal.pageSize.getWidth() / 2;
 
-    doc.setFont('Helvetica', 'bold');
     doc.setFontSize(18);
     doc.text("Ha-Mim Iron Mart", centerX, 15, { align: 'center' });
     
-    doc.setFont('Helvetica', 'normal');
     doc.setFontSize(14);
     doc.text(`${contactType === 'vendor' ? 'Vendor' : 'Client'} Statement`, centerX, 22, { align: 'center' });
     
@@ -124,19 +129,49 @@ export function ContactHistoryDialog({ isOpen, setIsOpen, contact, contactType }
         ]
     });
 
+    const footerData = [
+        ['', 'Total Debit', '', formatCurrencyForPdf(totalDebit), ''],
+        ['', 'Total Credit', '', formatCurrencyForPdf(totalCredit), ''],
+        ['', 'Balance Due', '', '', formatCurrencyForPdf(finalBalance)]
+    ]
+
     doc.autoTable({
         startY: 35,
         head: [['Date', 'Description', 'Debit', 'Credit', 'Balance']],
         body: tableData,
+        foot: footerData,
         theme: 'grid',
+        styles: {
+            font: 'RobotoSlab',
+            fontSize: 9,
+        },
         headStyles: { fillColor: [34, 49, 63], textColor: 255, fontStyle: 'bold', halign: 'center' },
+        footStyles: {
+            fillColor: [236, 240, 241],
+            textColor: [44, 62, 80],
+            fontStyle: 'bold',
+        },
         columnStyles: {
-            2: { halign: 'right', font: 'Courier' },
-            3: { halign: 'right', font: 'Courier' },
-            4: { halign: 'right', font: 'Courier', fontStyle: 'bold' },
+            0: { halign: 'center' },
+            2: { halign: 'right' },
+            3: { halign: 'right' },
+            4: { halign: 'right', fontStyle: 'bold' },
+        },
+        didParseCell: function(data) {
+            // Center align the footer labels
+            if (data.section === 'foot') {
+                if (data.column.index === 1) {
+                    data.cell.styles.halign = 'right';
+                }
+                if (data.column.index === 2 || data.column.index === 3 || data.column.index === 4) {
+                    data.cell.styles.halign = 'right';
+                }
+                if(data.row.index === 2) { // Balance Due row
+                    data.cell.styles.fontSize = 10;
+                }
+            }
         },
         didDrawPage: (data) => {
-            // Footer
             doc.setFontSize(8);
             doc.setTextColor(150);
             doc.text(

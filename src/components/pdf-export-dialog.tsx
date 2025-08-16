@@ -23,6 +23,7 @@ import { cn } from '@/lib/utils';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import type { CashTransaction, BankTransaction, StockTransaction } from '@/lib/types';
+import { robotoSlabBase64 } from '@/lib/fonts';
 
 
 interface PdfExportDialogProps {
@@ -60,6 +61,11 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
 
     const doc = new jsPDF();
     
+    // Add the font to jsPDF
+    doc.addFileToVFS('RobotoSlab-Regular.ttf', robotoSlabBase64);
+    doc.addFont('RobotoSlab-Regular.ttf', 'RobotoSlab', 'normal');
+    doc.setFont('RobotoSlab');
+
     const pageMargins = { left: 15, right: 15, top: 20, bottom: 20 };
     let tableData: any[] = [];
     let tableHeaders: any[] = [];
@@ -67,7 +73,8 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
     const generationDate = new Date();
     
     const formatCurrencyForPdf = (value: number) => {
-        const prefix = currency === 'BDT' ? 'BDT' : currency;
+        if (!value) return '';
+        const prefix = currency === 'BDT' ? '৳' : currency;
         // The space is intentional for readability
         return `${prefix} ${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     }
@@ -91,16 +98,13 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
       const rightAlignX = doc.internal.pageSize.getWidth() - pageMargins.right;
 
       // Centered Titles
-      doc.setFont('Helvetica', 'bold');
       doc.setFontSize(18);
       doc.text("Ha-Mim Iron Mart", centerX, 15, { align: 'center' });
       
-      doc.setFont('Helvetica', 'normal');
       doc.setFontSize(14);
       doc.text(title, centerX, 22, { align: 'center' });
 
       // Left Aligned Dates
-      doc.setFont('Helvetica', 'normal');
       doc.setFontSize(9);
       doc.text(`From: ${format(dateRange.from, 'dd-MM-yyyy')}`, pageMargins.left, 15);
       doc.text(`To: ${format(dateRange.to, 'dd-MM-yyyy')}`, pageMargins.left, 20);
@@ -146,11 +150,9 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
         }, { totalCredit: 0, totalDebit: 0 });
         
         const rightAlignX = doc.internal.pageSize.getWidth() - pageMargins.right;
-        doc.setFont('Helvetica', 'normal');
         doc.setFontSize(9);
         doc.text(`Total Credit:`, rightAlignX - 45, 15, { align: 'left'});
         doc.text(`Total Debit:`, rightAlignX - 45, 20, { align: 'left'});
-        doc.setFont('Courier', 'normal');
         doc.text(formatCurrencyForPdf(totalCredit), rightAlignX, 15, { align: 'right'});
         doc.text(formatCurrencyForPdf(totalDebit), rightAlignX, 20, { align: 'right'});
         
@@ -169,10 +171,9 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
         });
 
         columnStyles = { 
-            3: { halign: 'right', font: 'Courier', textColor: [0,0,0] },
-            4: { halign: 'right', font: 'Courier', textColor: [0,0,0] },
-            5: { halign: 'right', font: 'Courier', fontStyle: 'bold', textColor: [0,0,0] },
-            0: { font: 'Courier', textColor: [0,0,0] } // Date column
+            3: { halign: 'right' },
+            4: { halign: 'right' },
+            5: { halign: 'right', fontStyle: 'bold' },
         };
 
     } else { // Stock
@@ -193,11 +194,9 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
         }, { totalPurchaseValue: 0, totalSaleValue: 0 });
 
         const rightAlignX = doc.internal.pageSize.getWidth() - pageMargins.right;
-        doc.setFont('Helvetica', 'normal');
         doc.setFontSize(9);
         doc.text(`Total Purchase:`, rightAlignX - 45, 15, { align: 'left'});
         doc.text(`Total Sale:`, rightAlignX - 45, 20, { align: 'left'});
-        doc.setFont('Courier', 'normal');
         doc.text(formatCurrencyForPdf(totalPurchaseValue), rightAlignX, 15, { align: 'right'});
         doc.text(formatCurrencyForPdf(totalSaleValue), rightAlignX, 20, { align: 'right'});
 
@@ -231,11 +230,10 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
             ];
         });
         columnStyles = { 
-            3: { halign: 'right', font: 'Courier', textColor: [0,0,0] },
-            4: { halign: 'right', font: 'Courier', textColor: [0,0,0] },
-            5: { halign: 'right', font: 'Courier', textColor: [0,0,0] },
-            6: { halign: 'right', font: 'Courier', fontStyle: 'bold', textColor: [0,0,0] },
-            0: { font: 'Courier', textColor: [0,0,0] } // Date column
+            3: { halign: 'right' },
+            4: { halign: 'right' },
+            5: { halign: 'right' },
+            6: { halign: 'right', fontStyle: 'bold' },
         };
     }
 
@@ -245,9 +243,8 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
         body: tableData,
         theme: 'grid',
         styles: {
-            font: 'Helvetica',
+            font: 'RobotoSlab',
             fontSize: 9,
-            textColor: [0,0,0],
         },
         headStyles: {
             fillColor: [34, 49, 63],
@@ -258,7 +255,6 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
         columnStyles: columnStyles,
         didDrawPage: (data) => {
             // Footer
-            doc.setFont('Helvetica', 'normal');
             doc.setFontSize(8);
             doc.setTextColor(150);
             doc.text(
@@ -267,7 +263,7 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
                 doc.internal.pageSize.getHeight() - 10
             );
             doc.text(
-                `Page ${data.pageNumber} of ${doc.internal.pages.length - 1 > 0 ? doc.internal.pages.length - 1 : 1}`,
+                `Page ${data.pageNumber}`,
                 doc.internal.pageSize.getWidth() - data.settings.margin.right,
                 doc.internal.pageSize.getHeight() - 10,
                 { align: 'right' }
