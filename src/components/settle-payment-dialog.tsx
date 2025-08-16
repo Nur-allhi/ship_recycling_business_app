@@ -65,7 +65,6 @@ export function SettlePaymentDialog({ isOpen, setIsOpen, transaction }: SettlePa
     const onSubmit = async (data: FormData) => {
         try {
             await recordInstallment(transaction, data.paymentAmount, data.paymentMethod, data.paymentDate);
-            toast({ title: 'Payment Recorded', description: 'The payment installment has been successfully recorded.' });
             setIsOpen(false);
         } catch (error: any) {
             toast({ variant: 'destructive', title: 'Payment Failed', description: error.message });

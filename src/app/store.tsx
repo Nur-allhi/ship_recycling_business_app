@@ -971,7 +971,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   
   const recordInstallment = async (tx: LedgerTransaction, paymentAmount: number, paymentMethod: 'cash' | 'bank', paymentDate: Date) => {
     try {
-        await addPaymentInstallment({
+        const result = await addPaymentInstallment({
             ap_ar_transaction_id: tx.id,
             original_amount: tx.amount,
             already_paid_amount: tx.paid_amount,
@@ -981,9 +981,43 @@ export function AppProvider({ children }: { children: ReactNode }) {
             ledger_type: tx.type,
             description: tx.description
         });
+
+        // Optimistic update of the UI
+        setState(prev => {
+            const updatedLedgerTxs = prev.ledgerTransactions.map(ledgerTx => {
+                if (ledgerTx.id === tx.id) {
+                    return {
+                        ...ledgerTx,
+                        paid_amount: result.updatedParent.paid_amount,
+                        status: result.updatedParent.status,
+                        installments: [...(ledgerTx.installments || []), result.newInstallment]
+                    };
+                }
+                return ledgerTx;
+            });
+            
+            const newFinancialTx = result.newFinancialTx;
+            const newCashTxs = result.paymentMethod === 'cash' ? [...prev.cashTransactions, newFinancialTx] : prev.cashTransactions;
+            const newBankTxs = result.paymentMethod === 'bank' ? [...prev.bankTransactions, newFinancialTx] : prev.bankTransactions;
+
+            const { finalCashBalance, finalBankBalance } = calculateBalancesAndStock(newCashTxs, newBankTxs, prev.stockTransactions, []);
+
+            const totalPayables = updatedLedgerTxs.filter(t => t.type === 'payable' && t.status !== 'paid').reduce((acc, t) => acc + (t.amount - t.paid_amount), 0);
+            const totalReceivables = updatedLedgerTxs.filter(t => t.type === 'receivable' && t.status !== 'paid').reduce((acc, t) => acc + (t.amount - t.paid_amount), 0);
+
+            return {
+                ...prev,
+                ledgerTransactions: updatedLedgerTxs.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+                cashTransactions: newCashTxs.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+                bankTransactions: newBankTxs.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+                cashBalance: finalCashBalance,
+                bankBalance: finalBankBalance,
+                totalPayables,
+                totalReceivables,
+            };
+        });
         
         toast({title: "Payment Recorded", description: "The installment has been recorded and balances updated."});
-        reloadData({ force: true });
     } catch (error: any) {
          handleApiError(new Error(error.message || "An unexpected error occurred during installment recording."));
          throw error;
