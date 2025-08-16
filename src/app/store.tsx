@@ -177,9 +177,14 @@ const saveStateToLocalStorage = (state: AppState) => {
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AppState>(getInitialState());
+  const [isMounted, setIsMounted] = useState(false);
   const { toast } = useToast();
   const router = useRouter();
   const pathname = usePathname();
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   const logout = useCallback(async () => {
     localStorage.removeItem(getCacheKey());
@@ -219,7 +224,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       } catch (error) {
         console.error("Failed to get session", error);
       } finally {
-        // Only set loading to false after checking session, not in getInitialState
         setState(prev => ({ ...prev, isLoading: false }));
       }
     };
@@ -344,7 +348,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             totalPayables,
             totalReceivables,
         }));
-      } catch (error) {
+      } catch (error: any) {
         console.error("Failed to load data during promise resolution:", error);
         handleApiError(error);
       } finally {
@@ -504,7 +508,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
             throw new Error(`Could not find a name for the selected ${tx.type === 'purchase' ? 'vendor' : 'client'}.`);
           }
           
-          // Do not await this, let it run in the background
           addLedgerTransaction({
               type: ledgerType,
               description,
@@ -525,10 +528,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
           };
 
           if (tx.paymentMethod === 'cash') {
-              // Do not await this, let it run in the background
               addCashTransaction({ ...financialTxData, type: tx.type === 'purchase' ? 'expense' : 'income' });
           } else if (tx.paymentMethod === 'bank') { 
-              // Do not await this, let it run in the background
               addBankTransaction({ ...financialTxData, type: tx.type === 'purchase' ? 'withdrawal' : 'deposit' });
           }
       }
@@ -993,6 +994,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     saveStateToLocalStorage(state);
   }, [state])
 
+  if (!isMounted) {
+    return <AppLoading />;
+  }
+
   if (state.isLoading && pathname !== '/login') {
     return <AppLoading />;
   }
@@ -1048,3 +1053,5 @@ export function useAppContext() {
   }
   return context;
 }
+
+    
