@@ -9,6 +9,7 @@ export interface SessionPayload {
     id: string;
     username: string;
     role: 'admin' | 'user';
+    accessToken: string; // JWT token
 }
 
 export async function createSession(payload: SessionPayload) {
@@ -50,3 +51,5 @@ export async function removeSession() {
     expires: new Date(0),
   });
 }
+
+    

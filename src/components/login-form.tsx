@@ -16,8 +16,8 @@ import { Loader2 } from 'lucide-react';
 import Logo from './logo';
 
 const formSchema = z.object({
-  username: z.string().min(1, 'Username is required.'),
-  password: z.string().min(1, 'Password is required.'),
+  username: z.string().email("Username must be a valid email address."),
+  password: z.string().min(6, 'Password must be at least 6 characters.'),
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -34,7 +34,7 @@ export function LoginForm() {
     setIsLoading(true);
     try {
       await login(data);
-      toast({ title: "Login Successful", description: "Welcome back!" });
+      toast({ title: "Login Successful", description: "Welcome!" });
       // Force a hard reload to ensure all state is re-initialized and the new cookie is sent.
       window.location.href = '/'; 
     } catch (error: any) {
@@ -54,12 +54,12 @@ export function LoginForm() {
             <Logo className="h-16 w-16 text-primary" />
         </div>
         <CardTitle className="text-2xl">Login to your account</CardTitle>
-        <CardDescription>Enter your username and password below.</CardDescription>
+        <CardDescription>Enter your username and password below. If the account doesn't exist, it will be created for you.</CardDescription>
       </CardHeader>
       <form onSubmit={handleSubmit(onSubmit)}>
         <CardContent className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="username">Username</Label>
+            <Label htmlFor="username">Username (Email)</Label>
             <Input id="username" {...register('username')} />
             {errors.username && <p className="text-sm text-destructive">{errors.username.message}</p>}
           </div>
@@ -72,10 +72,12 @@ export function LoginForm() {
         <CardFooter>
           <Button type="submit" className="w-full" disabled={isLoading}>
             {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Login
+            Login or Create Account
           </Button>
         </CardFooter>
       </form>
     </Card>
   );
 }
+
+    

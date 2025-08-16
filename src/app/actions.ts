@@ -4,11 +4,11 @@
 import { createClient } from '@supabase/supabase-js';
 import { cookies } from 'next/headers';
 import { z } from 'zod';
-import { createSession, getSession } from '@/lib/auth';
+import { createSession, getSession, removeSession } from '@/lib/auth';
 
 // Helper function to create a Supabase client.
 // Can be configured to use the service_role key for admin-level access.
-const createSupabaseClient = async (serviceRole = false) => {
+const createSupabaseClient = (serviceRole = false) => {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
     const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -20,9 +20,7 @@ const createSupabaseClient = async (serviceRole = false) => {
     // For server-side actions, we use the service role key.
     // RLS policies that depend on `auth.uid()` will still work correctly 
     // as long as we pass the user_id in the operations.
-    return createClient(supabaseUrl, serviceRole ? supabaseServiceKey : supabaseAnonKey, {
-        auth: { persistSession: false },
-    });
+    return createClient(supabaseUrl, serviceRole ? supabaseServiceKey : supabaseAnonKey);
 }
 
 const ReadDataInputSchema = z.object({
@@ -33,10 +31,14 @@ const ReadDataInputSchema = z.object({
 
 
 export async function readData(input: z.infer<typeof ReadDataInputSchema>) {
-  const supabase = await createSupabaseClient(true);
+  const supabase = createSupabaseClient(true);
+  const session = await getSession();
+  if(!session) throw new Error("Not authenticated");
+
   let query = supabase
     .from(input.tableName)
-    .select(input.select);
+    .select(input.select)
+    .eq('user_id', session.id);
 
   const softDeleteTables = ['cash_transactions', 'bank_transactions', 'stock_transactions', 'ap_ar_transactions'];
   
@@ -57,10 +59,14 @@ export async function readData(input: z.infer<typeof ReadDataInputSchema>) {
 }
 
 export async function readDeletedData(input: z.infer<typeof ReadDataInputSchema>) {
-    const supabase = await createSupabaseClient(true);
+    const supabase = createSupabaseClient(true);
+    const session = await getSession();
+    if(!session) throw new Error("Not authenticated");
+
     let query = supabase
         .from(input.tableName)
         .select(input.select)
+        .eq('user_id', session.id)
         .not('deletedAt', 'is', null);
     
     const { data, error } = await query;
@@ -80,21 +86,25 @@ const AppendDataInputSchema = z.object({
 });
 
 export async function appendData(input: z.infer<typeof AppendDataInputSchema>) {
-    const supabase = await createSupabaseClient(true);
     const session = await getSession();
+    if (!session) throw new Error("User not authenticated for append operation.");
+    
+    // We create the client here and pass the JWT to properly authenticate the request
+    const supabase = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        {
+            global: {
+                headers: { Authorization: `Bearer ${session.accessToken}` },
+            },
+        }
+    );
 
-    if (!session) {
-        throw new Error("User not authenticated for append operation.");
-    }
-    
-    const dataWithUserId = {
-        ...input.data,
-        user_id: session.id,
-    };
-    
+    // The user_id is now automatically handled by RLS policies because the request is authenticated.
+    // We no longer need to manually add it.
     const { data, error } = await supabase
         .from(input.tableName)
-        .insert([dataWithUserId])
+        .insert([input.data]) 
         .select();
 
     if (error) {
@@ -115,7 +125,17 @@ const UpdateDataInputSchema = z.object({
 });
 
 export async function updateData(input: z.infer<typeof UpdateDataInputSchema>) {
-  const supabase = await createSupabaseClient(true);
+  const session = await getSession();
+  if (!session) throw new Error("User not authenticated for update operation.");
+  const supabase = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        {
+            global: {
+                headers: { Authorization: `Bearer ${session.accessToken}` },
+            },
+        }
+    );
   const { data, error } = await supabase
     .from(input.tableName)
     .update(input.data)
@@ -132,7 +152,17 @@ const DeleteDataInputSchema = z.object({
 });
 
 export async function deleteData(input: z.infer<typeof DeleteDataInputSchema>) {
-  const supabase = await createSupabaseClient(true);
+  const session = await getSession();
+  if (!session) throw new Error("User not authenticated for delete operation.");
+    const supabase = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        {
+            global: {
+                headers: { Authorization: `Bearer ${session.accessToken}` },
+            },
+        }
+    );
   const { error } = await supabase
     .from(input.tableName)
     .update({ deletedAt: new Date().toISOString() })
@@ -148,7 +178,17 @@ const RestoreDataInputSchema = z.object({
 });
 
 export async function restoreData(input: z.infer<typeof RestoreDataInputSchema>) {
-    const supabase = await createSupabaseClient(true);
+    const session = await getSession();
+    if (!session) throw new Error("User not authenticated for restore operation.");
+     const supabase = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        {
+            global: {
+                headers: { Authorization: `Bearer ${session.accessToken}` },
+            },
+        }
+    );
     const { error } = await supabase
         .from(input.tableName)
         .update({ deletedAt: null })
@@ -159,12 +199,14 @@ export async function restoreData(input: z.infer<typeof RestoreDataInputSchema>)
 }
 
 export async function exportAllData() {
-    const supabase = await createSupabaseClient(true);
+    const supabase = createSupabaseClient(true);
+    const session = await getSession();
+    if (!session) throw new Error("No active session for export.");
     const tables = ['cash_transactions', 'bank_transactions', 'stock_transactions', 'initial_stock', 'categories', 'vendors', 'clients', 'ap_ar_transactions'];
     const exportedData: Record<string, any[]> = {};
     
     for (const tableName of tables) {
-        const { data, error } = await supabase.from(tableName).select('*');
+        const { data, error } = await supabase.from(tableName).select('*').eq('user_id', session.id);
         if (error) {
             if (error.code !== '42P01') {
                  throw new Error(`Error exporting ${tableName}: ${error.message}`);
@@ -182,7 +224,7 @@ export async function exportAllData() {
 const ImportDataSchema = z.record(z.array(z.record(z.any())));
 
 export async function batchImportData(dataToImport: z.infer<typeof ImportDataSchema>) {
-    const supabase = await createSupabaseClient(true);
+    const supabase = createSupabaseClient(true);
     const tables = ['cash_transactions', 'bank_transactions', 'stock_transactions', 'initial_stock', 'categories', 'vendors', 'clients', 'ap_ar_transactions'];
     const session = await getSession();
     if (!session) throw new Error("No active session for import.");
@@ -214,12 +256,10 @@ export async function batchImportData(dataToImport: z.infer<typeof ImportDataSch
 }
 
 export async function deleteAllData() {
-    const supabase = await createSupabaseClient(true);
-    const tables = ['cash_transactions', 'bank_transactions', 'stock_transactions', 'initial_stock', 'categories', 'vendors', 'clients', 'ap_ar_transactions'];
+    const supabase = createSupabaseClient(true);
     const session = await getSession();
     if (!session) throw new Error("No active session to delete data.");
     try {
-        // First delete the user from auth schema
         const { error: authError } = await supabase.auth.admin.deleteUser(session.id);
         if (authError) {
             // If the user doesn't exist in auth, we can still proceed to delete their data
@@ -229,6 +269,9 @@ export async function deleteAllData() {
             }
         }
         
+        // Data deletion will cascade from user deletion in auth schema if FKs are set up correctly.
+        // But we do it manually to be safe and handle cases where FKs might be missing.
+        const tables = ['cash_transactions', 'bank_transactions', 'stock_transactions', 'initial_stock', 'categories', 'vendors', 'clients', 'ap_ar_transactions'];
         for (const tableName of tables) {
             const { error } = await supabase.from(tableName).delete().eq('user_id', session.id);
             if (error && error.code !== '42P01') {
@@ -236,6 +279,8 @@ export async function deleteAllData() {
                 throw new Error(`Failed to delete data from ${tableName}.`);
             }
         }
+
+        await removeSession();
 
         return { success: true };
     } catch (error: any) {
@@ -247,41 +292,52 @@ export async function deleteAllData() {
 // --- Auth Actions ---
 
 const LoginInputSchema = z.object({
-    username: z.string(),
+    username: z.string().email("Username must be a valid email address."),
     password: z.string(),
 });
 
 export async function login(input: z.infer<typeof LoginInputSchema>) {
-    const supabase = await createSupabaseClient(true);
+    const supabase = createSupabaseClient(); // Use anon client for login
     
-    // Simplified Login: Find user by email (username) or create them.
-    const { data: { users }, error: userError } = await supabase.auth.admin.listUsers({ email: input.username });
+    const { data, error } = await supabase.auth.signInWithPassword({
+        email: input.username,
+        password: input.password,
+    });
     
-    let userId: string;
-    let userRole: 'admin' | 'user' = 'user'; // Default role
+    if (error) {
+        if (error.message === 'Invalid login credentials') {
+             const supabaseAdmin = createSupabaseClient(true);
+             const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
+                email: input.username,
+                password: input.password,
+                email_confirm: true, // auto-confirm for simplicity
+                user_metadata: { role: 'admin' } // First user is admin
+            });
+            if(createError) throw new Error(createError.message);
+            
+            const { data: loginData, error: loginError } = await supabase.auth.signInWithPassword({
+                email: input.username,
+                password: input.password,
+            });
+            if(loginError) throw new Error(loginError.message);
 
-    if (userError) throw new Error("Could not contact auth service.");
-    
-    if (users && users.length > 0) {
-        userId = users[0].id;
-        userRole = users[0].user_metadata.role || 'user';
-    } else {
-        // For simplicity, create a new user if they don't exist.
-        const { data: newUser, error: createError } = await supabase.auth.admin.createUser({
-            email: input.username,
-            password: input.password,
-            email_confirm: true, // auto-confirm
-            user_metadata: { role: 'admin' } // First user is admin
-        });
-        if (createError) throw new Error(`Could not create user: ${createError.message}`);
-        userId = newUser.user.id;
-        userRole = 'admin';
+            const sessionPayload = {
+                id: loginData.user.id,
+                username: loginData.user.email!,
+                role: loginData.user.user_metadata.role || 'user',
+                accessToken: loginData.session.access_token,
+            };
+            await createSession(sessionPayload);
+            return { success: true };
+        }
+        throw new Error(error.message);
     }
     
     const sessionData = {
-        id: userId,
-        username: input.username,
-        role: userRole,
+        id: data.user.id,
+        username: data.user.email!,
+        role: data.user.user_metadata.role || 'user',
+        accessToken: data.session.access_token,
     }
     
     await createSession(sessionData);
@@ -289,7 +345,7 @@ export async function login(input: z.infer<typeof LoginInputSchema>) {
 }
 
 export async function getUsers() {
-    const supabase = await createSupabaseClient(true);
+    const supabase = createSupabaseClient(true);
     const { data, error } = await supabase.auth.admin.listUsers();
     if (error) throw new Error(error.message);
     return data.users.map(u => ({ id: u.id, username: u.email, role: u.user_metadata.role || 'user' }));
@@ -302,7 +358,7 @@ const AddUserInputSchema = z.object({
 });
 
 export async function addUser(input: z.infer<typeof AddUserInputSchema>) {
-    const supabase = await createSupabaseClient(true);
+    const supabase = createSupabaseClient(true);
     const { error } = await supabase.auth.admin.createUser({
         email: input.username,
         password: input.password,
@@ -316,8 +372,10 @@ export async function addUser(input: z.infer<typeof AddUserInputSchema>) {
 }
 
 export async function deleteUser(id: string) {
-    const supabase = await createSupabaseClient(true);
+    const supabase = createSupabaseClient(true);
     const { error } = await supabase.auth.admin.deleteUser(id);
     if (error) throw new Error(error.message);
     return { success: true };
 }
+
+    

@@ -114,6 +114,15 @@ const initialAppState: AppState = {
 };
 
 const getInitialState = (): AppState => {
+    try {
+        const storedSettings = localStorage.getItem('ha-mim-iron-mart-settings');
+        if (storedSettings) {
+            const settings = JSON.parse(storedSettings);
+            return { ...initialAppState, ...settings };
+        }
+    } catch (e) {
+        console.error("Could not parse settings from local storage", e);
+    }
     return initialAppState;
 }
 
@@ -141,7 +150,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const reloadData = useCallback(async () => {
     if (!state.user) {
-        setState(prev => ({...prev, initialBalanceSet: true}));
+        setState(prev => ({...prev, initialBalanceSet: true, needsInitialBalance: !prev.user}));
         return;
     }
     try {
@@ -160,23 +169,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
         
         let needsInitialBalance = true;
 
-        const cashTransactions: CashTransaction[] = cashData.map((tx: any) => ({...tx, date: new Date(tx.date).toISOString() }));
-        const bankTransactions: BankTransaction[] = bankData.map((tx: any) => ({...tx, date: new Date(tx.date).toISOString() }));
+        const cashTransactions: CashTransaction[] = cashData?.map((tx: any) => ({...tx, date: new Date(tx.date).toISOString() })) || [];
+        const bankTransactions: BankTransaction[] = bankData?.map((tx: any) => ({...tx, date: new Date(tx.date).toISOString() })) || [];
 
         const initialCashTx = cashTransactions.find(tx => tx.category === 'Initial Balance');
         const initialBankTx = bankTransactions.find(tx => tx.category === 'Initial Balance');
         
-        if (initialCashTx || initialBankTx || initialStockData.length > 0) {
+        if (initialCashTx || initialBankTx || initialStockData?.length > 0) {
           needsInitialBalance = false;
         }
 
-        const stockTransactions: StockTransaction[] = stockTransactionsData.map((tx: any) => ({...tx, date: new Date(tx.date).toISOString() }));
+        const stockTransactions: StockTransaction[] = stockTransactionsData?.map((tx: any) => ({...tx, date: new Date(tx.date).toISOString() })) || [];
 
-        const initialStockItems: StockItem[] = initialStockData.map((item: any) => ({
+        const initialStockItems: StockItem[] = initialStockData?.map((item: any) => ({
             ...item,
             id: item.id.toString(),
             purchasePricePerKg: item.purchasePricePerKg,
-        }));
+        })) || [];
         
         const finalCashBalance = cashTransactions.reduce((acc, tx) => acc + (tx.type === 'income' ? tx.amount : -tx.amount), 0);
         const finalBankBalance = bankTransactions.reduce((acc, tx) => acc + (tx.type === 'deposit' ? tx.amount : -tx.amount), 0);
@@ -217,8 +226,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
             purchasePricePerKg: data.weight > 0 ? data.totalValue / data.weight : 0,
         }));
         
-        const cashCategories = categoriesData.filter((c: any) => c.type === 'cash').map((c: any) => c.name);
-        const bankCategories = categoriesData.filter((c: any) => c.type === 'bank').map((c: any) => c.name);
+        const cashCategories = categoriesData?.filter((c: any) => c.type === 'cash').map((c: any) => c.name);
+        const bankCategories = categoriesData?.filter((c: any) => c.type === 'bank').map((c: any) => c.name);
         
         const ledgerTransactions: LedgerTransaction[] = ledgerData?.map((tx: any) => ({...tx, date: new Date(tx.date).toISOString() })) || [];
         const totalPayables = ledgerTransactions.filter(tx => tx.type === 'payable' && tx.status === 'unpaid').reduce((acc, tx) => acc + tx.amount, 0);
@@ -233,8 +242,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
             cashBalance: finalCashBalance,
             bankBalance: finalBankBalance,
             needsInitialBalance,
-            cashCategories: cashCategories.length > 0 ? cashCategories : prev.cashCategories,
-            bankCategories: bankCategories.length > 0 ? bankCategories : prev.bankCategories,
+            cashCategories: cashCategories?.length > 0 ? cashCategories : prev.cashCategories,
+            bankCategories: bankCategories?.length > 0 ? bankCategories : prev.bankCategories,
             initialBalanceSet: true,
             vendors: vendorsData || [],
             clients: clientsData || [],
@@ -260,7 +269,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (state.user && sessionChecked) {
         reloadData();
     } else if (sessionChecked) {
-        setState(prev => ({...prev, initialBalanceSet: true}));
+        setState(prev => ({...prev, initialBalanceSet: true, needsInitialBalance: !state.user}));
     }
   }, [state.user, sessionChecked, reloadData]);
   
@@ -293,18 +302,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
         });
     }
   }, [toast, state.user]);
-
-  useEffect(() => {
-      try {
-        const storedSettings = localStorage.getItem('ha-mim-iron-mart-settings');
-        if (storedSettings) {
-          const settings = JSON.parse(storedSettings);
-          setState(prev => ({ ...prev, ...settings }));
-        }
-      } catch (e) {
-        console.error("Could not parse settings from local storage", e);
-      }
-  }, []);
   
   const addCashTransaction = async (tx: Omit<CashTransaction, 'id' | 'createdAt' | 'deletedAt' | 'user_id'>) => {
     try {
@@ -646,13 +643,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const handleDeleteAllData = async () => {
     try {
         await deleteAllData();
-        toast({ title: 'All Data Deleted', description: 'Your ledger has been reset.' });
+        toast({ title: 'All Data Deleted', description: 'Your account and all associated data have been permanently removed.' });
         setState(prevState => ({
             ...initialAppState, 
-            user: prevState.user, 
-            initialBalanceSet: true,
-            needsInitialBalance: true,
+            user: null, 
         }));
+        window.location.href = '/login';
     } catch (error: any) {
         console.error(error);
         toast({ variant: 'destructive', title: 'Deletion Failed', description: error.message });
@@ -784,7 +780,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  if (!state.initialBalanceSet) {
+  const saveSettings = () => {
+      try {
+        const settingsToSave = {
+            fontSize: state.fontSize,
+            bodyFont: state.bodyFont,
+            numberFont: state.numberFont,
+            wastagePercentage: state.wastagePercentage,
+            currency: state.currency,
+            showStockValue: state.showStockValue,
+        }
+        localStorage.setItem('ha-mim-iron-mart-settings', JSON.stringify(settingsToSave));
+      } catch (e) {
+          console.error("Could not save settings to local storage", e);
+      }
+  }
+  
+  // Save settings whenever they change
+  useEffect(() => {
+    saveSettings();
+  }, [state.fontSize, state.bodyFont, state.numberFont, state.wastagePercentage, state.currency, state.showStockValue])
+
+  if (!state.initialBalanceSet && !pathname.includes('/login')) {
     return <AppLoading />;
   }
 
@@ -849,3 +866,5 @@ export function AppLoading() {
         </div>
     );
 }
+
+    
