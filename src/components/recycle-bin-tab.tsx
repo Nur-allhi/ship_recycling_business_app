@@ -16,7 +16,6 @@ export function RecycleBinTab() {
         deletedCashTransactions, 
         deletedBankTransactions, 
         deletedStockTransactions,
-        deletedLedgerTransactions,
         restoreTransaction,
         currency,
         user
@@ -58,11 +57,10 @@ export function RecycleBinTab() {
             </CardHeader>
             <CardContent>
                 <Tabs defaultValue="cash" className="w-full">
-                    <TabsList className="grid w-full grid-cols-4">
+                    <TabsList className="grid w-full grid-cols-3">
                         <TabsTrigger value="cash">Cash ({deletedCashTransactions.length})</TabsTrigger>
                         <TabsTrigger value="bank">Bank ({deletedBankTransactions.length})</TabsTrigger>
                         <TabsTrigger value="stock">Stock ({deletedStockTransactions.length})</TabsTrigger>
-                        <TabsTrigger value="ledger">A/R & A/P ({deletedLedgerTransactions.length})</TabsTrigger>
                     </TabsList>
                     <TabsContent value="cash" className="mt-4">
                         <div className="overflow-x-auto">
@@ -146,34 +144,6 @@ export function RecycleBinTab() {
                                             </TableCell>
                                         </TableRow>
                                     )) : <TableRow><TableCell colSpan={5} className="text-center h-24">No deleted stock transactions.</TableCell></TableRow>}
-                                </TableBody>
-                            </Table>
-                        </div>
-                    </TabsContent>
-                     <TabsContent value="ledger" className="mt-4">
-                        <div className="overflow-x-auto">
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>Deleted On</TableHead>
-                                        <TableHead>Description</TableHead>
-                                        <TableHead>Amount</TableHead>
-                                        <TableHead className="text-right">Actions</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {deletedLedgerTransactions.length > 0 ? deletedLedgerTransactions.map(tx => (
-                                        <TableRow key={tx.id}>
-                                            <TableCell>{tx.deletedAt ? format(new Date(tx.deletedAt), "dd-MM-yyyy") : 'N/A'}</TableCell>
-                                            <TableCell>{tx.description}</TableCell>
-                                            <TableCell className={tx.type === 'receivable' ? 'text-accent' : 'text-destructive'}>{formatCurrency(tx.amount)}</TableCell>
-                                            <TableCell className="text-right">
-                                                <Button variant="ghost" size="icon" onClick={() => restoreTransaction('ledger', tx.id)}>
-                                                    <Undo2 className="h-4 w-4"/>
-                                                </Button>
-                                            </TableCell>
-                                        </TableRow>
-                                    )) : <TableRow><TableCell colSpan={4} className="text-center h-24">No deleted A/R or A/P transactions.</TableCell></TableRow>}
                                 </TableBody>
                             </Table>
                         </div>

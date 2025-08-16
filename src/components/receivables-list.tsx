@@ -5,16 +5,18 @@ import { useState } from "react";
 import { useAppContext } from "@/app/store";
 import { LedgerTransaction } from "@/lib/types";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
-import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { format } from "date-fns";
-import { HandCoins } from "lucide-react";
+import { HandCoins, Trash2 } from "lucide-react";
 import { SettlePaymentDialog } from "./settle-payment-dialog";
+import { DeleteConfirmationDialog } from "./delete-confirmation-dialog";
 
 
 export function ReceivablesList() {
-    const { ledgerTransactions, currency } = useAppContext();
+    const { ledgerTransactions, currency, deleteLedgerTransaction, user } = useAppContext();
     const [settleDialogState, setSettleDialogState] = useState<{isOpen: boolean, transaction: LedgerTransaction | null}>({isOpen: false, transaction: null});
+    const [deleteDialogState, setDeleteDialogState] = useState<{isOpen: boolean, txToDelete: LedgerTransaction | null}>({isOpen: false, txToDelete: null});
+    const isAdmin = user?.role === 'admin';
 
     const receivables = ledgerTransactions.filter(tx => tx.type === 'receivable' && tx.status === 'unpaid');
     
@@ -27,6 +29,17 @@ export function ReceivablesList() {
 
     const handleSettleClick = (tx: LedgerTransaction) => {
         setSettleDialogState({ isOpen: true, transaction: tx });
+    }
+
+    const handleDeleteClick = (tx: LedgerTransaction) => {
+        setDeleteDialogState({isOpen: true, txToDelete: tx});
+    }
+
+    const confirmDeletion = () => {
+        if(deleteDialogState.txToDelete) {
+            deleteLedgerTransaction(deleteDialogState.txToDelete);
+        }
+        setDeleteDialogState({isOpen: false, txToDelete: null});
     }
     
     return (
@@ -50,11 +63,16 @@ export function ReceivablesList() {
                                     <TableCell className="font-medium">{tx.contact_name}</TableCell>
                                     <TableCell>{tx.description}</TableCell>
                                     <TableCell className="text-right font-mono font-semibold">{formatCurrency(tx.amount)}</TableCell>
-                                    <TableCell className="text-center">
+                                    <TableCell className="text-center space-x-1">
                                         <Button variant="outline" size="sm" onClick={() => handleSettleClick(tx)}>
                                             <HandCoins className="mr-2 h-4 w-4"/>
                                             Settle
                                         </Button>
+                                         {isAdmin && (
+                                            <Button variant="destructive" size="icon" className="h-9 w-9" onClick={() => handleDeleteClick(tx)}>
+                                                <Trash2 className="h-4 w-4"/>
+                                            </Button>
+                                        )}
                                     </TableCell>
                                 </TableRow>
                             ))
@@ -73,6 +91,12 @@ export function ReceivablesList() {
                     transaction={settleDialogState.transaction}
                 />
             )}
+            <DeleteConfirmationDialog 
+                isOpen={deleteDialogState.isOpen}
+                setIsOpen={(isOpen) => setDeleteDialogState({ isOpen: isOpen, txToDelete: null })}
+                onConfirm={confirmDeletion}
+                itemCount={1}
+            />
         </>
     )
 }

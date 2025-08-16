@@ -38,8 +38,8 @@ const getAuthenticatedSupabaseClient = async () => {
 };
 
 
-const handleAuthError = (error: any) => {
-    const isAuthError = error.message.includes('JWT') || error.message.includes('Unauthorized');
+const handleApiError = (error: any) => {
+    const isAuthError = error.message.includes('JWT') || error.message.includes('Unauthorized') || error.message === 'SESSION_EXPIRED';
     if (isAuthError) {
         // This specific error message will be caught by the client to trigger a logout.
         throw new Error("SESSION_EXPIRED"); 
@@ -62,7 +62,7 @@ export async function readData(input: z.infer<typeof ReadDataInputSchema>) {
       .from(input.tableName)
       .select(input.select);
 
-    const softDeleteTables = ['cash_transactions', 'bank_transactions', 'stock_transactions', 'ap_ar_transactions'];
+    const softDeleteTables = ['cash_transactions', 'bank_transactions', 'stock_transactions'];
     
     if (softDeleteTables.includes(input.tableName)) {
       query = query.is('deletedAt', null);
@@ -79,7 +79,7 @@ export async function readData(input: z.infer<typeof ReadDataInputSchema>) {
     }
     return data;
   } catch (error) {
-    return handleAuthError(error);
+    return handleApiError(error);
   }
 }
 
@@ -131,7 +131,7 @@ export async function appendData(input: z.infer<typeof AppendDataInputSchema>) {
         }
         return data;
     } catch (error) {
-        return handleAuthError(error);
+        return handleApiError(error);
     }
 }
 
@@ -172,13 +172,22 @@ export async function deleteData(input: z.infer<typeof DeleteDataInputSchema>) {
     if (session?.role !== 'admin') throw new Error("Only admins can delete data.");
     
     const supabase = await getAuthenticatedSupabaseClient();
+
+    if (input.tableName === 'ap_ar_transactions') {
+        const { error } = await supabase
+            .from(input.tableName)
+            .delete()
+            .eq('id', input.id);
+        if (error) throw new Error(error.message);
+    } else {
+        const { error } = await supabase
+            .from(input.tableName)
+            .update({ deletedAt: new Date().toISOString() })
+            .eq('id', input.id);
+            
+        if (error) throw new Error(error.message);
+    }
     
-    const { error } = await supabase
-        .from(input.tableName)
-        .update({ deletedAt: new Date().toISOString() })
-        .eq('id', input.id);
-        
-    if (error) throw new Error(error.message);
     return { success: true };
   } catch(error) {
     return handleAuthError(error);
@@ -229,7 +238,7 @@ export async function exportAllData() {
 
         return exportedData;
     } catch (error) {
-        return handleAuthError(error);
+        return handleApiError(error);
     }
 }
 
@@ -411,6 +420,4 @@ export async function deleteUser(id: string) {
 export async function logout() {
   await removeSession();
 }
-    
-
     

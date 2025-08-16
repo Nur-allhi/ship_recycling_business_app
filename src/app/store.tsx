@@ -40,7 +40,6 @@ interface AppState {
   vendors: Vendor[];
   clients: Client[];
   ledgerTransactions: LedgerTransaction[];
-  deletedLedgerTransactions: LedgerTransaction[];
   totalPayables: number;
   totalReceivables: number;
 }
@@ -50,7 +49,7 @@ interface AppContextType extends AppState {
   loadRecycleBinData: () => Promise<void>;
   addCashTransaction: (tx: Omit<CashTransaction, 'id' | 'createdAt' | 'deletedAt' | 'user_id'>) => void;
   addBankTransaction: (tx: Omit<BankTransaction, 'id' | 'createdAt' | 'deletedAt' | 'user_id'>) => void;
-  addStockTransaction: (tx: Omit<StockTransaction, 'id' | 'createdAt' | 'deletedAt' | 'user_id'> & { contact_id?: string }) => void;
+  addStockTransaction: (tx: Omit<StockTransaction, 'id' | 'createdAt' | 'deletedAt' | 'user_id'>) => void;
   editCashTransaction: (originalTx: CashTransaction, updatedTxData: Partial<Omit<CashTransaction, 'id' | 'date'>>) => void;
   editBankTransaction: (originalTx: BankTransaction, updatedTxData: Partial<Omit<BankTransaction, 'id' | 'date'>>) => void;
   editStockTransaction: (originalTx: StockTransaction, updatedTxData: Partial<Omit<StockTransaction, 'id' | 'date'>>) => void;
@@ -60,7 +59,7 @@ interface AppContextType extends AppState {
   deleteMultipleCashTransactions: (txs: CashTransaction[]) => void;
   deleteMultipleBankTransactions: (txs: BankTransaction[]) => void;
   deleteMultipleStockTransactions: (txs: StockTransaction[]) => void;
-  restoreTransaction: (txType: 'cash' | 'bank' | 'stock' | 'ledger', id: string) => void;
+  restoreTransaction: (txType: 'cash' | 'bank' | 'stock', id: string) => void;
   transferFunds: (from: 'cash' | 'bank', amount: number, date?: string) => void;
   addCategory: (type: 'cash' | 'bank', category: string) => void;
   deleteCategory: (type: 'cash' | 'bank', category: string) => void;
@@ -79,6 +78,7 @@ interface AppContextType extends AppState {
   addVendor: (name: string) => Promise<any>;
   addClient: (name: string) => Promise<any>;
   addLedgerTransaction: (tx: Omit<LedgerTransaction, 'id' | 'createdAt' | 'deletedAt' | 'user_id' | 'status'>) => Promise<any>;
+  deleteLedgerTransaction: (tx: LedgerTransaction) => Promise<any>;
   settleLedgerTransaction: (tx: LedgerTransaction, paymentMethod: 'cash' | 'bank', paymentDate: Date) => Promise<any>;
 }
 
@@ -108,7 +108,6 @@ const initialAppState: AppState = {
   vendors: [],
   clients: [],
   ledgerTransactions: [],
-  deletedLedgerTransactions: [],
   totalPayables: 0,
   totalReceivables: 0,
 };
@@ -302,17 +301,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
             readDeletedData({ tableName: 'cash_transactions' }),
             readDeletedData({ tableName: 'bank_transactions' }),
             readDeletedData({ tableName: 'stock_transactions' }),
-            readDeletedData({ tableName: 'ap_ar_transactions' }),
         ]);
 
-        const [deletedCashData, deletedBankData, deletedStockData, deletedLedgerData] = results.map(r => r.status === 'fulfilled' ? r.value : []);
+        const [deletedCashData, deletedBankData, deletedStockData] = results.map(r => r.status === 'fulfilled' ? r.value : []);
         
         setState(prev => ({
             ...prev,
             deletedCashTransactions: deletedCashData.sort((a: any, b: any) => new Date(b.deletedAt).getTime() - new Date(a.deletedAt).getTime()),
             deletedBankTransactions: deletedBankData.sort((a: any, b: any) => new Date(b.deletedAt).getTime() - new Date(a.deletedAt).getTime()),
             deletedStockTransactions: deletedStockData.sort((a: any, b: any) => new Date(b.deletedAt).getTime() - new Date(a.deletedAt).getTime()),
-            deletedLedgerTransactions: deletedLedgerData?.sort((a: any, b: any) => new Date(b.deletedAt).getTime() - new Date(a.deletedAt).getTime()) || [],
         }));
 
     } catch (error: any) {
@@ -338,9 +335,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
   
-  const addStockTransaction = async (tx: Omit<StockTransaction, 'id' | 'createdAt' | 'deletedAt' | 'user_id'> & { contact_id?: string }) => {
+  const addStockTransaction = async (tx: Omit<StockTransaction, 'id' | 'createdAt' | 'deletedAt' | 'user_id'>) => {
     try {
-      const { contact_id, ...stockTxData } = tx;
+      const { contact_id, ...stockTxData } = tx as any;
 
       const result = await appendData({ tableName: 'stock_transactions', data: stockTxData });
       if (!result) throw new Error("Stock transaction creation failed. The 'stock_transactions' table may not exist.");
@@ -351,13 +348,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (tx.paymentMethod === 'credit' && contact_id) {
           const ledgerType = tx.type === 'purchase' ? 'payable' : 'receivable';
           const description = `${tx.type === 'purchase' ? 'Purchase' : 'Sale'} of ${tx.weight}kg of ${tx.stockItemName} on credit`;
-          
+          const contactList = tx.type === 'purchase' ? state.vendors : state.clients;
+          const contactName = contactList.find(c => c.id === contact_id)?.name;
+
+          if (!contactName) throw new Error("Could not find contact name for credit transaction.");
+
           await addLedgerTransaction({
               type: ledgerType,
               description,
               amount: totalValue,
               date: tx.date,
               contact_id: contact_id,
+              contact_name: contactName,
           });
       } else {
           const description = `${tx.type === 'purchase' ? 'Purchase' : 'Sale'} of ${tx.weight}kg of ${tx.stockItemName}`;
@@ -464,8 +466,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
   
-  const restoreTransaction = async (txType: 'cash' | 'bank' | 'stock' | 'ledger', id: string) => {
-    const tableName = txType === 'ledger' ? 'ap_ar_transactions' : `${txType}_transactions`;
+  const restoreTransaction = async (txType: 'cash' | 'bank' | 'stock', id: string) => {
+    const tableName = `${txType}_transactions`;
     try {
         await restoreData({ tableName, id });
 
@@ -727,6 +729,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return null;
     }
   }
+
+  const deleteLedgerTransaction = async (tx: LedgerTransaction) => {
+    if (!state.user || state.user.role !== 'admin') {
+        toast({ variant: 'destructive', title: 'Permission Denied', description: 'Only admins can delete transactions.' });
+        return null;
+    }
+    try {
+        await deleteData({ tableName: 'ap_ar_transactions', id: tx.id });
+        toast({ title: 'Transaction Deleted' });
+        await reloadData();
+    } catch(error) {
+        handleApiError(error);
+    }
+  }
   
   const settleLedgerTransaction = async (tx: LedgerTransaction, paymentMethod: 'cash' | 'bank', paymentDate: Date) => {
     if (!state.user) throw new Error("User not authenticated.");
@@ -831,6 +847,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         addVendor,
         addClient,
         addLedgerTransaction,
+        deleteLedgerTransaction,
         settleLedgerTransaction,
     }}>
       {children}
