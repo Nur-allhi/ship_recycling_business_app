@@ -10,7 +10,7 @@ import { supabase } from '@/lib/supabase';
 import { saveAs } from 'file-saver';
 import JSZip from 'jszip';
 import { getSession } from '@/lib/auth';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { AppLoading } from '@/components/app-loading';
 
 
@@ -178,6 +178,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
   const router = useRouter();
+  const pathname = usePathname();
 
   const logout = useCallback(async () => {
     localStorage.removeItem(getCacheKey());
@@ -479,10 +480,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const addStockTransaction = async (tx: Omit<StockTransaction, 'id' | 'createdAt' | 'deletedAt'> & { contact_id?: string, contact_name?: string }) => {
     const { contact_id, contact_name, ...stockTxData } = tx;
 
-    // This is more complex because it can trigger other transactions.
-    // A full optimistic update here requires generating temp IDs for financial/ledger txs.
-    // For now, let's keep the original logic for stock and just make cash/bank/ledger optimistic.
-    // This is a balance between complexity and perceived performance.
     try {
       const newStockTx = await appendData({ tableName: 'stock_transactions', data: stockTxData, select: '*' });
       if (!newStockTx) throw new Error("Stock transaction creation failed. The 'stock_transactions' table may not exist.");
@@ -525,7 +522,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
           }
       }
       
-      // We need a reload here because stock affects balances in complex ways.
       reloadData({ force: true });
       toast({ title: "Success", description: "Stock transaction recorded."});
       return newStockTx;
@@ -901,7 +897,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     saveStateToLocalStorage(state);
   }, [state])
 
-  if (isLoading && !state.initialBalanceSet) {
+  if (isLoading && pathname !== '/login') {
     return <AppLoading />;
   }
 
@@ -956,7 +952,3 @@ export function useAppContext() {
   }
   return context;
 }
-
-    
-
-    
