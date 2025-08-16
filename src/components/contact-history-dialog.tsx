@@ -40,9 +40,9 @@ export function ContactHistoryDialog({ isOpen, setIsOpen, contact, contactType }
 
   const transactions = useMemo(() => {
     return ledgerTransactions
-        .filter(tx => tx.contactId === contact.id)
+        .filter(tx => tx.contactName === contact.name)
         .sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-  }, [ledgerTransactions, contact.id]);
+  }, [ledgerTransactions, contact.name]);
 
   const { totalDebit, totalCredit, finalBalance } = useMemo(() => {
     let balance = 0;
