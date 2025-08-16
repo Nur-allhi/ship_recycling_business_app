@@ -673,7 +673,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       const result = await appendData({ tableName: 'vendors', data: { name } });
       if (!result) {
-        toast({ variant: 'destructive', title: 'Failed to add vendor', description: "The 'vendors' table may not exist in your database." });
+        toast({ variant: 'destructive', title: 'Setup Incomplete', description: "The 'vendors' table does not exist in your database. Please complete the database setup." });
         return null;
       }
       const newVendor = result[0];
@@ -681,7 +681,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       await reloadData();
       return newVendor;
     } catch (error: any) {
-      toast({ variant: 'destructive', title: 'Failed to add vendor' });
+      toast({ variant: 'destructive', title: 'Failed to add vendor', description: error.message });
       return null;
     }
   }
@@ -689,8 +689,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const addClient = async (name: string) => {
     try {
       const result = await appendData({ tableName: 'clients', data: { name } });
-      if (!result) {
-        toast({ variant: 'destructive', title: 'Failed to add client', description: "The 'clients' table may not exist in your database." });
+       if (!result) {
+        toast({ variant: 'destructive', title: 'Setup Incomplete', description: "The 'clients' table does not exist in your database. Please complete the database setup." });
         return null;
       }
       const newClient = result[0];
@@ -698,7 +698,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       await reloadData();
       return newClient;
     } catch (error: any) {
-      toast({ variant: 'destructive', title: 'Failed to add client' });
+      toast({ variant: 'destructive', title: 'Failed to add client', description: error.message });
       return null;
     }
   }
@@ -822,3 +822,5 @@ export function useAppContext() {
   }
   return context;
 }
+
+    
