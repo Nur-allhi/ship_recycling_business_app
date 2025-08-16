@@ -159,10 +159,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
         const [cashData, bankData, stockTransactionsData, initialStockData, categoriesData, vendorsData, clientsData, ledgerData] = results.map(r => r.status === 'fulfilled' ? r.value : []);
         
-        if (results[5].status === 'rejected') console.error("Failed to load vendors:", results[5].reason?.message);
-        if (results[6].status === 'rejected') console.error("Failed to load clients:", results[6].reason?.message);
-        if (results[7].status === 'rejected') console.error("Failed to load ledger transactions:", results[7].reason?.message);
-        
         let needsInitialBalance = true;
 
         const cashTransactions: CashTransaction[] = cashData.map((tx: any) => ({...tx, date: new Date(tx.date).toISOString() }));
@@ -282,8 +278,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
         const [deletedCashData, deletedBankData, deletedStockData, deletedLedgerData] = results.map(r => r.status === 'fulfilled' ? r.value : []);
         
-        if (results[3].status === 'rejected') console.error("Failed to load deleted ledger transactions:", results[3].reason?.message);
-
         setState(prev => ({
             ...prev,
             deletedCashTransactions: deletedCashData.sort((a: any, b: any) => new Date(b.deletedAt).getTime() - new Date(a.deletedAt).getTime()),
@@ -294,13 +288,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     } catch (error: any) {
         console.error("Failed to load recycle bin data", error);
-        if (!error.message.includes('relation "public.ap_ar_transactions" does not exist')) {
-            toast({
-                variant: 'destructive',
-                title: 'Failed to load recycle bin',
-                description: 'Could not fetch deleted items. Please try again later.'
-            });
-        }
+        toast({
+            variant: 'destructive',
+            title: 'Failed to load recycle bin',
+            description: 'Could not fetch deleted items. Please try again later.'
+        });
     }
   }, [toast, state.user]);
 
@@ -476,7 +468,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         await Promise.all([reloadData(), loadRecycleBinData()]);
     } catch (error: any) {
         console.error("Failed to restore transaction", error);
-         if (!error.message.includes('relation "public.ap_ar_transactions" does not exist')) {
+         if (error.code !== '42P01') {
             toast({ variant: 'destructive', title: "Error", description: "Failed to restore the transaction." });
         }
     }
@@ -807,5 +799,3 @@ export function useAppContext() {
   }
   return context;
 }
-
-    

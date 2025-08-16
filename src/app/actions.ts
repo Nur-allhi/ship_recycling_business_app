@@ -70,6 +70,10 @@ export async function readData(input: z.infer<typeof ReadDataInputSchema>) {
   const { data, error } = await query;
 
   if (error) {
+    // Gracefully handle tables that might not exist for all users
+    if (error.code === '42P01') { // 42P01 is 'undefined_table'
+      return []; // Return empty array if table doesn't exist
+    }
     console.error(`Error reading from ${input.tableName}:`, error);
     throw new Error(error.message);
   }
@@ -87,7 +91,12 @@ export async function readDeletedData(input: z.infer<typeof ReadDataInputSchema>
 
     const { data, error } = await query;
 
-    if (error) throw new Error(error.message);
+    if (error) {
+      if (error.code === '42P01') {
+        return [];
+      }
+      throw new Error(error.message);
+    }
     return data;
 }
 
