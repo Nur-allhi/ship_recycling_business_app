@@ -814,7 +814,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     saveSettings();
   }, [state.fontSize, state.bodyFont, state.numberFont, state.wastagePercentage, state.currency, state.showStockValue])
 
-  if (!state.initialBalanceSet && !pathname.includes('/login')) {
+  if (!sessionChecked && !pathname.includes('/login')) {
     return <AppLoading />;
   }
 

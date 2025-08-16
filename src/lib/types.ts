@@ -68,7 +68,7 @@ export interface LedgerTransaction {
   id: string;
   date: string;
   type: 'payable' | 'receivable'; // A/P or A/R
-  contact: string;
+  contact: string; // The name of the vendor or client
   description: string;
   amount: number;
   status: 'unpaid' | 'paid';
