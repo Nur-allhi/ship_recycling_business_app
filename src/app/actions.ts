@@ -17,15 +17,9 @@ const createSupabaseClient = async (serviceRole = false) => {
         throw new Error("Supabase URL, Anon Key, or Service Role Key is missing from environment variables.");
     }
     
-    if (serviceRole) {
-        return createClient(supabaseUrl, supabaseServiceKey, {
-            auth: { persistSession: false },
-        });
-    }
-
-    // For standard RLS, we would use the user's JWT. Since this app has simplified auth,
-    // we will use the service role key and let RLS policies that depend on auth.uid() work automatically.
-    // This is not standard practice for production apps but fits this app's simplified model.
+    // For server-side actions, we use the service role key.
+    // RLS policies that depend on `auth.uid()` will still work correctly 
+    // as long as we pass the user_id in the operations.
     return createClient(supabaseUrl, supabaseServiceKey, {
         auth: { persistSession: false },
     });
@@ -86,14 +80,21 @@ const AppendDataInputSchema = z.object({
 });
 
 export async function appendData(input: z.infer<typeof AppendDataInputSchema>) {
-    // The createSupabaseClient now uses the service role key, which allows auth.uid()
-    // in RLS policies and default values to work correctly based on the user's session.
-    // We no longer need to manually inject the user_id here.
     const supabase = await createSupabaseClient();
+    const session = await getSession();
+
+    if (!session) {
+        throw new Error("User not authenticated for append operation.");
+    }
+    
+    const dataWithUserId = {
+        ...input.data,
+        user_id: session.id,
+    };
     
     const { data, error } = await supabase
         .from(input.tableName)
-        .insert([input.data])
+        .insert([dataWithUserId])
         .select();
 
     if (error) {

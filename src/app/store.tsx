@@ -672,7 +672,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return null;
     }
     try {
-      // The user_id is now handled by RLS and database defaults, so we don't pass it.
       const result = await appendData({ tableName: 'vendors', data: { name } });
       if (!result) {
         toast({ variant: 'destructive', title: 'Setup Incomplete', description: "Could not save to the 'vendors' table. Please ensure it exists in your database and RLS is configured." });
@@ -699,7 +698,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return null;
     }
     try {
-      // The user_id is now handled by RLS and database defaults, so we don't pass it.
       const result = await appendData({
         tableName: 'clients',
         data: { name },
