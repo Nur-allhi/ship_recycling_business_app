@@ -172,7 +172,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const cashTransactions: CashTransaction[] = cashData?.map((tx: any) => ({...tx, date: new Date(tx.date).toISOString() })) || [];
         const bankTransactions: BankTransaction[] = bankData?.map((tx: any) => ({...tx, date: new Date(tx.date).toISOString() })) || [];
         
-        // If there's ANY data, we don't need initial balances.
         if (cashTransactions.length > 0 || bankTransactions.length > 0 || (initialStockData && initialStockData.length > 0)) {
             needsInitialBalance = false;
         }
@@ -880,4 +879,5 @@ export function AppLoading() {
         </div>
     );
 }
+    
     

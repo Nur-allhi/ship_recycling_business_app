@@ -153,6 +153,11 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
     setValue('newContact', '');
   }, [stockType, setValue]);
 
+  useEffect(() => {
+    setValue('contact', undefined);
+    setValue('newContact', '');
+  }, [ledgerType, setValue]);
+
   const onSubmit = async (data: FormData) => {
     const transactionDate = data.date.toISOString();
     try {
@@ -625,4 +630,5 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
     </>
   );
 }
+    
     

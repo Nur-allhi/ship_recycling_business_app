@@ -229,3 +229,4 @@ export function ContactHistoryDialog({ isOpen, setIsOpen, contact, contactType }
   );
 }
     
+    
