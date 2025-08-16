@@ -25,6 +25,7 @@ import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Separator } from './ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
+import { Alert, AlertTitle, AlertDescription } from './ui/alert';
 
 const formSchema = z.object({
   transactionType: z.enum(['cash', 'bank', 'stock', 'transfer', 'ap_ar']),
@@ -38,7 +39,7 @@ const formSchema = z.object({
   stockItemName: z.string().optional(),
   weight: z.coerce.number().optional(),
   pricePerKg: z.coerce.number().optional(),
-  paymentMethod: z.enum(['cash', 'bank']).optional(),
+  paymentMethod: z.enum(['cash', 'bank', 'credit']).optional(),
 
   // cash/bank specific
   inOutType: z.enum(['in', 'out']).optional(),
@@ -59,6 +60,16 @@ const formSchema = z.object({
         if (!data.weight || data.weight <= 0) ctx.addIssue({ code: 'custom', message: 'Weight must be positive.', path: ['weight'] });
         if (data.pricePerKg === undefined || data.pricePerKg < 0) ctx.addIssue({ code: 'custom', message: 'Price must be non-negative.', path: ['pricePerKg'] });
         if (!data.paymentMethod) ctx.addIssue({ code: 'custom', message: 'Payment method is required.', path: ['paymentMethod'] });
+        if (data.paymentMethod === 'credit') {
+            if (data.contactId === 'new' && !data.newContactName) {
+                const contactType = data.stockType === 'purchase' ? 'Vendor' : 'Client';
+                ctx.addIssue({ code: 'custom', message: `New ${contactType} name is required.`, path: ['newContactName'] });
+            }
+            if (data.contactId !== 'new' && !data.contactId) {
+                const contactType = data.stockType === 'purchase' ? 'Vendor' : 'Client';
+                ctx.addIssue({ code: 'custom', message: `Please select a ${contactType}.`, path: ['contactId'] });
+            }
+        }
     }
     if (['cash', 'bank', 'transfer', 'ap_ar'].includes(data.transactionType)) {
         if(!data.amount || data.amount <=0) ctx.addIssue({ code: 'custom', message: 'Amount must be positive.', path: ['amount'] });
@@ -108,7 +119,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
   
   const { toast } = useToast();
   
-  const { register, handleSubmit, control, watch, reset, formState: { errors, isSubmitting } } = useForm<FormData>({
+  const { register, handleSubmit, control, watch, reset, setValue, formState: { errors, isSubmitting } } = useForm<FormData>({
     resolver: zodResolver(formSchema),
     defaultValues: {
         transactionType: 'cash',
@@ -120,6 +131,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
 
   const transactionType = watch('transactionType');
   const stockType = watch('stockType');
+  const stockPaymentMethod = watch('paymentMethod');
   const ledgerType = watch('ledgerType');
   const contactId = watch('contactId');
   const [isNewStockItem, setIsNewStockItem] = useState(false);
@@ -133,6 +145,12 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
     });
     setIsNewStockItem(false);
   }, [transactionType, reset]);
+  
+  useEffect(() => {
+    // Clear contact selection when stock type changes
+    setValue('contactId', undefined);
+    setValue('newContactName', '');
+  }, [stockType, setValue]);
 
   const onSubmit = async (data: FormData) => {
     const transactionDate = data.date.toISOString();
@@ -157,6 +175,21 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                 });
                 break;
             case 'stock':
+                let stockContactId = data.contactId;
+                let stockContactName = '';
+                
+                if (data.paymentMethod === 'credit') {
+                    if (data.contactId === 'new') {
+                        const newContact = data.stockType === 'purchase' ? await addVendor(data.newContactName!) : await addClient(data.newContactName!);
+                        if(!newContact) throw new Error(`Failed to create new ${data.stockType === 'purchase' ? 'vendor' : 'client'}.`);
+                        stockContactId = newContact.id;
+                        stockContactName = newContact.name;
+                    } else {
+                        const existingContact = data.stockType === 'purchase' ? vendors.find(v => v.id === stockContactId) : clients.find(c => c.id === stockContactId);
+                        stockContactName = existingContact?.name || '';
+                    }
+                }
+                
                 await addStockTransaction({
                     type: data.stockType!,
                     stockItemName: data.stockItemName!,
@@ -165,6 +198,8 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                     paymentMethod: data.paymentMethod!,
                     description: data.description,
                     date: transactionDate,
+                    contactId: stockContactId,
+                    contactName: stockContactName,
                 });
                 break;
             case 'transfer':
@@ -202,7 +237,10 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
   };
 
   const currentCategories = transactionType === 'cash' ? cashCategories : bankCategories;
-  const currentContacts = ledgerType === 'payable' ? vendors : clients;
+  const stockCreditContactType = stockType === 'purchase' ? 'Vendor' : 'Client';
+  const stockCreditContacts = stockType === 'purchase' ? vendors : clients;
+  
+  const currentLedgerContacts = ledgerType === 'payable' ? vendors : clients;
   
   const dateField = (
       <div className="space-y-2">
@@ -236,6 +274,47 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
             )}
         />
         {errors.date && <p className="text-sm text-destructive">{errors.date.message}</p>}
+    </div>
+  )
+
+  const stockCreditFields = (
+     <div className="space-y-2 animate-fade-in pt-2">
+        <Separator />
+         <Alert variant="default" className="mt-4 bg-blue-50 border-blue-200 text-blue-800">
+            <AlertTitle>On Credit</AlertTitle>
+            <AlertDescription>
+                This will create a new item in your Accounts {stockType === 'purchase' ? 'Payable' : 'Receivable'} ledger.
+            </AlertDescription>
+        </Alert>
+        <Label>{stockCreditContactType}</Label>
+        <Controller
+            control={control}
+            name="contactId"
+            render={({ field }) => (
+                <Select onValueChange={field.onChange} value={field.value}>
+                    <SelectTrigger>
+                        <SelectValue placeholder={`Select a ${stockCreditContactType}`} />
+                    </SelectTrigger>
+                    <SelectContent>
+                        {stockCreditContacts.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                        <SelectItem value="new">
+                          <span className="flex items-center gap-2"><Plus className="h-4 w-4"/>Add New</span>
+                        </SelectItem>
+                    </SelectContent>
+                </Select>
+            )}
+        />
+        {errors.contactId && <p className="text-sm text-destructive">{errors.contactId.message}</p>}
+    
+        {contactId === 'new' && (
+            <div className="flex items-end gap-2 pt-2 animate-fade-in">
+                <div className="flex-grow space-y-1">
+                    <Label htmlFor="newContactName">New {stockCreditContactType} Name</Label>
+                    <Input {...register('newContactName')} placeholder={`Enter new ${stockCreditContactType.toLowerCase()} name`}/>
+                </div>
+            </div>
+        )}
+        {errors.newContactName && <p className="text-sm text-destructive">{errors.newContactName.message}</p>}
     </div>
   )
 
@@ -431,11 +510,13 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                                             <RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex pt-2 gap-4">
                                                 <Label htmlFor="cash-payment" className="flex items-center gap-2 cursor-pointer"><RadioGroupItem value="cash" id="cash-payment" /><span>Cash</span></Label>
                                                 <Label htmlFor="bank-payment" className="flex items-center gap-2 cursor-pointer"><RadioGroupItem value="bank" id="bank-payment" /><span>Bank</span></Label>
+                                                <Label htmlFor="credit-payment" className="flex items-center gap-2 cursor-pointer"><RadioGroupItem value="credit" id="credit-payment" /><span>Credit</span></Label>
                                             </RadioGroup>
                                         )}
                                     />
                                     {errors.paymentMethod && <p className="text-sm text-destructive">{errors.paymentMethod.message}</p>}
                                 </div>
+                                {stockPaymentMethod === 'credit' && stockType && stockCreditFields}
                             </TabsContent>
 
                             <TabsContent value="transfer" className="m-0 space-y-4 animate-fade-in">
@@ -503,7 +584,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                                                         <SelectValue placeholder={`Select a ${ledgerType === 'payable' ? 'Vendor' : 'Client'}`} />
                                                     </SelectTrigger>
                                                     <SelectContent>
-                                                        {currentContacts.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                                                        {currentLedgerContacts.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
                                                         <SelectItem value="new">
                                                           <span className="flex items-center gap-2"><Plus className="h-4 w-4"/>Add New</span>
                                                         </SelectItem>

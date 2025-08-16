@@ -35,12 +35,15 @@ export interface StockTransaction {
   type: 'purchase' | 'sale';
   weight: number; // in kg
   pricePerKg: number;
-  paymentMethod: 'cash' | 'bank';
+  paymentMethod: 'cash' | 'bank' | 'credit';
   description?: string;
   lastEdited?: string;
   deletedAt?: string;
   createdAt: string;
   user_id?: string;
+  // Fields for credit transactions
+  contactId?: string;
+  contactName?: string;
 }
 
 export interface User {
@@ -79,4 +82,5 @@ export interface LedgerTransaction {
   deletedAt?: string;
   createdAt: string;
   user_id?: string;
+  linkedStockTxId?: string; // Link to the stock transaction if it exists
 }

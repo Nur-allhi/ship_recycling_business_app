@@ -44,7 +44,7 @@ export function UserManagementTab() {
   const [users, setUsers] = useState<Omit<User, 'password'>[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  const { register, handleSubmit, control, reset, formState: { errors } } = useForm<NewUserFormData>({
+  const { register, handleSubmit, control, reset, formState: { errors, isSubmitting } } = useForm<NewUserFormData>({
     resolver: zodResolver(newUserSchema),
   });
 
@@ -124,7 +124,10 @@ export function UserManagementTab() {
                         {errors.role && <p className="text-sm text-destructive">{errors.role.message}</p>}
                     </div>
                 </div>
-                <Button type="submit"><Plus className="mr-2 h-4 w-4" /> Add User</Button>
+                <Button type="submit" disabled={isSubmitting}>
+                  {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />} 
+                  Add User
+                </Button>
             </form>
         </div>
         
@@ -148,7 +151,7 @@ export function UserManagementTab() {
                 </TableHeader>
                 <TableBody>
                     {isLoading ? (
-                        <TableRow><TableCell colSpan={3} className="text-center h-24">Loading users...</TableCell></TableRow>
+                        <TableRow><TableCell colSpan={3} className="text-center h-24"><Loader2 className="mx-auto h-6 w-6 animate-spin" /></TableCell></TableRow>
                     ) : users.length > 0 ? (
                     users.map((user) => (
                         <TableRow key={user.id}>

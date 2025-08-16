@@ -332,25 +332,40 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       const [newStockTx] = await appendData({ tableName: 'stock_transactions', data: { ...tx } });
       if (!newStockTx) throw new Error("Stock transaction creation failed.");
-
+      
       const totalValue = tx.weight * tx.pricePerKg;
-      const description = `${tx.type === 'purchase' ? 'Purchase' : 'Sale'} of ${tx.weight}kg of ${tx.stockItemName}`;
-      const category = tx.type === 'purchase' ? 'Stock Purchase' : 'Stock Sale';
-      const financialTxData = {
-          date: tx.date,
-          amount: totalValue,
-          description,
-          category,
-          linkedStockTxId: newStockTx.id
-      };
 
-      if (tx.paymentMethod === 'cash') {
-          await appendData({ tableName: 'cash_transactions', data: { ...financialTxData, type: tx.type === 'purchase' ? 'expense' : 'income' }});
-      } else { 
-          await appendData({ tableName: 'bank_transactions', data: { ...financialTxData, type: tx.type === 'purchase' ? 'withdrawal' : 'deposit' }});
+      if (tx.paymentMethod === 'credit') {
+          const ledgerType = tx.type === 'purchase' ? 'payable' : 'receivable';
+          const description = `${tx.type === 'purchase' ? 'Purchase' : 'Sale'} of ${tx.weight}kg of ${tx.stockItemName} on credit`;
+          await addLedgerTransaction({
+              type: ledgerType,
+              contactId: tx.contactId!,
+              contactName: tx.contactName!,
+              description,
+              amount: totalValue,
+              date: tx.date,
+              linkedStockTxId: newStockTx.id
+          });
+      } else {
+          const description = `${tx.type === 'purchase' ? 'Purchase' : 'Sale'} of ${tx.weight}kg of ${tx.stockItemName}`;
+          const category = tx.type === 'purchase' ? 'Stock Purchase' : 'Stock Sale';
+          const financialTxData = {
+              date: tx.date,
+              amount: totalValue,
+              description,
+              category,
+              linkedStockTxId: newStockTx.id
+          };
+
+          if (tx.paymentMethod === 'cash') {
+              await appendData({ tableName: 'cash_transactions', data: { ...financialTxData, type: tx.type === 'purchase' ? 'expense' : 'income' }});
+          } else { 
+              await appendData({ tableName: 'bank_transactions', data: { ...financialTxData, type: tx.type === 'purchase' ? 'withdrawal' : 'deposit' }});
+          }
       }
       
-      toast({ title: "Success", description: "Stock transaction and financial entry added."});
+      toast({ title: "Success", description: "Stock transaction recorded."});
       await reloadData();
     } catch (error) {
       console.error(error);
