@@ -600,15 +600,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
      try {
         const baseTx = { date: transactionDate, amount, description, category: 'Transfer' };
-
+        let cashTx, bankTx;
         if(from === 'cash') {
-            await addCashTransaction({ ...baseTx, type: 'expense' });
-            await addBankTransaction({ ...baseTx, type: 'deposit' });
+            cashTx = await addCashTransaction({ ...baseTx, type: 'expense' });
+            bankTx = await addBankTransaction({ ...baseTx, type: 'deposit' });
         } else {
-            await addBankTransaction({ ...baseTx, type: 'withdrawal' });
-            await addCashTransaction({ ...baseTx, type: 'income' });
+            bankTx = await addBankTransaction({ ...baseTx, type: 'withdrawal' });
+            cashTx = await addCashTransaction({ ...baseTx, type: 'income' });
         }
-        toast({ title: "Success", description: "Fund transfer completed."});
+        if (cashTx && bankTx) {
+          toast({ title: "Success", description: "Fund transfer completed."});
+        }
      } catch (error) {
         handleApiError(error);
      }
@@ -935,7 +937,7 @@ export function AppLoading() {
     return (
         <div className="flex items-center justify-center min-h-screen bg-background">
             <div className="flex flex-col items-center gap-4">
-                <Logo className="h-16 w-16 text-primary animate-pulse" />
+                <div className="loader"></div>
                 <p className="text-muted-foreground">Loading your ledger...</p>
             </div>
         </div>
