@@ -211,6 +211,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       try {
         const session = await getSession();
         setState(prev => ({...prev, user: session }));
+        if (session && !state.initialBalanceSet) {
+             await reloadData({force: true});
+        }
       } catch (error) {
         console.error("Failed to get session", error);
       } finally {
@@ -269,7 +272,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
   
   const reloadData = useCallback(async (options?: { force?: boolean }) => {
-    if (!state.user) return;
+    if (!state.user && !options?.force) return;
 
     try {
       const [
@@ -334,17 +337,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
             totalPayables,
             totalReceivables,
         }));
-      } catch (error: any) {
+      } catch (error) {
         console.error("Failed to load data during promise resolution:", error);
         setState(prev => ({...prev, initialBalanceSet: true}));
         handleApiError(error);
       }
-  }, [state.user, calculateBalancesAndStock, handleApiError]);
+  }, [state.user, calculateBalancesAndStock, handleApiError, state.initialBalanceSet]);
   
   useEffect(() => {
     if (state.user && !isLoading) {
         reloadData({ force: !state.initialBalanceSet });
-    } else if (!isLoading && !state.user) { // Added this check
+    } else if (!isLoading && !state.user) {
         setState(prev => ({...prev, initialBalanceSet: true, needsInitialBalance: true }));
     }
   }, [state.user, isLoading, reloadData, state.initialBalanceSet]);
@@ -374,30 +377,113 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [state.user, handleApiError]);
   
-  const addCashTransaction = async (tx: Omit<CashTransaction, 'id' | 'createdAt' | 'deletedAt' | 'user_id'>) => {
-    try {
-      const newTx = await appendData({ tableName: 'cash_transactions', data: { ...tx }, select: '*' });
-      reloadData({ force: true });
-      return newTx;
-    } catch (error) {
-      handleApiError(error);
-    }
-  };
+    const addCashTransaction = async (tx: Omit<CashTransaction, 'id' | 'createdAt' | 'deletedAt'>) => {
+        const tempId = `temp-${Date.now()}`;
+        const newTxForUI: CashTransaction = { ...tx, id: tempId, createdAt: new Date().toISOString() };
 
-  const addBankTransaction = async (tx: Omit<BankTransaction, 'id' | 'createdAt' | 'deletedAt' | 'user_id'>) => {
-    try {
-        const newTx = await appendData({ tableName: 'bank_transactions', data: { ...tx }, select: '*' });
-        reloadData({ force: true });
-        return newTx;
-    } catch (error) {
-        handleApiError(error);
-    }
-  };
-  
-  const addStockTransaction = async (tx: Omit<StockTransaction, 'id' | 'createdAt' | 'deletedAt' | 'user_id'> & { contact_id?: string, contact_name?: string }) => {
-    try {
-      const { contact_id, contact_name, ...stockTxData } = tx;
+        // Optimistic UI update
+        setState(prev => {
+            const newTxs = [newTxForUI, ...prev.cashTransactions];
+            const { finalCashBalance } = calculateBalancesAndStock(newTxs, prev.bankTransactions, prev.stockTransactions, []);
+            return {
+                ...prev,
+                cashTransactions: newTxs.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+                cashBalance: finalCashBalance,
+            };
+        });
 
+        try {
+            const savedTx = await appendData({ tableName: 'cash_transactions', data: tx, select: '*' });
+            // Replace temp record with final record from DB
+            setState(prev => ({
+                ...prev,
+                cashTransactions: prev.cashTransactions.map(t => t.id === tempId ? savedTx : t),
+            }));
+            return savedTx;
+        } catch (error) {
+            // Rollback on error
+            toast({ variant: 'destructive', title: 'Failed to save cash transaction.' });
+            setState(prev => ({
+                ...prev,
+                cashTransactions: prev.cashTransactions.filter(t => t.id !== tempId),
+            }));
+            handleApiError(error);
+        }
+    };
+
+    const addBankTransaction = async (tx: Omit<BankTransaction, 'id' | 'createdAt' | 'deletedAt'>) => {
+        const tempId = `temp-${Date.now()}`;
+        const newTxForUI: BankTransaction = { ...tx, id: tempId, createdAt: new Date().toISOString() };
+
+        setState(prev => {
+            const newTxs = [newTxForUI, ...prev.bankTransactions];
+            const { finalBankBalance } = calculateBalancesAndStock(prev.cashTransactions, newTxs, prev.stockTransactions, []);
+            return {
+                ...prev,
+                bankTransactions: newTxs.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+                bankBalance: finalBankBalance,
+            };
+        });
+
+        try {
+            const savedTx = await appendData({ tableName: 'bank_transactions', data: tx, select: '*' });
+            setState(prev => ({
+                ...prev,
+                bankTransactions: prev.bankTransactions.map(t => t.id === tempId ? savedTx : t),
+            }));
+            return savedTx;
+        } catch (error) {
+            toast({ variant: 'destructive', title: 'Failed to save bank transaction.' });
+            setState(prev => ({
+                ...prev,
+                bankTransactions: prev.bankTransactions.filter(t => t.id !== tempId),
+            }));
+            handleApiError(error);
+        }
+    };
+
+    const addLedgerTransaction = async (tx: Omit<LedgerTransaction, 'id' | 'createdAt' | 'deletedAt' | 'status' | 'paid_amount' | 'installments'>) => {
+        const tempId = `temp-${Date.now()}`;
+        const newTxForUI: LedgerTransaction = { ...tx, id: tempId, createdAt: new Date().toISOString(), status: 'unpaid', paid_amount: 0, installments: [] };
+        
+        setState(prev => {
+            const newLedgerTxs = [newTxForUI, ...prev.ledgerTransactions];
+            const totalPayables = newLedgerTxs.filter(t => t.type === 'payable' && t.status !== 'paid').reduce((acc, t) => acc + (t.amount - t.paid_amount), 0);
+            const totalReceivables = newLedgerTxs.filter(t => t.type === 'receivable' && t.status !== 'paid').reduce((acc, t) => acc + (t.amount - t.paid_amount), 0);
+            return {
+                ...prev,
+                ledgerTransactions: newLedgerTxs.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+                totalPayables,
+                totalReceivables
+            };
+        });
+
+        try {
+            const savedTx = await appendData({ tableName: 'ap_ar_transactions', data: { ...tx, status: 'unpaid', paid_amount: 0 }, select: '*, installments:payment_installments(*)' });
+            setState(prev => ({
+                ...prev,
+                ledgerTransactions: prev.ledgerTransactions.map(t => t.id === tempId ? savedTx : t),
+            }));
+            return savedTx;
+        } catch (error) {
+            toast({ variant: 'destructive', title: 'Failed to save ledger transaction.' });
+            setState(prev => ({
+                ...prev,
+                ledgerTransactions: prev.ledgerTransactions.filter(t => t.id !== tempId),
+            }));
+            handleApiError(error);
+            return null;
+        }
+    }
+
+  const addStockTransaction = async (tx: Omit<StockTransaction, 'id' | 'createdAt' | 'deletedAt'> & { contact_id?: string, contact_name?: string }) => {
+    const { contact_id, contact_name, ...stockTxData } = tx;
+
+    // This is more complex because it can trigger other transactions.
+    // A full optimistic update here requires generating temp IDs for financial/ledger txs.
+    // For now, let's keep the original logic for stock and just make cash/bank/ledger optimistic.
+    // This is a balance between complexity and perceived performance.
+    try {
       const newStockTx = await appendData({ tableName: 'stock_transactions', data: stockTxData, select: '*' });
       if (!newStockTx) throw new Error("Stock transaction creation failed. The 'stock_transactions' table may not exist.");
       
@@ -408,7 +494,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           const description = `${tx.type === 'purchase' ? 'Purchase' : 'Sale'} of ${tx.weight}kg of ${tx.stockItemName} on credit`;
           const contactList = tx.type === 'purchase' ? state.vendors : state.clients;
           const finalContactName = contact_name || contactList.find(c => c.id === contact_id)?.name;
-
+          
           if (!finalContactName) {
             throw new Error(`Could not find a name for the selected ${tx.type === 'purchase' ? 'vendor' : 'client'}.`);
           }
@@ -439,8 +525,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
           }
       }
       
+      // We need a reload here because stock affects balances in complex ways.
+      reloadData({ force: true });
       toast({ title: "Success", description: "Stock transaction recorded."});
-      // No reload here, the sub-functions will trigger it
       return newStockTx;
     } catch (error: any) {
       handleApiError(error)
@@ -591,7 +678,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
      try {
         const baseTx = { date: transactionDate, amount, description, category: 'Transfer' };
-        let cashTx, bankTx;
+        
+        // This is not a simple optimistic update as it involves two transactions.
+        // We'll keep the existing behavior for atomicity.
         if(from === 'cash') {
             await addCashTransaction({ ...baseTx, type: 'expense' });
             await addBankTransaction({ ...baseTx, type: 'deposit' });
@@ -773,24 +862,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const addLedgerTransaction = async (tx: Omit<LedgerTransaction, 'id' | 'createdAt' | 'deletedAt' | 'user_id' | 'status' | 'paid_amount' | 'installments'>) => {
-    if (!state.user) {
-        toast({ variant: 'destructive', title: 'Authentication Error', description: 'You must be logged in.' });
-        return null;
-    }
-    try {
-        const newTx = await appendData({ tableName: 'ap_ar_transactions', data: { ...tx, status: 'unpaid', paid_amount: 0 }, select: '*, installments:payment_installments(*)' });
-        if(!newTx) throw new Error("Could not create ledger transaction.");
-        
-        reloadData({ force: true });
-        
-        return newTx;
-    } catch (error: any) {
-        handleApiError(error);
-        return null;
-    }
-  }
-
   const deleteLedgerTransaction = async (tx: LedgerTransaction) => {
     if (!state.user || state.user.role !== 'admin') {
         toast({ variant: 'destructive', title: 'Permission Denied', description: 'Only admins can delete transactions.' });
@@ -885,3 +956,5 @@ export function useAppContext() {
   }
   return context;
 }
+
+    
