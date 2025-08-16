@@ -219,18 +219,22 @@ export async function deleteAllData() {
     const session = await getSession();
     if (!session) throw new Error("No active session to delete data.");
     try {
+        // First delete the user from auth schema
+        const { error: authError } = await supabase.auth.admin.deleteUser(session.id);
+        if (authError) {
+            // If the user doesn't exist in auth, we can still proceed to delete their data
+            if (authError.message !== 'User not found') {
+                console.error(`Error deleting auth user:`, authError);
+                throw new Error(`Failed to delete user account.`);
+            }
+        }
+        
         for (const tableName of tables) {
             const { error } = await supabase.from(tableName).delete().eq('user_id', session.id);
             if (error && error.code !== '42P01') {
                 console.error(`Error deleting from ${tableName}:`, error);
                 throw new Error(`Failed to delete data from ${tableName}.`);
             }
-        }
-        // Also delete the user from auth schema
-        const { error: authError } = await supabase.auth.admin.deleteUser(session.id);
-        if (authError) {
-            console.error(`Error deleting auth user:`, authError);
-            throw new Error(`Failed to delete user account.`);
         }
 
         return { success: true };
@@ -251,17 +255,16 @@ export async function login(input: z.infer<typeof LoginInputSchema>) {
     const supabase = await createSupabaseClient(true);
     
     // Simplified Login: Find user by email (username) or create them.
-    // In a real app, you would use supabase.auth.signInWithPassword.
-    const { data: { user }, error: userError } = await supabase.auth.admin.listUsers({ email: input.username });
+    const { data: { users }, error: userError } = await supabase.auth.admin.listUsers({ email: input.username });
     
     let userId: string;
     let userRole: 'admin' | 'user' = 'user'; // Default role
 
     if (userError) throw new Error("Could not contact auth service.");
     
-    if (user && user.length > 0) {
-        userId = user[0].id;
-        userRole = user[0].user_metadata.role || 'user';
+    if (users && users.length > 0) {
+        userId = users[0].id;
+        userRole = users[0].user_metadata.role || 'user';
     } else {
         // For simplicity, create a new user if they don't exist.
         const { data: newUser, error: createError } = await supabase.auth.admin.createUser({
