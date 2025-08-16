@@ -170,14 +170,12 @@ export async function exportAllData() {
     const tables = ['cash_transactions', 'bank_transactions', 'stock_transactions', 'initial_stock', 'categories'];
     const exportedData: Record<string, any[]> = {};
     const session = await getSession();
+    const userSpecificTables = ['cash_transactions', 'bank_transactions', 'stock_transactions', 'categories', 'initial_stock'];
 
     for (const tableName of tables) {
         let query = supabase.from(tableName).select('*');
-        if (session?.id) {
-             let shouldFilter = ['cash_transactions', 'bank_transactions', 'stock_transactions', 'categories', 'initial_stock'].includes(tableName);
-             if (shouldFilter) {
-                query = query.eq('user_id', session.id);
-             }
+        if (session?.id && userSpecificTables.includes(tableName)) {
+             query = query.eq('user_id', session.id);
         }
         const { data, error } = await query;
         if (error) {
@@ -335,5 +333,7 @@ export async function deleteUser(id: string) {
     if (error) throw new Error(error.message);
     return { success: true };
 }
+
+    
 
     
