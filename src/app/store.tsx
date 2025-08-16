@@ -146,7 +146,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return;
     }
     try {
-        const [cashData, bankData, stockTransactionsData, initialStockData, categoriesData, vendorsData, clientsData, ledgerData] = await Promise.all([
+        const results = await Promise.allSettled([
             readData({ tableName: 'cash_transactions' }),
             readData({ tableName: 'bank_transactions' }),
             readData({ tableName: 'stock_transactions' }),
@@ -156,6 +156,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
             readData({ tableName: 'clients' }),
             readData({ tableName: 'ap_ar_transactions' }),
         ]);
+
+        const [cashData, bankData, stockTransactionsData, initialStockData, categoriesData, vendorsData, clientsData, ledgerData] = results.map(r => r.status === 'fulfilled' ? r.value : []);
+        
+        if (results[5].status === 'rejected') console.error("Failed to load vendors:", results[5].reason?.message);
+        if (results[6].status === 'rejected') console.error("Failed to load clients:", results[6].reason?.message);
+        if (results[7].status === 'rejected') console.error("Failed to load ledger transactions:", results[7].reason?.message);
         
         let needsInitialBalance = true;
 
@@ -243,9 +249,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }));
 
       } catch (error: any) {
-        console.error("Failed to load data", error);
+        console.error("Failed to load data during promise resolution:", error);
         setState(prev => ({...prev, initialBalanceSet: true}));
-        if (!error.message.includes('relation "users" does not exist') && !error.message.includes('relation "public.vendors" does not exist')) {
+        if (!error.message.includes('relation "users" does not exist')) {
           toast({
               variant: 'destructive',
               title: 'Failed to load data',
@@ -267,12 +273,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const loadRecycleBinData = useCallback(async () => {
     if(!state.user) return;
     try {
-        const [deletedCashData, deletedBankData, deletedStockData, deletedLedgerData] = await Promise.all([
+        const results = await Promise.allSettled([
             readDeletedData({ tableName: 'cash_transactions' }),
             readDeletedData({ tableName: 'bank_transactions' }),
             readDeletedData({ tableName: 'stock_transactions' }),
             readDeletedData({ tableName: 'ap_ar_transactions' }),
         ]);
+
+        const [deletedCashData, deletedBankData, deletedStockData, deletedLedgerData] = results.map(r => r.status === 'fulfilled' ? r.value : []);
+        
+        if (results[3].status === 'rejected') console.error("Failed to load deleted ledger transactions:", results[3].reason?.message);
 
         setState(prev => ({
             ...prev,
@@ -797,3 +807,5 @@ export function useAppContext() {
   }
   return context;
 }
+
+    
