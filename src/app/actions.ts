@@ -62,7 +62,7 @@ export async function readData(input: z.infer<typeof ReadDataInputSchema>) {
       .from(input.tableName)
       .select(input.select);
 
-    const softDeleteTables = ['cash_transactions', 'bank_transactions', 'stock_transactions'];
+    const softDeleteTables = ['cash_transactions', 'bank_transactions', 'stock_transactions', 'ap_ar_transactions'];
     
     if (softDeleteTables.includes(input.tableName)) {
       query = query.is('deletedAt', null);
@@ -101,7 +101,7 @@ export async function readDeletedData(input: z.infer<typeof ReadDataInputSchema>
         }
         return data;
     } catch (error) {
-        return handleAuthError(error);
+        return handleApiError(error);
     }
 }
 
@@ -157,7 +157,7 @@ export async function updateData(input: z.infer<typeof UpdateDataInputSchema>) {
     if (error) throw new Error(error.message);
     return data;
   } catch(error) {
-    return handleAuthError(error);
+    return handleApiError(error);
   }
 }
 
@@ -173,24 +173,16 @@ export async function deleteData(input: z.infer<typeof DeleteDataInputSchema>) {
     
     const supabase = await getAuthenticatedSupabaseClient();
 
-    if (input.tableName === 'ap_ar_transactions') {
-        const { error } = await supabase
-            .from(input.tableName)
-            .delete()
-            .eq('id', input.id);
-        if (error) throw new Error(error.message);
-    } else {
-        const { error } = await supabase
-            .from(input.tableName)
-            .update({ deletedAt: new Date().toISOString() })
-            .eq('id', input.id);
+    const { error } = await supabase
+        .from(input.tableName)
+        .update({ deletedAt: new Date().toISOString() })
+        .eq('id', input.id);
             
-        if (error) throw new Error(error.message);
-    }
+    if (error) throw new Error(error.message);
     
     return { success: true };
   } catch(error) {
-    return handleAuthError(error);
+    return handleApiError(error);
   }
 }
 
@@ -214,7 +206,7 @@ export async function restoreData(input: z.infer<typeof RestoreDataInputSchema>)
         if (error) throw new Error(error.message);
         return { success: true };
     } catch (error) {
-        return handleAuthError(error);
+        return handleApiError(error);
     }
 }
 

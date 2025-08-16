@@ -26,6 +26,7 @@ interface AppState {
   deletedCashTransactions: CashTransaction[];
   deletedBankTransactions: BankTransaction[];
   deletedStockTransactions: StockTransaction[];
+  deletedLedgerTransactions: LedgerTransaction[];
   cashCategories: string[];
   bankCategories: string[];
   fontSize: FontSize;
@@ -49,7 +50,7 @@ interface AppContextType extends AppState {
   loadRecycleBinData: () => Promise<void>;
   addCashTransaction: (tx: Omit<CashTransaction, 'id' | 'createdAt' | 'deletedAt' | 'user_id'>) => void;
   addBankTransaction: (tx: Omit<BankTransaction, 'id' | 'createdAt' | 'deletedAt' | 'user_id'>) => void;
-  addStockTransaction: (tx: Omit<StockTransaction, 'id' | 'createdAt' | 'deletedAt' | 'user_id'>) => void;
+  addStockTransaction: (tx: Omit<StockTransaction, 'id' | 'createdAt' | 'deletedAt' | 'user_id' | 'contact_id'> & { contact_id?: string, contact_name?: string }) => void;
   editCashTransaction: (originalTx: CashTransaction, updatedTxData: Partial<Omit<CashTransaction, 'id' | 'date'>>) => void;
   editBankTransaction: (originalTx: BankTransaction, updatedTxData: Partial<Omit<BankTransaction, 'id' | 'date'>>) => void;
   editStockTransaction: (originalTx: StockTransaction, updatedTxData: Partial<Omit<StockTransaction, 'id' | 'date'>>) => void;
@@ -59,7 +60,7 @@ interface AppContextType extends AppState {
   deleteMultipleCashTransactions: (txs: CashTransaction[]) => void;
   deleteMultipleBankTransactions: (txs: BankTransaction[]) => void;
   deleteMultipleStockTransactions: (txs: StockTransaction[]) => void;
-  restoreTransaction: (txType: 'cash' | 'bank' | 'stock', id: string) => void;
+  restoreTransaction: (txType: 'cash' | 'bank' | 'stock' | 'ap_ar', id: string) => void;
   transferFunds: (from: 'cash' | 'bank', amount: number, date?: string) => void;
   addCategory: (type: 'cash' | 'bank', category: string) => void;
   deleteCategory: (type: 'cash' | 'bank', category: string) => void;
@@ -94,6 +95,7 @@ const initialAppState: AppState = {
   deletedCashTransactions: [],
   deletedBankTransactions: [],
   deletedStockTransactions: [],
+  deletedLedgerTransactions: [],
   cashCategories: ['Salary', 'Groceries', 'Transport', 'Utilities', 'Stock Purchase', 'Stock Sale'],
   bankCategories: ['Deposit', 'Withdrawal', 'Stock Purchase', 'Stock Sale'],
   fontSize: 'base',
@@ -302,15 +304,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
             readDeletedData({ tableName: 'cash_transactions' }),
             readDeletedData({ tableName: 'bank_transactions' }),
             readDeletedData({ tableName: 'stock_transactions' }),
+            readDeletedData({ tableName: 'ap_ar_transactions' }),
         ]);
 
-        const [deletedCashData, deletedBankData, deletedStockData] = results.map(r => r.status === 'fulfilled' ? r.value : []);
+        const [deletedCashData, deletedBankData, deletedStockData, deletedLedgerData] = results.map(r => r.status === 'fulfilled' ? r.value : []);
         
         setState(prev => ({
             ...prev,
             deletedCashTransactions: deletedCashData.sort((a: any, b: any) => new Date(b.deletedAt).getTime() - new Date(a.deletedAt).getTime()),
             deletedBankTransactions: deletedBankData.sort((a: any, b: any) => new Date(b.deletedAt).getTime() - new Date(a.deletedAt).getTime()),
             deletedStockTransactions: deletedStockData.sort((a: any, b: any) => new Date(b.deletedAt).getTime() - new Date(a.deletedAt).getTime()),
+            deletedLedgerTransactions: deletedLedgerData.sort((a: any, b: any) => new Date(b.deletedAt).getTime() - new Date(a.deletedAt).getTime()),
         }));
 
     } catch (error: any) {
@@ -336,7 +340,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
   
-  const addStockTransaction = async (tx: Omit<StockTransaction, 'id' | 'createdAt' | 'deletedAt' | 'user_id'>) => {
+  const addStockTransaction = async (tx: Omit<StockTransaction, 'id' | 'createdAt' | 'deletedAt' | 'user_id'> & { contact_id?: string, contact_name?: string }) => {
     try {
       const { contact_id, contact_name, ...stockTxData } = tx;
 
@@ -469,8 +473,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
   
-  const restoreTransaction = async (txType: 'cash' | 'bank' | 'stock', id: string) => {
-    const tableName = `${txType}_transactions`;
+  const restoreTransaction = async (txType: 'cash' | 'bank' | 'stock' | 'ap_ar', id: string) => {
+    const tableName = txType === 'ap_ar' ? 'ap_ar_transactions' : `${txType}_transactions`;
     try {
         await restoreData({ tableName, id });
 
@@ -740,7 +744,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
     try {
         await deleteData({ tableName: 'ap_ar_transactions', id: tx.id });
-        toast({ title: 'Transaction Deleted' });
+        toast({ title: 'Transaction moved to recycle bin.' });
         await reloadData();
     } catch(error) {
         handleApiError(error);
