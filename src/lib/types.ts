@@ -41,6 +41,8 @@ export interface StockTransaction {
   deletedAt?: string;
   createdAt: string;
   user_id?: string;
+  contact_id?: string;
+  contact_name?: string;
 }
 
 export interface User {
@@ -72,6 +74,7 @@ export interface LedgerTransaction {
   amount: number;
   status: 'unpaid' | 'paid';
   contact_id: string;
+  contact_name: string;
   paidDate?: string;
   paidFrom?: 'cash' | 'bank';
   deletedAt?: string;

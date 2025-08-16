@@ -180,11 +180,13 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                 break;
             case 'stock':
                 let stockContactId: string | undefined;
+                let stockContactName: string | undefined;
                 if (data.paymentMethod === 'credit') {
                     if (data.contact_id === 'new') {
                         const newContact = data.stockType === 'purchase' ? await addVendor(data.newContact!) : await addClient(data.newContact!);
                         if (!newContact) throw new Error(`Failed to create new ${data.stockType === 'purchase' ? 'vendor' : 'client'}.`);
                         stockContactId = newContact.id;
+                        stockContactName = newContact.name;
                     } else {
                         stockContactId = data.contact_id;
                     }
@@ -200,6 +202,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                     description: data.description,
                     date: transactionDate,
                     contact_id: stockContactId,
+                    contact_name: stockContactName,
                 });
                 break;
             case 'transfer':

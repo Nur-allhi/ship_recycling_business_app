@@ -141,7 +141,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const handleApiError = useCallback((error: any) => {
-    if (error.message === "SESSION_EXPIRED") {
+    const isAuthError = error.message.includes('JWT') || error.message.includes('Unauthorized') || error.message.includes("SESSION_EXPIRED");
+    if (isAuthError) {
         toast({
             variant: 'destructive',
             title: 'Session Expired',
@@ -337,7 +338,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   
   const addStockTransaction = async (tx: Omit<StockTransaction, 'id' | 'createdAt' | 'deletedAt' | 'user_id'>) => {
     try {
-      const { contact_id, ...stockTxData } = tx as any;
+      const { contact_id, contact_name, ...stockTxData } = tx;
 
       const result = await appendData({ tableName: 'stock_transactions', data: stockTxData });
       if (!result) throw new Error("Stock transaction creation failed. The 'stock_transactions' table may not exist.");
@@ -349,9 +350,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
           const ledgerType = tx.type === 'purchase' ? 'payable' : 'receivable';
           const description = `${tx.type === 'purchase' ? 'Purchase' : 'Sale'} of ${tx.weight}kg of ${tx.stockItemName} on credit`;
           const contactList = tx.type === 'purchase' ? state.vendors : state.clients;
-          const contactName = contactList.find(c => c.id === contact_id)?.name;
+          
+          // If a new contact was created, the name is passed directly. Otherwise, look it up.
+          const finalContactName = contact_name || contactList.find(c => c.id === contact_id)?.name;
 
-          if (!contactName) throw new Error("Could not find contact name for credit transaction.");
+          if (!finalContactName) throw new Error("Could not find contact name for credit transaction.");
 
           await addLedgerTransaction({
               type: ledgerType,
@@ -359,7 +362,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
               amount: totalValue,
               date: tx.date,
               contact_id: contact_id,
-              contact_name: contactName,
+              contact_name: finalContactName,
           });
       } else {
           const description = `${tx.type === 'purchase' ? 'Purchase' : 'Sale'} of ${tx.weight}kg of ${tx.stockItemName}`;
