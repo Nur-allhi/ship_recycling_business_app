@@ -2,9 +2,9 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
-import type { CashTransaction, BankTransaction, StockItem, StockTransaction, User, Vendor, Client, LedgerTransaction } from '@/lib/types';
+import type { CashTransaction, BankTransaction, StockItem, StockTransaction, User, Vendor, Client, LedgerTransaction, PaymentInstallment } from '@/lib/types';
 import { useToast } from "@/hooks/use-toast"
-import { readData, appendData, updateData, deleteData, readDeletedData, restoreData, exportAllData, batchImportData, deleteAllData, logout as serverLogout } from '@/app/actions';
+import { readData, appendData, updateData, deleteData, readDeletedData, restoreData, exportAllData, batchImportData, deleteAllData, logout as serverLogout, addPaymentInstallment } from '@/app/actions';
 import { format } from 'date-fns';
 import { supabase } from '@/lib/supabase';
 import { saveAs } from 'file-saver';
@@ -50,7 +50,7 @@ interface AppContextType extends AppState {
   loadRecycleBinData: () => Promise<void>;
   addCashTransaction: (tx: Omit<CashTransaction, 'id' | 'createdAt' | 'deletedAt' | 'user_id'>) => void;
   addBankTransaction: (tx: Omit<BankTransaction, 'id' | 'createdAt' | 'deletedAt' | 'user_id'>) => void;
-  addStockTransaction: (tx: Omit<StockTransaction, 'id' | 'createdAt' | 'deletedAt' | 'user_id' | 'contact_id'> & { contact_id?: string, contact_name?: string }) => void;
+  addStockTransaction: (tx: Omit<StockTransaction, 'id' | 'createdAt' | 'deletedAt' | 'user_id'> & { contact_id?: string, contact_name?: string }) => void;
   editCashTransaction: (originalTx: CashTransaction, updatedTxData: Partial<Omit<CashTransaction, 'id' | 'date'>>) => void;
   editBankTransaction: (originalTx: BankTransaction, updatedTxData: Partial<Omit<BankTransaction, 'id' | 'date'>>) => void;
   editStockTransaction: (originalTx: StockTransaction, updatedTxData: Partial<Omit<StockTransaction, 'id' | 'date'>>) => void;
@@ -60,6 +60,7 @@ interface AppContextType extends AppState {
   deleteMultipleCashTransactions: (txs: CashTransaction[]) => void;
   deleteMultipleBankTransactions: (txs: BankTransaction[]) => void;
   deleteMultipleStockTransactions: (txs: StockTransaction[]) => void;
+  deleteLedgerTransaction: (tx: LedgerTransaction) => Promise<any>;
   restoreTransaction: (txType: 'cash' | 'bank' | 'stock' | 'ap_ar', id: string) => void;
   transferFunds: (from: 'cash' | 'bank', amount: number, date?: string) => void;
   addCategory: (type: 'cash' | 'bank', category: string) => void;
@@ -78,9 +79,8 @@ interface AppContextType extends AppState {
   logout: () => void;
   addVendor: (name: string) => Promise<any>;
   addClient: (name: string) => Promise<any>;
-  addLedgerTransaction: (tx: Omit<LedgerTransaction, 'id' | 'createdAt' | 'deletedAt' | 'user_id' | 'status'>) => Promise<any>;
-  deleteLedgerTransaction: (tx: LedgerTransaction) => Promise<any>;
-  settleLedgerTransaction: (tx: LedgerTransaction, paymentMethod: 'cash' | 'bank', paymentDate: Date) => Promise<any>;
+  addLedgerTransaction: (tx: Omit<LedgerTransaction, 'id' | 'createdAt' | 'deletedAt' | 'user_id' | 'status' | 'paid_amount' | 'installments'>) => Promise<any>;
+  recordInstallment: (tx: LedgerTransaction, paymentAmount: number, paymentMethod: 'cash' | 'bank', paymentDate: Date) => Promise<any>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -177,7 +177,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const reloadData = useCallback(async () => {
     if (!state.user) {
-        setState(prev => ({...prev, initialBalanceSet: true, needsInitialBalance: !prev.user}));
+        setState(prev => ({...prev, initialBalanceSet: true, needsInitialBalance: !state.user}));
         return;
     }
     try {
@@ -190,9 +190,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
             readData({ tableName: 'vendors' }),
             readData({ tableName: 'clients' }),
             readData({ tableName: 'ap_ar_transactions' }),
+            readData({ tableName: 'payment_installments' }),
         ]);
 
-        const [cashData, bankData, stockTransactionsData, initialStockData, categoriesData, vendorsData, clientsData, ledgerData] = results.map(r => {
+        const [cashData, bankData, stockTransactionsData, initialStockData, categoriesData, vendorsData, clientsData, ledgerData, installmentsData] = results.map(r => {
             if (r.status === 'rejected') {
                 handleApiError(r.reason);
                 return []; // Return empty array on error to prevent crashes
@@ -259,9 +260,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const cashCategories = categoriesData?.filter((c: any) => c.type === 'cash').map((c: any) => c.name);
         const bankCategories = categoriesData?.filter((c: any) => c.type === 'bank').map((c: any) => c.name);
         
-        const ledgerTransactions: LedgerTransaction[] = ledgerData?.map((tx: any) => ({...tx, date: new Date(tx.date).toISOString() })) || [];
-        const totalPayables = ledgerTransactions.filter(tx => tx.type === 'payable' && tx.status === 'unpaid').reduce((acc, tx) => acc + tx.amount, 0);
-        const totalReceivables = ledgerTransactions.filter(tx => tx.type === 'receivable' && tx.status === 'unpaid').reduce((acc, tx) => acc + tx.amount, 0);
+        const installments: PaymentInstallment[] = installmentsData || [];
+        const ledgerTransactions: LedgerTransaction[] = (ledgerData || []).map((tx: any) => ({
+            ...tx, 
+            date: new Date(tx.date).toISOString(),
+            installments: installments.filter(ins => ins.ap_ar_transaction_id === tx.id)
+        }));
+
+        const totalPayables = ledgerTransactions.filter(tx => tx.type === 'payable' && tx.status !== 'paid').reduce((acc, tx) => acc + (tx.amount - tx.paid_amount), 0);
+        const totalReceivables = ledgerTransactions.filter(tx => tx.type === 'receivable' && tx.status !== 'paid').reduce((acc, tx) => acc + (tx.amount - tx.paid_amount), 0);
 
         setState(prev => ({
             ...prev,
@@ -355,9 +362,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           const description = `${tx.type === 'purchase' ? 'Purchase' : 'Sale'} of ${tx.weight}kg of ${tx.stockItemName} on credit`;
           const contactList = tx.type === 'purchase' ? state.vendors : state.clients;
           
-          // If a new contact was created, the name is passed directly. Otherwise, look it up.
           const finalContactName = contact_name || contactList.find(c => c.id === contact_id)?.name;
-
           if (!finalContactName) throw new Error("Could not find contact name for credit transaction.");
 
           await addLedgerTransaction({
@@ -721,7 +726,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const addLedgerTransaction = async (tx: Omit<LedgerTransaction, 'id' | 'createdAt' | 'deletedAt' | 'user_id' | 'status'>) => {
+  const addLedgerTransaction = async (tx: Omit<LedgerTransaction, 'id' | 'createdAt' | 'deletedAt' | 'user_id' | 'status' | 'paid_amount' | 'installments'>) => {
     if (!state.user) {
         toast({ variant: 'destructive', title: 'Authentication Error', description: 'You must be logged in.' });
         return null;
@@ -751,46 +756,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }
   
-  const settleLedgerTransaction = async (tx: LedgerTransaction, paymentMethod: 'cash' | 'bank', paymentDate: Date) => {
-    if (!state.user) throw new Error("User not authenticated.");
-    const contactList = tx.type === 'payable' ? state.vendors : state.clients;
-    const contact = contactList.find(c => c.id === tx.contact_id);
-    if(!contact) throw new Error("Contact not found for settlement");
-
+  const recordInstallment = async (tx: LedgerTransaction, paymentAmount: number, paymentMethod: 'cash' | 'bank', paymentDate: Date) => {
     try {
-        await updateData({
-            tableName: 'ap_ar_transactions',
-            id: tx.id,
-            data: {
-                status: 'paid',
-                paidDate: paymentDate.toISOString(),
-                paidFrom: paymentMethod
-            }
+        await addPaymentInstallment({
+            ap_ar_transaction_id: tx.id,
+            original_amount: tx.amount,
+            already_paid_amount: tx.paid_amount,
+            payment_amount: paymentAmount,
+            payment_date: paymentDate.toISOString(),
+            payment_method: paymentMethod,
+            ledger_type: tx.type,
+            description: tx.description
         });
-
-        const financialTxData = {
-            date: paymentDate.toISOString(),
-            amount: tx.amount,
-            description: `Settlement for: ${tx.description}`,
-            category: tx.type === 'payable' ? 'A/P Settlement' : 'A/R Settlement',
-        };
-
-        if (paymentMethod === 'cash') {
-            await addCashTransaction({
-                ...financialTxData,
-                type: tx.type === 'payable' ? 'expense' : 'income',
-            });
-        } else { // bank
-            await addBankTransaction({
-                ...financialTxData,
-                type: tx.type === 'payable' ? 'withdrawal' : 'deposit',
-            });
-        }
-        
         await reloadData();
-
     } catch (error: any) {
-        handleApiError(new Error(error.message || "An unexpected error occurred during settlement."));
+         handleApiError(new Error(error.message || "An unexpected error occurred during installment recording."));
     }
   }
 
@@ -835,6 +815,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         deleteMultipleCashTransactions,
         deleteMultipleBankTransactions,
         deleteMultipleStockTransactions,
+        deleteLedgerTransaction,
         restoreTransaction,
         transferFunds,
         addCategory,
@@ -854,8 +835,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         addVendor,
         addClient,
         addLedgerTransaction,
-        deleteLedgerTransaction,
-        settleLedgerTransaction,
+        recordInstallment,
     }}>
       {children}
     </AppContext.Provider>

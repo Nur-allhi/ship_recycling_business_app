@@ -3,7 +3,7 @@
 
 import { useMemo } from "react";
 import { useAppContext } from "@/app/store";
-import type { Vendor, Client, LedgerTransaction } from "@/lib/types";
+import type { Vendor, Client, LedgerTransaction, PaymentInstallment } from "@/lib/types";
 import {
   Dialog,
   DialogContent,
@@ -16,7 +16,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFoo
 import { Badge } from "./ui/badge";
 import { format } from "date-fns";
 import { Button } from "./ui/button";
-import { FileText } from "lucide-react";
+import { FileText, ArrowRight } from "lucide-react";
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import { useToast } from "@/hooks/use-toast";
@@ -44,29 +44,27 @@ export function ContactHistoryDialog({ isOpen, setIsOpen, contact, contactType }
         .sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   }, [ledgerTransactions, contact.id]);
 
+  const combinedHistory = useMemo(() => {
+    const history: (LedgerTransaction | (PaymentInstallment & { originalDescription: string }))[] = [];
+    transactions.forEach(tx => {
+        history.push(tx);
+        tx.installments.forEach(inst => {
+            history.push({ ...inst, originalDescription: tx.description });
+        });
+    });
+    return history.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  }, [transactions]);
+
+
   const { totalDebit, totalCredit, finalBalance } = useMemo(() => {
-    let balance = 0;
     let debit = 0;
     let credit = 0;
     transactions.forEach(tx => {
-        if (contactType === 'vendor') { // Payable
-            balance += tx.amount;
-            debit += tx.amount;
-            if(tx.status === 'paid') {
-                balance -= tx.amount;
-                credit += tx.amount;
-            }
-        } else { // Receivable
-            balance += tx.amount;
-            debit += tx.amount;
-            if (tx.status === 'paid') {
-                balance -= tx.amount;
-                credit += tx.amount;
-            }
-        }
+        debit += tx.amount;
+        credit += tx.paid_amount;
     });
-    return { totalDebit: debit, totalCredit: credit, finalBalance: balance };
-  }, [transactions, contactType]);
+    return { totalDebit: debit, totalCredit: credit, finalBalance: debit - credit };
+  }, [transactions]);
 
 
   const formatCurrency = (amount: number) => {
@@ -81,7 +79,6 @@ export function ContactHistoryDialog({ isOpen, setIsOpen, contact, contactType }
     const pageMargins = { top: 20, right: 15, bottom: 20, left: 15 };
     const centerX = doc.internal.pageSize.getWidth() / 2;
 
-    // Header
     doc.setFont('Helvetica', 'bold');
     doc.setFontSize(18);
     doc.text("Ha-Mim Iron Mart", centerX, 15, { align: 'center' });
@@ -97,29 +94,24 @@ export function ContactHistoryDialog({ isOpen, setIsOpen, contact, contactType }
     doc.text(`Generated: ${format(new Date(), 'dd-MM-yyyy HH:mm')}`, pageMargins.left, 15);
 
     let runningBalance = 0;
-    const tableData = transactions.map(tx => {
-        const isPayable = tx.type === 'payable';
-        const isReceivable = tx.type === 'receivable';
-        const isPaid = tx.status === 'paid';
-
+    const tableData = combinedHistory.map(item => {
         let debit = 0;
         let credit = 0;
-        
-        // For a vendor, a payable is a debit, a payment is a credit
-        // For a client, a receivable is a debit, a payment is a credit
-        if (isPayable || isReceivable) {
-            debit = tx.amount;
-            runningBalance += tx.amount;
-        }
-        if (isPaid) {
-            credit = tx.amount;
-            runningBalance -= tx.amount;
+        let description = '';
+
+        if ('type' in item) { // LedgerTransaction
+            debit = item.amount;
+            runningBalance += item.amount;
+            description = item.description;
+        } else { // PaymentInstallment
+            credit = item.amount;
+            runningBalance -= item.amount;
+            description = `Payment for: ${item.originalDescription}`;
         }
 
         return [
-            format(new Date(tx.date), 'dd-MM-yy'),
-            tx.description,
-            isPaid ? format(new Date(tx.paidDate!), 'dd-MM-yy') : '-',
+            format(new Date(item.date), 'dd-MM-yy'),
+            description,
             formatCurrency(debit),
             formatCurrency(credit),
             formatCurrency(runningBalance),
@@ -128,14 +120,14 @@ export function ContactHistoryDialog({ isOpen, setIsOpen, contact, contactType }
 
     doc.autoTable({
         startY: 35,
-        head: [['Date', 'Description', 'Paid Date', 'Debit', 'Credit', 'Balance']],
+        head: [['Date', 'Description', 'Debit', 'Credit', 'Balance']],
         body: tableData,
         theme: 'grid',
         headStyles: { fillColor: [34, 49, 63], textColor: 255, fontStyle: 'bold', halign: 'center' },
         columnStyles: {
+            2: { halign: 'right' },
             3: { halign: 'right' },
-            4: { halign: 'right' },
-            5: { halign: 'right', fontStyle: 'bold' },
+            4: { halign: 'right', fontStyle: 'bold' },
         },
         didDrawPage: (data) => {
             // Footer
@@ -175,25 +167,51 @@ export function ContactHistoryDialog({ isOpen, setIsOpen, contact, contactType }
                     <TableRow>
                         <TableHead>Date</TableHead>
                         <TableHead>Description</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>Paid On</TableHead>
-                        <TableHead className="text-right">Amount</TableHead>
+                        <TableHead className="text-right">Debit</TableHead>
+                        <TableHead className="text-right">Credit</TableHead>
+                        <TableHead className="text-right">Balance</TableHead>
                     </TableRow>
                 </TableHeader>
                 <TableBody>
-                    {transactions.length > 0 ? (
-                        transactions.map(tx => (
-                            <TableRow key={tx.id}>
-                                <TableCell className="font-mono">{format(new Date(tx.date), 'dd-MM-yy')}</TableCell>
-                                <TableCell>{tx.description}</TableCell>
-                                <TableCell>
-                                    <Badge variant={tx.status === 'paid' ? 'default' : 'destructive'} className="capitalize bg-opacity-20 text-opacity-100">{tx.status}</Badge>
-                                </TableCell>
-                                <TableCell className="font-mono">{tx.paidDate ? format(new Date(tx.paidDate), 'dd-MM-yy') : '-'}</TableCell>
-                                <TableCell className="text-right font-mono font-semibold">{formatCurrency(tx.amount)}</TableCell>
-                            </TableRow>
-                        ))
-                    ) : (
+                    {combinedHistory.length > 0 ? (() => {
+                        let balance = 0;
+                        return combinedHistory.map(item => {
+                            let debit = 0;
+                            let credit = 0;
+                            let description = '';
+                            let isInstallment = false;
+
+                            if ('type' in item) { // LedgerTransaction
+                                debit = item.amount;
+                                balance += item.amount;
+                                description = item.description;
+                            } else { // PaymentInstallment
+                                credit = item.amount;
+                                balance -= item.amount;
+                                description = item.originalDescription;
+                                isInstallment = true;
+                            }
+
+                            return (
+                                <TableRow key={'id' in item ? item.id : item.createdAt}>
+                                    <TableCell className="font-mono">{format(new Date(item.date), 'dd-MM-yy')}</TableCell>
+                                    <TableCell>
+                                        {isInstallment && (
+                                            <div className="flex items-center gap-2 text-sm">
+                                                <ArrowRight className="h-4 w-4 text-green-500"/>
+                                                <span className="text-muted-foreground">Payment for:</span>
+                                                <span>{description}</span>
+                                            </div>
+                                        )}
+                                        {!isInstallment && <span>{description}</span>}
+                                    </TableCell>
+                                    <TableCell className="text-right font-mono">{debit > 0 ? formatCurrency(debit) : '-'}</TableCell>
+                                    <TableCell className="text-right font-mono text-green-600">{credit > 0 ? formatCurrency(credit) : '-'}</TableCell>
+                                    <TableCell className="text-right font-mono font-semibold">{formatCurrency(balance)}</TableCell>
+                                </TableRow>
+                            );
+                        });
+                    })() : (
                         <TableRow>
                             <TableCell colSpan={5} className="text-center h-24">No transactions found for this {contactType}.</TableCell>
                         </TableRow>

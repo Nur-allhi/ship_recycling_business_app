@@ -23,10 +23,12 @@ import { cn } from '@/lib/utils';
 import { useAppContext } from '@/app/store';
 import type { LedgerTransaction } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
+import { Input } from './ui/input';
 
 const formSchema = z.object({
   paymentMethod: z.enum(['cash', 'bank'], { required_error: "Please select a payment method." }),
   paymentDate: z.date({ required_error: "Please select a payment date." }),
+  paymentAmount: z.coerce.number().positive("Payment amount must be positive."),
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -38,13 +40,18 @@ interface SettlePaymentDialogProps {
 }
 
 export function SettlePaymentDialog({ isOpen, setIsOpen, transaction }: SettlePaymentDialogProps) {
-    const { settleLedgerTransaction, currency } = useAppContext();
+    const { recordInstallment, currency } = useAppContext();
     const { toast } = useToast();
+    const remainingBalance = transaction.amount - transaction.paid_amount;
     
-    const { control, handleSubmit, formState: { errors, isSubmitting } } = useForm<FormData>({
-        resolver: zodResolver(formSchema),
+    const { control, handleSubmit, register, formState: { errors, isSubmitting } } = useForm<FormData>({
+        resolver: zodResolver(formSchema.refine(data => data.paymentAmount <= remainingBalance, {
+            message: "Payment cannot exceed the remaining balance.",
+            path: ["paymentAmount"],
+        })),
         defaultValues: {
             paymentDate: new Date(),
+            paymentAmount: remainingBalance,
         },
     });
 
@@ -57,11 +64,11 @@ export function SettlePaymentDialog({ isOpen, setIsOpen, transaction }: SettlePa
 
     const onSubmit = async (data: FormData) => {
         try {
-            await settleLedgerTransaction(transaction, data.paymentMethod, data.paymentDate);
-            toast({ title: 'Payment Settled', description: 'The transaction has been settled and recorded.' });
+            await recordInstallment(transaction, data.paymentAmount, data.paymentMethod, data.paymentDate);
+            toast({ title: 'Payment Recorded', description: 'The payment installment has been successfully recorded.' });
             setIsOpen(false);
         } catch (error: any) {
-            toast({ variant: 'destructive', title: 'Settle Failed', description: error.message });
+            toast({ variant: 'destructive', title: 'Payment Failed', description: error.message });
         }
     };
 
@@ -69,9 +76,9 @@ export function SettlePaymentDialog({ isOpen, setIsOpen, transaction }: SettlePa
         <Dialog open={isOpen} onOpenChange={setIsOpen}>
             <DialogContent>
                 <DialogHeader>
-                    <DialogTitle>Settle Transaction</DialogTitle>
+                    <DialogTitle>Record Payment</DialogTitle>
                     <DialogDescription>
-                        Record the payment for this {transaction.type}.
+                        Record a full or partial payment for this {transaction.type}.
                     </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4 py-2 text-sm">
@@ -84,18 +91,32 @@ export function SettlePaymentDialog({ isOpen, setIsOpen, transaction }: SettlePa
                         <span className="font-medium">{transaction.description}</span>
                     </div>
                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Amount:</span>
-                        <span className="font-bold text-lg">{formatCurrency(transaction.amount)}</span>
+                        <span className="text-muted-foreground">Total Bill:</span>
+                        <span className="font-bold">{formatCurrency(transaction.amount)}</span>
+                    </div>
+                     <div className="flex justify-between">
+                        <span className="text-muted-foreground">Already Paid:</span>
+                        <span className="font-medium text-green-600">{formatCurrency(transaction.paid_amount)}</span>
+                    </div>
+                    <div className="flex justify-between text-base">
+                        <span className="text-muted-foreground">Balance Due:</span>
+                        <span className="font-bold text-lg text-destructive">{formatCurrency(remainingBalance)}</span>
                     </div>
                 </div>
                 <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+                     <div className="space-y-2">
+                        <Label htmlFor="paymentAmount">Payment Amount</Label>
+                        <Input id="paymentAmount" type="number" step="0.01" {...register('paymentAmount')} />
+                        {errors.paymentAmount && <p className="text-sm text-destructive">{errors.paymentAmount.message}</p>}
+                    </div>
+
                     <div className="space-y-2">
-                        <Label>Settle from / into</Label>
+                        <Label>Pay from / into</Label>
                         <Controller 
                             control={control}
                             name="paymentMethod"
                             render={({ field }) => (
-                                <RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex pt-2 gap-4">
+                                <RadioGroup onValueChange={field.onChange} value={field.value} className="flex pt-2 gap-4">
                                     <Label className="flex items-center gap-2 cursor-pointer"><RadioGroupItem value="cash" />Cash</Label>
                                     <Label className="flex items-center gap-2 cursor-pointer"><RadioGroupItem value="bank" />Bank</Label>
                                 </RadioGroup>
@@ -105,7 +126,7 @@ export function SettlePaymentDialog({ isOpen, setIsOpen, transaction }: SettlePa
                     </div>
 
                     <div className="space-y-2">
-                        <Label>Settlement Date</Label>
+                        <Label>Payment Date</Label>
                         <Controller
                             control={control}
                             name="paymentDate"
@@ -133,7 +154,7 @@ export function SettlePaymentDialog({ isOpen, setIsOpen, transaction }: SettlePa
                         <Button type="button" variant="outline" onClick={() => setIsOpen(false)}>Cancel</Button>
                         <Button type="submit" disabled={isSubmitting}>
                             {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
-                            Confirm & Settle
+                            Record Payment
                         </Button>
                     </DialogFooter>
                 </form>

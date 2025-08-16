@@ -39,7 +39,7 @@ const getAuthenticatedSupabaseClient = async () => {
 
 
 const handleApiError = (error: any) => {
-    const isAuthError = error.message.includes('JWT') || error.message.includes('Unauthorized') || error.message === 'SESSION_EXPIRED';
+    const isAuthError = error.message.includes('JWT') || error.message.includes('Unauthorized') || error.message.includes("SESSION_EXPIRED");
     if (isAuthError) {
         // This specific error message will be caught by the client to trigger a logout.
         throw new Error("SESSION_EXPIRED"); 
@@ -213,7 +213,7 @@ export async function restoreData(input: z.infer<typeof RestoreDataInputSchema>)
 export async function exportAllData() {
     try {
         const supabase = await getAuthenticatedSupabaseClient();
-        const tables = ['cash_transactions', 'bank_transactions', 'stock_transactions', 'initial_stock', 'categories', 'vendors', 'clients', 'ap_ar_transactions'];
+        const tables = ['cash_transactions', 'bank_transactions', 'stock_transactions', 'initial_stock', 'categories', 'vendors', 'clients', 'ap_ar_transactions', 'payment_installments'];
         const exportedData: Record<string, any[]> = {};
         
         for (const tableName of tables) {
@@ -239,7 +239,7 @@ const ImportDataSchema = z.record(z.array(z.record(z.any())));
 
 export async function batchImportData(dataToImport: z.infer<typeof ImportDataSchema>) {
     const supabase = createSupabaseClient(true);
-    const tables = ['cash_transactions', 'bank_transactions', 'stock_transactions', 'initial_stock', 'categories', 'vendors', 'clients', 'ap_ar_transactions'];
+    const tables = ['cash_transactions', 'bank_transactions', 'stock_transactions', 'initial_stock', 'categories', 'vendors', 'clients', 'ap_ar_transactions', 'payment_installments'];
     const session = await getSession();
     if (!session) throw new Error("No active session for import.");
     if (session.role !== 'admin') throw new Error("Only admins can import data.");
@@ -290,7 +290,7 @@ export async function deleteAllData() {
             }
         }
         
-        const tables = ['cash_transactions', 'bank_transactions', 'stock_transactions', 'initial_stock', 'categories', 'vendors', 'clients', 'ap_ar_transactions'];
+        const tables = ['payment_installments', 'ap_ar_transactions', 'cash_transactions', 'bank_transactions', 'stock_transactions', 'initial_stock', 'categories', 'vendors', 'clients'];
         for (const tableName of tables) {
             const { error } = await supabase.from(tableName).delete().neq('id', '00000000-0000-0000-0000-000000000000');
             if (error && error.code !== '42P01') {
@@ -411,5 +411,69 @@ export async function deleteUser(id: string) {
 
 export async function logout() {
   await removeSession();
+}
+
+// --- Specific App Actions ---
+
+const AddInstallmentInputSchema = z.object({
+    ap_ar_transaction_id: z.string(),
+    original_amount: z.number(),
+    already_paid_amount: z.number(),
+    payment_amount: z.number(),
+    payment_date: z.string(),
+    payment_method: z.enum(['cash', 'bank']),
+    ledger_type: z.enum(['payable', 'receivable']),
+    description: z.string(),
+});
+
+export async function addPaymentInstallment(input: z.infer<typeof AddInstallmentInputSchema>) {
+    const supabase = await getAuthenticatedSupabaseClient();
+    const session = await getSession();
+    if (session?.role !== 'admin') throw new Error("Only admins can settle payments.");
+
+    try {
+        // 1. Add the installment payment record
+        await supabase.from('payment_installments').insert({
+            ap_ar_transaction_id: input.ap_ar_transaction_id,
+            amount: input.payment_amount,
+            date: input.payment_date,
+            payment_method: input.payment_method,
+        });
+
+        // 2. Add the corresponding financial transaction
+        const financialTxData = {
+            date: input.payment_date,
+            amount: input.payment_amount,
+            description: `Installment for: ${input.description}`,
+            category: input.ledger_type === 'payable' ? 'A/P Settlement' : 'A/R Settlement',
+        };
+
+        if (input.payment_method === 'cash') {
+            await supabase.from('cash_transactions').insert({
+                ...financialTxData,
+                type: input.ledger_type === 'payable' ? 'expense' : 'income',
+            });
+        } else { // bank
+            await supabase.from('bank_transactions').insert({
+                ...financialTxData,
+                type: input.ledger_type === 'payable' ? 'withdrawal' : 'deposit',
+            });
+        }
+
+        // 3. Update the parent AP/AR transaction
+        const newPaidAmount = input.already_paid_amount + input.payment_amount;
+        const newStatus = newPaidAmount >= input.original_amount ? 'paid' : 'partially paid';
+        
+        await supabase.from('ap_ar_transactions').update({
+            paid_amount: newPaidAmount,
+            status: newStatus
+        }).eq('id', input.ap_ar_transaction_id);
+
+        return { success: true };
+
+    } catch (error: any) {
+        console.error("Error adding installment:", error);
+        return handleApiError(error);
+    }
 }
     

@@ -41,8 +41,6 @@ export interface StockTransaction {
   deletedAt?: string;
   createdAt: string;
   user_id?: string;
-  contact_id?: string;
-  contact_name?: string;
 }
 
 export interface User {
@@ -66,20 +64,29 @@ export interface Client {
   createdAt: string;
 }
 
+export interface PaymentInstallment {
+  id: string;
+  ap_ar_transaction_id: string;
+  amount: number;
+  date: string;
+  payment_method: 'cash' | 'bank';
+  createdAt: string;
+  user_id?: string;
+}
+
 export interface LedgerTransaction {
   id: string;
   date: string;
   type: 'payable' | 'receivable'; // A/P or A/R
   description: string;
   amount: number;
-  status: 'unpaid' | 'paid';
+  paid_amount: number;
+  status: 'unpaid' | 'partially paid' | 'paid';
   contact_id: string;
   contact_name: string;
-  paidDate?: string;
-  paidFrom?: 'cash' | 'bank';
   deletedAt?: string;
   createdAt: string;
   user_id?: string;
+  installments: PaymentInstallment[];
 }
-
     

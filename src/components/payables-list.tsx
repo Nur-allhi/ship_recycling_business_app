@@ -10,6 +10,8 @@ import { format } from "date-fns";
 import { HandCoins, Trash2 } from "lucide-react";
 import { SettlePaymentDialog } from "./settle-payment-dialog";
 import { DeleteConfirmationDialog } from "./delete-confirmation-dialog";
+import { Badge } from "./ui/badge";
+import { Progress } from "./ui/progress";
 
 
 export function PayablesList() {
@@ -18,7 +20,7 @@ export function PayablesList() {
     const [deleteDialogState, setDeleteDialogState] = useState<{isOpen: boolean, txToDelete: LedgerTransaction | null}>({isOpen: false, txToDelete: null});
     const isAdmin = user?.role === 'admin';
 
-    const payables = ledgerTransactions.filter(tx => tx.type === 'payable' && tx.status === 'unpaid');
+    const payables = ledgerTransactions.filter(tx => tx.type === 'payable' && tx.status !== 'paid');
     
     const formatCurrency = (amount: number) => {
         if (currency === 'BDT') {
@@ -48,25 +50,39 @@ export function PayablesList() {
                 <Table>
                     <TableHeader>
                         <TableRow>
-                            <TableHead>Date</TableHead>
                             <TableHead>Vendor</TableHead>
                             <TableHead>Description</TableHead>
-                            <TableHead className="text-right">Amount</TableHead>
+                            <TableHead className="text-right">Balance Due</TableHead>
                             <TableHead className="text-center">Action</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
                         {payables.length > 0 ? (
-                            payables.map(tx => (
+                            payables.map(tx => {
+                                const remainingBalance = tx.amount - tx.paid_amount;
+                                const progress = (tx.paid_amount / tx.amount) * 100;
+
+                                return (
                                 <TableRow key={tx.id}>
-                                    <TableCell className="font-mono">{format(new Date(tx.date), 'dd-MM-yy')}</TableCell>
-                                    <TableCell className="font-medium">{tx.contact_name}</TableCell>
-                                    <TableCell>{tx.description}</TableCell>
-                                    <TableCell className="text-right font-mono font-semibold">{formatCurrency(tx.amount)}</TableCell>
+                                    <TableCell className="font-medium">
+                                        <div>{tx.contact_name}</div>
+                                        <div className="text-xs text-muted-foreground font-mono">{format(new Date(tx.date), 'dd-MM-yy')}</div>
+                                    </TableCell>
+                                    <TableCell>
+                                        <div>{tx.description}</div>
+                                        <div className="flex items-center gap-2 mt-1">
+                                            <Progress value={progress} className="h-2 w-24" />
+                                            <span className="text-xs text-muted-foreground font-mono">{progress.toFixed(0)}%</span>
+                                        </div>
+                                    </TableCell>
+                                    <TableCell className="text-right font-mono font-semibold">
+                                        <div>{formatCurrency(remainingBalance)}</div>
+                                        <div className="text-xs text-muted-foreground font-normal">of {formatCurrency(tx.amount)}</div>
+                                    </TableCell>
                                     <TableCell className="text-center space-x-1">
                                         <Button variant="outline" size="sm" onClick={() => handleSettleClick(tx)}>
                                             <HandCoins className="mr-2 h-4 w-4"/>
-                                            Settle
+                                            Pay
                                         </Button>
                                         {isAdmin && (
                                             <Button variant="destructive" size="icon" className="h-9 w-9" onClick={() => handleDeleteClick(tx)}>
@@ -75,7 +91,7 @@ export function PayablesList() {
                                         )}
                                     </TableCell>
                                 </TableRow>
-                            ))
+                            )})
                         ) : (
                             <TableRow>
                                 <TableCell colSpan={5} className="text-center h-24">No outstanding payables.</TableCell>
