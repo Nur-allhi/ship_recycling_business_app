@@ -118,6 +118,7 @@ const getCacheKey = () => `ha-mim-iron-mart-cache`;
 
 const getInitialState = (): AppState => {
     let state = { ...initialAppState, initialBalanceSet: false };
+    if (typeof window === 'undefined') return state;
     try {
         const storedSettings = localStorage.getItem('ha-mim-iron-mart-settings');
         if (storedSettings) {
@@ -137,6 +138,7 @@ const getInitialState = (): AppState => {
 }
 
 const saveStateToLocalStorage = (state: AppState) => {
+    if (typeof window === 'undefined') return;
     try {
         const settingsToSave = {
             fontSize: state.fontSize,
@@ -173,7 +175,7 @@ const saveStateToLocalStorage = (state: AppState) => {
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AppState>(getInitialState());
-  const [sessionChecked, setSessionChecked] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
   const router = useRouter();
 
@@ -208,12 +210,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const checkSessionAndLoadData = async () => {
       try {
         const session = await getSession();
-        // Update user in state, but keep cached data until fresh data is loaded
         setState(prev => ({...prev, user: session }));
       } catch (error) {
         console.error("Failed to get session", error);
       } finally {
-        setSessionChecked(true);
+        setIsLoading(false);
       }
     };
     checkSessionAndLoadData();
@@ -333,7 +334,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             totalPayables,
             totalReceivables,
         }));
-      } catch (error: any) {
+      } catch (error) {
         console.error("Failed to load data during promise resolution:", error);
         setState(prev => ({...prev, initialBalanceSet: true}));
         handleApiError(error);
@@ -341,12 +342,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [state.user, calculateBalancesAndStock, handleApiError]);
   
   useEffect(() => {
-    if (state.user && sessionChecked) {
+    if (state.user && !isLoading) {
         reloadData({ force: !state.initialBalanceSet });
-    } else if (sessionChecked) {
+    } else if (!isLoading) {
         setState(prev => ({...prev, initialBalanceSet: true, needsInitialBalance: !state.user}));
     }
-  }, [state.user, sessionChecked, reloadData, state.initialBalanceSet]);
+  }, [state.user, isLoading, reloadData, state.initialBalanceSet]);
   
   const loadRecycleBinData = useCallback(async () => {
     if(!state.user) return;
@@ -823,7 +824,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     saveStateToLocalStorage(state);
   }, [state])
 
-  if (!sessionChecked && !state.initialBalanceSet) {
+  if (isLoading) {
     return <AppLoading />;
   }
 
@@ -878,3 +879,5 @@ export function useAppContext() {
   }
   return context;
 }
+
+    
