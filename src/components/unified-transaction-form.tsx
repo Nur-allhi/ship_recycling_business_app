@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect } from 'react';
@@ -175,8 +176,8 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                 });
                 break;
             case 'stock':
-                let stockContactId = data.contactId;
-                let stockContactName = '';
+                let stockContactId: string | undefined;
+                let stockContactName: string | undefined;
                 
                 if (data.paymentMethod === 'credit') {
                     if (data.contactId === 'new') {
@@ -185,6 +186,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                         stockContactId = newContact.id;
                         stockContactName = newContact.name;
                     } else {
+                        stockContactId = data.contactId;
                         const existingContact = data.stockType === 'purchase' ? vendors.find(v => v.id === stockContactId) : clients.find(c => c.id === stockContactId);
                         stockContactName = existingContact?.name || '';
                     }

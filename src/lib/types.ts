@@ -41,9 +41,6 @@ export interface StockTransaction {
   deletedAt?: string;
   createdAt: string;
   user_id?: string;
-  // Fields for credit transactions
-  contactId?: string;
-  contactName?: string;
 }
 
 export interface User {
