@@ -116,7 +116,7 @@ const initialAppState: AppState = {
 };
 
 const getInitialState = (user: User | null): AppState => {
-    let state = { ...initialAppState };
+    let state = { ...initialAppState, user };
     try {
         const storedSettings = localStorage.getItem('ha-mim-iron-mart-settings');
         if (storedSettings) {
@@ -127,10 +127,12 @@ const getInitialState = (user: User | null): AppState => {
         if (user?.id) {
             const dashboardCache = localStorage.getItem(`ha-mim-iron-mart-dashboard-${user.id}`);
             if (dashboardCache) {
-                const { cashBalance, bankBalance, stockItems } = JSON.parse(dashboardCache);
+                const { cashBalance, bankBalance, stockItems, totalPayables, totalReceivables } = JSON.parse(dashboardCache);
                 state.cashBalance = cashBalance ?? 0;
                 state.bankBalance = bankBalance ?? 0;
                 state.stockItems = stockItems ?? [];
+                state.totalPayables = totalPayables ?? 0;
+                state.totalReceivables = totalReceivables ?? 0;
             }
         }
     } catch (e) {
@@ -188,7 +190,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
     };
     checkSessionAndLoadData();
-  }, [pathname]);
+  }, []);
   
   const calculateBalancesAndStock = useCallback((
     cashTxs: CashTransaction[], 
@@ -347,6 +349,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
                 cashBalance: finalCashBalance,
                 bankBalance: finalBankBalance,
                 stockItems: aggregatedStockItems,
+                totalPayables,
+                totalReceivables,
             };
             localStorage.setItem(`ha-mim-iron-mart-dashboard-${state.user?.id}`, JSON.stringify(dashboardCache));
         } catch (e) {
@@ -957,3 +961,5 @@ export function AppLoading() {
         </div>
     );
 }
+
+    
