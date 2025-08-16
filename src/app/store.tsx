@@ -338,7 +338,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             totalPayables,
             totalReceivables,
         }));
-      } catch (error) {
+      } catch (error: any) {
         console.error("Failed to load data during promise resolution:", error);
         setState(prev => ({...prev, initialBalanceSet: true}));
         handleApiError(error);
@@ -347,7 +347,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   
   useEffect(() => {
     if (state.user && !isLoading) {
-        reloadData({ force: !state.initialBalanceSet });
+        if (!state.initialBalanceSet) {
+             reloadData({ force: true });
+        }
     } else if (!isLoading && !state.user) {
         setState(prev => ({...prev, initialBalanceSet: true, needsInitialBalance: true }));
     }
@@ -382,7 +384,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const tempId = `temp-${Date.now()}`;
         const newTxForUI: CashTransaction = { ...tx, id: tempId, createdAt: new Date().toISOString() };
 
-        // Optimistic UI update
         setState(prev => {
             const newTxs = [newTxForUI, ...prev.cashTransactions];
             const { finalCashBalance } = calculateBalancesAndStock(newTxs, prev.bankTransactions, prev.stockTransactions, []);
@@ -395,19 +396,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
         try {
             const savedTx = await appendData({ tableName: 'cash_transactions', data: tx, select: '*' });
-            // Replace temp record with final record from DB
-            setState(prev => ({
-                ...prev,
-                cashTransactions: prev.cashTransactions.map(t => t.id === tempId ? savedTx : t),
-            }));
+            setState(prev => {
+                const newTxs = prev.cashTransactions.map(t => t.id === tempId ? savedTx : t);
+                const { finalCashBalance } = calculateBalancesAndStock(newTxs, prev.bankTransactions, prev.stockTransactions, []);
+                 return {
+                    ...prev,
+                    cashTransactions: newTxs,
+                    cashBalance: finalCashBalance,
+                };
+            });
             return savedTx;
         } catch (error) {
-            // Rollback on error
             toast({ variant: 'destructive', title: 'Failed to save cash transaction.' });
-            setState(prev => ({
-                ...prev,
-                cashTransactions: prev.cashTransactions.filter(t => t.id !== tempId),
-            }));
+            setState(prev => {
+                 const newTxs = prev.cashTransactions.filter(t => t.id !== tempId);
+                 const { finalCashBalance } = calculateBalancesAndStock(newTxs, prev.bankTransactions, prev.stockTransactions, []);
+                 return {
+                    ...prev,
+                    cashTransactions: newTxs,
+                    cashBalance: finalCashBalance,
+                };
+            });
             handleApiError(error);
         }
     };
@@ -428,17 +437,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
         try {
             const savedTx = await appendData({ tableName: 'bank_transactions', data: tx, select: '*' });
-            setState(prev => ({
-                ...prev,
-                bankTransactions: prev.bankTransactions.map(t => t.id === tempId ? savedTx : t),
-            }));
+             setState(prev => {
+                const newTxs = prev.bankTransactions.map(t => t.id === tempId ? savedTx : t);
+                const { finalBankBalance } = calculateBalancesAndStock(prev.cashTransactions, newTxs, prev.stockTransactions, []);
+                 return {
+                    ...prev,
+                    bankTransactions: newTxs,
+                    bankBalance: finalBankBalance,
+                };
+            });
             return savedTx;
         } catch (error) {
             toast({ variant: 'destructive', title: 'Failed to save bank transaction.' });
-            setState(prev => ({
-                ...prev,
-                bankTransactions: prev.bankTransactions.filter(t => t.id !== tempId),
-            }));
+            setState(prev => {
+                const newTxs = prev.bankTransactions.filter(t => t.id !== tempId);
+                const { finalBankBalance } = calculateBalancesAndStock(prev.cashTransactions, newTxs, prev.stockTransactions, []);
+                return {
+                    ...prev,
+                    bankTransactions: newTxs,
+                    bankBalance: finalBankBalance,
+                };
+            });
             handleApiError(error);
         }
     };
@@ -461,17 +480,32 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
         try {
             const savedTx = await appendData({ tableName: 'ap_ar_transactions', data: { ...tx, status: 'unpaid', paid_amount: 0 }, select: '*, installments:payment_installments(*)' });
-            setState(prev => ({
-                ...prev,
-                ledgerTransactions: prev.ledgerTransactions.map(t => t.id === tempId ? savedTx : t),
-            }));
+            setState(prev => {
+                const newLedgerTxs = prev.ledgerTransactions.map(t => t.id === tempId ? savedTx : t);
+                const totalPayables = newLedgerTxs.filter(t => t.type === 'payable' && t.status !== 'paid').reduce((acc, t) => acc + (t.amount - t.paid_amount), 0);
+                const totalReceivables = newLedgerTxs.filter(t => t.type === 'receivable' && t.status !== 'paid').reduce((acc, t) => acc + (t.amount - t.paid_amount), 0);
+
+                return {
+                    ...prev,
+                    ledgerTransactions: newLedgerTxs,
+                    totalPayables,
+                    totalReceivables
+                };
+            });
             return savedTx;
         } catch (error) {
             toast({ variant: 'destructive', title: 'Failed to save ledger transaction.' });
-            setState(prev => ({
-                ...prev,
-                ledgerTransactions: prev.ledgerTransactions.filter(t => t.id !== tempId),
-            }));
+            setState(prev => {
+                 const newLedgerTxs = prev.ledgerTransactions.filter(t => t.id !== tempId);
+                 const totalPayables = newLedgerTxs.filter(t => t.type === 'payable' && t.status !== 'paid').reduce((acc, t) => acc + (t.amount - t.paid_amount), 0);
+                 const totalReceivables = newLedgerTxs.filter(t => t.type === 'receivable' && t.status !== 'paid').reduce((acc, t) => acc + (t.amount - t.paid_amount), 0);
+                return {
+                    ...prev,
+                    ledgerTransactions: newLedgerTxs,
+                    totalPayables,
+                    totalReceivables
+                };
+            });
             handleApiError(error);
             return null;
         }
@@ -479,11 +513,36 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const addStockTransaction = async (tx: Omit<StockTransaction, 'id' | 'createdAt' | 'deletedAt'> & { contact_id?: string, contact_name?: string }) => {
     const { contact_id, contact_name, ...stockTxData } = tx;
+    const tempId = `temp-${Date.now()}`;
+    const newTxForUI: StockTransaction = { ...stockTxData, id: tempId, createdAt: new Date().toISOString() };
+    
+    // Optimistic UI for stock
+    setState(prev => {
+        const newStockTxs = [newTxForUI, ...prev.stockTransactions];
+        const { aggregatedStockItems } = calculateBalancesAndStock(prev.cashTransactions, prev.bankTransactions, newStockTxs, []);
+        return {
+            ...prev,
+            stockTransactions: newStockTxs.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+            stockItems: aggregatedStockItems
+        };
+    });
+
 
     try {
       const newStockTx = await appendData({ tableName: 'stock_transactions', data: stockTxData, select: '*' });
       if (!newStockTx) throw new Error("Stock transaction creation failed. The 'stock_transactions' table may not exist.");
       
+      // Replace temp stock record
+       setState(prev => {
+            const newStockTxs = prev.stockTransactions.map(t => t.id === tempId ? newStockTx : t);
+            const { aggregatedStockItems } = calculateBalancesAndStock(prev.cashTransactions, prev.bankTransactions, newStockTxs, []);
+            return {
+                ...prev,
+                stockTransactions: newStockTxs,
+                stockItems: aggregatedStockItems
+            };
+       });
+
       const totalValue = tx.weight * tx.pricePerKg;
 
       if (tx.paymentMethod === 'credit' && contact_id) {
@@ -522,10 +581,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
           }
       }
       
-      reloadData({ force: true });
       toast({ title: "Success", description: "Stock transaction recorded."});
       return newStockTx;
     } catch (error: any) {
+       // Rollback stock transaction on error
+       setState(prev => {
+            const newStockTxs = prev.stockTransactions.filter(t => t.id !== tempId);
+            const { aggregatedStockItems } = calculateBalancesAndStock(prev.cashTransactions, prev.bankTransactions, newStockTxs, []);
+             return {
+                ...prev,
+                stockTransactions: newStockTxs,
+                stockItems: aggregatedStockItems
+            };
+       });
       handleApiError(error)
     }
   };
@@ -675,8 +743,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
      try {
         const baseTx = { date: transactionDate, amount, description, category: 'Transfer' };
         
-        // This is not a simple optimistic update as it involves two transactions.
-        // We'll keep the existing behavior for atomicity.
         if(from === 'cash') {
             await addCashTransaction({ ...baseTx, type: 'expense' });
             await addBankTransaction({ ...baseTx, type: 'deposit' });
@@ -816,7 +882,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         toast({ variant: 'destructive', title: 'Setup Incomplete', description: "Could not save to the 'vendors' table. Please ensure it exists in your database and RLS is configured." });
         return null;
       }
-      reloadData({ force: true });
+      setState(prev => ({...prev, vendors: [...prev.vendors, newVendor]}));
       toast({ title: 'Vendor Added' });
       return newVendor;
     } catch (error: any) {
@@ -849,7 +915,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         });
         return null;
       }
-      reloadData({ force: true });
+      setState(prev => ({...prev, clients: [...prev.clients, newClient]}));
       toast({ title: 'Client Added' });
       return newClient;
     } catch (error: any) {
