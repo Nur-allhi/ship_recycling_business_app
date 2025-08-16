@@ -675,9 +675,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return null;
     }
     try {
-      const result = await appendData({ tableName: 'vendors', data: { name, user_id: state.user.id } });
+      const result = await appendData({ tableName: 'vendors', data: { name } });
       if (!result) {
-        toast({ variant: 'destructive', title: 'Setup Incomplete', description: "Could not save to the 'vendors' table. Please ensure it exists in your database." });
+        toast({ variant: 'destructive', title: 'Setup Incomplete', description: "Could not save to the 'vendors' table. Please ensure it exists in your database and RLS is configured." });
         return null;
       }
       const newVendor = result[0];
@@ -697,9 +697,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return null;
     }
     try {
-      const result = await appendData({ tableName: 'clients', data: { name, user_id: state.user.id } });
+      const result = await appendData({ tableName: 'clients', data: { name } });
        if (!result) {
-        toast({ variant: 'destructive', title: 'Setup Incomplete', description: "Could not save to the 'clients' table. Please ensure it exists in your database." });
+        toast({ variant: 'destructive', title: 'Setup Incomplete', description: "Could not save to the 'clients' table. Please ensure it exists in your database and RLS is configured." });
         return null;
       }
       const newClient = result[0];
@@ -707,122 +707,114 @@ export function AppProvider({ children }: { children: ReactNode }) {
       await reloadData();
       return newClient;
     } catch (error: any) {
-      console.error("Failed to add client:", error)
+      console.error("Failed to add client:", error);
       toast({ variant: 'destructive', title: 'Failed to add client', description: error.message });
       return null;
     }
   }
 
   const addLedgerTransaction = async (tx: Omit<LedgerTransaction, 'id' | 'createdAt' | 'deletedAt' | 'user_id' | 'status'>) => {
-     try {
-      const result = await appendData({ tableName: 'ap_ar_transactions', data: { ...tx, status: 'unpaid' } });
-      if (!result) throw new Error("The 'ap_ar_transactions' table may not exist in your database.");
-      const newTx = result[0];
-      toast({ title: 'Ledger Transaction Added' });
-      await reloadData();
-      return newTx;
+    if (!state.user) {
+        toast({ variant: 'destructive', title: 'Authentication Error', description: 'You must be logged in.' });
+        return null;
+    }
+    try {
+        const result = await appendData({ tableName: 'ap_ar_transactions', data: { ...tx } });
+        if(!result) throw new Error("Could not create ledger transaction.");
+        await reloadData();
+        return result[0];
     } catch (error: any) {
-       toast({ variant: 'destructive', title: 'Failed to add ledger transaction', description: error.message });
-       return null;
+        console.error("Failed to add ledger tx:", error);
+        toast({ variant: 'destructive', title: 'Failed to add ledger transaction', description: error.message });
+        return null;
     }
   }
   
   const settleLedgerTransaction = async (tx: LedgerTransaction, paymentMethod: 'cash' | 'bank', paymentDate: Date) => {
-    try {
-      const finTxDesc = `Settlement for ${tx.type}: ${tx.description} (Ref: ${tx.id})`;
-      if (tx.type === 'payable') {
-        const transaction = {
-            date: paymentDate.toISOString(),
-            amount: tx.amount,
-            description: finTxDesc,
-            category: 'A/P Settlement',
-        };
-        if(paymentMethod === 'cash') {
-          await addCashTransaction({...transaction, type: 'expense'});
-        } else {
-          await addBankTransaction({...transaction, type: 'withdrawal'});
-        }
-      } else { // receivable
-         const transaction = {
-            date: paymentDate.toISOString(),
-            amount: tx.amount,
-            description: finTxDesc,
-            category: 'A/R Settlement',
-        };
-        if(paymentMethod === 'cash') {
-          await addCashTransaction({...transaction, type: 'income'});
-        } else {
-          await addBankTransaction({...transaction, type: 'deposit'});
-        }
-      }
+    if (!state.user) throw new Error("User not authenticated.");
 
-      await updateData({ tableName: 'ap_ar_transactions', id: tx.id, data: { status: 'paid', paidDate: paymentDate.toISOString(), paidFrom: paymentMethod } });
-      toast({ title: 'Transaction Settled' });
-      await reloadData();
+    try {
+        // Step 1: Update the ledger transaction to 'paid'
+        await updateData({
+            tableName: 'ap_ar_transactions',
+            id: tx.id,
+            data: {
+                status: 'paid',
+                paidDate: paymentDate.toISOString(),
+                paidFrom: paymentMethod
+            }
+        });
+
+        // Step 2: Create the corresponding financial transaction
+        const financialTxData = {
+            date: paymentDate.toISOString(),
+            amount: tx.amount,
+            description: `Settlement for: ${tx.description}`,
+            category: tx.type === 'payable' ? 'A/P Settlement' : 'A/R Settlement',
+        };
+
+        if (paymentMethod === 'cash') {
+            await addCashTransaction({
+                ...financialTxData,
+                type: tx.type === 'payable' ? 'expense' : 'income',
+            });
+        } else { // bank
+            await addBankTransaction({
+                ...financialTxData,
+                type: tx.type === 'payable' ? 'withdrawal' : 'deposit',
+            });
+        }
+        
+        await reloadData();
+
     } catch (error: any) {
-      if (!error.message.includes('relation "public.ap_ar_transactions" does not exist')) {
-         toast({ variant: 'destructive', title: 'Failed to settle transaction' });
-      }
+        console.error("Failed to settle transaction:", error);
+        throw new Error(error.message || "An unexpected error occurred during settlement.");
     }
   }
 
-  const setFontSize = (size: FontSize) => setState(prev => ({ ...prev, fontSize: size }));
-  const setBodyFont = (font: string) => setState(prev => ({ ...prev, bodyFont: font }));
-  const setNumberFont = (font: string) => setState(prev => ({ ...prev, numberFont: font }));
-  const setWastagePercentage = (percentage: number) => setState(prev => ({ ...prev, wastagePercentage: percentage }));
-  const setCurrency = (currency: string) => setState(prev => ({ ...prev, currency }));
-  const setShowStockValue = (show: boolean) => setState(prev => ({ ...prev, showStockValue: show }));
 
-  const value: AppContextType = {
-    ...state,
-    reloadData,
-    loadRecycleBinData,
-    addCashTransaction,
-    addBankTransaction,
-    addStockTransaction,
-    editCashTransaction,
-    editBankTransaction,
-    editStockTransaction,
-    deleteCashTransaction,
-    deleteBankTransaction,
-    deleteStockTransaction,
-    deleteMultipleCashTransactions,
-    deleteMultipleBankTransactions,
-    deleteMultipleStockTransactions,
-    restoreTransaction,
-    transferFunds,
-    addCategory,
-    deleteCategory,
-    setFontSize,
-    setBodyFont,
-    setNumberFont,
-    setWastagePercentage,
-    setCurrency,
-    setShowStockValue,
-    setInitialBalances,
-    addInitialStockItem,
-    handleExport,
-    handleImport,
-    handleDeleteAllData,
-    logout,
-    addVendor,
-    addClient,
-    addLedgerTransaction,
-    settleLedgerTransaction,
-  };
-
-  if (!sessionChecked) {
-    return (
-        <div className="flex items-center justify-center min-h-screen bg-background">
-            <div className="flex flex-col items-center gap-4">
-                <Logo className="h-16 w-16 text-primary animate-pulse" />
-                <p className="text-muted-foreground">Initializing...</p>
-            </div>
-        </div>
-    );
-  }
-  
-  return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
+  return (
+    <AppContext.Provider value={{ 
+        ...state, 
+        reloadData,
+        loadRecycleBinData,
+        addCashTransaction, 
+        addBankTransaction,
+        addStockTransaction,
+        editCashTransaction,
+        editBankTransaction,
+        editStockTransaction,
+        deleteCashTransaction,
+        deleteBankTransaction,
+        deleteStockTransaction,
+        deleteMultipleCashTransactions,
+        deleteMultipleBankTransactions,
+        deleteMultipleStockTransactions,
+        restoreTransaction,
+        transferFunds,
+        addCategory,
+        deleteCategory,
+        setFontSize: (size) => setState(prev => ({ ...prev, fontSize: size })),
+        setBodyFont: (font) => setState(prev => ({...prev, bodyFont: font })),
+        setNumberFont: (font) => setState(prev => ({...prev, numberFont: font })),
+        setWastagePercentage: (p) => setState(prev => ({ ...prev, wastagePercentage: p })),
+        setCurrency: (c) => setState(prev => ({ ...prev, currency: c })),
+        setShowStockValue: (s) => setState(prev => ({ ...prev, showStockValue: s })),
+        setInitialBalances,
+        addInitialStockItem,
+        handleExport,
+        handleImport,
+        handleDeleteAllData,
+        logout,
+        addVendor,
+        addClient,
+        addLedgerTransaction,
+        settleLedgerTransaction,
+    }}>
+      {children}
+    </AppContext.Provider>
+  );
 }
 
 export function useAppContext() {
@@ -833,4 +825,14 @@ export function useAppContext() {
   return context;
 }
 
-    
+// Fallback loader if context is not ready
+export function AppLoading() {
+    return (
+        <div className="flex items-center justify-center min-h-screen bg-background">
+            <div className="flex flex-col items-center gap-4">
+                <Logo className="h-16 w-16 text-primary animate-pulse" />
+                <p className="text-muted-foreground">Loading your ledger...</p>
+            </div>
+        </div>
+    );
+}
