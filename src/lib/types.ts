@@ -78,5 +78,4 @@ export interface LedgerTransaction {
   createdAt: string;
   user_id?: string;
   contact_id: string;
-  linkedStockTxId?: string;
 }

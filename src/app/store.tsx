@@ -339,7 +339,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
               amount: totalValue,
               date: tx.date,
               contact_id,
-              linkedStockTxId: newStockTx.id,
           });
       } else {
           const description = `${tx.type === 'purchase' ? 'Purchase' : 'Sale'} of ${tx.weight}kg of ${tx.stockItemName}`;
