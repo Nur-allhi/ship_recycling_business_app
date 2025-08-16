@@ -114,7 +114,6 @@ const initialAppState: AppState = {
 };
 
 const getInitialState = (): AppState => {
-    // We disable loading from local storage temporarily to ensure data consistency from DB
     return initialAppState;
 }
 
@@ -261,7 +260,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (state.user && sessionChecked) {
         reloadData();
     } else if (sessionChecked) {
-        // If no user but session is checked, we are ready to show login page or public content
         setState(prev => ({...prev, initialBalanceSet: true}));
     }
   }, [state.user, sessionChecked, reloadData]);
@@ -649,7 +647,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
         await deleteAllData();
         toast({ title: 'All Data Deleted', description: 'Your ledger has been reset.' });
-        // Reset state but keep user session
         setState(prevState => ({
             ...initialAppState, 
             user: prevState.user, 
@@ -675,6 +672,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return null;
     }
     try {
+      // The user_id is now handled by RLS and database defaults, so we don't pass it.
       const result = await appendData({ tableName: 'vendors', data: { name } });
       if (!result) {
         toast({ variant: 'destructive', title: 'Setup Incomplete', description: "Could not save to the 'vendors' table. Please ensure it exists in your database and RLS is configured." });
@@ -701,6 +699,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return null;
     }
     try {
+      // The user_id is now handled by RLS and database defaults, so we don't pass it.
       const result = await appendData({
         tableName: 'clients',
         data: { name },
@@ -750,7 +749,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!state.user) throw new Error("User not authenticated.");
 
     try {
-        // Step 1: Update the ledger transaction to 'paid'
         await updateData({
             tableName: 'ap_ar_transactions',
             id: tx.id,
@@ -761,7 +759,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
             }
         });
 
-        // Step 2: Create the corresponding financial transaction
         const financialTxData = {
             date: paymentDate.toISOString(),
             amount: tx.amount,
@@ -844,7 +841,6 @@ export function useAppContext() {
   return context;
 }
 
-// Fallback loader if context is not ready
 export function AppLoading() {
     return (
         <div className="flex items-center justify-center min-h-screen bg-background">
