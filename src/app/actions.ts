@@ -46,13 +46,16 @@ export async function readData(input: z.infer<typeof ReadDataInputSchema>) {
     .from(input.tableName)
     .select(input.select);
 
+  const softDeleteTables = ['cash_transactions', 'bank_transactions', 'stock_transactions'];
+  const userSpecificTables = ['cash_transactions', 'bank_transactions', 'stock_transactions', 'categories', 'initial_stock'];
+
   // Only apply the soft-delete filter to tables that have the column
-  if (['cash_transactions', 'bank_transactions', 'stock_transactions'].includes(input.tableName)) {
+  if (softDeleteTables.includes(input.tableName)) {
     query = query.is('deletedAt', null);
   }
   
   // Only filter by user_id if it's provided and the table is user-specific
-  if (input.userId && ['cash_transactions', 'bank_transactions', 'stock_transactions', 'categories', 'initial_stock'].includes(input.tableName)) {
+  if (input.userId && userSpecificTables.includes(input.tableName)) {
       query = query.eq('user_id', input.userId);
   }
 
@@ -64,7 +67,12 @@ export async function readData(input: z.infer<typeof ReadDataInputSchema>) {
     // as the user might not have run the migration yet.
     if (error.code === '42703' && error.message.includes('user_id')) {
         console.warn(`Warning: column 'user_id' not found in '${input.tableName}'. Returning all data.`);
-        const { data: allData, error: allError } = await supabase.from(input.tableName).select(input.select).is('deletedAt', null);
+        let fallbackQuery = supabase.from(input.tableName).select(input.select);
+        // Ensure we only apply deletedAt filter to relevant tables in fallback
+        if (softDeleteTables.includes(input.tableName)) {
+            fallbackQuery = fallbackQuery.is('deletedAt', null);
+        }
+        const { data: allData, error: allError } = await fallbackQuery;
         if(allError) throw new Error(allError.message);
         return allData || [];
     }
