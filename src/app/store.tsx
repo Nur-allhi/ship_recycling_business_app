@@ -693,13 +693,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const addClient = async (name: string) => {
     if (!state.user) {
-        toast({ variant: 'destructive', title: 'Authentication Error', description: 'You must be logged in to add a client.' });
-        return null;
+      toast({
+        variant: 'destructive',
+        title: 'Authentication Error',
+        description: 'You must be logged in to add a client.',
+      });
+      return null;
     }
     try {
-      const result = await appendData({ tableName: 'clients', data: { name, user_id: state.user.id } });
-       if (!result) {
-        toast({ variant: 'destructive', title: 'Setup Incomplete', description: "Could not save to the 'clients' table. Please ensure it exists in your database and RLS is configured." });
+      // Correctly include the user_id in the data payload
+      const result = await appendData({
+        tableName: 'clients',
+        data: { name, user_id: state.user.id },
+      });
+      if (!result) {
+        toast({
+          variant: 'destructive',
+          title: 'Setup Incomplete',
+          description:
+            "Could not save to the 'clients' table. Please ensure it exists and RLS is configured.",
+        });
         return null;
       }
       const newClient = result[0];
@@ -707,11 +720,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
       await reloadData();
       return newClient;
     } catch (error: any) {
-      console.error("Failed to add client:", error);
-      toast({ variant: 'destructive', title: 'Failed to add client', description: error.message });
+      console.error('Failed to add client:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Failed to add client',
+        description: error.message,
+      });
       return null;
     }
-  }
+  };
 
   const addLedgerTransaction = async (tx: Omit<LedgerTransaction, 'id' | 'createdAt' | 'deletedAt' | 'user_id' | 'status'>) => {
     if (!state.user) {
@@ -839,3 +856,5 @@ export function AppLoading() {
         </div>
     );
 }
+
+    
