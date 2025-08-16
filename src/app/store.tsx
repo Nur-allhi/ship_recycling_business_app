@@ -728,7 +728,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem('ha-mim-iron-mart-state');
     localStorage.removeItem('ha-mim-iron-mart-settings');
     setState({...initialAppState, initialBalanceSet: true, user: null});
-    router.push('/login');
     window.location.href = '/login';
   };
 

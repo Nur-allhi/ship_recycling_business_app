@@ -42,5 +42,11 @@ export async function getSession(): Promise<SessionPayload | null> {
 }
 
 export async function removeSession() {
-  cookies().set('session', '', { expires: new Date(0), path: '/' });
+  cookies().set('session', '', {
+    httpOnly: true,
+    secure: true,
+    sameSite: 'none',
+    path: '/',
+    expires: new Date(0),
+  });
 }
