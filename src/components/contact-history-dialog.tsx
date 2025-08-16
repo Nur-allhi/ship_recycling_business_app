@@ -73,6 +73,12 @@ export function ContactHistoryDialog({ isOpen, setIsOpen, contact, contactType }
     }
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: currency, currencyDisplay: 'symbol' }).format(amount)
   }
+
+  const formatCurrencyForPdf = (amount: number) => {
+    if (amount === 0) return '-';
+    const prefix = currency === 'BDT' ? '৳' : currency === 'USD' ? '$' : currency === 'EUR' ? '€' : currency === 'GBP' ? '£' : currency === 'JPY' ? '¥' : currency === 'INR' ? '₹' : '';
+    return `${prefix} ${amount.toFixed(2)}`;
+  };
   
   const handleExportPdf = () => {
     const doc = new jsPDF();
@@ -112,9 +118,9 @@ export function ContactHistoryDialog({ isOpen, setIsOpen, contact, contactType }
         return [
             format(new Date(item.date), 'dd-MM-yy'),
             description,
-            formatCurrency(debit),
-            formatCurrency(credit),
-            formatCurrency(runningBalance),
+            formatCurrencyForPdf(debit),
+            formatCurrencyForPdf(credit),
+            formatCurrencyForPdf(runningBalance),
         ]
     });
 
@@ -125,9 +131,9 @@ export function ContactHistoryDialog({ isOpen, setIsOpen, contact, contactType }
         theme: 'grid',
         headStyles: { fillColor: [34, 49, 63], textColor: 255, fontStyle: 'bold', halign: 'center' },
         columnStyles: {
-            2: { halign: 'right' },
-            3: { halign: 'right' },
-            4: { halign: 'right', fontStyle: 'bold' },
+            2: { halign: 'right', font: 'Courier' },
+            3: { halign: 'right', font: 'Courier' },
+            4: { halign: 'right', font: 'Courier', fontStyle: 'bold' },
         },
         didDrawPage: (data) => {
             // Footer
@@ -246,3 +252,4 @@ export function ContactHistoryDialog({ isOpen, setIsOpen, contact, contactType }
     </Dialog>
   );
 }
+
