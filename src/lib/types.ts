@@ -80,5 +80,3 @@ export interface LedgerTransaction {
   user_id?: string;
   linkedStockTxId?: string; // Link to the stock transaction if it exists
 }
-
-    
