@@ -29,7 +29,7 @@ const navItems = [
     { value: 'dashboard', label: 'Dashboard', icon: Wallet },
     { value: 'cash', label: 'Cash', icon: Wallet },
     { value: 'bank', label: 'Bank', icon: Landmark },
-    { value: 'credit', label: 'A/R & A/P', icon: UserPlus },
+    { value: 'credit', label: 'A/R & A/P', icon: CreditCard },
     { value: 'stock', label: 'Stock', icon: Boxes },
     { value: 'settings', label: 'Settings', icon: Settings },
 ]

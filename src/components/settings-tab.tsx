@@ -359,5 +359,3 @@ export function SettingsTab() {
     </div>
   )
 }
-
-    
