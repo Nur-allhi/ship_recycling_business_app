@@ -4,7 +4,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import type { CashTransaction, BankTransaction, StockItem, StockTransaction, User, Vendor, Client, LedgerTransaction } from '@/lib/types';
 import { useToast } from "@/hooks/use-toast"
-import { readData, appendData, updateData, deleteData, readDeletedData, restoreData, exportAllData, batchImportData, deleteAllData } from '@/app/actions';
+import { readData, appendData, updateData, deleteData, readDeletedData, restoreData, exportAllData, batchImportData, deleteAllData, logout as serverLogout } from '@/app/actions';
 import { format } from 'date-fns';
 import { supabase } from '@/lib/supabase';
 import { saveAs } from 'file-saver';
@@ -134,6 +134,31 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
 
+  const logout = useCallback(async () => {
+    await serverLogout();
+    localStorage.removeItem('ha-mim-iron-mart-settings');
+    setState({...initialAppState, user: null});
+    window.location.href = '/login';
+  }, []);
+
+  const handleApiError = useCallback((error: any) => {
+    if (error.message === "SESSION_EXPIRED") {
+        toast({
+            variant: 'destructive',
+            title: 'Session Expired',
+            description: 'Your session has expired. Please log in again.',
+        });
+        logout();
+    } else {
+        console.error("API Error:", error);
+        toast({
+            variant: 'destructive',
+            title: 'An Error Occurred',
+            description: error.message || 'An unknown error occurred. Please try again.',
+        });
+    }
+  }, [toast, logout]);
+
   useEffect(() => {
     const checkSessionAndLoadData = async () => {
       try {
@@ -165,7 +190,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
             readData({ tableName: 'ap_ar_transactions' }),
         ]);
 
-        const [cashData, bankData, stockTransactionsData, initialStockData, categoriesData, vendorsData, clientsData, ledgerData] = results.map(r => r.status === 'fulfilled' ? r.value : []);
+        const [cashData, bankData, stockTransactionsData, initialStockData, categoriesData, vendorsData, clientsData, ledgerData] = results.map(r => {
+            if (r.status === 'rejected') {
+                handleApiError(r.reason);
+                return []; // Return empty array on error to prevent crashes
+            }
+            return r.value;
+        });
         
         let needsInitialBalance = true;
 
@@ -252,15 +283,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       } catch (error: any) {
         console.error("Failed to load data during promise resolution:", error);
         setState(prev => ({...prev, initialBalanceSet: true}));
-        if (!error.message.includes('relation "users" does not exist')) {
-          toast({
-              variant: 'destructive',
-              title: 'Failed to load data',
-              description: 'Could not connect to Supabase. Check your console for details and verify your credentials.'
-          });
-        }
+        handleApiError(error);
       }
-  }, [toast, state.user]);
+  }, [toast, state.user, handleApiError]);
   
   useEffect(() => {
     if (state.user && sessionChecked) {
@@ -291,22 +316,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }));
 
     } catch (error: any) {
-        console.error("Failed to load recycle bin data", error);
-        toast({
-            variant: 'destructive',
-            title: 'Failed to load recycle bin',
-            description: 'Could not fetch deleted items. Please try again later.'
-        });
+        handleApiError(error);
     }
-  }, [toast, state.user]);
+  }, [state.user, handleApiError]);
   
   const addCashTransaction = async (tx: Omit<CashTransaction, 'id' | 'createdAt' | 'deletedAt' | 'user_id'>) => {
     try {
       await appendData({ tableName: 'cash_transactions', data: { ...tx } });
       await reloadData();
     } catch (error) {
-      console.error(error);
-      toast({ variant: 'destructive', title: "Error", description: "Failed to add cash transaction."});
+      handleApiError(error);
     }
   };
 
@@ -315,8 +334,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         await appendData({ tableName: 'bank_transactions', data: { ...tx } });
         await reloadData();
     } catch (error) {
-        console.error(error);
-        toast({ variant: 'destructive', title: "Error", description: "Failed to add bank transaction."});
+        handleApiError(error);
     }
   };
   
@@ -362,8 +380,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       toast({ title: "Success", description: "Stock transaction recorded."});
       await reloadData();
     } catch (error: any) {
-      console.error(error);
-      toast({ variant: 'destructive', title: "Error", description: error.message || "Failed to add stock transaction."});
+      handleApiError(error)
     }
   };
 
@@ -373,8 +390,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         toast({ title: "Success", description: "Cash transaction updated."});
         await reloadData();
       } catch (error) {
-        console.error(error);
-        toast({ variant: 'destructive', title: "Error", description: "Failed to update cash transaction."});
+        handleApiError(error);
       }
   };
 
@@ -384,8 +400,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         toast({ title: "Success", description: "Bank transaction updated."});
         await reloadData();
       } catch (error) {
-        console.error(error);
-        toast({ variant: 'destructive', title: "Error", description: "Failed to update bank transaction."});
+        handleApiError(error);
       }
   };
 
@@ -399,8 +414,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         });
         await reloadData();
       } catch (error) {
-        console.error(error);
-        toast({ variant: 'destructive', title: "Error", description: "Failed to update stock transaction."});
+        handleApiError(error);
       }
   };
 
@@ -413,8 +427,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         toast({ title: "Success", description: "Cash transaction and any linked stock entry have been moved to the recycle bin."});
         await reloadData();
     } catch(error) {
-        console.error(error);
-        toast({ variant: 'destructive', title: "Error", description: "Failed to delete cash transaction."});
+        handleApiError(error);
     }
   };
 
@@ -427,8 +440,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         toast({ title: "Success", description: "Bank transaction and any linked stock entry have been moved to the recycle bin."});
         await reloadData();
     } catch(error) {
-        console.error(error);
-        toast({ variant: 'destructive', title: "Error", description: "Failed to delete bank transaction."});
+        handleApiError(error);
     }
   };
   
@@ -448,8 +460,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         toast({ title: "Stock Transaction Deleted", description: "The corresponding financial entry was also moved to the recycle bin."});
         await reloadData();
     } catch(error) {
-        console.error(error);
-        toast({ variant: 'destructive', title: "Error", description: "Failed to delete stock transaction and its linked financial entry."});
+        handleApiError(error);
     }
   };
   
@@ -476,10 +487,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         toast({ title: "Transaction Restored", description: "The item and any linked transactions have been restored." });
         await Promise.all([reloadData(), loadRecycleBinData()]);
     } catch (error: any) {
-        console.error("Failed to restore transaction", error);
-         if (error.code !== '42P01') {
-            toast({ variant: 'destructive', title: "Error", description: "Failed to restore the transaction." });
-        }
+        handleApiError(error);
     }
   };
 
@@ -489,8 +497,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         toast({ title: "Success", description: `${txs.length} cash transaction(s) deleted.`});
         await reloadData();
     } catch(error) {
-        console.error(error);
-        toast({ variant: 'destructive', title: "Error", description: "Failed to delete multiple cash transactions."});
+        handleApiError(error);
     }
   };
 
@@ -500,8 +507,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         toast({ title: "Success", description: `${txs.length} bank transaction(s) deleted.`});
         await reloadData();
     } catch(error) {
-        console.error(error);
-        toast({ variant: 'destructive', title: "Error", description: "Failed to delete multiple bank transactions."});
+        handleApiError(error);
     }
   };
 
@@ -511,8 +517,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         toast({ title: "Success", description: `${txs.length} stock transaction(s) deleted.`});
         await reloadData();
     } catch(error) {
-        console.error(error);
-        toast({ variant: 'destructive', title: "Error", description: "Failed to delete multiple stock transactions."});
+        handleApiError(error);
     }
   };
 
@@ -533,8 +538,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         toast({ title: "Success", description: "Fund transfer completed."});
         await reloadData();
      } catch (error) {
-        console.error(error);
-        toast({ variant: 'destructive', title: "Error", description: "Failed to complete fund transfer."});
+        handleApiError(error);
      }
   };
 
@@ -548,8 +552,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       toast({ title: "Success", description: "Category added." });
       await reloadData();
     } catch (error) {
-      console.error(error);
-      toast({ variant: 'destructive', title: "Error", description: "Failed to add category." });
+      handleApiError(error);
     }
   };
 
@@ -580,16 +583,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
         await Promise.all(operations);
 
         toast({ title: "Initial balances set." });
-
-        // Optimistically update the UI to close the dialog
         setState(prev => ({ ...prev, needsInitialBalance: false }));
-
-        // Then, reload all data from the server to ensure consistency
         await reloadData();
 
     } catch (e) {
-        console.error(e);
-        toast({variant: 'destructive', title: 'Failed to set initial balances'});
+        handleApiError(e);
     }
 }
 
@@ -600,8 +598,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         toast({ title: "Initial stock item added." });
         await reloadData();
       } catch (e) {
-          console.error(e);
-          toast({variant: 'destructive', title: 'Failed to add initial stock item.'});
+          handleApiError(e);
       }
   }
 
@@ -614,8 +611,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       saveAs(blob, `ha-mim-iron-mart-backup-${format(new Date(), 'yyyy-MM-dd')}.zip`);
       toast({ title: "Export Successful", description: "Your data has been exported." });
     } catch (error: any) {
-      console.error(error);
-      toast({ variant: 'destructive', title: "Export Failed", description: error.message });
+      handleApiError(error);
     }
   };
 
@@ -646,8 +642,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             await reloadData();
 
         } catch (error: any) {
-            console.error(error);
-            toast({ variant: 'destructive', title: "Import Failed", description: error.message });
+            handleApiError(error);
         }
     };
     reader.readAsText(file);
@@ -657,22 +652,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
         await deleteAllData();
         toast({ title: 'All Data Deleted', description: 'Your account and all associated data have been permanently removed.' });
-        setState(prevState => ({
-            ...initialAppState, 
-            user: null, 
-        }));
-        window.location.href = '/login';
+        logout();
     } catch (error: any) {
-        console.error(error);
-        toast({ variant: 'destructive', title: 'Deletion Failed', description: error.message });
+        handleApiError(error);
     }
-  };
-
-  const logout = async () => {
-    await removeSession();
-    localStorage.removeItem('ha-mim-iron-mart-settings');
-    setState({...initialAppState, user: null});
-    window.location.href = '/login';
   };
 
   const addVendor = async (name: string) => {
@@ -691,8 +674,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       await reloadData();
       return newVendor;
     } catch (error: any) {
-      console.error("Failed to add vendor:", error)
-      toast({ variant: 'destructive', title: 'Failed to add vendor', description: error.message });
+      handleApiError(error);
       return null;
     }
   }
@@ -725,12 +707,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       await reloadData();
       return newClient;
     } catch (error: any) {
-      console.error('Failed to add client:', error);
-      toast({
-        variant: 'destructive',
-        title: 'Failed to add client',
-        description: error.message,
-      });
+      handleApiError(error);
       return null;
     }
   };
@@ -746,8 +723,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         await reloadData();
         return result[0];
     } catch (error: any) {
-        console.error("Failed to add ledger tx:", error);
-        toast({ variant: 'destructive', title: 'Failed to add ledger transaction', description: error.message });
+        handleApiError(error);
         return null;
     }
   }
@@ -791,8 +767,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         await reloadData();
 
     } catch (error: any) {
-        console.error("Failed to settle transaction:", error);
-        throw new Error(error.message || "An unexpected error occurred during settlement.");
+        handleApiError(new Error(error.message || "An unexpected error occurred during settlement."));
     }
   }
 
@@ -812,7 +787,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
   }
   
-  // Save settings whenever they change
   useEffect(() => {
     saveSettings();
   }, [state.fontSize, state.bodyFont, state.numberFont, state.wastagePercentage, state.currency, state.showStockValue])

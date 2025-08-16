@@ -31,7 +31,7 @@ import { Separator } from './ui/separator';
 import { Badge } from '@/components/ui/badge';
 
 const newUserSchema = z.object({
-  username: z.string().min(3, "Username must be at least 3 characters."),
+  username: z.string().email("Please enter a valid email address."),
   password: z.string().min(6, "Password must be at least 6 characters."),
   role: z.enum(['admin', 'user'], { required_error: "Role is required." }),
 });
@@ -97,7 +97,7 @@ export function UserManagementTab() {
             <form onSubmit={handleSubmit(onAddUser)} className="space-y-4 mt-4 p-4 border rounded-lg">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="space-y-2">
-                        <Label htmlFor="username">Username</Label>
+                        <Label htmlFor="username">Username (Email)</Label>
                         <Input id="username" {...register('username')} />
                         {errors.username && <p className="text-sm text-destructive">{errors.username.message}</p>}
                     </div>
@@ -197,3 +197,5 @@ export function UserManagementTab() {
     </Card>
   );
 }
+
+    
