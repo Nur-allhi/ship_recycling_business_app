@@ -569,21 +569,32 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const setInitialBalances = async (cash: number, bank: number) => {
-      try {
-          const date = new Date().toISOString();
-          if (cash > 0) {
-            await appendData({ tableName: 'cash_transactions', data: { date, type: 'income', amount: cash, description: 'Initial Balance', category: 'Initial Balance' }});
-          }
-          if (bank > 0) {
-            await appendData({ tableName: 'bank_transactions', data: { date, type: 'deposit', amount: bank, description: 'Initial Balance', category: 'Initial Balance' }});
-          }
-          toast({ title: "Initial balances set." });
-          await reloadData();
-      } catch (e) {
-          console.error(e);
-          toast({variant: 'destructive', title: 'Failed to set initial balances'});
-      }
-  }
+    try {
+        const date = new Date().toISOString();
+        const operations = [];
+
+        if (cash > 0) {
+            operations.push(appendData({ tableName: 'cash_transactions', data: { date, type: 'income', amount: cash, description: 'Initial Balance', category: 'Initial Balance' }}));
+        }
+        if (bank > 0) {
+            operations.push(appendData({ tableName: 'bank_transactions', data: { date, type: 'deposit', amount: bank, description: 'Initial Balance', category: 'Initial Balance' }}));
+        }
+        
+        await Promise.all(operations);
+
+        toast({ title: "Initial balances set." });
+
+        // Optimistically update the UI to close the dialog
+        setState(prev => ({ ...prev, needsInitialBalance: false }));
+
+        // Then, reload all data from the server to ensure consistency
+        await reloadData();
+
+    } catch (e) {
+        console.error(e);
+        toast({variant: 'destructive', title: 'Failed to set initial balances'});
+    }
+}
 
   const addInitialStockItem = async (item: { name: string; weight: number; pricePerKg: number }) => {
       try {
@@ -871,6 +882,8 @@ export function AppLoading() {
         </div>
     );
 }
+
+    
 
     
 
