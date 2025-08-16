@@ -76,7 +76,8 @@ export function ContactHistoryDialog({ isOpen, setIsOpen, contact, contactType }
 
   const formatCurrencyForPdf = (amount: number) => {
     if (amount === 0 || !amount) return '-';
-    const prefix = currency === 'BDT' ? '৳' : currency === 'USD' ? '$' : currency === 'EUR' ? '€' : currency === 'GBP' ? '£' : currency === 'JPY' ? '¥' : currency === 'INR' ? '₹' : '';
+    // Use "BDT" prefix instead of the symbol to ensure compatibility with standard PDF fonts
+    const prefix = currency === 'BDT' ? 'BDT' : currency; 
     return `${prefix} ${amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
   
@@ -118,8 +119,8 @@ export function ContactHistoryDialog({ isOpen, setIsOpen, contact, contactType }
         return [
             format(new Date(item.date), 'dd-MM-yy'),
             description,
-            formatCurrencyForPdf(debit),
-            formatCurrencyForPdf(credit),
+            debit > 0 ? formatCurrencyForPdf(debit) : '-',
+            credit > 0 ? formatCurrencyForPdf(credit) : '-',
             formatCurrencyForPdf(runningBalance),
         ]
     });
@@ -147,10 +148,10 @@ export function ContactHistoryDialog({ isOpen, setIsOpen, contact, contactType }
             fontStyle: 'bold',
         },
         columnStyles: {
-            0: { halign: 'center', font: 'Courier'},
-            2: { halign: 'right', font: 'Courier' },
-            3: { halign: 'right', font: 'Courier' },
-            4: { halign: 'right', font: 'Courier', fontStyle: 'bold' },
+            0: { halign: 'center' },
+            2: { halign: 'right' },
+            3: { halign: 'right' },
+            4: { halign: 'right' },
         },
         didParseCell: function(data) {
             // Center align the footer labels

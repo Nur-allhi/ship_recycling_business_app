@@ -69,8 +69,8 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
     
     const formatCurrencyForPdf = (value: number) => {
         if (!value) return '';
-        const prefix = currency === 'BDT' ? '৳' : currency;
-        // The space is intentional for readability
+        // Use "BDT" prefix instead of the symbol to ensure compatibility
+        const prefix = currency === 'BDT' ? 'BDT' : currency;
         return `${prefix} ${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     }
     
@@ -166,10 +166,10 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
         });
 
         columnStyles = { 
-            0: { font: 'Courier' },
-            3: { halign: 'right', font: 'Courier' },
-            4: { halign: 'right', font: 'Courier' },
-            5: { halign: 'right', fontStyle: 'bold', font: 'Courier' },
+            0: { },
+            3: { halign: 'right' },
+            4: { halign: 'right' },
+            5: { halign: 'right', fontStyle: 'bold' },
         };
 
     } else { // Stock
@@ -226,11 +226,10 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
             ];
         });
         columnStyles = { 
-            0: { font: 'Courier' },
-            3: { halign: 'right', font: 'Courier' },
-            4: { halign: 'right', font: 'Courier' },
-            5: { halign: 'right', font: 'Courier' },
-            6: { halign: 'right', fontStyle: 'bold', font: 'Courier' },
+            3: { halign: 'right' },
+            4: { halign: 'right' },
+            5: { halign: 'right' },
+            6: { halign: 'right', fontStyle: 'bold' },
         };
     }
 
