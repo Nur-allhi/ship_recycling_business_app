@@ -630,5 +630,3 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
     </>
   );
 }
-    
-    
