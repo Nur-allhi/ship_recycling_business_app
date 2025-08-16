@@ -330,8 +330,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   
   const addStockTransaction = async (tx: Omit<StockTransaction, 'id' | 'createdAt' | 'deletedAt' | 'user_id'>) => {
     try {
-      const [newStockTx] = await appendData({ tableName: 'stock_transactions', data: { ...tx } });
-      if (!newStockTx) throw new Error("Stock transaction creation failed.");
+      const result = await appendData({ tableName: 'stock_transactions', data: { ...tx } });
+      if (!result) throw new Error("Stock transaction creation failed. The 'stock_transactions' table may not exist.");
+      const newStockTx = result[0];
       
       const totalValue = tx.weight * tx.pricePerKg;
 
@@ -367,9 +368,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       
       toast({ title: "Success", description: "Stock transaction recorded."});
       await reloadData();
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      toast({ variant: 'destructive', title: "Error", description: "Failed to add stock transaction."});
+      toast({ variant: 'destructive', title: "Error", description: error.message || "Failed to add stock transaction."});
     }
   };
 
@@ -670,42 +671,49 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const addVendor = async (name: string) => {
     try {
-      const [newVendor] = await appendData({ tableName: 'vendors', data: { name } });
+      const result = await appendData({ tableName: 'vendors', data: { name } });
+      if (!result) {
+        toast({ variant: 'destructive', title: 'Failed to add vendor', description: "The 'vendors' table may not exist in your database." });
+        return null;
+      }
+      const newVendor = result[0];
       toast({ title: 'Vendor Added' });
       await reloadData();
       return newVendor;
     } catch (error: any) {
-      if (!error.message.includes('relation "public.vendors" does not exist')) {
-        toast({ variant: 'destructive', title: 'Failed to add vendor' });
-      }
+      toast({ variant: 'destructive', title: 'Failed to add vendor' });
       return null;
     }
   }
+
   const addClient = async (name: string) => {
     try {
-      const [newClient] = await appendData({ tableName: 'clients', data: { name } });
+      const result = await appendData({ tableName: 'clients', data: { name } });
+      if (!result) {
+        toast({ variant: 'destructive', title: 'Failed to add client', description: "The 'clients' table may not exist in your database." });
+        return null;
+      }
+      const newClient = result[0];
       toast({ title: 'Client Added' });
       await reloadData();
       return newClient;
     } catch (error: any) {
-      if (!error.message.includes('relation "public.clients" does not exist')) {
-        toast({ variant: 'destructive', title: 'Failed to add client' });
-      }
+      toast({ variant: 'destructive', title: 'Failed to add client' });
       return null;
     }
   }
 
   const addLedgerTransaction = async (tx: Omit<LedgerTransaction, 'id' | 'createdAt' | 'deletedAt' | 'user_id' | 'status'>) => {
      try {
-      const [newTx] = await appendData({ tableName: 'ap_ar_transactions', data: { ...tx, status: 'unpaid' } });
+      const result = await appendData({ tableName: 'ap_ar_transactions', data: { ...tx, status: 'unpaid' } });
+      if (!result) throw new Error("The 'ap_ar_transactions' table may not exist in your database.");
+      const newTx = result[0];
       toast({ title: 'Ledger Transaction Added' });
       await reloadData();
       return newTx;
     } catch (error: any) {
-       if (!error.message.includes('relation "public.ap_ar_transactions" does not exist')) {
-          toast({ variant: 'destructive', title: 'Failed to add ledger transaction' });
-       }
-      return null;
+       toast({ variant: 'destructive', title: 'Failed to add ledger transaction', description: error.message });
+       return null;
     }
   }
   
@@ -814,5 +822,3 @@ export function useAppContext() {
   }
   return context;
 }
-
-    

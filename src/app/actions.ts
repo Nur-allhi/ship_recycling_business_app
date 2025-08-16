@@ -69,15 +69,15 @@ export async function readData(input: z.infer<typeof ReadDataInputSchema>) {
 
   const { data, error } = await query;
 
-  if (error) {
-    // Gracefully handle tables that might not exist for all users
-    if (error.code === '42P01') { // 42P01 is 'undefined_table'
-      return []; // Return empty array if table doesn't exist
+    if (error) {
+        // Gracefully handle tables that might not exist for all users
+        if (error.code === '42P01') { // 42P01 is 'undefined_table'
+            return []; // Return empty array if table doesn't exist
+        }
+        console.error(`Error reading from ${input.tableName}:`, error);
+        throw new Error(error.message);
     }
-    console.error(`Error reading from ${input.tableName}:`, error);
-    throw new Error(error.message);
-  }
-  return data;
+    return data;
 }
 
 export async function readDeletedData(input: z.infer<typeof ReadDataInputSchema>) {
@@ -106,15 +106,20 @@ const AppendDataInputSchema = z.object({
 });
 
 export async function appendData(input: z.infer<typeof AppendDataInputSchema>) {
-  const supabase = await createSupabaseClient();
-  // RLS policies on INSERT will handle setting the correct user_id
-  const { data, error } = await supabase
-    .from(input.tableName)
-    .insert([input.data])
-    .select();
+    const supabase = await createSupabaseClient();
+    const { data, error } = await supabase
+        .from(input.tableName)
+        .insert([input.data])
+        .select();
 
-  if (error) throw new Error(error.message);
-  return data;
+    if (error) {
+        if (error.code === '42P01') {
+            console.warn(`Attempted to append to a non-existent table: ${input.tableName}`);
+            return null; // Gracefully return null if table doesn't exist
+        }
+        throw new Error(error.message);
+    }
+    return data;
 }
 
 const UpdateDataInputSchema = z.object({
