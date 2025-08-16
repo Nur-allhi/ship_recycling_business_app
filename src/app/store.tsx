@@ -125,7 +125,8 @@ const getInitialState = (): AppState => {
 
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<AppState>(getInitialState());
+  const [state, setState] = useState<AppState>(initialAppState);
+  const [sessionChecked, setSessionChecked] = useState(false);
   const { toast } = useToast();
   const router = useRouter();
   const pathname = usePathname();
@@ -134,10 +135,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const checkSessionAndLoadData = async () => {
       try {
         const session = await getSession();
-        setState(prev => ({ ...prev, user: session, initialBalanceSet: true }));
+        setState(prev => ({ ...prev, user: session }));
       } catch (error) {
         console.error("Failed to get session", error);
-        setState(prev => ({ ...prev, initialBalanceSet: true })); 
+      } finally {
+        setSessionChecked(true);
       }
     };
     checkSessionAndLoadData();
@@ -151,8 +153,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
             readData({ tableName: 'cash_transactions', userId: currentState.user.id }),
             readData({ tableName: 'bank_transactions', userId: currentState.user.id }),
             readData({ tableName: 'stock_transactions', userId: currentState.user.id }),
-            readData({ tableName: 'initial_stock' }),
-            readData({ tableName: 'categories' }),
+            readData({ tableName: 'initial_stock', userId: currentState.user.id }),
+            readData({ tableName: 'categories', userId: currentState.user.id }),
         ]);
         
         let needsInitialBalance = true;
@@ -228,10 +230,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
             needsInitialBalance,
             cashCategories: cashCategories.length > 0 ? cashCategories : prev.cashCategories,
             bankCategories: bankCategories.length > 0 ? bankCategories : prev.bankCategories,
+            initialBalanceSet: true
         }));
 
       } catch (error: any) {
         console.error("Failed to load data", error);
+        setState(prev => ({...prev, initialBalanceSet: true}));
         if (!error.message.includes('user_id') && !error.message.includes('relation "users" does not exist')) {
           toast({
               variant: 'destructive',
@@ -243,10 +247,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [toast, state]);
   
   useEffect(() => {
-    if (state.user && state.initialBalanceSet) {
+    if (state.user && sessionChecked) {
         reloadData();
+    } else if (sessionChecked) {
+        setState(prev => ({...prev, initialBalanceSet: true}));
     }
-  }, [state.user, state.initialBalanceSet, reloadData]);
+  }, [state.user, sessionChecked, reloadData]);
   
   const loadRecycleBinData = useCallback(async () => {
     if(!state.user) return;
@@ -595,12 +601,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
      });
 
      try {
+        if (!state.user) throw new Error("User not authenticated for transfer");
+        const baseTx = { date: transactionDate, amount, description, category: 'Transfer', user_id: state.user.id };
+
         if(from === 'cash') {
-            await addCashTransaction({ date: transactionDate, type: 'expense', amount, description, category: 'Transfer'});
-            await addBankTransaction({ date: transactionDate, type: 'deposit', amount, description, category: 'Transfer'});
+            await appendData({ tableName: 'cash_transactions', data: { ...baseTx, type: 'expense' }});
+            await appendData({ tableName: 'bank_transactions', data: { ...baseTx, type: 'deposit' }});
         } else {
-            await addBankTransaction({ date: transactionDate, type: 'withdrawal', amount, description, category: 'Transfer'});
-            await addCashTransaction({ date: transactionDate, type: 'income', amount, description, category: 'Transfer'});
+            await appendData({ tableName: 'bank_transactions', data: { ...baseTx, type: 'withdrawal' }});
+            await appendData({ tableName: 'cash_transactions', data: { ...baseTx, type: 'income' }});
         }
         toast({ title: "Success", description: "Fund transfer completed."});
         await reloadData();
@@ -612,11 +621,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const addCategory = async (type: 'cash' | 'bank', category: string) => {
+    if(!state.user) return;
     const categories = type === 'cash' ? state.cashCategories : state.bankCategories;
     if (categories.includes(category) || !category) return;
     
     try {
-      await appendData({ tableName: 'categories', data: { name: category, type } });
+      await appendData({ tableName: 'categories', data: { name: category, type, user_id: state.user.id } });
       toast({ title: "Success", description: "Category added." });
       await reloadData();
     } catch (error) {
@@ -640,8 +650,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const setInitialBalances = async (cash: number, bank: number) => {
       try {
           if (!state.user) throw new Error("User not authenticated");
-          await addCashTransaction({ date: new Date().toISOString(), type: 'income', amount: cash, description: 'Initial Balance', category: 'Initial Balance'});
-          await addBankTransaction({ date: new Date().toISOString(), type: 'deposit', amount: bank, description: 'Initial Balance', category: 'Initial Balance'});
+          const date = new Date().toISOString();
+          await appendData({ tableName: 'cash_transactions', data: { date, type: 'income', amount: cash, description: 'Initial Balance', category: 'Initial Balance', user_id: state.user.id }});
+          await appendData({ tableName: 'bank_transactions', data: { date, type: 'deposit', amount: bank, description: 'Initial Balance', category: 'Initial Balance', user_id: state.user.id }});
           toast({ title: "Initial balances set." });
           await reloadData();
       } catch (e) {
@@ -652,8 +663,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const addInitialStockItem = async (item: { name: string; weight: number; pricePerKg: number }) => {
       try {
+        if (!state.user) throw new Error("User not authenticated");
         const { name, weight, pricePerKg } = item;
-        await appendData({ tableName: 'initial_stock', data: { name, weight, purchasePricePerKg: pricePerKg } });
+        await appendData({ tableName: 'initial_stock', data: { name, weight, purchasePricePerKg: pricePerKg, user_id: state.user.id } });
         toast({ title: "Initial stock item added." });
         await reloadData();
       } catch (e) {
@@ -715,8 +727,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
         await deleteAllData();
         toast({ title: 'All Data Deleted', description: 'Your ledger has been reset.' });
         localStorage.removeItem('ha-mim-iron-mart-state');
-        setState(initialAppState);
-        await reloadData();
+        // Reset state but keep user session
+        setState(prevState => ({
+            ...initialAppState, 
+            user: prevState.user, 
+            initialBalanceSet: true,
+            needsInitialBalance: true,
+        }));
     } catch (error: any) {
         console.error(error);
         toast({ variant: 'destructive', title: 'Deletion Failed', description: error.message });
@@ -727,7 +744,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     await removeSession();
     localStorage.removeItem('ha-mim-iron-mart-state');
     localStorage.removeItem('ha-mim-iron-mart-settings');
-    setState({...initialAppState, initialBalanceSet: true, user: null});
+    setState({...initialAppState, user: null});
     window.location.href = '/login';
   };
 
@@ -772,7 +789,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     logout,
   };
 
-  if (!state.initialBalanceSet) {
+  if (!sessionChecked) {
     return (
         <div className="flex items-center justify-center min-h-screen bg-background">
             <div className="flex flex-col items-center gap-4">

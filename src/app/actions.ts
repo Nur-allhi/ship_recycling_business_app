@@ -216,8 +216,12 @@ export async function batchImportData(dataToImport: z.infer<typeof ImportDataSch
              if (tableName === 'users') continue; // Don't import users this way for security
             const records = dataToImport[tableName];
             if (records && records.length > 0) {
-                 // Assign current user_id to all imported transactions
-                 records.forEach(r => r.user_id = session.id);
+                 // Assign current user_id to all imported transactions, preserving existing user_id if present
+                 records.forEach(r => {
+                    if (!r.user_id) {
+                        r.user_id = session.id;
+                    }
+                 });
                 const { error: insertError } = await supabase.from(tableName).upsert(records);
                 if (insertError) throw new Error(`Failed to import to ${tableName}: ${insertError.message}`);
             }
