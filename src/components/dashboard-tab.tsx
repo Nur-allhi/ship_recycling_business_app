@@ -4,13 +4,14 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useAppContext } from "@/app/store"
 import { Wallet, Landmark, Boxes, BarChart2 } from "lucide-react"
+import { Skeleton } from "./ui/skeleton";
 
 interface DashboardTabProps {
   setActiveTab: (tab: string) => void;
 }
 
 export function DashboardTab({ setActiveTab }: DashboardTabProps) {
-  const { cashBalance, bankBalance, stockItems, currency } = useAppContext()
+  const { cashBalance, bankBalance, stockItems, currency, initialBalanceSet } = useAppContext()
 
   const formatCurrency = (amount: number) => {
     if (currency === 'BDT') {
@@ -23,6 +24,8 @@ export function DashboardTab({ setActiveTab }: DashboardTabProps) {
   const totalStockWeight = stockItems.reduce((acc, item) => acc + item.weight, 0);
   const totalBalance = cashBalance + bankBalance
 
+  const isLoading = !initialBalanceSet;
+
   return (
     <div className="space-y-6">
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
@@ -32,7 +35,11 @@ export function DashboardTab({ setActiveTab }: DashboardTabProps) {
             <BarChart2 className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold font-mono">{formatCurrency(totalBalance)}</div>
+            {isLoading ? (
+                <Skeleton className="h-8 w-3/4" />
+            ) : (
+                <div className="text-2xl font-bold font-mono">{formatCurrency(totalBalance)}</div>
+            )}
             <p className="text-xs text-muted-foreground">Cash + Bank combined</p>
           </CardContent>
         </Card>
@@ -42,7 +49,11 @@ export function DashboardTab({ setActiveTab }: DashboardTabProps) {
             <Wallet className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold font-mono">{formatCurrency(cashBalance)}</div>
+             {isLoading ? (
+                <Skeleton className="h-8 w-3/4" />
+            ) : (
+                <div className="text-2xl font-bold font-mono">{formatCurrency(cashBalance)}</div>
+            )}
             <p className="text-xs text-muted-foreground">In-hand currency</p>
           </CardContent>
         </Card>
@@ -52,7 +63,11 @@ export function DashboardTab({ setActiveTab }: DashboardTabProps) {
             <Landmark className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold font-mono">{formatCurrency(bankBalance)}</div>
+             {isLoading ? (
+                <Skeleton className="h-8 w-3/4" />
+            ) : (
+                <div className="text-2xl font-bold font-mono">{formatCurrency(bankBalance)}</div>
+            )}
             <p className="text-xs text-muted-foreground">Managed by financial institutions</p>
           </CardContent>
         </Card>
@@ -62,9 +77,14 @@ export function DashboardTab({ setActiveTab }: DashboardTabProps) {
             <Boxes className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold font-mono">{totalStockWeight.toFixed(2)} kg</div>
+             {isLoading ? (
+                <Skeleton className="h-8 w-3/4" />
+            ) : (
+                <div className="text-2xl font-bold font-mono">{totalStockWeight.toFixed(2)} kg</div>
+            )}
             <p className="text-xs text-muted-foreground">
-              Total Value: <span className="font-mono">{formatCurrency(totalStockValue)}</span>
+              Total Value: 
+              {isLoading ? <Skeleton className="h-4 w-1/2 inline-block" /> : <span className="font-mono"> {formatCurrency(totalStockValue)}</span>}
             </p>
           </CardContent>
         </Card>
