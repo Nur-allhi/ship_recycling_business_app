@@ -62,7 +62,7 @@ export async function readData(input: z.infer<typeof ReadDataInputSchema>) {
       .from(input.tableName)
       .select(input.select);
 
-    const softDeleteTables = ['cash_transactions', 'bank_transactions', 'stock_transactions'];
+    const softDeleteTables = ['cash_transactions', 'bank_transactions', 'stock_transactions', 'ap_ar_transactions'];
     
     if (softDeleteTables.includes(input.tableName)) {
       query = query.is('deletedAt', null);
@@ -108,7 +108,7 @@ export async function readDeletedData(input: z.infer<typeof ReadDataInputSchema>
 const AppendDataInputSchema = z.object({
   tableName: z.string(),
   data: z.record(z.any()),
-  select: z.string().optional().default('*'),
+  select: z.string().optional(),
 });
 
 export async function appendData(input: z.infer<typeof AppendDataInputSchema>) {
@@ -121,7 +121,8 @@ export async function appendData(input: z.infer<typeof AppendDataInputSchema>) {
         const { data, error } = await supabase
             .from(input.tableName)
             .insert([input.data]) 
-            .select(input.select);
+            .select(input.select || '*')
+            .single();
 
         if (error) {
             if (error.code === '42P01') {
@@ -130,7 +131,7 @@ export async function appendData(input: z.infer<typeof AppendDataInputSchema>) {
             }
             throw new Error(error.message);
         }
-        return data ? data[0] : null;
+        return data;
     } catch (error) {
         return handleApiError(error);
     }
@@ -174,20 +175,12 @@ export async function deleteData(input: z.infer<typeof DeleteDataInputSchema>) {
     
     const supabase = await getAuthenticatedSupabaseClient();
 
-    if(input.tableName === 'ap_ar_transactions'){
-        const { error } = await supabase
-            .from(input.tableName)
-            .delete()
-            .eq('id', input.id);
-        if (error) throw new Error(error.message);
-    } else {
-        const { error } = await supabase
-            .from(input.tableName)
-            .update({ deletedAt: new Date().toISOString() })
-            .eq('id', input.id);
-                
-        if (error) throw new Error(error.message);
-    }
+    const { error } = await supabase
+        .from(input.tableName)
+        .update({ deletedAt: new Date().toISOString() })
+        .eq('id', input.id);
+            
+    if (error) throw new Error(error.message);
     
     return { success: true };
   } catch(error) {

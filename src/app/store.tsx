@@ -372,12 +372,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const newTx = await appendData({ tableName: 'cash_transactions', data: { ...tx } });
       if (newTx) {
           setState(prev => {
-              const newTxs = [newTx, ...prev.cashTransactions];
-              const { finalCashBalance } = calculateBalancesAndStock(newTxs, prev.bankTransactions, prev.stockTransactions, []);
+              const newTxs = [newTx, ...prev.cashTransactions].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+              const newBalance = prev.cashBalance + (newTx.type === 'income' ? newTx.amount : -newTx.amount);
               return {
                   ...prev,
-                  cashTransactions: newTxs.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
-                  cashBalance: finalCashBalance,
+                  cashTransactions: newTxs,
+                  cashBalance: newBalance,
               }
           })
       }
@@ -391,15 +391,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
         const newTx = await appendData({ tableName: 'bank_transactions', data: { ...tx } });
         if (newTx) {
-             setState(prev => {
-              const newTxs = [newTx, ...prev.bankTransactions];
-              const { finalBankBalance } = calculateBalancesAndStock(prev.cashTransactions, newTxs, prev.stockTransactions, []);
-              return {
-                  ...prev,
-                  bankTransactions: newTxs.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
-                  bankBalance: finalBankBalance,
-              }
-          })
+            setState(prev => {
+                const newTxs = [newTx, ...prev.bankTransactions].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+                const newBalance = prev.bankBalance + (newTx.type === 'deposit' ? newTx.amount : -newTx.amount);
+                return {
+                    ...prev,
+                    bankTransactions: newTxs,
+                    bankBalance: newBalance,
+                }
+            })
         }
         return newTx;
     } catch (error) {
@@ -419,10 +419,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (tx.paymentMethod === 'credit' && contact_id) {
           const ledgerType = tx.type === 'purchase' ? 'payable' : 'receivable';
           const description = `${tx.type === 'purchase' ? 'Purchase' : 'Sale'} of ${tx.weight}kg of ${tx.stockItemName} on credit`;
-          const contactList = tx.type === 'purchase' ? state.vendors : state.clients;
           
-          const finalContactName = contact_name || contactList.find(c => c.id === contact_id)?.name;
-          if (!finalContactName) throw new Error("Could not find contact name for credit transaction.");
+          if (!contact_name) throw new Error("Could not find contact name for credit transaction.");
 
           await addLedgerTransaction({
               type: ledgerType,
@@ -430,7 +428,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
               amount: totalValue,
               date: tx.date,
               contact_id: contact_id,
-              contact_name: finalContactName,
+              contact_name: contact_name,
           });
       } else {
           const description = `${tx.type === 'purchase' ? 'Purchase' : 'Sale'} of ${tx.weight}kg of ${tx.stockItemName}`;
@@ -673,9 +671,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const addInitialStockItem = async (item: { name: string; weight: number; pricePerKg: number }) => {
       try {
         const { name, weight, pricePerKg } = item;
-        await appendData({ tableName: 'initial_stock', data: { name, weight, purchasePricePerKg: pricePerKg } });
-        toast({ title: "Initial stock item added." });
-        await reloadData();
+        const newItem = await appendData({ tableName: 'initial_stock', data: { name, weight, purchasePricePerKg: pricePerKg } });
+        if(newItem) {
+            toast({ title: "Initial stock item added." });
+            await reloadData(); // Reload is needed to recalculate aggregated stock
+        }
       } catch (e) {
           handleApiError(e);
       }
@@ -795,13 +795,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return null;
     }
     try {
-        const newTx = await appendData({ tableName: 'ap_ar_transactions', data: { ...tx }, select: '*, installments:payment_installments(*)' });
+        const newTx = await appendData({ tableName: 'ap_ar_transactions', data: { ...tx, status: 'unpaid', paid_amount: 0 }, select: '*, installments:payment_installments(*)' });
         if(!newTx) throw new Error("Could not create ledger transaction.");
         
-        setState(prev => ({
-            ...prev,
-            ledgerTransactions: [newTx, ...prev.ledgerTransactions].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-        }));
+        setState(prev => {
+            const newLedgerTxs = [newTx, ...prev.ledgerTransactions].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+            const totalPayables = newLedgerTxs.filter(t => t.type === 'payable' && t.status !== 'paid').reduce((acc, t) => acc + (t.amount - t.paid_amount), 0);
+            const totalReceivables = newLedgerTxs.filter(t => t.type === 'receivable' && t.status !== 'paid').reduce((acc, t) => acc + (t.amount - t.paid_amount), 0);
+
+            return {
+                ...prev,
+                ledgerTransactions: newLedgerTxs,
+                totalPayables,
+                totalReceivables
+            }
+        });
         
         return newTx;
     } catch (error: any) {
@@ -817,8 +825,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
     try {
         await deleteData({ tableName: 'ap_ar_transactions', id: tx.id });
-        toast({ title: 'Transaction permanently deleted.' });
-        await reloadLedger();
+        toast({ title: 'Transaction moved to recycle bin.' });
+        await reloadData();
     } catch(error) {
         handleApiError(error);
     }
@@ -837,28 +845,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
             description: tx.description
         });
         
-        // Optimistic UI updates
-        setState(prev => {
-            const updatedLedgerTxs = prev.ledgerTransactions.map(ltx => 
-                ltx.id === result.updatedParent.id ? { ...ltx, ...result.updatedParent, installments: [...ltx.installments, result.newInstallment] } : ltx
-            );
-
-            const updatedCashTxs = result.paymentMethod === 'cash' ? [...prev.cashTransactions, result.newFinancialTx] : prev.cashTransactions;
-            const updatedBankTxs = result.paymentMethod === 'bank' ? [...prev.bankTransactions, result.newFinancialTx] : prev.bankTransactions;
-
-            const { finalCashBalance, finalBankBalance } = calculateBalancesAndStock(updatedCashTxs, updatedBankTxs, prev.stockTransactions, []);
-            
-            return {
-                ...prev,
-                ledgerTransactions: updatedLedgerTxs,
-                cashTransactions: updatedCashTxs,
-                bankTransactions: updatedBankTxs,
-                cashBalance: finalCashBalance,
-                bankBalance: finalBankBalance,
-            }
-        })
-        
-        await reloadLedger();
+        toast({title: "Payment Recorded", description: "The installment has been recorded and balances updated."});
+        await reloadData(); // Full reload is best here to ensure all balances are correct
         return result;
     } catch (error: any) {
          handleApiError(new Error(error.message || "An unexpected error occurred during installment recording."));
