@@ -98,8 +98,34 @@ const initialAppState: AppState = {
   user: null,
 };
 
+const getInitialState = (): AppState => {
+    try {
+        const storedState = localStorage.getItem('ha-mim-iron-mart-state');
+        if (storedState) {
+            const parsedState = JSON.parse(storedState);
+            // We only restore data, not the user session or loading states
+            return {
+                ...initialAppState,
+                cashTransactions: parsedState.cashTransactions || [],
+                bankTransactions: parsedState.bankTransactions || [],
+                stockItems: parsedState.stockItems || [],
+                stockTransactions: parsedState.stockTransactions || [],
+                cashBalance: parsedState.cashBalance || 0,
+                bankBalance: parsedState.bankBalance || 0,
+                cashCategories: parsedState.cashCategories || initialAppState.cashCategories,
+                bankCategories: parsedState.bankCategories || initialAppState.bankCategories,
+                // We load settings separately
+            };
+        }
+    } catch (e) {
+        console.error("Could not parse state from local storage", e);
+    }
+    return initialAppState;
+}
+
+
 export function AppProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<AppState>(initialAppState);
+  const [state, setState] = useState<AppState>(getInitialState());
   const { toast } = useToast();
   const router = useRouter();
   const pathname = usePathname();
@@ -206,7 +232,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
       } catch (error: any) {
         console.error("Failed to load data", error);
-        // Only show toast if it's not a 'user_id' column error during initial setup
         if (!error.message.includes('user_id') && !error.message.includes('relation "users" does not exist')) {
           toast({
               variant: 'destructive',
@@ -262,7 +287,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
   
   useEffect(() => {
+      if (!state.initialBalanceSet) return; // Don't save initial default state
       try {
+        // Save app data
+        const dataToStore = {
+            cashTransactions: state.cashTransactions,
+            bankTransactions: state.bankTransactions,
+            stockItems: state.stockItems,
+            stockTransactions: state.stockTransactions,
+            cashBalance: state.cashBalance,
+            bankBalance: state.bankBalance,
+            cashCategories: state.cashCategories,
+            bankCategories: state.bankCategories,
+        };
+        localStorage.setItem('ha-mim-iron-mart-state', JSON.stringify(dataToStore));
+        
+        // Save settings separately
         const settingsToStore = {
             fontSize: state.fontSize,
             bodyFont: state.bodyFont,
@@ -273,9 +313,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
         localStorage.setItem('ha-mim-iron-mart-settings', JSON.stringify(settingsToStore));
       } catch (error) {
-        console.error("Failed to save settings to localStorage", error);
+        console.error("Failed to save state to localStorage", error);
       }
-  }, [state.fontSize, state.bodyFont, state.numberFont, state.wastagePercentage, state.currency, state.showStockValue]);
+  }, [state]);
   
   const addCashTransaction = async (tx: Omit<CashTransaction, 'id' | 'createdAt' | 'deletedAt' | 'user_id'>) => {
     if (!state.user) {
@@ -290,7 +330,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       user_id: state.user.id,
     };
   
-    // Optimistic update
     const previousState = state;
     setState(prevState => {
       const updatedTransactions = [newTx, ...prevState.cashTransactions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
@@ -304,7 +343,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     try {
       const [savedTx] = await appendData({ tableName: 'cash_transactions', data: { ...tx, user_id: state.user.id } });
-      // Replace temporary transaction with the one from the server
       setState(prevState => ({
         ...prevState,
         cashTransactions: prevState.cashTransactions.map(t => t.id === tempId ? { ...savedTx, date: new Date(savedTx.date).toISOString() } : t),
@@ -312,7 +350,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       console.error(error);
       toast({ variant: 'destructive', title: "Error", description: "Failed to add cash transaction."});
-      // Rollback on error
       setState(previousState);
     }
   };
@@ -359,9 +396,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
         toast({ variant: 'destructive', title: "Error", description: "User not authenticated"});
         return;
     }
-
-    // Since stock updates are complex and involve financial transactions,
-    // we will perform the backend update first and then reload all data for consistency.
     try {
       const [newStockTx] = await appendData({ tableName: 'stock_transactions', data: { ...tx, user_id: state.user.id } });
       if (!newStockTx) throw new Error("Stock transaction creation failed.");
@@ -374,17 +408,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
           amount: totalValue,
           description,
           category,
-          linkedStockTxId: newStockTx.id // Link financial tx to stock tx
+          linkedStockTxId: newStockTx.id
       };
 
       if (tx.paymentMethod === 'cash') {
           await appendData({ tableName: 'cash_transactions', data: { ...financialTxData, type: tx.type === 'purchase' ? 'expense' : 'income', user_id: state.user.id }});
-      } else { // bank
+      } else { 
           await appendData({ tableName: 'bank_transactions', data: { ...financialTxData, type: tx.type === 'purchase' ? 'withdrawal' : 'deposit', user_id: state.user.id }});
       }
       
       toast({ title: "Success", description: "Stock transaction and financial entry added."});
-      await reloadData(); // Full reload to ensure stock calculations are correct
+      await reloadData();
     } catch (error) {
       console.error(error);
       toast({ variant: 'destructive', title: "Error", description: "Failed to add stock transaction."});
@@ -542,14 +576,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
      const transactionDate = date || new Date().toISOString();
      const description = from === 'cash' ? 'Transfer to Bank' : 'Transfer from Bank';
      
-     // Optimistic UI for transfers
      const previousState = state;
      const tempIdCash = `temp-cash-${Date.now()}`;
      const tempIdBank = `temp-bank-${Date.now()}`;
 
      setState(prevState => {
-        const cashTx = { date: transactionDate, type: from === 'cash' ? 'expense' : 'income', amount, description, category: 'Transfer', id: tempIdCash, createdAt: new Date().toISOString(), user_id: prevState.user!.id };
-        const bankTx = { date: transactionDate, type: from === 'cash' ? 'deposit' : 'withdrawal', amount, description, category: 'Transfer', id: tempIdBank, createdAt: new Date().toISOString(), user_id: prevState.user!.id };
+        if (!prevState.user) return prevState;
+        const cashTx = { date: transactionDate, type: from === 'cash' ? 'expense' : 'income', amount, description, category: 'Transfer', id: tempIdCash, createdAt: new Date().toISOString(), user_id: prevState.user.id };
+        const bankTx = { date: transactionDate, type: from === 'cash' ? 'deposit' : 'withdrawal', amount, description, category: 'Transfer', id: tempIdBank, createdAt: new Date().toISOString(), user_id: prevState.user.id };
         
         return {
             ...prevState,
@@ -564,17 +598,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if(from === 'cash') {
             await addCashTransaction({ date: transactionDate, type: 'expense', amount, description, category: 'Transfer'});
             await addBankTransaction({ date: transactionDate, type: 'deposit', amount, description, category: 'Transfer'});
-        } else { // from bank
+        } else {
             await addBankTransaction({ date: transactionDate, type: 'withdrawal', amount, description, category: 'Transfer'});
             await addCashTransaction({ date: transactionDate, type: 'income', amount, description, category: 'Transfer'});
         }
         toast({ title: "Success", description: "Fund transfer completed."});
-        // We can reload here to get the real IDs from the server, replacing temp ones
         await reloadData();
      } catch (error) {
         console.error(error);
         toast({ variant: 'destructive', title: "Error", description: "Failed to complete fund transfer."});
-        setState(previousState); // Rollback on error
+        setState(previousState);
      }
   };
 
@@ -681,6 +714,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
         await deleteAllData();
         toast({ title: 'All Data Deleted', description: 'Your ledger has been reset.' });
+        localStorage.removeItem('ha-mim-iron-mart-state');
+        setState(initialAppState);
         await reloadData();
     } catch (error: any) {
         console.error(error);
@@ -690,6 +725,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const logout = async () => {
     await removeSession();
+    localStorage.removeItem('ha-mim-iron-mart-state');
+    localStorage.removeItem('ha-mim-iron-mart-settings');
     setState({...initialAppState, initialBalanceSet: true, user: null});
     router.push('/login');
     window.location.href = '/login';
