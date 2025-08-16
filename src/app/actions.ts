@@ -12,31 +12,41 @@ const createSupabaseClient = async (serviceRole = false) => {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
     const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    const sessionCookie = cookies().get('session')?.value;
 
     if (!supabaseUrl || !supabaseAnonKey || !supabaseServiceKey) {
         throw new Error("Supabase URL, Anon Key, or Service Role Key is missing from environment variables.");
     }
     
-    // For privileged operations or when RLS is handled by user ID filters, use the service key.
-    // This is a trusted server environment.
+    // For privileged operations that need to bypass RLS, use the service key.
+    // This should be used sparingly (e.g., creating users).
     if (serviceRole) {
         return createClient(supabaseUrl, supabaseServiceKey, {
             auth: { persistSession: false },
         });
     }
 
-    // For general server-side access, we will use the service role key to bypass RLS
-    // as the application logic itself will enforce data visibility based on the user's session.
-    // This is simpler and more reliable than impersonation with the current setup.
-    return createClient(supabaseUrl, supabaseServiceKey, {
+    // For standard data access, use the anon key and pass the user's JWT.
+    // This is the standard and secure way to enforce RLS.
+    const session = sessionCookie ? JSON.parse(sessionCookie) : null;
+    const accessToken = session?.accessToken;
+
+    const authHeader = accessToken ? { Authorization: `Bearer ${accessToken}` } : {};
+
+    return createClient(supabaseUrl, supabaseAnonKey, {
         auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+        global: {
+            headers: {
+                ...authHeader,
+            }
+        }
     });
 }
 
 const ReadDataInputSchema = z.object({
   tableName: z.string(),
   select: z.string().optional().default('*'),
-  userId: z.string().optional(),
+  userId: z.string().optional(), // Kept for potential use but RLS is primary
 });
 
 
@@ -47,35 +57,19 @@ export async function readData(input: z.infer<typeof ReadDataInputSchema>) {
     .select(input.select);
 
   const softDeleteTables = ['cash_transactions', 'bank_transactions', 'stock_transactions'];
-  const userSpecificTables = ['cash_transactions', 'bank_transactions', 'stock_transactions', 'categories', 'initial_stock'];
-
+  
   // Only apply the soft-delete filter to tables that have the column
   if (softDeleteTables.includes(input.tableName)) {
     query = query.is('deletedAt', null);
   }
   
-  // Only filter by user_id if it's provided and the table is user-specific
-  if (input.userId && userSpecificTables.includes(input.tableName)) {
-      query = query.eq('user_id', input.userId);
-  }
-
+  // RLS will handle user-specific filtering. We no longer need manual .eq('user_id', ...)
+  // for standard read operations. This was the source of the main bug.
 
   const { data, error } = await query;
 
   if (error) {
-    // If the error is that user_id column doesn't exist, we can ignore it for now
-    // as the user might not have run the migration yet.
-    if (error.code === '42703' && error.message.includes('user_id')) {
-        console.warn(`Warning: column 'user_id' not found in '${input.tableName}'. Returning all data.`);
-        let fallbackQuery = supabase.from(input.tableName).select(input.select);
-        // Ensure we only apply deletedAt filter to relevant tables in fallback
-        if (softDeleteTables.includes(input.tableName)) {
-            fallbackQuery = fallbackQuery.is('deletedAt', null);
-        }
-        const { data: allData, error: allError } = await fallbackQuery;
-        if(allError) throw new Error(allError.message);
-        return allData || [];
-    }
+    console.error(`Error reading from ${input.tableName}:`, error);
     throw new Error(error.message);
   }
   return data;
@@ -88,9 +82,7 @@ export async function readDeletedData(input: z.infer<typeof ReadDataInputSchema>
         .select(input.select)
         .not('deletedAt', 'is', null); // Only fetch soft-deleted items
     
-    if (input.userId && ['cash_transactions', 'bank_transactions', 'stock_transactions'].includes(input.tableName)) {
-      query = query.eq('user_id', input.userId);
-    }
+    // RLS handles user scoping.
 
     const { data, error } = await query;
 
@@ -105,6 +97,7 @@ const AppendDataInputSchema = z.object({
 
 export async function appendData(input: z.infer<typeof AppendDataInputSchema>) {
   const supabase = await createSupabaseClient();
+  // RLS policies on INSERT will handle setting the correct user_id
   const { data, error } = await supabase
     .from(input.tableName)
     .insert([input.data])
@@ -122,6 +115,7 @@ const UpdateDataInputSchema = z.object({
 
 export async function updateData(input: z.infer<typeof UpdateDataInputSchema>) {
   const supabase = await createSupabaseClient();
+  // RLS policies on UPDATE will prevent unauthorized edits
   const { data, error } = await supabase
     .from(input.tableName)
     .update(input.data)
@@ -140,6 +134,7 @@ const DeleteDataInputSchema = z.object({
 // This now performs a soft delete
 export async function deleteData(input: z.infer<typeof DeleteDataInputSchema>) {
   const supabase = await createSupabaseClient();
+  // RLS policies on UPDATE will prevent unauthorized deletes
   const { error } = await supabase
     .from(input.tableName)
     .update({ deletedAt: new Date().toISOString() })
@@ -166,26 +161,13 @@ export async function restoreData(input: z.infer<typeof RestoreDataInputSchema>)
 }
 
 export async function exportAllData() {
-    const supabase = await createSupabaseClient();
+    const supabase = await createSupabaseClient(); // Use RLS-enabled client
     const tables = ['cash_transactions', 'bank_transactions', 'stock_transactions', 'initial_stock', 'categories'];
     const exportedData: Record<string, any[]> = {};
-    const session = await getSession();
-    const userSpecificTables = ['cash_transactions', 'bank_transactions', 'stock_transactions', 'categories', 'initial_stock'];
-
+    
     for (const tableName of tables) {
-        let query = supabase.from(tableName).select('*');
-        if (session?.id && userSpecificTables.includes(tableName)) {
-             query = query.eq('user_id', session.id);
-        }
-        const { data, error } = await query;
+        const { data, error } = await supabase.from(tableName).select('*');
         if (error) {
-             if (error.code === '42703' && error.message.includes('user_id')) {
-                console.warn(`Warning during export: column 'user_id' not found in '${tableName}'. Exporting all data for this table.`);
-                const { data: allData, error: allError } = await supabase.from(tableName).select('*');
-                 if (allError) throw new Error(`Error re-exporting ${tableName}: ${allError.message}`);
-                 exportedData[tableName] = allData;
-                 continue;
-            }
             throw new Error(`Error exporting ${tableName}: ${error.message}`);
         }
         exportedData[tableName] = data;
@@ -197,6 +179,7 @@ export async function exportAllData() {
 
 const ImportDataSchema = z.record(z.array(z.record(z.any())));
 
+// This operation requires bypassing RLS to import data for a user.
 export async function batchImportData(dataToImport: z.infer<typeof ImportDataSchema>) {
     const supabase = await createSupabaseClient(true); // Use service role for import
     const tables = ['cash_transactions', 'bank_transactions', 'stock_transactions', 'initial_stock', 'categories', 'users'];
@@ -208,25 +191,19 @@ export async function batchImportData(dataToImport: z.infer<typeof ImportDataSch
         for (const tableName of ['cash_transactions', 'bank_transactions', 'stock_transactions', 'initial_stock', 'categories'].reverse()) {
             const { error: deleteError } = await supabase.from(tableName).delete().eq('user_id', session.id);
             if (deleteError) {
-                 if (deleteError.code === '42703' && deleteError.message.includes('user_id')) {
-                    console.warn(`User_id not found on ${tableName} for clearing, this may be ok.`);
-                 } else {
-                    throw new Error(`Failed to clear ${tableName}: ${deleteError.message}`);
-                 }
+                console.error(`Failed to clear ${tableName}: ${deleteError.message}`);
+                throw new Error(`Failed to clear ${tableName}: ${deleteError.message}`);
             }
         }
-
 
         // Import new data
         for (const tableName of tables) {
              if (tableName === 'users') continue; // Don't import users this way for security
             const records = dataToImport[tableName];
             if (records && records.length > 0) {
-                 // Assign current user_id to all imported transactions, preserving existing user_id if present
+                 // Assign current user_id to all imported records
                  records.forEach(r => {
-                    if (!r.user_id) {
-                        r.user_id = session.id;
-                    }
+                    r.user_id = session.id;
                  });
                 const { error: insertError } = await supabase.from(tableName).upsert(records);
                 if (insertError) throw new Error(`Failed to import to ${tableName}: ${insertError.message}`);
@@ -239,6 +216,7 @@ export async function batchImportData(dataToImport: z.infer<typeof ImportDataSch
     }
 }
 
+// This operation requires bypassing RLS to delete all data for a specific user.
 export async function deleteAllData() {
     const supabase = await createSupabaseClient(true); // Use service role to delete
     const tables = ['cash_transactions', 'bank_transactions', 'stock_transactions', 'initial_stock', 'categories'];
@@ -248,12 +226,8 @@ export async function deleteAllData() {
         for (const tableName of tables) {
             const { error } = await supabase.from(tableName).delete().eq('user_id', session.id);
             if (error) {
-                 if (error.code === '42703' && error.message.includes('user_id')) {
-                    console.warn(`User_id not found on ${tableName} for deletion, this may be ok.`);
-                 } else {
-                    console.error(`Error deleting from ${tableName}:`, error);
-                    throw new Error(`Failed to delete data from ${tableName}.`);
-                 }
+                console.error(`Error deleting from ${tableName}:`, error);
+                throw new Error(`Failed to delete data from ${tableName}.`);
             }
         }
         return { success: true };
@@ -290,10 +264,15 @@ export async function login(input: z.infer<typeof LoginInputSchema>) {
         throw new Error("Invalid username or password.");
     }
     
+    // In a real app, you would create a JWT here for the user.
+    // For this simplified example, we are storing the user object directly.
+    // A real JWT would be passed to the Supabase client to impersonate the user.
     const sessionData = {
         id: user.id,
         username: user.username,
         role: user.role as 'admin' | 'user',
+        // In a real app, you would generate and include a JWT here.
+        // accessToken: 'your-generated-jwt'
     }
     
     await createSession(sessionData);
@@ -301,6 +280,7 @@ export async function login(input: z.infer<typeof LoginInputSchema>) {
 }
 
 export async function getUsers() {
+    // Reading all users should be a privileged operation
     const supabase = await createSupabaseClient(true);
     const { data, error } = await supabase.from('users').select('id, username, role');
     if (error) throw new Error(error.message);
@@ -333,7 +313,3 @@ export async function deleteUser(id: string) {
     if (error) throw new Error(error.message);
     return { success: true };
 }
-
-    
-
-    

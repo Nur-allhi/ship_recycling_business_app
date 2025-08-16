@@ -9,6 +9,7 @@ export interface Transaction {
   deletedAt?: string;
   linkedStockTxId?: string;
   createdAt: string;
+  user_id?: string;
 }
 
 export interface CashTransaction extends Transaction {
@@ -24,6 +25,7 @@ export interface StockItem {
   name: string;
   weight: number; // in kg
   purchasePricePerKg: number;
+  user_id?: string;
 }
 
 export interface StockTransaction {
@@ -38,6 +40,7 @@ export interface StockTransaction {
   lastEdited?: string;
   deletedAt?: string;
   createdAt: string;
+  user_id?: string;
 }
 
 export interface User {
