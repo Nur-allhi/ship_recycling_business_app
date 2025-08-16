@@ -145,16 +145,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     checkSessionAndLoadData();
   }, [pathname]);
 
-  const reloadData = useCallback(async (optimisticState?: AppState) => {
-    const currentState = optimisticState || state;
-    if (!currentState.user) return;
+  const reloadData = useCallback(async () => {
+    if (!state.user) return;
     try {
         const [cashData, bankData, stockTransactionsData, initialStockData, categoriesData] = await Promise.all([
-            readData({ tableName: 'cash_transactions', userId: currentState.user.id }),
-            readData({ tableName: 'bank_transactions', userId: currentState.user.id }),
-            readData({ tableName: 'stock_transactions', userId: currentState.user.id }),
-            readData({ tableName: 'initial_stock', userId: currentState.user.id }),
-            readData({ tableName: 'categories', userId: currentState.user.id }),
+            readData({ tableName: 'cash_transactions', userId: state.user.id }),
+            readData({ tableName: 'bank_transactions', userId: state.user.id }),
+            readData({ tableName: 'stock_transactions', userId: state.user.id }),
+            readData({ tableName: 'initial_stock', userId: state.user.id }),
+            readData({ tableName: 'categories', userId: state.user.id }),
         ]);
         
         let needsInitialBalance = true;
@@ -244,12 +243,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
           });
         }
       }
-  }, [toast, state]);
+  }, [toast, state.user]);
   
   useEffect(() => {
     if (state.user && sessionChecked) {
         reloadData();
     } else if (sessionChecked) {
+        // If no user but session is checked, we are ready to show login page or public content
         setState(prev => ({...prev, initialBalanceSet: true}));
     }
   }, [state.user, sessionChecked, reloadData]);
@@ -810,3 +810,5 @@ export function useAppContext() {
   }
   return context;
 }
+
+    
