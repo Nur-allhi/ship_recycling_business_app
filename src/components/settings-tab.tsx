@@ -10,13 +10,14 @@ import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { Badge } from "@/components/ui/badge"
-import { Plus, Trash2, Eye, EyeOff } from "lucide-react"
+import { Plus, Trash2, Eye, EyeOff, Users, Settings, Palette, FileCog, Recycle } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { RecycleBinTab } from "./recycle-bin-tab"
 import { ExportImportTab } from "./export-import-tab"
 import { ContactsTab } from "./contacts-tab"
+import { UserManagementTab } from "./user-management-tab"
 
 const bodyFontOptions = [
     { name: "Inter", value: "Inter, sans-serif" },
@@ -149,121 +150,115 @@ export function SettingsTab() {
     <div className="max-w-4xl mx-auto">
       <Tabs defaultValue="appearance" className="w-full">
         <TabsList className="flex flex-wrap h-auto">
-          {isAdmin && <TabsTrigger value="balances">Initial Balances</TabsTrigger>}
-          {isAdmin && <TabsTrigger value="wastage">Wastage</TabsTrigger>}
-          {isAdmin && <TabsTrigger value="categories">Categories</TabsTrigger>}
-          <TabsTrigger value="appearance">Appearance</TabsTrigger>
-          {isAdmin && <TabsTrigger value="contacts">Contacts</TabsTrigger>}
-          {isAdmin && <TabsTrigger value="recycle_bin">Recycle Bin</TabsTrigger>}
-          <TabsTrigger value="export_import">Export/Import</TabsTrigger>
+          <TabsTrigger value="appearance"><Palette className="mr-2 h-4 w-4"/>Appearance</TabsTrigger>
+          {isAdmin && <TabsTrigger value="general_settings"><Settings className="mr-2 h-4 w-4"/>General</TabsTrigger>}
+          {isAdmin && <TabsTrigger value="contacts"><Users className="mr-2 h-4 w-4"/>Contacts & Users</TabsTrigger>}
+          {isAdmin && <TabsTrigger value="recycle_bin"><Recycle className="mr-2 h-4 w-4"/>Recycle Bin</TabsTrigger>}
+          <TabsTrigger value="export_import"><FileCog className="mr-2 h-4 w-4"/>Export/Import</TabsTrigger>
         </TabsList>
         
-        {isAdmin && <TabsContent value="balances">
-          <Card>
-            <CardHeader>
-              <CardTitle>Initial Balances</CardTitle>
-              <CardDescription>Set your starting cash, bank, and stock balances. This should be done once.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
+        {isAdmin && <TabsContent value="general_settings">
+          <div className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Initial Balances</CardTitle>
+                <CardDescription>Set your starting cash, bank, and stock balances. This should be done once.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                  <div>
+                    <h3 className="font-semibold mb-2">Financial Balances</h3>
+                    <div className="space-y-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="cash-balance">Initial Cash Balance</Label>
+                            <Input id="cash-balance" type="number" ref={cashBalanceRef} placeholder="0.00" />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="bank-balance">Initial Bank Balance</Label>
+                            <Input id="bank-balance" type="number" ref={bankBalanceRef} placeholder="0.00"/>
+                        </div>
+                        <Button onClick={handleBalanceSave}>Save Financial Balances</Button>
+                    </div>
+                  </div>
+                  <Separator />
+                  <div>
+                    <h3 className="font-semibold mb-2">Initial Stock Inventory</h3>
+                    <div className="space-y-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="stock-item-name">Item Name</Label>
+                            <Input id="stock-item-name" type="text" ref={stockItemNameRef} placeholder="e.g. Rice"/>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <Label htmlFor="stock-weight">Total Stock Weight (kg)</Label>
+                                <Input id="stock-weight" type="number" ref={stockWeightRef} placeholder="e.g. 1000"/>
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="stock-price">Average Purchase Price/kg</Label>
+                                <Input id="stock-price" type="number" ref={stockPriceRef} placeholder="e.g. 50.00"/>
+                            </div>
+                        </div>
+                        <Button onClick={handleInitialStockSave}>Add Initial Stock Item</Button>
+                    </div>
+                  </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle>Category Management</CardTitle>
+                <CardDescription>Customize categories for your transactions.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
                 <div>
-                  <h3 className="font-semibold mb-2">Financial Balances</h3>
-                  <div className="space-y-4">
-                      <div className="space-y-2">
-                          <Label htmlFor="cash-balance">Initial Cash Balance</Label>
-                          <Input id="cash-balance" type="number" ref={cashBalanceRef} placeholder="0.00" />
-                      </div>
-                      <div className="space-y-2">
-                          <Label htmlFor="bank-balance">Initial Bank Balance</Label>
-                          <Input id="bank-balance" type="number" ref={bankBalanceRef} placeholder="0.00"/>
-                      </div>
-                      <Button onClick={handleBalanceSave}>Save Financial Balances</Button>
+                  <h3 className="font-semibold mb-2">Cash Categories</h3>
+                  <div className="flex gap-2 mb-3">
+                    <Input placeholder="New cash category" ref={cashCategoryRef} />
+                    <Button size="icon" onClick={() => handleAddCategory('cash')}><Plus className="h-4 w-4" /></Button>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {cashCategories.map(cat => (
+                      <Badge key={cat} variant="secondary" className="flex items-center gap-2">
+                        {cat}
+                        <button onClick={() => deleteCategory('cash', cat)} className="rounded-full hover:bg-muted-foreground/20">
+                          <Trash2 className="h-3 w-3" />
+                        </button>
+                      </Badge>
+                    ))}
                   </div>
                 </div>
                 <Separator />
                 <div>
-                  <h3 className="font-semibold mb-2">Initial Stock Inventory</h3>
-                   <div className="space-y-4">
-                      <div className="space-y-2">
-                          <Label htmlFor="stock-item-name">Item Name</Label>
-                          <Input id="stock-item-name" type="text" ref={stockItemNameRef} placeholder="e.g. Rice"/>
-                      </div>
-                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                          <div className="space-y-2">
-                              <Label htmlFor="stock-weight">Total Stock Weight (kg)</Label>
-                              <Input id="stock-weight" type="number" ref={stockWeightRef} placeholder="e.g. 1000"/>
-                          </div>
-                          <div className="space-y-2">
-                              <Label htmlFor="stock-price">Average Purchase Price/kg</Label>
-                              <Input id="stock-price" type="number" ref={stockPriceRef} placeholder="e.g. 50.00"/>
-                          </div>
-                       </div>
-                      <Button onClick={handleInitialStockSave}>Add Initial Stock Item</Button>
+                  <h3 className="font-semibold mb-2">Bank Categories</h3>
+                  <div className="flex gap-2 mb-3">
+                    <Input placeholder="New bank category" ref={bankCategoryRef} />
+                    <Button size="icon" onClick={() => handleAddCategory('bank')}><Plus className="h-4 w-4" /></Button>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {bankCategories.map(cat => (
+                      <Badge key={cat} variant="secondary" className="flex items-center gap-2">
+                        {cat}
+                        <button onClick={() => deleteCategory('bank', cat)} className="rounded-full hover:bg-muted-foreground/20">
+                          <Trash2 className="h-3 w-3" />
+                        </button>
+                      </Badge>
+                    ))}
                   </div>
                 </div>
-            </CardContent>
-          </Card>
-        </TabsContent>}
-
-        {isAdmin && <TabsContent value="wastage">
-           <Card>
-            <CardHeader>
-              <CardTitle>Wastage Settings</CardTitle>
-              <CardDescription>Set a default wastage percentage for stock sales. This is applied to the weight of the sold item.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="wastage-percentage">Wastage Percentage (%)</Label>
-                <Input id="wastage-percentage" type="number" step="0.01" defaultValue={wastagePercentage} ref={wastageRef} />
-              </div>
-              <Button onClick={handleWastageSave}>Save Wastage Setting</Button>
-            </CardContent>
-          </Card>
-        </TabsContent>}
-
-        {isAdmin && <TabsContent value="categories">
-           <Card>
-            <CardHeader>
-              <CardTitle>Category Management</CardTitle>
-              <CardDescription>Customize categories for your transactions.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div>
-                <h3 className="font-semibold mb-2">Cash Categories</h3>
-                <div className="flex gap-2 mb-3">
-                  <Input placeholder="New cash category" ref={cashCategoryRef} />
-                  <Button size="icon" onClick={() => handleAddCategory('cash')}><Plus className="h-4 w-4" /></Button>
+              </CardContent>
+            </Card>
+             <Card>
+                <CardHeader>
+                <CardTitle>Wastage Settings</CardTitle>
+                <CardDescription>Set a default wastage percentage for stock sales. This is applied to the weight of the sold item.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                <div className="space-y-2">
+                    <Label htmlFor="wastage-percentage">Wastage Percentage (%)</Label>
+                    <Input id="wastage-percentage" type="number" step="0.01" defaultValue={wastagePercentage} ref={wastageRef} />
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  {cashCategories.map(cat => (
-                    <Badge key={cat} variant="secondary" className="flex items-center gap-2">
-                      {cat}
-                      <button onClick={() => deleteCategory('cash', cat)} className="rounded-full hover:bg-muted-foreground/20">
-                        <Trash2 className="h-3 w-3" />
-                      </button>
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-              <Separator />
-              <div>
-                <h3 className="font-semibold mb-2">Bank Categories</h3>
-                <div className="flex gap-2 mb-3">
-                  <Input placeholder="New bank category" ref={bankCategoryRef} />
-                  <Button size="icon" onClick={() => handleAddCategory('bank')}><Plus className="h-4 w-4" /></Button>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {bankCategories.map(cat => (
-                    <Badge key={cat} variant="secondary" className="flex items-center gap-2">
-                      {cat}
-                      <button onClick={() => deleteCategory('bank', cat)} className="rounded-full hover:bg-muted-foreground/20">
-                        <Trash2 className="h-3 w-3" />
-                      </button>
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+                <Button onClick={handleWastageSave}>Save Wastage Setting</Button>
+                </CardContent>
+            </Card>
+          </div>
         </TabsContent>}
 
         <TabsContent value="appearance">

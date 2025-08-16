@@ -54,7 +54,7 @@ export function LoginForm() {
             <Logo className="h-16 w-16 text-primary" />
         </div>
         <CardTitle className="text-2xl">Login to your account</CardTitle>
-        <CardDescription>Enter your username and password below. If the account doesn't exist, it will be created for you.</CardDescription>
+        <CardDescription>Enter your email and password. If this is the first user, an admin account will be created.</CardDescription>
       </CardHeader>
       <form onSubmit={handleSubmit(onSubmit)}>
         <CardContent className="space-y-4">
@@ -72,7 +72,7 @@ export function LoginForm() {
         <CardFooter>
           <Button type="submit" className="w-full" disabled={isLoading}>
             {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Login or Create Account
+            Login or Create First User
           </Button>
         </CardFooter>
       </form>

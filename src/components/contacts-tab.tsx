@@ -12,7 +12,7 @@ export function ContactsTab() {
       <TabsList className="grid w-full grid-cols-3">
         <TabsTrigger value="vendors">Vendors</TabsTrigger>
         <TabsTrigger value="clients">Clients</TabsTrigger>
-        <TabsTrigger value="user_management">User Management</TabsTrigger>
+        <TabsTrigger value="user_management">Users</TabsTrigger>
       </TabsList>
       <TabsContent value="vendors">
         <VendorList />

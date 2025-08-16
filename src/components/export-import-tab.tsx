@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { Upload, Download, AlertTriangle, FileText, Trash } from "lucide-react";
+import { Upload, Download, AlertTriangle, FileText, Trash, UserX } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -146,30 +146,30 @@ export function ExportImportTab() {
 
               {/* Reset Section */}
               <div className="space-y-4">
-                <h3 className="font-semibold text-lg flex items-center"><Trash className="mr-2 h-5 w-5" /> Reset Ledger</h3>
+                <h3 className="font-semibold text-lg flex items-center"><UserX className="mr-2 h-5 w-5" /> Reset & Delete</h3>
                 <Alert variant="destructive">
                   <AlertTriangle className="h-4 w-4" />
                   <AlertTitle>Warning: This will delete everything.</AlertTitle>
                   <AlertDescription>
-                      This action will permanently <span className="font-bold">erase all of your ledger data</span>, including cash, bank, and stock transactions, categories, and initial balances. This action cannot be undone.
+                      This action will permanently <span className="font-bold">erase all of your ledger data and all user accounts except your own</span>. This action cannot be undone.
                   </AlertDescription>
                 </Alert>
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
                     <Button variant="destructive">
-                      Delete All Data and Reset Application
+                      Delete All Data and Users
                     </Button>
                   </AlertDialogTrigger>
                   <AlertDialogContent>
                     <AlertDialogHeader>
                       <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
                       <AlertDialogDescription>
-                        This is your final confirmation. Clicking "Yes" will permanently delete all data. This action cannot be undone.
+                        This is your final confirmation. Clicking "Yes" will permanently delete all data and other user accounts. This action cannot be undone.
                       </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                       <AlertDialogCancel>Cancel</AlertDialogCancel>
-                      <AlertDialogAction onClick={triggerDeleteAll}>Yes, delete all my data.</AlertDialogAction>
+                      <AlertDialogAction onClick={triggerDeleteAll}>Yes, delete all data.</AlertDialogAction>
                     </AlertDialogFooter>
                   </AlertDialogContent>
                 </AlertDialog>

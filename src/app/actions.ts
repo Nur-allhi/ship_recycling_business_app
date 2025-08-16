@@ -26,7 +26,6 @@ const createSupabaseClient = (serviceRole = false) => {
 const ReadDataInputSchema = z.object({
   tableName: z.string(),
   select: z.string().optional().default('*'),
-  userId: z.string().optional(), 
 });
 
 
@@ -37,8 +36,7 @@ export async function readData(input: z.infer<typeof ReadDataInputSchema>) {
 
   let query = supabase
     .from(input.tableName)
-    .select(input.select)
-    .eq('user_id', session.id);
+    .select(input.select);
 
   const softDeleteTables = ['cash_transactions', 'bank_transactions', 'stock_transactions', 'ap_ar_transactions'];
   
@@ -66,7 +64,6 @@ export async function readDeletedData(input: z.infer<typeof ReadDataInputSchema>
     let query = supabase
         .from(input.tableName)
         .select(input.select)
-        .eq('user_id', session.id)
         .not('deletedAt', 'is', null);
     
     const { data, error } = await query;
@@ -88,6 +85,7 @@ const AppendDataInputSchema = z.object({
 export async function appendData(input: z.infer<typeof AppendDataInputSchema>) {
     const session = await getSession();
     if (!session) throw new Error("User not authenticated for append operation.");
+    if (session.role !== 'admin') throw new Error("Only admins can add new data.");
     
     // We create the client here and pass the JWT to properly authenticate the request
     const supabase = createClient(
@@ -127,6 +125,7 @@ const UpdateDataInputSchema = z.object({
 export async function updateData(input: z.infer<typeof UpdateDataInputSchema>) {
   const session = await getSession();
   if (!session) throw new Error("User not authenticated for update operation.");
+  if (session.role !== 'admin') throw new Error("Only admins can update data.");
   const supabase = createClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
         process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -154,6 +153,7 @@ const DeleteDataInputSchema = z.object({
 export async function deleteData(input: z.infer<typeof DeleteDataInputSchema>) {
   const session = await getSession();
   if (!session) throw new Error("User not authenticated for delete operation.");
+  if (session.role !== 'admin') throw new Error("Only admins can delete data.");
     const supabase = createClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
         process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -180,6 +180,7 @@ const RestoreDataInputSchema = z.object({
 export async function restoreData(input: z.infer<typeof RestoreDataInputSchema>) {
     const session = await getSession();
     if (!session) throw new Error("User not authenticated for restore operation.");
+    if (session.role !== 'admin') throw new Error("Only admins can restore data.");
      const supabase = createClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
         process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -206,7 +207,7 @@ export async function exportAllData() {
     const exportedData: Record<string, any[]> = {};
     
     for (const tableName of tables) {
-        const { data, error } = await supabase.from(tableName).select('*').eq('user_id', session.id);
+        const { data, error } = await supabase.from(tableName).select('*');
         if (error) {
             if (error.code !== '42P01') {
                  throw new Error(`Error exporting ${tableName}: ${error.message}`);
@@ -228,21 +229,27 @@ export async function batchImportData(dataToImport: z.infer<typeof ImportDataSch
     const tables = ['cash_transactions', 'bank_transactions', 'stock_transactions', 'initial_stock', 'categories', 'vendors', 'clients', 'ap_ar_transactions'];
     const session = await getSession();
     if (!session) throw new Error("No active session for import.");
+    if (session.role !== 'admin') throw new Error("Only admins can import data.");
     
     try {
-        for (const tableName of [...tables].reverse()) {
-            const { error: deleteError } = await supabase.from(tableName).delete().eq('user_id', session.id);
-            if (deleteError && deleteError.code !== '42P01') {
-                console.error(`Failed to clear ${tableName}: ${deleteError.message}`);
-                throw new Error(`Failed to clear ${tableName}: ${deleteError.message}`);
+        for (const table of tables) {
+             const { error: deleteError } = await supabase.from(table).delete().neq('id', '00000000-0000-0000-0000-000000000000'); // Delete all
+             if (deleteError && deleteError.code !== '42P01') {
+                console.error(`Failed to clear ${table}: ${deleteError.message}`);
+                throw new Error(`Failed to clear ${table}: ${deleteError.message}`);
             }
         }
+
+        const adminUsers = (await getUsers()).filter(u => u.role === 'admin');
+        if (adminUsers.length === 0) throw new Error("Cannot import data, no admin user exists to own the data.");
+        const primaryAdminId = adminUsers[0].id;
 
         for (const tableName of tables) {
             const records = dataToImport[tableName];
             if (records && records.length > 0) {
                  records.forEach(r => {
-                    r.user_id = session.id;
+                    // Assign all imported data to the primary admin
+                    r.user_id = primaryAdminId;
                  });
                 const { error: insertError } = await supabase.from(tableName).upsert(records);
                 if (insertError && insertError.code !== '42P01') throw new Error(`Failed to import to ${tableName}: ${insertError.message}`);
@@ -259,28 +266,28 @@ export async function deleteAllData() {
     const supabase = createSupabaseClient(true);
     const session = await getSession();
     if (!session) throw new Error("No active session to delete data.");
+    if (session.role !== 'admin') throw new Error("Only admins can delete all data.");
+
     try {
-        const { error: authError } = await supabase.auth.admin.deleteUser(session.id);
-        if (authError) {
-            // If the user doesn't exist in auth, we can still proceed to delete their data
-            if (authError.message !== 'User not found') {
-                console.error(`Error deleting auth user:`, authError);
-                throw new Error(`Failed to delete user account.`);
+        const { data: users, error: userError } = await supabase.auth.admin.listUsers();
+        if(userError) throw userError;
+
+        for(const user of users.users) {
+            if (user.id !== session.id) { // Don't delete the current admin
+                 await supabase.auth.admin.deleteUser(user.id);
             }
         }
         
-        // Data deletion will cascade from user deletion in auth schema if FKs are set up correctly.
-        // But we do it manually to be safe and handle cases where FKs might be missing.
         const tables = ['cash_transactions', 'bank_transactions', 'stock_transactions', 'initial_stock', 'categories', 'vendors', 'clients', 'ap_ar_transactions'];
         for (const tableName of tables) {
-            const { error } = await supabase.from(tableName).delete().eq('user_id', session.id);
+            const { error } = await supabase.from(tableName).delete().neq('id', '00000000-0000-0000-0000-000000000000'); // Delete all
             if (error && error.code !== '42P01') {
                 console.error(`Error deleting from ${tableName}:`, error);
                 throw new Error(`Failed to delete data from ${tableName}.`);
             }
         }
-
-        await removeSession();
+        
+        await logout(); // Log out the current user as well, forcing a new session
 
         return { success: true };
     } catch (error: any) {
@@ -307,13 +314,20 @@ export async function login(input: z.infer<typeof LoginInputSchema>) {
     if (error) {
         if (error.message === 'Invalid login credentials') {
              const supabaseAdmin = createSupabaseClient(true);
-             const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
-                email: input.username,
-                password: input.password,
-                email_confirm: true, // auto-confirm for simplicity
-                user_metadata: { role: 'admin' } // First user is admin
-            });
-            if(createError) throw new Error(createError.message);
+             const { data: allUsers } = await supabaseAdmin.auth.admin.listUsers();
+
+             // If this is the first user ever, create them as an admin
+             if(allUsers?.users.length === 0) {
+                const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
+                    email: input.username,
+                    password: input.password,
+                    email_confirm: true, // auto-confirm for simplicity
+                    user_metadata: { role: 'admin' } 
+                });
+                if(createError) throw new Error(createError.message);
+             } else {
+                throw new Error(error.message); // If users exist, don't auto-create
+             }
             
             const { data: loginData, error: loginError } = await supabase.auth.signInWithPassword({
                 email: input.username,
@@ -358,6 +372,9 @@ const AddUserInputSchema = z.object({
 });
 
 export async function addUser(input: z.infer<typeof AddUserInputSchema>) {
+    const session = await getSession();
+    if(session?.role !== 'admin') throw new Error("Only admins can add users.");
+
     const supabase = createSupabaseClient(true);
     const { error } = await supabase.auth.admin.createUser({
         email: input.username,
@@ -372,12 +389,20 @@ export async function addUser(input: z.infer<typeof AddUserInputSchema>) {
 }
 
 export async function deleteUser(id: string) {
+    const session = await getSession();
+    if(session?.role !== 'admin') throw new Error("Only admins can delete users.");
+
     const supabase = createSupabaseClient(true);
     const { error } = await supabase.auth.admin.deleteUser(id);
     if (error) throw new Error(error.message);
     return { success: true };
 }
 
+async function logout() {
+  await removeSession();
+  // We can't use redirect() here because this is not a component.
+  // The client will handle the redirection.
+}
     
 
     
