@@ -3,8 +3,7 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useAppContext } from "@/app/store"
-import { Wallet, Landmark, Boxes, BarChart2 } from "lucide-react"
-import { cn } from "@/lib/utils"
+import { Wallet, Landmark, Boxes, LineChart } from "lucide-react"
 
 interface DashboardTabProps {
   setActiveTab: (tab: string) => void;
@@ -24,18 +23,16 @@ export function DashboardTab({ setActiveTab }: DashboardTabProps) {
   const totalStockWeight = stockItems.reduce((acc, item) => acc + item.weight, 0);
   const totalBalance = cashBalance + bankBalance
 
-  const isLoading = !initialBalanceSet;
-
   const renderValue = (value: string) => {
-    if (isLoading) {
-      return <div className="text-2xl font-bold font-mono h-8 w-3/4" />;
+    if (!initialBalanceSet) {
+      return <div className="h-8 bg-muted rounded animate-pulse w-3/4" />;
     }
     return <div className="text-2xl font-bold font-mono animate-fade-in">{value}</div>;
   };
 
   const renderSubtext = (value: string) => {
-    if (isLoading) {
-      return <div className="text-xs text-muted-foreground h-4 w-2/3" />;
+    if (!initialBalanceSet) {
+      return <div className="h-4 bg-muted rounded animate-pulse w-2/3 mt-1" />;
     }
     return <div className="text-xs text-muted-foreground animate-fade-in">{value}</div>;
   }
@@ -46,7 +43,7 @@ export function DashboardTab({ setActiveTab }: DashboardTabProps) {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Balance</CardTitle>
-            <BarChart2 className="h-4 w-4 text-muted-foreground" />
+            <LineChart className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             {renderValue(formatCurrency(totalBalance))}

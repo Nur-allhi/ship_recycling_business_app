@@ -1,9 +1,10 @@
+
 "use client";
 
 import { useState } from 'react';
 import { useAppContext } from './store';
 import { cn } from '@/lib/utils';
-import { Wallet, Landmark, Boxes, Settings, PlusCircle, LogOut, CreditCard, UserPlus } from 'lucide-react';
+import { Wallet, Landmark, Boxes, Settings, PlusCircle, LogOut, CreditCard, Users, LineChart } from 'lucide-react';
 import { DashboardTab } from '@/components/dashboard-tab';
 import { CashTab } from '@/components/cash-tab';
 import { BankTab } from '@/components/bank-tab';
@@ -26,7 +27,7 @@ const fontClasses = {
 };
 
 const navItems = [
-    { value: 'dashboard', label: 'Dashboard', icon: Wallet },
+    { value: 'dashboard', label: 'Dashboard', icon: LineChart },
     { value: 'cash', label: 'Cash', icon: Wallet },
     { value: 'bank', label: 'Bank', icon: Landmark },
     { value: 'credit', label: 'A/R & A/P', icon: CreditCard },
