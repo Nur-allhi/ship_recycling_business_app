@@ -166,7 +166,7 @@ export function RecycleBinTab() {
                                     {deletedLedgerTransactions.length > 0 ? deletedLedgerTransactions.map(tx => (
                                         <TableRow key={tx.id}>
                                             <TableCell>{tx.deletedAt ? format(new Date(tx.deletedAt), "dd-MM-yyyy") : 'N/A'}</TableCell>
-                                            <TableCell>{tx.contactName}</TableCell>
+                                            <TableCell>{tx.contact}</TableCell>
                                             <TableCell>{tx.description}</TableCell>
                                             <TableCell className={tx.type === 'receivable' ? 'text-accent' : 'text-destructive'}>{formatCurrency(tx.amount)}</TableCell>
                                             <TableCell className="text-right">
@@ -185,3 +185,4 @@ export function RecycleBinTab() {
         </Card>
     )
 }
+    

@@ -47,7 +47,7 @@ export function PayablesList() {
                             payables.map(tx => (
                                 <TableRow key={tx.id}>
                                     <TableCell className="font-mono">{format(new Date(tx.date), 'dd-MM-yy')}</TableCell>
-                                    <TableCell className="font-medium">{tx.contactName}</TableCell>
+                                    <TableCell className="font-medium">{tx.contact}</TableCell>
                                     <TableCell>{tx.description}</TableCell>
                                     <TableCell className="text-right font-mono font-semibold">{formatCurrency(tx.amount)}</TableCell>
                                     <TableCell className="text-center">
@@ -76,3 +76,4 @@ export function PayablesList() {
         </>
     )
 }
+    

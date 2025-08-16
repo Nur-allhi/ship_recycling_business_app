@@ -50,8 +50,8 @@ const formSchema = z.object({
 
   // A/R A/P specific
   ledgerType: z.enum(['payable', 'receivable']).optional(),
-  contactName: z.string().optional(),
-  newContactName: z.string().optional(),
+  contact: z.string().optional(),
+  newContact: z.string().optional(),
 
 
 }).superRefine((data, ctx) => {
@@ -62,13 +62,13 @@ const formSchema = z.object({
         if (data.pricePerKg === undefined || data.pricePerKg < 0) ctx.addIssue({ code: 'custom', message: 'Price must be non-negative.', path: ['pricePerKg'] });
         if (!data.paymentMethod) ctx.addIssue({ code: 'custom', message: 'Payment method is required.', path: ['paymentMethod'] });
         if (data.paymentMethod === 'credit') {
-            if (data.contactName === 'new' && !data.newContactName) {
+            if (data.contact === 'new' && !data.newContact) {
                 const contactType = data.stockType === 'purchase' ? 'Vendor' : 'Client';
-                ctx.addIssue({ code: 'custom', message: `New ${contactType} name is required.`, path: ['newContactName'] });
+                ctx.addIssue({ code: 'custom', message: `New ${contactType} name is required.`, path: ['newContact'] });
             }
-            if (data.contactName !== 'new' && !data.contactName) {
+            if (data.contact !== 'new' && !data.contact) {
                 const contactType = data.stockType === 'purchase' ? 'Vendor' : 'Client';
-                ctx.addIssue({ code: 'custom', message: `Please select a ${contactType}.`, path: ['contactName'] });
+                ctx.addIssue({ code: 'custom', message: `Please select a ${contactType}.`, path: ['contact'] });
             }
         }
     }
@@ -86,11 +86,11 @@ const formSchema = z.object({
     if(data.transactionType === 'ap_ar') {
         if (!data.ledgerType) ctx.addIssue({ code: 'custom', message: 'Please select Payable or Receivable.', path: ['ledgerType'] });
         if (!data.description) ctx.addIssue({ code: 'custom', message: 'Description is required.', path: ['description'] });
-        if (data.contactName === 'new' && !data.newContactName) {
-            ctx.addIssue({ code: 'custom', message: 'New contact name is required.', path: ['newContactName'] });
+        if (data.contact === 'new' && !data.newContact) {
+            ctx.addIssue({ code: 'custom', message: 'New contact name is required.', path: ['newContact'] });
         }
-        if (data.contactName !== 'new' && !data.contactName) {
-            ctx.addIssue({ code: 'custom', message: 'Please select a contact.', path: ['contactName'] });
+        if (data.contact !== 'new' && !data.contact) {
+            ctx.addIssue({ code: 'custom', message: 'Please select a contact.', path: ['contact'] });
         }
     }
 });
@@ -134,7 +134,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
   const stockType = watch('stockType');
   const stockPaymentMethod = watch('paymentMethod');
   const ledgerType = watch('ledgerType');
-  const contactName = watch('contactName');
+  const contact = watch('contact');
   const [isNewStockItem, setIsNewStockItem] = useState(false);
 
   useEffect(() => {
@@ -149,8 +149,8 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
   
   useEffect(() => {
     // Clear contact selection when stock type changes
-    setValue('contactName', undefined);
-    setValue('newContactName', '');
+    setValue('contact', undefined);
+    setValue('newContact', '');
   }, [stockType, setValue]);
 
   const onSubmit = async (data: FormData) => {
@@ -179,12 +179,12 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                 let stockContactName: string | undefined;
                 
                 if (data.paymentMethod === 'credit') {
-                    if (data.contactName === 'new') {
-                        const newContact = data.stockType === 'purchase' ? await addVendor(data.newContactName!) : await addClient(data.newContactName!);
+                    if (data.contact === 'new') {
+                        const newContact = data.stockType === 'purchase' ? await addVendor(data.newContact!) : await addClient(data.newContact!);
                         if(!newContact) throw new Error(`Failed to create new ${data.stockType === 'purchase' ? 'vendor' : 'client'}.`);
                         stockContactName = newContact.name;
                     } else {
-                        stockContactName = data.contactName;
+                        stockContactName = data.contact;
                     }
                 }
                 
@@ -196,23 +196,23 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                     paymentMethod: data.paymentMethod!,
                     description: data.description,
                     date: transactionDate,
-                    contactName: stockContactName,
+                    contact: stockContactName,
                 });
                 break;
             case 'transfer':
                 await transferFunds(data.transferFrom!, data.amount!, transactionDate);
                 break;
             case 'ap_ar':
-                let finalContactName = data.contactName!;
-                if(data.contactName === 'new') {
-                    const newContact = data.ledgerType === 'payable' ? await addVendor(data.newContactName!) : await addClient(data.newContactName!);
+                let finalContactName = data.contact!;
+                if(data.contact === 'new') {
+                    const newContact = data.ledgerType === 'payable' ? await addVendor(data.newContact!) : await addClient(data.newContact!);
                     if(!newContact) throw new Error(`Failed to create new ${data.ledgerType === 'payable' ? 'vendor' : 'client'}.`);
                     finalContactName = newContact.name;
                 }
 
                 await addLedgerTransaction({
                     type: data.ledgerType!,
-                    contactName: finalContactName,
+                    contact: finalContactName,
                     description: data.description!,
                     amount: data.amount!,
                     date: transactionDate
@@ -280,7 +280,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
         <Label>{stockCreditContactType}</Label>
         <Controller
             control={control}
-            name="contactName"
+            name="contact"
             render={({ field }) => (
                 <Select onValueChange={field.onChange} value={field.value}>
                     <SelectTrigger>
@@ -295,17 +295,17 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                 </Select>
             )}
         />
-        {errors.contactName && <p className="text-sm text-destructive">{errors.contactName.message}</p>}
+        {errors.contact && <p className="text-sm text-destructive">{errors.contact.message}</p>}
     
-        {contactName === 'new' && (
+        {contact === 'new' && (
             <div className="flex items-end gap-2 pt-2 animate-fade-in">
                 <div className="flex-grow space-y-1">
-                    <Label htmlFor="newContactName">New {stockCreditContactType} Name</Label>
-                    <Input {...register('newContactName')} placeholder={`Enter new ${stockCreditContactType.toLowerCase()} name`}/>
+                    <Label htmlFor="newContact">New {stockCreditContactType} Name</Label>
+                    <Input {...register('newContact')} placeholder={`Enter new ${stockCreditContactType.toLowerCase()} name`}/>
                 </div>
             </div>
         )}
-        {errors.newContactName && <p className="text-sm text-destructive">{errors.newContactName.message}</p>}
+        {errors.newContact && <p className="text-sm text-destructive">{errors.newContact.message}</p>}
     </div>
   )
 
@@ -568,7 +568,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                                         <Label>{ledgerType === 'payable' ? 'Vendor' : 'Client'}</Label>
                                         <Controller
                                             control={control}
-                                            name="contactName"
+                                            name="contact"
                                             render={({ field }) => (
                                                 <Select onValueChange={field.onChange} value={field.value}>
                                                     <SelectTrigger>
@@ -583,17 +583,17 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                                                 </Select>
                                             )}
                                         />
-                                        {errors.contactName && <p className="text-sm text-destructive">{errors.contactName.message}</p>}
+                                        {errors.contact && <p className="text-sm text-destructive">{errors.contact.message}</p>}
                                     
-                                        {contactName === 'new' && (
+                                        {contact === 'new' && (
                                             <div className="flex items-end gap-2 pt-2 animate-fade-in">
                                                 <div className="flex-grow space-y-1">
-                                                    <Label htmlFor="newContactName">New {ledgerType === 'payable' ? 'Vendor' : 'Client'} Name</Label>
-                                                    <Input {...register('newContactName')} placeholder={`Enter new ${ledgerType === 'payable' ? 'vendor' : 'client'} name`}/>
+                                                    <Label htmlFor="newContact">New {ledgerType === 'payable' ? 'Vendor' : 'Client'} Name</Label>
+                                                    <Input {...register('newContact')} placeholder={`Enter new ${ledgerType === 'payable' ? 'vendor' : 'client'} name`}/>
                                                 </div>
                                             </div>
                                         )}
-                                        {errors.newContactName && <p className="text-sm text-destructive">{errors.newContactName.message}</p>}
+                                        {errors.newContact && <p className="text-sm text-destructive">{errors.newContact.message}</p>}
                                     </div>
                                 )}
                             </TabsContent>
@@ -625,3 +625,4 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
     </>
   );
 }
+    

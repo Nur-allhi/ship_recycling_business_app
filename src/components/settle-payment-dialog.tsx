@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useForm, Controller } from 'react-hook-form';
@@ -76,7 +77,7 @@ export function SettlePaymentDialog({ isOpen, setIsOpen, transaction }: SettlePa
                 <div className="space-y-4 py-2 text-sm">
                     <div className="flex justify-between">
                         <span className="text-muted-foreground">Contact:</span>
-                        <span className="font-medium">{transaction.contactName}</span>
+                        <span className="font-medium">{transaction.contact}</span>
                     </div>
                     <div className="flex justify-between">
                         <span className="text-muted-foreground">Description:</span>
@@ -140,3 +141,4 @@ export function SettlePaymentDialog({ isOpen, setIsOpen, transaction }: SettlePa
         </Dialog>
     )
 }
+    
