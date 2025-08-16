@@ -4,7 +4,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useAppContext } from "@/app/store"
 import { Wallet, Landmark, Boxes, BarChart2 } from "lucide-react"
-import { Skeleton } from "./ui/skeleton";
+import { cn } from "@/lib/utils"
 
 interface DashboardTabProps {
   setActiveTab: (tab: string) => void;
@@ -26,6 +26,20 @@ export function DashboardTab({ setActiveTab }: DashboardTabProps) {
 
   const isLoading = !initialBalanceSet;
 
+  const renderValue = (value: string) => {
+    if (isLoading) {
+      return <div className="text-2xl font-bold font-mono h-8 w-3/4" />;
+    }
+    return <div className="text-2xl font-bold font-mono animate-fade-in">{value}</div>;
+  };
+
+  const renderSubtext = (value: string) => {
+    if (isLoading) {
+      return <div className="text-xs text-muted-foreground h-4 w-2/3" />;
+    }
+    return <div className="text-xs text-muted-foreground animate-fade-in">{value}</div>;
+  }
+
   return (
     <div className="space-y-6">
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
@@ -35,12 +49,8 @@ export function DashboardTab({ setActiveTab }: DashboardTabProps) {
             <BarChart2 className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            {isLoading ? (
-                <Skeleton className="h-8 w-3/4" />
-            ) : (
-                <div className="text-2xl font-bold font-mono">{formatCurrency(totalBalance)}</div>
-            )}
-            <p className="text-xs text-muted-foreground">Cash + Bank combined</p>
+            {renderValue(formatCurrency(totalBalance))}
+            {renderSubtext("Cash + Bank combined")}
           </CardContent>
         </Card>
         <Card onClick={() => setActiveTab('cash')} className="cursor-pointer hover:bg-muted/50">
@@ -49,12 +59,8 @@ export function DashboardTab({ setActiveTab }: DashboardTabProps) {
             <Wallet className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-             {isLoading ? (
-                <Skeleton className="h-8 w-3/4" />
-            ) : (
-                <div className="text-2xl font-bold font-mono">{formatCurrency(cashBalance)}</div>
-            )}
-            <p className="text-xs text-muted-foreground">In-hand currency</p>
+             {renderValue(formatCurrency(cashBalance))}
+             {renderSubtext("In-hand currency")}
           </CardContent>
         </Card>
         <Card onClick={() => setActiveTab('bank')} className="cursor-pointer hover:bg-muted/50">
@@ -63,12 +69,8 @@ export function DashboardTab({ setActiveTab }: DashboardTabProps) {
             <Landmark className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-             {isLoading ? (
-                <Skeleton className="h-8 w-3/4" />
-            ) : (
-                <div className="text-2xl font-bold font-mono">{formatCurrency(bankBalance)}</div>
-            )}
-            <p className="text-xs text-muted-foreground">Managed by financial institutions</p>
+             {renderValue(formatCurrency(bankBalance))}
+             {renderSubtext("Managed by financial institutions")}
           </CardContent>
         </Card>
         <Card onClick={() => setActiveTab('stock')} className="cursor-pointer hover:bg-muted/50">
@@ -77,14 +79,8 @@ export function DashboardTab({ setActiveTab }: DashboardTabProps) {
             <Boxes className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-             {isLoading ? (
-                <Skeleton className="h-8 w-3/4" />
-            ) : (
-                <div className="text-2xl font-bold font-mono">{totalStockWeight.toFixed(2)} kg</div>
-            )}
-            <div className="text-xs text-muted-foreground">
-              {isLoading ? <Skeleton className="h-4 w-2/3" /> : `Total Value: ${formatCurrency(totalStockValue)}`}
-            </div>
+             {renderValue(`${totalStockWeight.toFixed(2)} kg`)}
+             {renderSubtext(`Total Value: ${formatCurrency(totalStockValue)}`)}
           </CardContent>
         </Card>
       </div>
