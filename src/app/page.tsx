@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useAppContext } from './store';
 import { cn } from '@/lib/utils';
 import { Wallet, Landmark, Boxes, Settings, PlusCircle, LogOut, CreditCard, UserPlus } from 'lucide-react';
@@ -35,7 +35,7 @@ const navItems = [
 ]
 
 function ShipShapeLedger() {
-  const { fontSize, initialBalanceSet, needsInitialBalance, user, logout } = useAppContext();
+  const { fontSize, needsInitialBalance, user, logout } = useAppContext();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isSheetOpen, setIsSheetOpen] = useState(false);
@@ -47,19 +47,6 @@ function ShipShapeLedger() {
     if(isMobile) {
         setIsSheetOpen(false);
     }
-  }
-
-  // This check ensures we show a loading screen while the user session is being validated.
-  // `initialBalanceSet` is now a proxy for "is the app ready to render?"
-  if (!initialBalanceSet) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-background">
-        <div className="flex flex-col items-center gap-4">
-            <Logo className="h-16 w-16 text-primary animate-pulse" />
-            <p className="text-muted-foreground">Loading your ledger...</p>
-        </div>
-      </div>
-    );
   }
 
   return (

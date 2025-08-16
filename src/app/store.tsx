@@ -675,7 +675,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return null;
     }
     try {
-      const result = await appendData({ tableName: 'vendors', data: { name } });
+      const result = await appendData({ tableName: 'vendors', data: { name, user_id: state.user.id } });
       if (!result) {
         toast({ variant: 'destructive', title: 'Setup Incomplete', description: "Could not save to the 'vendors' table. Please ensure it exists in your database and RLS is configured." });
         return null;
@@ -697,7 +697,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return null;
     }
     try {
-      const result = await appendData({ tableName: 'clients', data: { name } });
+      const result = await appendData({ tableName: 'clients', data: { name, user_id: state.user.id } });
        if (!result) {
         toast({ variant: 'destructive', title: 'Setup Incomplete', description: "Could not save to the 'clients' table. Please ensure it exists in your database and RLS is configured." });
         return null;
@@ -773,6 +773,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  if (!state.initialBalanceSet) {
+    return <AppLoading />;
+  }
 
   return (
     <AppContext.Provider value={{ 
