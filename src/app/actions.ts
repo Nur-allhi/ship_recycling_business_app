@@ -20,7 +20,7 @@ const createSupabaseClient = async (serviceRole = false) => {
     // For server-side actions, we use the service role key.
     // RLS policies that depend on `auth.uid()` will still work correctly 
     // as long as we pass the user_id in the operations.
-    return createClient(supabaseUrl, supabaseServiceKey, {
+    return createClient(supabaseUrl, serviceRole ? supabaseServiceKey : supabaseAnonKey, {
         auth: { persistSession: false },
     });
 }
@@ -33,7 +33,7 @@ const ReadDataInputSchema = z.object({
 
 
 export async function readData(input: z.infer<typeof ReadDataInputSchema>) {
-  const supabase = await createSupabaseClient();
+  const supabase = await createSupabaseClient(true);
   let query = supabase
     .from(input.tableName)
     .select(input.select);
@@ -57,7 +57,7 @@ export async function readData(input: z.infer<typeof ReadDataInputSchema>) {
 }
 
 export async function readDeletedData(input: z.infer<typeof ReadDataInputSchema>) {
-    const supabase = await createSupabaseClient();
+    const supabase = await createSupabaseClient(true);
     let query = supabase
         .from(input.tableName)
         .select(input.select)
@@ -80,7 +80,7 @@ const AppendDataInputSchema = z.object({
 });
 
 export async function appendData(input: z.infer<typeof AppendDataInputSchema>) {
-    const supabase = await createSupabaseClient();
+    const supabase = await createSupabaseClient(true);
     const session = await getSession();
 
     if (!session) {
@@ -115,7 +115,7 @@ const UpdateDataInputSchema = z.object({
 });
 
 export async function updateData(input: z.infer<typeof UpdateDataInputSchema>) {
-  const supabase = await createSupabaseClient();
+  const supabase = await createSupabaseClient(true);
   const { data, error } = await supabase
     .from(input.tableName)
     .update(input.data)
@@ -132,7 +132,7 @@ const DeleteDataInputSchema = z.object({
 });
 
 export async function deleteData(input: z.infer<typeof DeleteDataInputSchema>) {
-  const supabase = await createSupabaseClient();
+  const supabase = await createSupabaseClient(true);
   const { error } = await supabase
     .from(input.tableName)
     .update({ deletedAt: new Date().toISOString() })
@@ -148,7 +148,7 @@ const RestoreDataInputSchema = z.object({
 });
 
 export async function restoreData(input: z.infer<typeof RestoreDataInputSchema>) {
-    const supabase = await createSupabaseClient();
+    const supabase = await createSupabaseClient(true);
     const { error } = await supabase
         .from(input.tableName)
         .update({ deletedAt: null })
@@ -159,7 +159,7 @@ export async function restoreData(input: z.infer<typeof RestoreDataInputSchema>)
 }
 
 export async function exportAllData() {
-    const supabase = await createSupabaseClient();
+    const supabase = await createSupabaseClient(true);
     const tables = ['cash_transactions', 'bank_transactions', 'stock_transactions', 'initial_stock', 'categories', 'vendors', 'clients', 'ap_ar_transactions'];
     const exportedData: Record<string, any[]> = {};
     
