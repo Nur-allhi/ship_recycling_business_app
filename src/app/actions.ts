@@ -46,7 +46,9 @@ const createSupabaseClient = async (serviceRole = false) => {
 const ReadDataInputSchema = z.object({
   tableName: z.string(),
   select: z.string().optional().default('*'),
-  userId: z.string().optional(), // Kept for potential use but RLS is primary
+  // userId is no longer used for filtering, RLS handles it.
+  // Kept for schema compatibility but will be ignored.
+  userId: z.string().optional(), 
 });
 
 
@@ -56,15 +58,14 @@ export async function readData(input: z.infer<typeof ReadDataInputSchema>) {
     .from(input.tableName)
     .select(input.select);
 
-  const softDeleteTables = ['cash_transactions', 'bank_transactions', 'stock_transactions', 'credit_transactions'];
+  // These tables support soft deletion
+  const softDeleteTables = ['cash_transactions', 'bank_transactions', 'stock_transactions'];
   
-  // Only apply the soft-delete filter to tables that have the column
   if (softDeleteTables.includes(input.tableName)) {
     query = query.is('deletedAt', null);
   }
   
-  // RLS will handle user-specific filtering. We no longer need manual .eq('user_id', ...)
-  // for standard read operations. This was the source of the main bug.
+  // RLS will handle user-specific filtering automatically.
 
   const { data, error } = await query;
 
@@ -77,12 +78,12 @@ export async function readData(input: z.infer<typeof ReadDataInputSchema>) {
 
 export async function readDeletedData(input: z.infer<typeof ReadDataInputSchema>) {
     const supabase = await createSupabaseClient();
+    // RLS handles user scoping.
     let query = supabase
         .from(input.tableName)
         .select(input.select)
         .not('deletedAt', 'is', null); // Only fetch soft-deleted items
     
-    // RLS handles user scoping.
 
     const { data, error } = await query;
 
@@ -162,7 +163,7 @@ export async function restoreData(input: z.infer<typeof RestoreDataInputSchema>)
 
 export async function exportAllData() {
     const supabase = await createSupabaseClient(); // Use RLS-enabled client
-    const tables = ['cash_transactions', 'bank_transactions', 'stock_transactions', 'initial_stock', 'categories', 'vendors', 'credit_transactions'];
+    const tables = ['cash_transactions', 'bank_transactions', 'stock_transactions', 'initial_stock', 'categories'];
     const exportedData: Record<string, any[]> = {};
     
     for (const tableName of tables) {
@@ -182,13 +183,13 @@ const ImportDataSchema = z.record(z.array(z.record(z.any())));
 // This operation requires bypassing RLS to import data for a user.
 export async function batchImportData(dataToImport: z.infer<typeof ImportDataSchema>) {
     const supabase = await createSupabaseClient(true); // Use service role for import
-    const tables = ['cash_transactions', 'bank_transactions', 'stock_transactions', 'initial_stock', 'categories', 'users', 'vendors', 'credit_transactions'];
+    const tables = ['cash_transactions', 'bank_transactions', 'stock_transactions', 'initial_stock', 'categories', 'users'];
     const session = await getSession();
     if (!session) throw new Error("No active session for import.");
     
     try {
         // Clear existing data for the current user
-        for (const tableName of ['cash_transactions', 'bank_transactions', 'stock_transactions', 'initial_stock', 'categories', 'vendors', 'credit_transactions'].reverse()) {
+        for (const tableName of ['cash_transactions', 'bank_transactions', 'stock_transactions', 'initial_stock', 'categories'].reverse()) {
             const { error: deleteError } = await supabase.from(tableName).delete().eq('user_id', session.id);
             if (deleteError) {
                 console.error(`Failed to clear ${tableName}: ${deleteError.message}`);
@@ -219,7 +220,7 @@ export async function batchImportData(dataToImport: z.infer<typeof ImportDataSch
 // This operation requires bypassing RLS to delete all data for a specific user.
 export async function deleteAllData() {
     const supabase = await createSupabaseClient(true); // Use service role to delete
-    const tables = ['cash_transactions', 'bank_transactions', 'stock_transactions', 'initial_stock', 'categories', 'vendors', 'credit_transactions'];
+    const tables = ['cash_transactions', 'bank_transactions', 'stock_transactions', 'initial_stock', 'categories'];
     const session = await getSession();
     if (!session) throw new Error("No active session to delete data.");
     try {

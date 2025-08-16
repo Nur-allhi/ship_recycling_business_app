@@ -18,7 +18,7 @@ import {
 } from '@/components/ui/select';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useToast } from '@/hooks/use-toast';
-import { CalendarIcon, Plus, PlusCircle, Wallet, Landmark, Boxes, ArrowRightLeft, CreditCard } from 'lucide-react';
+import { CalendarIcon, PlusCircle, Wallet, Landmark, Boxes, ArrowRightLeft } from 'lucide-react';
 import { DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
@@ -28,7 +28,7 @@ import { Separator } from './ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 
 const formSchema = z.object({
-  transactionType: z.enum(['cash', 'bank', 'stock', 'transfer', 'credit']),
+  transactionType: z.enum(['cash', 'bank', 'stock', 'transfer']),
   amount: z.coerce.number().optional(),
   description: z.string().optional(),
   category: z.string().optional(),
@@ -47,9 +47,6 @@ const formSchema = z.object({
   // transfer specific
   transferFrom: z.enum(['cash', 'bank']).optional(),
 
-  // credit specific
-  vendorId: z.string().optional(),
-
 }).superRefine((data, ctx) => {
     if (data.transactionType === 'stock') {
         if (!data.stockType) ctx.addIssue({ code: 'custom', message: 'Please select purchase or sale.', path: ['stockType'] });
@@ -58,7 +55,7 @@ const formSchema = z.object({
         if (data.pricePerKg === undefined || data.pricePerKg < 0) ctx.addIssue({ code: 'custom', message: 'Price must be non-negative.', path: ['pricePerKg'] });
         if (!data.paymentMethod) ctx.addIssue({ code: 'custom', message: 'Payment method is required.', path: ['paymentMethod'] });
     }
-    if (data.transactionType === 'cash' || data.transactionType === 'bank' || data.transactionType === 'transfer' || data.transactionType === 'credit') {
+    if (data.transactionType === 'cash' || data.transactionType === 'bank' || data.transactionType === 'transfer') {
         if(!data.amount || data.amount <=0) ctx.addIssue({ code: 'custom', message: 'Amount must be positive.', path: ['amount'] });
     }
     if(data.transactionType === 'cash' || data.transactionType === 'bank') {
@@ -68,10 +65,6 @@ const formSchema = z.object({
     }
     if(data.transactionType === 'transfer') {
         if (!data.transferFrom) ctx.addIssue({ code: 'custom', message: 'Transfer source is required.', path: ['transferFrom'] });
-    }
-    if (data.transactionType === 'credit') {
-        if (!data.vendorId) ctx.addIssue({ code: 'custom', message: 'Vendor is required.', path: ['vendorId'] });
-        if (!data.description) ctx.addIssue({ code: 'custom', message: 'Description is required.', path: ['description'] });
     }
 });
 
@@ -87,18 +80,15 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
     addCashTransaction, 
     addBankTransaction, 
     addStockTransaction, 
-    addCreditTransaction,
     transferFunds,
     cashCategories,
     bankCategories,
-    stockItems,
-    vendors,
-    addVendor
+    stockItems
   } = useAppContext();
   
   const { toast } = useToast();
   
-  const { register, handleSubmit, control, watch, reset, setValue, formState: { errors } } = useForm<FormData>({
+  const { register, handleSubmit, control, watch, reset, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(formSchema),
     defaultValues: {
         transactionType: 'cash',
@@ -111,8 +101,6 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
   const transactionType = watch('transactionType');
   const stockType = watch('stockType');
   const [isNewStockItem, setIsNewStockItem] = useState(false);
-  const [isNewVendor, setIsNewVendor] = useState(false);
-  const [newVendorName, setNewVendorName] = useState("");
 
   useEffect(() => {
     reset({
@@ -122,19 +110,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
         transactionType: transactionType as any
     });
     setIsNewStockItem(false);
-    setIsNewVendor(false);
   }, [transactionType, reset]);
-
-  const handleAddNewVendor = async () => {
-    if (newVendorName.trim()) {
-        const newVendor = await addVendor(newVendorName.trim());
-        if (newVendor) {
-            setValue('vendorId', newVendor.id);
-            setIsNewVendor(false);
-            setNewVendorName("");
-        }
-    }
-  }
 
   const onSubmit = (data: FormData) => {
     const transactionDate = data.date.toISOString();
@@ -170,14 +146,6 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
             break;
         case 'transfer':
             transferFunds(data.transferFrom!, data.amount!, transactionDate);
-            break;
-        case 'credit':
-            addCreditTransaction({
-                amount: data.amount!,
-                description: data.description!,
-                vendorId: data.vendorId!,
-                date: transactionDate,
-            })
             break;
     }
     toast({ title: "Transaction Added", description: "Your transaction has been successfully recorded." });
@@ -234,10 +202,9 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
             rules={{ required: true }}
             render={({ field }) => (
                 <Tabs value={field.value} onValueChange={field.onChange} className="w-full">
-                    <TabsList className="grid w-full grid-cols-5">
+                    <TabsList className="grid w-full grid-cols-4">
                         <TabsTrigger value="cash"><Wallet className="mr-2 h-4 w-4" />Cash</TabsTrigger>
                         <TabsTrigger value="bank"><Landmark className="mr-2 h-4 w-4" />Bank</TabsTrigger>
-                        <TabsTrigger value="credit"><CreditCard className="mr-2 h-4 w-4" />Credit</TabsTrigger>
                         <TabsTrigger value="stock"><Boxes className="mr-2 h-4 w-4" />Stock</TabsTrigger>
                         <TabsTrigger value="transfer"><ArrowRightLeft className="mr-2 h-4 w-4" />Transfer</TabsTrigger>
                     </TabsList>
@@ -334,50 +301,6 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                                         )}
                                     />
                                     {errors.category && <p className="text-sm text-destructive">{errors.category.message}</p>}
-                                </div>
-                            </TabsContent>
-
-                            <TabsContent value="credit" className="m-0 space-y-4 animate-fade-in">
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div>{dateField}</div>
-                                    <div className="space-y-2">
-                                        <Label htmlFor="amount-credit">Amount</Label>
-                                        <Input id="amount-credit" type="number" step="0.01" {...register('amount')} placeholder="0.00"/>
-                                        {errors.amount && <p className="text-sm text-destructive">{errors.amount.message}</p>}
-                                    </div>
-                                </div>
-                                <div className="space-y-2">
-                                    <Label>Vendor</Label>
-                                    {isNewVendor ? (
-                                        <div className="flex items-center gap-2">
-                                            <Input 
-                                                value={newVendorName} 
-                                                onChange={(e) => setNewVendorName(e.target.value)} 
-                                                placeholder="New vendor name"
-                                            />
-                                            <Button type="button" size="sm" onClick={handleAddNewVendor}>Save</Button>
-                                            <Button type="button" variant="ghost" size="sm" onClick={() => setIsNewVendor(false)}>Cancel</Button>
-                                        </div>
-                                    ) : (
-                                        <div className="flex items-center gap-2">
-                                            <Controller
-                                                control={control}
-                                                name="vendorId"
-                                                render={({ field }) => (
-                                                    <Select onValueChange={field.onChange} value={field.value}>
-                                                        <SelectTrigger><SelectValue placeholder="Select a vendor" /></SelectTrigger>
-                                                        <SelectContent>
-                                                            {vendors.map(v => <SelectItem key={v.id} value={v.id}>{v.name}</SelectItem>)}
-                                                        </SelectContent>
-                                                    </Select>
-                                                )}
-                                            />
-                                            <Button type="button" variant="outline" size="icon" onClick={() => setIsNewVendor(true)}>
-                                                <Plus className="h-4 w-4" />
-                                            </Button>
-                                        </div>
-                                    )}
-                                    {errors.vendorId && <p className="text-sm text-destructive">{errors.vendorId.message}</p>}
                                 </div>
                             </TabsContent>
                             
@@ -496,12 +419,11 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                         {transactionType && (
                             <div className="space-y-4 pt-4 animate-fade-in">
                                 <Separator />
-                                {(transactionType !== 'transfer') && (
+                                {(transactionType === 'cash' || transactionType === 'bank' || transactionType === 'stock') && (
                                     <div className="space-y-2">
                                         <Label htmlFor="description">Description</Label>
                                         <Input id="description" {...register('description')} placeholder={
                                             transactionType === 'stock' ? "Optional notes (e.g., invoice #)" :
-                                            transactionType === 'credit' ? "e.g., Office supplies" :
                                             "e.g., Weekly groceries"
                                         } />
                                         {errors.description && <p className="text-sm text-destructive">{errors.description.message}</p>}

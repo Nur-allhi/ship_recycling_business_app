@@ -20,7 +20,6 @@ interface AppState {
   cashBalance: number;
   cashTransactions: CashTransaction[];
   bankBalance: number;
-
   bankTransactions: BankTransaction[];
   stockItems: StockItem[];
   stockTransactions: StockTransaction[];
@@ -132,11 +131,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
     try {
         const [cashData, bankData, stockTransactionsData, initialStockData, categoriesData] = await Promise.all([
-            readData({ tableName: 'cash_transactions', userId: state.user.id }),
-            readData({ tableName: 'bank_transactions', userId: state.user.id }),
-            readData({ tableName: 'stock_transactions', userId: state.user.id }),
-            readData({ tableName: 'initial_stock', userId: state.user.id }),
-            readData({ tableName: 'categories', userId: state.user.id }),
+            readData({ tableName: 'cash_transactions' }),
+            readData({ tableName: 'bank_transactions' }),
+            readData({ tableName: 'stock_transactions' }),
+            readData({ tableName: 'initial_stock' }),
+            readData({ tableName: 'categories' }),
         ]);
         
         let needsInitialBalance = true;
@@ -241,9 +240,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if(!state.user) return;
     try {
         const [deletedCashData, deletedBankData, deletedStockData] = await Promise.all([
-            readDeletedData({ tableName: 'cash_transactions', userId: state.user.id }),
-            readDeletedData({ tableName: 'bank_transactions', userId: state.user.id }),
-            readDeletedData({ tableName: 'stock_transactions', userId: state.user.id }),
+            readDeletedData({ tableName: 'cash_transactions' }),
+            readDeletedData({ tableName: 'bank_transactions' }),
+            readDeletedData({ tableName: 'stock_transactions' }),
         ]);
 
         setState(prev => ({
