@@ -255,15 +255,12 @@ export async function batchImportData(dataToImport: z.infer<typeof ImportDataSch
             }
         }
 
-        const adminUsers = (await getUsers()).filter(u => u.role === 'admin');
-        if (adminUsers.length === 0) throw new Error("Cannot import data, no admin user exists to own the data.");
-        const primaryAdminId = adminUsers[0].id;
-
         for (const tableName of tables) {
             const records = dataToImport[tableName];
             if (records && records.length > 0) {
                  records.forEach(r => {
-                    r.user_id = primaryAdminId;
+                    // Remove user_id if it exists from old exports
+                    delete r.user_id; 
                  });
                 const { error: insertError } = await supabase.from(tableName).upsert(records);
                 if (insertError && insertError.code !== '42P01') throw new Error(`Failed to import to ${tableName}: ${insertError.message}`);
@@ -489,4 +486,6 @@ export async function addPaymentInstallment(input: z.infer<typeof AddInstallment
         return handleApiError(error);
     }
 }
+    
+
     

@@ -9,7 +9,6 @@ export interface Transaction {
   deletedAt?: string;
   linkedStockTxId?: string;
   createdAt: string;
-  user_id?: string;
 }
 
 export interface CashTransaction extends Transaction {
@@ -25,7 +24,6 @@ export interface StockItem {
   name: string;
   weight: number; // in kg
   purchasePricePerKg: number;
-  user_id?: string;
 }
 
 export interface StockTransaction {
@@ -40,7 +38,6 @@ export interface StockTransaction {
   lastEdited?: string;
   deletedAt?: string;
   createdAt: string;
-  user_id?: string;
 }
 
 export interface User {
@@ -53,14 +50,12 @@ export interface User {
 export interface Vendor {
   id: string;
   name: string;
-  user_id?: string;
   createdAt: string;
 }
 
 export interface Client {
   id: string;
   name: string;
-  user_id?: string;
   createdAt: string;
 }
 
@@ -71,7 +66,6 @@ export interface PaymentInstallment {
   date: string;
   payment_method: 'cash' | 'bank';
   createdAt: string;
-  user_id?: string;
 }
 
 export interface LedgerTransaction {
@@ -86,7 +80,8 @@ export interface LedgerTransaction {
   contact_name: string;
   deletedAt?: string;
   createdAt: string;
-  user_id?: string;
   installments: PaymentInstallment[];
 }
+    
+
     

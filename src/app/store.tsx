@@ -114,7 +114,7 @@ const initialAppState: AppState = {
   totalReceivables: 0,
 };
 
-const getCacheKey = (userId: string) => `ha-mim-iron-mart-cache-${userId}`;
+const getCacheKey = () => `ha-mim-iron-mart-cache`;
 
 const getInitialState = (user: User | null): AppState => {
     let state = { ...initialAppState, user, initialBalanceSet: false };
@@ -125,12 +125,10 @@ const getInitialState = (user: User | null): AppState => {
             state = { ...state, ...settings };
         }
         
-        if (user?.id) {
-            const appCache = localStorage.getItem(getCacheKey(user.id));
-            if (appCache) {
-                const cachedData = JSON.parse(appCache);
-                state = { ...state, ...cachedData, initialBalanceSet: true };
-            }
+        const appCache = localStorage.getItem(getCacheKey());
+        if (appCache) {
+            const cachedData = JSON.parse(appCache);
+            state = { ...state, ...cachedData, initialBalanceSet: true };
         }
     } catch (e) {
         console.error("Could not parse data from local storage", e);
@@ -139,7 +137,6 @@ const getInitialState = (user: User | null): AppState => {
 }
 
 const saveStateToLocalStorage = (state: AppState) => {
-    if (!state.user) return;
     try {
         const settingsToSave = {
             fontSize: state.fontSize,
@@ -166,7 +163,7 @@ const saveStateToLocalStorage = (state: AppState) => {
             totalPayables: state.totalPayables,
             totalReceivables: state.totalReceivables,
         };
-        localStorage.setItem(getCacheKey(state.user.id), JSON.stringify(appStateToCache));
+        localStorage.setItem(getCacheKey(), JSON.stringify(appStateToCache));
 
     } catch (e) {
         console.error("Could not save state to local storage", e);
@@ -181,14 +178,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
 
   const logout = useCallback(async () => {
-    if(state.user) {
-        localStorage.removeItem(getCacheKey(state.user.id));
-    }
+    localStorage.removeItem(getCacheKey());
     await serverLogout();
     localStorage.removeItem('ha-mim-iron-mart-settings');
     setState({...initialAppState, user: null});
     window.location.href = '/login';
-  }, [state.user]);
+  }, []);
 
   const handleApiError = useCallback((error: any) => {
     const isAuthError = error.message.includes('JWT') || error.message.includes('Unauthorized') || error.message.includes("SESSION_EXPIRED");
@@ -880,3 +875,5 @@ export function useAppContext() {
   }
   return context;
 }
+
+    
