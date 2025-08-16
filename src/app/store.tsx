@@ -174,8 +174,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
         const initialCashTx = cashTransactions.find(tx => tx.category === 'Initial Balance');
         const initialBankTx = bankTransactions.find(tx => tx.category === 'Initial Balance');
+        const hasInitialStock = initialStockData?.length > 0;
         
-        if (initialCashTx || initialBankTx || initialStockData?.length > 0) {
+        if (initialCashTx || initialBankTx || hasInitialStock) {
           needsInitialBalance = false;
         }
 
@@ -570,8 +571,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const setInitialBalances = async (cash: number, bank: number) => {
       try {
           const date = new Date().toISOString();
-          await appendData({ tableName: 'cash_transactions', data: { date, type: 'income', amount: cash, description: 'Initial Balance', category: 'Initial Balance' }});
-          await appendData({ tableName: 'bank_transactions', data: { date, type: 'deposit', amount: bank, description: 'Initial Balance', category: 'Initial Balance' }});
+          if (cash > 0) {
+            await appendData({ tableName: 'cash_transactions', data: { date, type: 'income', amount: cash, description: 'Initial Balance', category: 'Initial Balance' }});
+          }
+          if (bank > 0) {
+            await appendData({ tableName: 'bank_transactions', data: { date, type: 'deposit', amount: bank, description: 'Initial Balance', category: 'Initial Balance' }});
+          }
           toast({ title: "Initial balances set." });
           await reloadData();
       } catch (e) {
@@ -866,5 +871,7 @@ export function AppLoading() {
         </div>
     );
 }
+
+    
 
     
