@@ -2,7 +2,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
-import type { CashTransaction, BankTransaction, StockItem, StockTransaction, User } from '@/lib/types';
+import type { CashTransaction, BankTransaction, StockItem, StockTransaction, User, Vendor, Client, LedgerTransaction } from '@/lib/types';
 import { useToast } from "@/hooks/use-toast"
 import { readData, appendData, updateData, deleteData, readDeletedData, restoreData, exportAllData, batchImportData, deleteAllData } from '@/app/actions';
 import { format } from 'date-fns';
@@ -37,6 +37,12 @@ interface AppState {
   currency: string;
   showStockValue: boolean;
   user: User | null;
+  vendors: Vendor[];
+  clients: Client[];
+  ledgerTransactions: LedgerTransaction[];
+  deletedLedgerTransactions: LedgerTransaction[];
+  totalPayables: number;
+  totalReceivables: number;
 }
 
 interface AppContextType extends AppState {
@@ -54,7 +60,7 @@ interface AppContextType extends AppState {
   deleteMultipleCashTransactions: (txs: CashTransaction[]) => void;
   deleteMultipleBankTransactions: (txs: BankTransaction[]) => void;
   deleteMultipleStockTransactions: (txs: StockTransaction[]) => void;
-  restoreTransaction: (txType: 'cash' | 'bank' | 'stock', id: string) => void;
+  restoreTransaction: (txType: 'cash' | 'bank' | 'stock' | 'ledger', id: string) => void;
   transferFunds: (from: 'cash' | 'bank', amount: number, date?: string) => void;
   addCategory: (type: 'cash' | 'bank', category: string) => void;
   deleteCategory: (type: 'cash' | 'bank', category: string) => void;
@@ -70,6 +76,10 @@ interface AppContextType extends AppState {
   handleImport: (file: File) => void;
   handleDeleteAllData: () => void;
   logout: () => void;
+  addVendor: (name: string) => Promise<any>;
+  addClient: (name: string) => Promise<any>;
+  addLedgerTransaction: (tx: Omit<LedgerTransaction, 'id' | 'createdAt' | 'deletedAt' | 'user_id' | 'status'>) => Promise<any>;
+  settleLedgerTransaction: (tx: LedgerTransaction, paymentMethod: 'cash' | 'bank', paymentDate: Date) => Promise<any>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -95,6 +105,12 @@ const initialAppState: AppState = {
   currency: 'BDT',
   showStockValue: false,
   user: null,
+  vendors: [],
+  clients: [],
+  ledgerTransactions: [],
+  deletedLedgerTransactions: [],
+  totalPayables: 0,
+  totalReceivables: 0,
 };
 
 const getInitialState = (): AppState => {
@@ -130,12 +146,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return;
     }
     try {
-        const [cashData, bankData, stockTransactionsData, initialStockData, categoriesData] = await Promise.all([
+        const [cashData, bankData, stockTransactionsData, initialStockData, categoriesData, vendorsData, clientsData, ledgerData] = await Promise.all([
             readData({ tableName: 'cash_transactions' }),
             readData({ tableName: 'bank_transactions' }),
             readData({ tableName: 'stock_transactions' }),
             readData({ tableName: 'initial_stock' }),
             readData({ tableName: 'categories' }),
+            readData({ tableName: 'vendors' }),
+            readData({ tableName: 'clients' }),
+            readData({ tableName: 'ap_ar_transactions' }),
         ]);
         
         let needsInitialBalance = true;
@@ -199,6 +218,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         
         const cashCategories = categoriesData.filter((c: any) => c.type === 'cash').map((c: any) => c.name);
         const bankCategories = categoriesData.filter((c: any) => c.type === 'bank').map((c: any) => c.name);
+        
+        const ledgerTransactions: LedgerTransaction[] = ledgerData?.map((tx: any) => ({...tx, date: new Date(tx.date).toISOString() })) || [];
+        const totalPayables = ledgerTransactions.filter(tx => tx.type === 'payable' && tx.status === 'unpaid').reduce((acc, tx) => acc + tx.amount, 0);
+        const totalReceivables = ledgerTransactions.filter(tx => tx.type === 'receivable' && tx.status === 'unpaid').reduce((acc, tx) => acc + tx.amount, 0);
 
         setState(prev => ({
             ...prev,
@@ -211,13 +234,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
             needsInitialBalance,
             cashCategories: cashCategories.length > 0 ? cashCategories : prev.cashCategories,
             bankCategories: bankCategories.length > 0 ? bankCategories : prev.bankCategories,
-            initialBalanceSet: true
+            initialBalanceSet: true,
+            vendors: vendorsData || [],
+            clients: clientsData || [],
+            ledgerTransactions: ledgerTransactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+            totalPayables,
+            totalReceivables,
         }));
 
       } catch (error: any) {
         console.error("Failed to load data", error);
         setState(prev => ({...prev, initialBalanceSet: true}));
-        if (!error.message.includes('relation "users" does not exist')) {
+        if (!error.message.includes('relation "users" does not exist') && !error.message.includes('relation "public.vendors" does not exist')) {
           toast({
               variant: 'destructive',
               title: 'Failed to load data',
@@ -239,10 +267,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const loadRecycleBinData = useCallback(async () => {
     if(!state.user) return;
     try {
-        const [deletedCashData, deletedBankData, deletedStockData] = await Promise.all([
+        const [deletedCashData, deletedBankData, deletedStockData, deletedLedgerData] = await Promise.all([
             readDeletedData({ tableName: 'cash_transactions' }),
             readDeletedData({ tableName: 'bank_transactions' }),
             readDeletedData({ tableName: 'stock_transactions' }),
+            readDeletedData({ tableName: 'ap_ar_transactions' }),
         ]);
 
         setState(prev => ({
@@ -250,15 +279,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
             deletedCashTransactions: deletedCashData.sort((a: any, b: any) => new Date(b.deletedAt).getTime() - new Date(a.deletedAt).getTime()),
             deletedBankTransactions: deletedBankData.sort((a: any, b: any) => new Date(b.deletedAt).getTime() - new Date(a.deletedAt).getTime()),
             deletedStockTransactions: deletedStockData.sort((a: any, b: any) => new Date(b.deletedAt).getTime() - new Date(a.deletedAt).getTime()),
+            deletedLedgerTransactions: deletedLedgerData?.sort((a: any, b: any) => new Date(b.deletedAt).getTime() - new Date(a.deletedAt).getTime()) || [],
         }));
 
-    } catch (error) {
+    } catch (error: any) {
         console.error("Failed to load recycle bin data", error);
-        toast({
-            variant: 'destructive',
-            title: 'Failed to load recycle bin',
-            description: 'Could not fetch deleted items. Please try again later.'
-        });
+        if (!error.message.includes('relation "public.ap_ar_transactions" does not exist')) {
+            toast({
+                variant: 'destructive',
+                title: 'Failed to load recycle bin',
+                description: 'Could not fetch deleted items. Please try again later.'
+            });
+        }
     }
   }, [toast, state.user]);
 
@@ -410,8 +442,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
   
-  const restoreTransaction = async (txType: 'cash' | 'bank' | 'stock', id: string) => {
-    const tableName = `${txType}_transactions`;
+  const restoreTransaction = async (txType: 'cash' | 'bank' | 'stock' | 'ledger', id: string) => {
+    const tableName = txType === 'ledger' ? 'ap_ar_transactions' : `${txType}_transactions`;
     try {
         await restoreData({ tableName, id });
 
@@ -432,9 +464,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
         
         toast({ title: "Transaction Restored", description: "The item and any linked transactions have been restored." });
         await Promise.all([reloadData(), loadRecycleBinData()]);
-    } catch (error) {
+    } catch (error: any) {
         console.error("Failed to restore transaction", error);
-        toast({ variant: 'destructive', title: "Error", description: "Failed to restore the transaction." });
+         if (!error.message.includes('relation "public.ap_ar_transactions" does not exist')) {
+            toast({ variant: 'destructive', title: "Error", description: "Failed to restore the transaction." });
+        }
     }
   };
 
@@ -617,6 +651,86 @@ export function AppProvider({ children }: { children: ReactNode }) {
     window.location.href = '/login';
   };
 
+  const addVendor = async (name: string) => {
+    try {
+      const [newVendor] = await appendData({ tableName: 'vendors', data: { name } });
+      toast({ title: 'Vendor Added' });
+      await reloadData();
+      return newVendor;
+    } catch (error: any) {
+      if (!error.message.includes('relation "public.vendors" does not exist')) {
+        toast({ variant: 'destructive', title: 'Failed to add vendor' });
+      }
+      return null;
+    }
+  }
+  const addClient = async (name: string) => {
+    try {
+      const [newClient] = await appendData({ tableName: 'clients', data: { name } });
+      toast({ title: 'Client Added' });
+      await reloadData();
+      return newClient;
+    } catch (error: any) {
+      if (!error.message.includes('relation "public.clients" does not exist')) {
+        toast({ variant: 'destructive', title: 'Failed to add client' });
+      }
+      return null;
+    }
+  }
+
+  const addLedgerTransaction = async (tx: Omit<LedgerTransaction, 'id' | 'createdAt' | 'deletedAt' | 'user_id' | 'status'>) => {
+     try {
+      const [newTx] = await appendData({ tableName: 'ap_ar_transactions', data: { ...tx, status: 'unpaid' } });
+      toast({ title: 'Ledger Transaction Added' });
+      await reloadData();
+      return newTx;
+    } catch (error: any) {
+       if (!error.message.includes('relation "public.ap_ar_transactions" does not exist')) {
+          toast({ variant: 'destructive', title: 'Failed to add ledger transaction' });
+       }
+      return null;
+    }
+  }
+  
+  const settleLedgerTransaction = async (tx: LedgerTransaction, paymentMethod: 'cash' | 'bank', paymentDate: Date) => {
+    try {
+      const finTxDesc = `Settlement for ${tx.type}: ${tx.description} (Ref: ${tx.id})`;
+      if (tx.type === 'payable') {
+        const transaction = {
+            date: paymentDate.toISOString(),
+            amount: tx.amount,
+            description: finTxDesc,
+            category: 'A/P Settlement',
+        };
+        if(paymentMethod === 'cash') {
+          await addCashTransaction({...transaction, type: 'expense'});
+        } else {
+          await addBankTransaction({...transaction, type: 'withdrawal'});
+        }
+      } else { // receivable
+         const transaction = {
+            date: paymentDate.toISOString(),
+            amount: tx.amount,
+            description: finTxDesc,
+            category: 'A/R Settlement',
+        };
+        if(paymentMethod === 'cash') {
+          await addCashTransaction({...transaction, type: 'income'});
+        } else {
+          await addBankTransaction({...transaction, type: 'deposit'});
+        }
+      }
+
+      await updateData({ tableName: 'ap_ar_transactions', id: tx.id, data: { status: 'paid', paidDate: paymentDate.toISOString(), paidFrom: paymentMethod } });
+      toast({ title: 'Transaction Settled' });
+      await reloadData();
+    } catch (error: any) {
+      if (!error.message.includes('relation "public.ap_ar_transactions" does not exist')) {
+         toast({ variant: 'destructive', title: 'Failed to settle transaction' });
+      }
+    }
+  }
+
   const setFontSize = (size: FontSize) => setState(prev => ({ ...prev, fontSize: size }));
   const setBodyFont = (font: string) => setState(prev => ({ ...prev, bodyFont: font }));
   const setNumberFont = (font: string) => setState(prev => ({ ...prev, numberFont: font }));
@@ -656,6 +770,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     handleImport,
     handleDeleteAllData,
     logout,
+    addVendor,
+    addClient,
+    addLedgerTransaction,
+    settleLedgerTransaction,
   };
 
   if (!sessionChecked) {
