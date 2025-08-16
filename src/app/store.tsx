@@ -217,19 +217,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const checkSessionAndLoadData = async () => {
       try {
         const session = await getSession();
-        setState(prev => ({...prev, user: session }));
-        if (session && !state.initialBalanceSet) {
+        if (session) {
+          setState(prev => ({...prev, user: session }));
+          if (!state.initialBalanceSet) {
              await reloadData({force: true});
+          }
+        } else {
+          setState(prev => ({ ...prev, isLoading: false }));
         }
       } catch (error) {
         console.error("Failed to get session", error);
-      } finally {
         setState(prev => ({ ...prev, isLoading: false }));
       }
     };
     checkSessionAndLoadData();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [state.initialBalanceSet]);
   
   const calculateBalancesAndStock = useCallback((
     cashTxs: CashTransaction[], 
@@ -1087,5 +1090,3 @@ export function useAppContext() {
   }
   return context;
 }
-
-    

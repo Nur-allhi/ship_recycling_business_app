@@ -35,7 +35,8 @@ export function LoginForm() {
     try {
       await login(data);
       toast({ title: "Login Successful", description: "Welcome!" });
-      // Force a hard reload to ensure all state is re-initialized and the new cookie is sent.
+      // Clear cache for the new user then force a hard reload
+      localStorage.removeItem('ha-mim-iron-mart-cache');
       window.location.href = '/'; 
     } catch (error: any) {
       toast({
