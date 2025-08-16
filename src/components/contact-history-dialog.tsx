@@ -40,7 +40,7 @@ export function ContactHistoryDialog({ isOpen, setIsOpen, contact, contactType }
 
   const transactions = useMemo(() => {
     return ledgerTransactions
-        .filter(tx => tx.contact === contact.name)
+        .filter(tx => tx.additional_info?.contact === contact.name)
         .sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   }, [ledgerTransactions, contact.name]);
 

@@ -217,10 +217,12 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
 
                 await addLedgerTransaction({
                     type: data.ledgerType!,
-                    contact: finalContactName,
                     description: data.description!,
                     amount: data.amount!,
-                    date: transactionDate
+                    date: transactionDate,
+                    additional_info: {
+                        contact: finalContactName,
+                    }
                 });
                 break;
         }

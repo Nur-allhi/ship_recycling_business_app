@@ -335,11 +335,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
           const description = `${tx.type === 'purchase' ? 'Purchase' : 'Sale'} of ${tx.weight}kg of ${tx.stockItemName} on credit`;
           await addLedgerTransaction({
               type: ledgerType,
-              contact: contact!,
               description,
               amount: totalValue,
               date: tx.date,
-              linkedStockTxId: newStockTx.id
+              additional_info: {
+                contact: contact,
+                linkedStockTxId: newStockTx.id,
+              }
           });
       } else {
           const description = `${tx.type === 'purchase' ? 'Purchase' : 'Sale'} of ${tx.weight}kg of ${tx.stockItemName}`;

@@ -77,7 +77,7 @@ export function SettlePaymentDialog({ isOpen, setIsOpen, transaction }: SettlePa
                 <div className="space-y-4 py-2 text-sm">
                     <div className="flex justify-between">
                         <span className="text-muted-foreground">Contact:</span>
-                        <span className="font-medium">{transaction.contact}</span>
+                        <span className="font-medium">{transaction.additional_info?.contact || 'N/A'}</span>
                     </div>
                     <div className="flex justify-between">
                         <span className="text-muted-foreground">Description:</span>

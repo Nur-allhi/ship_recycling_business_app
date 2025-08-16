@@ -47,7 +47,7 @@ export function ReceivablesList() {
                             receivables.map(tx => (
                                 <TableRow key={tx.id}>
                                     <TableCell className="font-mono">{format(new Date(tx.date), 'dd-MM-yy')}</TableCell>
-                                    <TableCell className="font-medium">{tx.contact}</TableCell>
+                                    <TableCell className="font-medium">{tx.additional_info?.contact || 'N/A'}</TableCell>
                                     <TableCell>{tx.description}</TableCell>
                                     <TableCell className="text-right font-mono font-semibold">{formatCurrency(tx.amount)}</TableCell>
                                     <TableCell className="text-center">

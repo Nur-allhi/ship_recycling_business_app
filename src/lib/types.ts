@@ -68,7 +68,6 @@ export interface LedgerTransaction {
   id: string;
   date: string;
   type: 'payable' | 'receivable'; // A/P or A/R
-  contact: string; // The name of the vendor or client
   description: string;
   amount: number;
   status: 'unpaid' | 'paid';
@@ -78,5 +77,8 @@ export interface LedgerTransaction {
   deletedAt?: string;
   createdAt: string;
   user_id?: string;
-  linkedStockTxId?: string; // Link to the stock transaction if it exists
+  additional_info?: {
+    contact?: string;
+    linkedStockTxId?: string;
+  };
 }
