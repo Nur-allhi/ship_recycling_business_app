@@ -670,10 +670,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const addVendor = async (name: string) => {
+    if (!state.user) {
+        toast({ variant: 'destructive', title: 'Authentication Error', description: 'You must be logged in to add a vendor.' });
+        return null;
+    }
     try {
-      const result = await appendData({ tableName: 'vendors', data: { name } });
+      const result = await appendData({ tableName: 'vendors', data: { name, user_id: state.user.id } });
       if (!result) {
-        toast({ variant: 'destructive', title: 'Setup Incomplete', description: "The 'vendors' table does not exist in your database. Please complete the database setup." });
+        toast({ variant: 'destructive', title: 'Setup Incomplete', description: "Could not save to the 'vendors' table. Please ensure it exists in your database." });
         return null;
       }
       const newVendor = result[0];
@@ -681,16 +685,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
       await reloadData();
       return newVendor;
     } catch (error: any) {
+      console.error("Failed to add vendor:", error)
       toast({ variant: 'destructive', title: 'Failed to add vendor', description: error.message });
       return null;
     }
   }
 
   const addClient = async (name: string) => {
+    if (!state.user) {
+        toast({ variant: 'destructive', title: 'Authentication Error', description: 'You must be logged in to add a client.' });
+        return null;
+    }
     try {
-      const result = await appendData({ tableName: 'clients', data: { name } });
+      const result = await appendData({ tableName: 'clients', data: { name, user_id: state.user.id } });
        if (!result) {
-        toast({ variant: 'destructive', title: 'Setup Incomplete', description: "The 'clients' table does not exist in your database. Please complete the database setup." });
+        toast({ variant: 'destructive', title: 'Setup Incomplete', description: "Could not save to the 'clients' table. Please ensure it exists in your database." });
         return null;
       }
       const newClient = result[0];
@@ -698,6 +707,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       await reloadData();
       return newClient;
     } catch (error: any) {
+      console.error("Failed to add client:", error)
       toast({ variant: 'destructive', title: 'Failed to add client', description: error.message });
       return null;
     }
