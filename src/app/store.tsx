@@ -46,7 +46,7 @@ interface AppState {
 }
 
 interface AppContextType extends AppState {
-  reloadData: () => Promise<void>;
+  reloadData: (options?: { force?: boolean }) => Promise<void>;
   loadRecycleBinData: () => Promise<void>;
   addCashTransaction: (tx: Omit<CashTransaction, 'id' | 'createdAt' | 'deletedAt' | 'user_id'>) => Promise<any>;
   addBankTransaction: (tx: Omit<BankTransaction, 'id' | 'createdAt' | 'deletedAt' | 'user_id'>) => Promise<any>;
@@ -114,6 +114,8 @@ const initialAppState: AppState = {
   totalReceivables: 0,
 };
 
+const getCacheKey = (userId: string) => `ha-mim-iron-mart-cache-${userId}`;
+
 const getInitialState = (user: User | null): AppState => {
     let state = { ...initialAppState, user, initialBalanceSet: false };
     try {
@@ -124,21 +126,51 @@ const getInitialState = (user: User | null): AppState => {
         }
         
         if (user?.id) {
-            const dashboardCache = localStorage.getItem(`ha-mim-iron-mart-dashboard-${user.id}`);
-            if (dashboardCache) {
-                const { cashBalance, bankBalance, stockItems, totalPayables, totalReceivables } = JSON.parse(dashboardCache);
-                state.cashBalance = cashBalance ?? 0;
-                state.bankBalance = bankBalance ?? 0;
-                state.stockItems = stockItems ?? [];
-                state.totalPayables = totalPayables ?? 0;
-                state.totalReceivables = totalReceivables ?? 0;
-                state.initialBalanceSet = true;
+            const appCache = localStorage.getItem(getCacheKey(user.id));
+            if (appCache) {
+                const cachedData = JSON.parse(appCache);
+                state = { ...state, ...cachedData, initialBalanceSet: true };
             }
         }
     } catch (e) {
-        console.error("Could not parse settings from local storage", e);
+        console.error("Could not parse data from local storage", e);
     }
     return state;
+}
+
+const saveStateToLocalStorage = (state: AppState) => {
+    if (!state.user) return;
+    try {
+        const settingsToSave = {
+            fontSize: state.fontSize,
+            bodyFont: state.bodyFont,
+            numberFont: state.numberFont,
+            wastagePercentage: state.wastagePercentage,
+            currency: state.currency,
+            showStockValue: state.showStockValue,
+        };
+        localStorage.setItem('ha-mim-iron-mart-settings', JSON.stringify(settingsToSave));
+
+        const appStateToCache = {
+            cashBalance: state.cashBalance,
+            cashTransactions: state.cashTransactions,
+            bankBalance: state.bankBalance,
+            bankTransactions: state.bankTransactions,
+            stockItems: state.stockItems,
+            stockTransactions: state.stockTransactions,
+            cashCategories: state.cashCategories,
+            bankCategories: state.bankCategories,
+            vendors: state.vendors,
+            clients: state.clients,
+            ledgerTransactions: state.ledgerTransactions,
+            totalPayables: state.totalPayables,
+            totalReceivables: state.totalReceivables,
+        };
+        localStorage.setItem(getCacheKey(state.user.id), JSON.stringify(appStateToCache));
+
+    } catch (e) {
+        console.error("Could not save state to local storage", e);
+    }
 }
 
 
@@ -150,7 +182,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(async () => {
     if(state.user) {
-        localStorage.removeItem(`ha-mim-iron-mart-dashboard-${state.user.id}`);
+        localStorage.removeItem(getCacheKey(state.user.id));
     }
     await serverLogout();
     localStorage.removeItem('ha-mim-iron-mart-settings');
@@ -240,12 +272,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
   
   const reloadData = useCallback(async (options?: { force?: boolean }) => {
-    if (!state.user || (state.initialBalanceSet && !options?.force)) {
-      if(!state.user){
-        setState(prev => ({...prev, initialBalanceSet: true, needsInitialBalance: true}));
-      }
-      return;
-    }
+    if (!state.user) return;
 
     try {
       const [
@@ -310,34 +337,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
             totalPayables,
             totalReceivables,
         }));
-        
-        try {
-            const dashboardCache = {
-                cashBalance: finalCashBalance,
-                bankBalance: finalBankBalance,
-                stockItems: aggregatedStockItems,
-                totalPayables,
-                totalReceivables,
-            };
-            localStorage.setItem(`ha-mim-iron-mart-dashboard-${state.user?.id}`, JSON.stringify(dashboardCache));
-        } catch (e) {
-            console.error("Could not write to dashboard cache", e);
-        }
-
       } catch (error: any) {
         console.error("Failed to load data during promise resolution:", error);
         setState(prev => ({...prev, initialBalanceSet: true}));
         handleApiError(error);
       }
-  }, [state.user, state.initialBalanceSet, calculateBalancesAndStock, handleApiError]);
+  }, [state.user, calculateBalancesAndStock, handleApiError]);
   
   useEffect(() => {
     if (state.user && sessionChecked) {
-        reloadData();
+        reloadData({ force: !state.initialBalanceSet });
     } else if (sessionChecked) {
         setState(prev => ({...prev, initialBalanceSet: true, needsInitialBalance: !state.user}));
     }
-  }, [state.user, sessionChecked, reloadData]);
+  }, [state.user, sessionChecked, reloadData, state.initialBalanceSet]);
   
   const loadRecycleBinData = useCallback(async () => {
     if(!state.user) return;
@@ -367,17 +380,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const addCashTransaction = async (tx: Omit<CashTransaction, 'id' | 'createdAt' | 'deletedAt' | 'user_id'>) => {
     try {
       const newTx = await appendData({ tableName: 'cash_transactions', data: { ...tx }, select: '*' });
-      if (newTx) {
-          setState(prev => {
-              const newTxs = [newTx, ...prev.cashTransactions].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-              const newBalance = prev.cashBalance + (newTx.type === 'income' ? newTx.amount : -newTx.amount);
-              return {
-                  ...prev,
-                  cashTransactions: newTxs,
-                  cashBalance: newBalance,
-              }
-          })
-      }
+      reloadData({ force: true });
       return newTx;
     } catch (error) {
       handleApiError(error);
@@ -387,17 +390,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const addBankTransaction = async (tx: Omit<BankTransaction, 'id' | 'createdAt' | 'deletedAt' | 'user_id'>) => {
     try {
         const newTx = await appendData({ tableName: 'bank_transactions', data: { ...tx }, select: '*' });
-        if (newTx) {
-            setState(prev => {
-                const newTxs = [newTx, ...prev.bankTransactions].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-                const newBalance = prev.bankBalance + (newTx.type === 'deposit' ? newTx.amount : -newTx.amount);
-                return {
-                    ...prev,
-                    bankTransactions: newTxs,
-                    bankBalance: newBalance,
-                }
-            })
-        }
+        reloadData({ force: true });
         return newTx;
     } catch (error) {
         handleApiError(error);
@@ -444,7 +437,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
       
       toast({ title: "Success", description: "Stock transaction recorded."});
-      reloadData({ force: true });
+      // No reload here, the sub-functions will trigger it
       return newStockTx;
     } catch (error: any) {
       handleApiError(error)
@@ -598,12 +591,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         let cashTx, bankTx;
         if(from === 'cash') {
             await addCashTransaction({ ...baseTx, type: 'expense' });
-            await addBankTransaction({ ...baseTx, type: 'deposit' });
         } else {
             await addBankTransaction({ ...baseTx, type: 'withdrawal' });
-            await addCashTransaction({ ...baseTx, type: 'income' });
         }
-        toast({ title: "Success", description: "Fund transfer completed."});
         
      } catch (error) {
         handleApiError(error);
@@ -618,11 +608,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       const newCategory = await appendData({ tableName: 'categories', data: { name: category, type } });
       if (newCategory) {
-          setState(prev => ({
-              ...prev,
-              cashCategories: type === 'cash' ? [...prev.cashCategories, category] : prev.cashCategories,
-              bankCategories: type === 'bank' ? [...prev.bankCategories, category] : prev.bankCategories,
-          }))
+          reloadData({ force: true });
           toast({ title: "Success", description: "Category added." });
       }
     } catch (error) {
@@ -740,7 +726,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         toast({ variant: 'destructive', title: 'Setup Incomplete', description: "Could not save to the 'vendors' table. Please ensure it exists in your database and RLS is configured." });
         return null;
       }
-      setState(prev => ({...prev, vendors: [...prev.vendors, newVendor]}));
+      reloadData({ force: true });
       toast({ title: 'Vendor Added' });
       return newVendor;
     } catch (error: any) {
@@ -773,7 +759,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         });
         return null;
       }
-      setState(prev => ({...prev, clients: [...prev.clients, newClient]}));
+      reloadData({ force: true });
       toast({ title: 'Client Added' });
       return newClient;
     } catch (error: any) {
@@ -834,26 +820,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
          throw error;
     }
   }
-
-  const saveSettings = () => {
-      try {
-        const settingsToSave = {
-            fontSize: state.fontSize,
-            bodyFont: state.bodyFont,
-            numberFont: state.numberFont,
-            wastagePercentage: state.wastagePercentage,
-            currency: state.currency,
-            showStockValue: state.showStockValue,
-        }
-        localStorage.setItem('ha-mim-iron-mart-settings', JSON.stringify(settingsToSave));
-      } catch (e) {
-          console.error("Could not save settings to local storage", e);
-      }
-  }
   
   useEffect(() => {
-    saveSettings();
-  }, [state.fontSize, state.bodyFont, state.numberFont, state.wastagePercentage, state.currency, state.showStockValue])
+    saveStateToLocalStorage(state);
+  }, [state])
 
   if (!sessionChecked) {
     return <AppLoading />;
