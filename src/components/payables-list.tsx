@@ -29,12 +29,6 @@ export function PayablesList() {
         setSettleDialogState({ isOpen: true, transaction: tx });
     }
     
-    const getVendorName = (contactId: string): string => {
-        const vendor = vendors.find(v => v.id === contactId);
-        return vendor ? vendor.name : 'N/A';
-    }
-
-
     return (
         <>
             <div className="overflow-x-auto">
@@ -53,7 +47,7 @@ export function PayablesList() {
                             payables.map(tx => (
                                 <TableRow key={tx.id}>
                                     <TableCell className="font-mono">{format(new Date(tx.date), 'dd-MM-yy')}</TableCell>
-                                    <TableCell className="font-medium">{getVendorName(tx.contact_id)}</TableCell>
+                                    <TableCell className="font-medium">{tx.contact_name}</TableCell>
                                     <TableCell>{tx.description}</TableCell>
                                     <TableCell className="text-right font-mono font-semibold">{formatCurrency(tx.amount)}</TableCell>
                                     <TableCell className="text-center">
@@ -82,3 +76,5 @@ export function PayablesList() {
         </>
     )
 }
+
+    

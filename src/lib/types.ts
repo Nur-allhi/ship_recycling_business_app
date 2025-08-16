@@ -71,11 +71,13 @@ export interface LedgerTransaction {
   description: string;
   amount: number;
   status: 'unpaid' | 'paid';
+  contact_name: string;
   dueDate?: string;
   paidDate?: string;
   paidFrom?: 'cash' | 'bank';
   deletedAt?: string;
   createdAt: string;
   user_id?: string;
-  contact_id: string;
 }
+
+    

@@ -29,11 +29,6 @@ export function ReceivablesList() {
         setSettleDialogState({ isOpen: true, transaction: tx });
     }
     
-    const getClientName = (contactId: string): string => {
-        const client = clients.find(c => c.id === contactId);
-        return client ? client.name : 'N/A';
-    }
-
     return (
         <>
             <div className="overflow-x-auto">
@@ -52,7 +47,7 @@ export function ReceivablesList() {
                             receivables.map(tx => (
                                 <TableRow key={tx.id}>
                                     <TableCell className="font-mono">{format(new Date(tx.date), 'dd-MM-yy')}</TableCell>
-                                    <TableCell className="font-medium">{getClientName(tx.contact_id)}</TableCell>
+                                    <TableCell className="font-medium">{tx.contact_name}</TableCell>
                                     <TableCell>{tx.description}</TableCell>
                                     <TableCell className="text-right font-mono font-semibold">{formatCurrency(tx.amount)}</TableCell>
                                     <TableCell className="text-center">
@@ -81,3 +76,5 @@ export function ReceivablesList() {
         </>
     )
 }
+
+    

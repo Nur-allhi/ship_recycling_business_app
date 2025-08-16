@@ -333,12 +333,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (tx.paymentMethod === 'credit' && contact_id) {
           const ledgerType = tx.type === 'purchase' ? 'payable' : 'receivable';
           const description = `${tx.type === 'purchase' ? 'Purchase' : 'Sale'} of ${tx.weight}kg of ${tx.stockItemName} on credit`;
+          
+          let contactName = '';
+          if (ledgerType === 'payable') {
+              const vendor = state.vendors.find(v => v.id === contact_id);
+              if (vendor) contactName = vendor.name;
+          } else {
+              const client = state.clients.find(c => c.id === contact_id);
+              if (client) contactName = client.name;
+          }
+
+          if (!contactName) throw new Error("Could not find contact name for credit transaction.");
+
           await addLedgerTransaction({
               type: ledgerType,
               description,
               amount: totalValue,
               date: tx.date,
-              contact_id,
+              contact_name: contactName,
           });
       } else {
           const description = `${tx.type === 'purchase' ? 'Purchase' : 'Sale'} of ${tx.weight}kg of ${tx.stockItemName}`;
@@ -878,3 +890,5 @@ export function AppLoading() {
         </div>
     );
 }
+
+    

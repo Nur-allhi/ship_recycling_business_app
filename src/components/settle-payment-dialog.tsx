@@ -38,7 +38,7 @@ interface SettlePaymentDialogProps {
 }
 
 export function SettlePaymentDialog({ isOpen, setIsOpen, transaction }: SettlePaymentDialogProps) {
-    const { settleLedgerTransaction, currency, vendors, clients } = useAppContext();
+    const { settleLedgerTransaction, currency } = useAppContext();
     const { toast } = useToast();
     
     const { control, handleSubmit, formState: { errors, isSubmitting } } = useForm<FormData>({
@@ -53,12 +53,6 @@ export function SettlePaymentDialog({ isOpen, setIsOpen, transaction }: SettlePa
             return `৳${new Intl.NumberFormat('en-US').format(amount)}`;
         }
         return new Intl.NumberFormat('en-US', { style: 'currency', currency: currency, currencyDisplay: 'symbol' }).format(amount)
-    }
-
-    const getContactName = (tx: LedgerTransaction) => {
-        const contactList = tx.type === 'payable' ? vendors : clients;
-        const contact = contactList.find(c => c.id === tx.contact_id);
-        return contact ? contact.name : 'N/A';
     }
 
     const onSubmit = async (data: FormData) => {
@@ -83,7 +77,7 @@ export function SettlePaymentDialog({ isOpen, setIsOpen, transaction }: SettlePa
                 <div className="space-y-4 py-2 text-sm">
                     <div className="flex justify-between">
                         <span className="text-muted-foreground">Contact:</span>
-                        <span className="font-medium">{getContactName(transaction)}</span>
+                        <span className="font-medium">{transaction.contact_name}</span>
                     </div>
                     <div className="flex justify-between">
                         <span className="text-muted-foreground">Description:</span>
@@ -147,3 +141,5 @@ export function SettlePaymentDialog({ isOpen, setIsOpen, transaction }: SettlePa
         </Dialog>
     )
 }
+
+    
