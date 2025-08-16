@@ -30,8 +30,6 @@ interface AppState {
   cashCategories: string[];
   bankCategories: string[];
   fontSize: FontSize;
-  bodyFont: string;
-  numberFont: string;
   initialBalanceSet: boolean;
   needsInitialBalance: boolean;
   wastagePercentage: number;
@@ -67,8 +65,6 @@ interface AppContextType extends AppState {
   addCategory: (type: 'cash' | 'bank', category: string) => void;
   deleteCategory: (type: 'cash' | 'bank', category: string) => void;
   setFontSize: (size: FontSize) => void;
-  setBodyFont: (font: string) => void;
-  setNumberFont: (font: string) => void;
   setWastagePercentage: (percentage: number) => void;
   setCurrency: (currency: string) => void;
   setShowStockValue: (show: boolean) => void;
@@ -100,8 +96,6 @@ const initialAppState: AppState = {
   cashCategories: ['Salary', 'Groceries', 'Transport', 'Utilities', 'Stock Purchase', 'Stock Sale'],
   bankCategories: ['Deposit', 'Withdrawal', 'Stock Purchase', 'Stock Sale'],
   fontSize: 'base',
-  bodyFont: "'Roboto Slab', serif",
-  numberFont: "'Roboto Mono', monospace",
   initialBalanceSet: false,
   needsInitialBalance: false,
   wastagePercentage: 0,
@@ -144,8 +138,6 @@ const saveStateToLocalStorage = (state: AppState) => {
     try {
         const settingsToSave = {
             fontSize: state.fontSize,
-            bodyFont: state.bodyFont,
-            numberFont: state.numberFont,
             wastagePercentage: state.wastagePercentage,
             currency: state.currency,
             showStockValue: state.showStockValue,
@@ -1062,8 +1054,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
         addCategory,
         deleteCategory,
         setFontSize: (size) => setState(prev => ({ ...prev, fontSize: size })),
-        setBodyFont: (font) => setState(prev => ({...prev, bodyFont: font })),
-        setNumberFont: (font) => setState(prev => ({...prev, numberFont: font })),
         setWastagePercentage: (p) => setState(prev => ({ ...prev, wastagePercentage: p })),
         setCurrency: (c) => setState(prev => ({ ...prev, currency: c })),
         setShowStockValue: (s) => setState(prev => ({ ...prev, showStockValue: s })),

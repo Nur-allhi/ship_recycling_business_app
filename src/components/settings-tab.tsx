@@ -17,25 +17,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { RecycleBinTab } from "./recycle-bin-tab"
 import { ExportImportTab } from "./export-import-tab"
 import { ContactsTab } from "./contacts-tab"
-import { UserManagementTab } from "./user-management-tab"
-
-const bodyFontOptions = [
-    { name: "Inter", value: "Inter, sans-serif" },
-    { name: "Roboto", value: "Roboto, sans-serif" },
-    { name: "Lato", value: "Lato, sans-serif" },
-    { name: "Open Sans", value: "'Open Sans', sans-serif" },
-    { name: "Roboto Slab", value: "'Roboto Slab', serif" },
-    { name: "Merriweather", value: "Merriweather, serif" },
-    { name: "Playfair Display", value: "'Playfair Display', serif" },
-];
-
-const numberFontOptions = [
-    { name: "Roboto Mono", value: "'Roboto Mono', monospace" },
-    { name: "Source Code Pro", value: "'Source Code Pro', monospace" },
-    { name: "Fira Code", value: "'Fira Code', monospace" },
-    { name: "Inter", value: "Inter, sans-serif" },
-    { name: "Open Sans", value: "'Open Sans', sans-serif" },
-];
 
 export function SettingsTab() {
   const {
@@ -44,10 +25,6 @@ export function SettingsTab() {
     addInitialStockItem,
     fontSize,
     setFontSize,
-    bodyFont,
-    setBodyFont,
-    numberFont,
-    setNumberFont,
     cashCategories,
     bankCategories,
     addCategory,
@@ -136,14 +113,6 @@ export function SettingsTab() {
   const handleCurrencyChange = (value: string) => {
     setCurrency(value);
     toast({ title: "Currency Updated", description: `Set to ${value}.` });
-  }
-
-  const handleBodyFontChange = (value: string) => {
-    setBodyFont(value);
-  }
-
-  const handleNumberFontChange = (value: string) => {
-    setNumberFont(value);
   }
 
   return (
@@ -291,39 +260,6 @@ export function SettingsTab() {
                         <SelectItem value="BDT">BDT (৳)</SelectItem>
                     </SelectContent>
                 </Select>
-              </div>
-              <Separator />
-               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                      <Label>Body Text Font</Label>
-                       <Select value={bodyFont} onValueChange={handleBodyFontChange}>
-                          <SelectTrigger>
-                              <SelectValue placeholder="Select font" />
-                          </SelectTrigger>
-                          <SelectContent>
-                              {bodyFontOptions.map(font => (
-                                  <SelectItem key={font.name} value={font.value} style={{fontFamily: font.value}}>
-                                      {font.name}
-                                  </SelectItem>
-                              ))}
-                          </SelectContent>
-                      </Select>
-                  </div>
-                   <div className="space-y-2">
-                      <Label>Number Font</Label>
-                       <Select value={numberFont} onValueChange={handleNumberFontChange}>
-                          <SelectTrigger>
-                              <SelectValue placeholder="Select font" />
-                          </SelectTrigger>
-                          <SelectContent>
-                              {numberFontOptions.map(font => (
-                                  <SelectItem key={font.name} value={font.value} style={{fontFamily: font.value}}>
-                                      {font.name}
-                                  </SelectItem>
-                              ))}
-                          </SelectContent>
-                      </Select>
-                  </div>
               </div>
               <Separator />
               <div>

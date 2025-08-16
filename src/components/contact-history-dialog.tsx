@@ -20,7 +20,6 @@ import { FileText, ArrowRight } from "lucide-react";
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import { useToast } from "@/hooks/use-toast";
-import { robotoSlabBase64 } from "@/lib/fonts";
 
 interface ContactHistoryDialogProps {
   isOpen: boolean;
@@ -83,11 +82,7 @@ export function ContactHistoryDialog({ isOpen, setIsOpen, contact, contactType }
   
   const handleExportPdf = () => {
     const doc = new jsPDF();
-
-    // Add the font to jsPDF
-    doc.addFileToVFS('RobotoSlab-Regular.ttf', robotoSlabBase64);
-    doc.addFont('RobotoSlab-Regular.ttf', 'RobotoSlab', 'normal');
-    doc.setFont('RobotoSlab');
+    doc.setFont('Helvetica', 'normal');
 
     const pageMargins = { top: 20, right: 15, bottom: 20, left: 15 };
     const centerX = doc.internal.pageSize.getWidth() / 2;
@@ -142,7 +137,7 @@ export function ContactHistoryDialog({ isOpen, setIsOpen, contact, contactType }
         foot: footerData,
         theme: 'grid',
         styles: {
-            font: 'RobotoSlab',
+            font: 'Helvetica',
             fontSize: 9,
         },
         headStyles: { fillColor: [34, 49, 63], textColor: 255, fontStyle: 'bold', halign: 'center' },
@@ -152,10 +147,10 @@ export function ContactHistoryDialog({ isOpen, setIsOpen, contact, contactType }
             fontStyle: 'bold',
         },
         columnStyles: {
-            0: { halign: 'center' },
-            2: { halign: 'right' },
-            3: { halign: 'right' },
-            4: { halign: 'right', fontStyle: 'bold' },
+            0: { halign: 'center', font: 'Courier'},
+            2: { halign: 'right', font: 'Courier' },
+            3: { halign: 'right', font: 'Courier' },
+            4: { halign: 'right', font: 'Courier', fontStyle: 'bold' },
         },
         didParseCell: function(data) {
             // Center align the footer labels
@@ -287,4 +282,3 @@ export function ContactHistoryDialog({ isOpen, setIsOpen, contact, contactType }
     </Dialog>
   );
 }
-

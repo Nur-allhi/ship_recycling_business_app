@@ -23,7 +23,6 @@ import { cn } from '@/lib/utils';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import type { CashTransaction, BankTransaction, StockTransaction } from '@/lib/types';
-import { robotoSlabBase64 } from '@/lib/fonts';
 
 
 interface PdfExportDialogProps {
@@ -60,12 +59,8 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
     }
 
     const doc = new jsPDF();
+    doc.setFont('Helvetica', 'normal');
     
-    // Add the font to jsPDF
-    doc.addFileToVFS('RobotoSlab-Regular.ttf', robotoSlabBase64);
-    doc.addFont('RobotoSlab-Regular.ttf', 'RobotoSlab', 'normal');
-    doc.setFont('RobotoSlab');
-
     const pageMargins = { left: 15, right: 15, top: 20, bottom: 20 };
     let tableData: any[] = [];
     let tableHeaders: any[] = [];
@@ -171,9 +166,10 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
         });
 
         columnStyles = { 
-            3: { halign: 'right' },
-            4: { halign: 'right' },
-            5: { halign: 'right', fontStyle: 'bold' },
+            0: { font: 'Courier' },
+            3: { halign: 'right', font: 'Courier' },
+            4: { halign: 'right', font: 'Courier' },
+            5: { halign: 'right', fontStyle: 'bold', font: 'Courier' },
         };
 
     } else { // Stock
@@ -230,10 +226,11 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
             ];
         });
         columnStyles = { 
-            3: { halign: 'right' },
-            4: { halign: 'right' },
-            5: { halign: 'right' },
-            6: { halign: 'right', fontStyle: 'bold' },
+            0: { font: 'Courier' },
+            3: { halign: 'right', font: 'Courier' },
+            4: { halign: 'right', font: 'Courier' },
+            5: { halign: 'right', font: 'Courier' },
+            6: { halign: 'right', fontStyle: 'bold', font: 'Courier' },
         };
     }
 
@@ -243,7 +240,7 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
         body: tableData,
         theme: 'grid',
         styles: {
-            font: 'RobotoSlab',
+            font: 'Helvetica',
             fontSize: 9,
         },
         headStyles: {
