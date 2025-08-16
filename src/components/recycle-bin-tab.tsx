@@ -156,7 +156,6 @@ export function RecycleBinTab() {
                                 <TableHeader>
                                     <TableRow>
                                         <TableHead>Deleted On</TableHead>
-                                        <TableHead>Contact</TableHead>
                                         <TableHead>Description</TableHead>
                                         <TableHead>Amount</TableHead>
                                         <TableHead className="text-right">Actions</TableHead>
@@ -166,7 +165,6 @@ export function RecycleBinTab() {
                                     {deletedLedgerTransactions.length > 0 ? deletedLedgerTransactions.map(tx => (
                                         <TableRow key={tx.id}>
                                             <TableCell>{tx.deletedAt ? format(new Date(tx.deletedAt), "dd-MM-yyyy") : 'N/A'}</TableCell>
-                                            <TableCell>{tx.contact}</TableCell>
                                             <TableCell>{tx.description}</TableCell>
                                             <TableCell className={tx.type === 'receivable' ? 'text-accent' : 'text-destructive'}>{formatCurrency(tx.amount)}</TableCell>
                                             <TableCell className="text-right">
@@ -175,7 +173,7 @@ export function RecycleBinTab() {
                                                 </Button>
                                             </TableCell>
                                         </TableRow>
-                                    )) : <TableRow><TableCell colSpan={5} className="text-center h-24">No deleted A/R or A/P transactions.</TableCell></TableRow>}
+                                    )) : <TableRow><TableCell colSpan={4} className="text-center h-24">No deleted A/R or A/P transactions.</TableCell></TableRow>}
                                 </TableBody>
                             </Table>
                         </div>

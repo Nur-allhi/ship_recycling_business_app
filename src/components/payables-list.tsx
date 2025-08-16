@@ -3,7 +3,7 @@
 
 import { useState } from "react";
 import { useAppContext } from "@/app/store";
-import { LedgerTransaction } from "@/lib/types";
+import { LedgerTransaction, Vendor } from "@/lib/types";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
@@ -13,7 +13,7 @@ import { SettlePaymentDialog } from "./settle-payment-dialog";
 
 
 export function PayablesList() {
-    const { ledgerTransactions, currency } = useAppContext();
+    const { ledgerTransactions, currency, vendors } = useAppContext();
     const [settleDialogState, setSettleDialogState] = useState<{isOpen: boolean, transaction: LedgerTransaction | null}>({isOpen: false, transaction: null});
 
     const payables = ledgerTransactions.filter(tx => tx.type === 'payable' && tx.status === 'unpaid');
@@ -28,6 +28,12 @@ export function PayablesList() {
     const handleSettleClick = (tx: LedgerTransaction) => {
         setSettleDialogState({ isOpen: true, transaction: tx });
     }
+    
+    const getVendorName = (contactId: string): string => {
+        const vendor = vendors.find(v => v.id === contactId);
+        return vendor ? vendor.name : 'N/A';
+    }
+
 
     return (
         <>
@@ -47,7 +53,7 @@ export function PayablesList() {
                             payables.map(tx => (
                                 <TableRow key={tx.id}>
                                     <TableCell className="font-mono">{format(new Date(tx.date), 'dd-MM-yy')}</TableCell>
-                                    <TableCell className="font-medium">{tx.additional_info?.contact || 'N/A'}</TableCell>
+                                    <TableCell className="font-medium">{getVendorName(tx.contact_id)}</TableCell>
                                     <TableCell>{tx.description}</TableCell>
                                     <TableCell className="text-right font-mono font-semibold">{formatCurrency(tx.amount)}</TableCell>
                                     <TableCell className="text-center">

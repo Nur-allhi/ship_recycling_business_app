@@ -77,8 +77,6 @@ export interface LedgerTransaction {
   deletedAt?: string;
   createdAt: string;
   user_id?: string;
-  additional_info?: {
-    contact?: string;
-    linkedStockTxId?: string;
-  };
+  contact_id: string;
+  linkedStockTxId?: string;
 }

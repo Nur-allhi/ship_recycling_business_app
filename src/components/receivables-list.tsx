@@ -13,7 +13,7 @@ import { SettlePaymentDialog } from "./settle-payment-dialog";
 
 
 export function ReceivablesList() {
-    const { ledgerTransactions, currency } = useAppContext();
+    const { ledgerTransactions, currency, clients } = useAppContext();
     const [settleDialogState, setSettleDialogState] = useState<{isOpen: boolean, transaction: LedgerTransaction | null}>({isOpen: false, transaction: null});
 
     const receivables = ledgerTransactions.filter(tx => tx.type === 'receivable' && tx.status === 'unpaid');
@@ -27,6 +27,11 @@ export function ReceivablesList() {
 
     const handleSettleClick = (tx: LedgerTransaction) => {
         setSettleDialogState({ isOpen: true, transaction: tx });
+    }
+    
+    const getClientName = (contactId: string): string => {
+        const client = clients.find(c => c.id === contactId);
+        return client ? client.name : 'N/A';
     }
 
     return (
@@ -47,7 +52,7 @@ export function ReceivablesList() {
                             receivables.map(tx => (
                                 <TableRow key={tx.id}>
                                     <TableCell className="font-mono">{format(new Date(tx.date), 'dd-MM-yy')}</TableCell>
-                                    <TableCell className="font-medium">{tx.additional_info?.contact || 'N/A'}</TableCell>
+                                    <TableCell className="font-medium">{getClientName(tx.contact_id)}</TableCell>
                                     <TableCell>{tx.description}</TableCell>
                                     <TableCell className="text-right font-mono font-semibold">{formatCurrency(tx.amount)}</TableCell>
                                     <TableCell className="text-center">

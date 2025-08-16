@@ -50,7 +50,7 @@ interface AppContextType extends AppState {
   loadRecycleBinData: () => Promise<void>;
   addCashTransaction: (tx: Omit<CashTransaction, 'id' | 'createdAt' | 'deletedAt' | 'user_id'>) => void;
   addBankTransaction: (tx: Omit<BankTransaction, 'id' | 'createdAt' | 'deletedAt' | 'user_id'>) => void;
-  addStockTransaction: (tx: Omit<StockTransaction, 'id' | 'createdAt' | 'deletedAt' | 'user_id'> & { contact?: string; }) => void;
+  addStockTransaction: (tx: Omit<StockTransaction, 'id' | 'createdAt' | 'deletedAt' | 'user_id'> & { contact_id?: string; }) => void;
   editCashTransaction: (originalTx: CashTransaction, updatedTxData: Partial<Omit<CashTransaction, 'id' | 'date'>>) => void;
   editBankTransaction: (originalTx: BankTransaction, updatedTxData: Partial<Omit<BankTransaction, 'id' | 'date'>>) => void;
   editStockTransaction: (originalTx: StockTransaction, updatedTxData: Partial<Omit<StockTransaction, 'id' | 'date'>>) => void;
@@ -320,9 +320,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
   
-  const addStockTransaction = async (tx: Omit<StockTransaction, 'id' | 'createdAt' | 'deletedAt' | 'user_id'> & { contact?: string }) => {
+  const addStockTransaction = async (tx: Omit<StockTransaction, 'id' | 'createdAt' | 'deletedAt' | 'user_id'> & { contact_id?: string }) => {
     try {
-      const { contact, ...stockTxData } = tx;
+      const { contact_id, ...stockTxData } = tx;
 
       const result = await appendData({ tableName: 'stock_transactions', data: { ...stockTxData } });
       if (!result) throw new Error("Stock transaction creation failed. The 'stock_transactions' table may not exist.");
@@ -330,7 +330,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       
       const totalValue = tx.weight * tx.pricePerKg;
 
-      if (tx.paymentMethod === 'credit') {
+      if (tx.paymentMethod === 'credit' && contact_id) {
           const ledgerType = tx.type === 'purchase' ? 'payable' : 'receivable';
           const description = `${tx.type === 'purchase' ? 'Purchase' : 'Sale'} of ${tx.weight}kg of ${tx.stockItemName} on credit`;
           await addLedgerTransaction({
@@ -338,10 +338,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
               description,
               amount: totalValue,
               date: tx.date,
-              additional_info: {
-                contact: contact,
-                linkedStockTxId: newStockTx.id,
-              }
+              contact_id,
+              linkedStockTxId: newStockTx.id,
           });
       } else {
           const description = `${tx.type === 'purchase' ? 'Purchase' : 'Sale'} of ${tx.weight}kg of ${tx.stockItemName}`;
@@ -356,7 +354,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
           if (tx.paymentMethod === 'cash') {
               await appendData({ tableName: 'cash_transactions', data: { ...financialTxData, type: tx.type === 'purchase' ? 'expense' : 'income' }});
-          } else { 
+          } else if (tx.paymentMethod === 'bank') { 
               await appendData({ tableName: 'bank_transactions', data: { ...financialTxData, type: tx.type === 'purchase' ? 'withdrawal' : 'deposit' }});
           }
       }
