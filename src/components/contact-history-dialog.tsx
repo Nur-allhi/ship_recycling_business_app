@@ -77,7 +77,7 @@ export function ContactHistoryDialog({ isOpen, setIsOpen, contact, contactType }
   const formatCurrencyForPdf = (amount: number) => {
     if (amount === 0) return '-';
     const prefix = currency === 'BDT' ? '৳' : currency === 'USD' ? '$' : currency === 'EUR' ? '€' : currency === 'GBP' ? '£' : currency === 'JPY' ? '¥' : currency === 'INR' ? '₹' : '';
-    return `${prefix} ${amount.toFixed(2)}`;
+    return `${prefix} ${amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
   
   const handleExportPdf = () => {
