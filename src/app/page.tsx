@@ -29,7 +29,7 @@ const navItems = [
     { value: 'dashboard', label: 'Dashboard', icon: Wallet },
     { value: 'cash', label: 'Cash', icon: Wallet },
     { value: 'bank', label: 'Bank', icon: Landmark },
-    // { value: 'credit', label: 'Credit', icon: CreditCard },
+    { value: 'credit', label: 'A/R & A/P', icon: CreditCard },
     { value: 'stock', label: 'Stock', icon: Boxes },
     { value: 'settings', label: 'Settings', icon: Settings },
 ]
@@ -140,7 +140,7 @@ function ShipShapeLedger() {
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
              {!isMobile && (
                 <div className="overflow-x-auto pb-2">
-                    <TabsList className="grid w-full grid-cols-5 min-w-[700px]">
+                    <TabsList className="grid w-full grid-cols-6 min-w-[700px]">
                         {navItems.map(item => {
                             const Icon = item.icon;
                             return (
@@ -162,9 +162,9 @@ function ShipShapeLedger() {
             <TabsContent value="bank" className="mt-6 animate-slide-in-up">
               <BankTab />
             </TabsContent>
-            {/* <TabsContent value="credit" className="mt-6 animate-slide-in-up">
+            <TabsContent value="credit" className="mt-6 animate-slide-in-up">
               <CreditTab />
-            </TabsContent> */}
+            </TabsContent>
             <TabsContent value="stock" className="mt-6 animate-slide-in-up">
               <StockTab />
             </TabsContent>
