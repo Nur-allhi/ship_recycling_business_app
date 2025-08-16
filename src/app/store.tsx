@@ -675,7 +675,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return null;
     }
     try {
-      const result = await appendData({ tableName: 'vendors', data: { name, user_id: state.user.id } });
+      const result = await appendData({ tableName: 'vendors', data: { name } });
       if (!result) {
         toast({ variant: 'destructive', title: 'Setup Incomplete', description: "Could not save to the 'vendors' table. Please ensure it exists in your database and RLS is configured." });
         return null;
@@ -701,10 +701,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return null;
     }
     try {
-      // Correctly include the user_id in the data payload
       const result = await appendData({
         tableName: 'clients',
-        data: { name, user_id: state.user.id },
+        data: { name },
       });
       if (!result) {
         toast({
@@ -856,5 +855,3 @@ export function AppLoading() {
         </div>
     );
 }
-
-    

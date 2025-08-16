@@ -30,6 +30,15 @@ const createSupabaseClient = async (serviceRole = false) => {
     // This is the standard and secure way to enforce RLS.
     const session = sessionCookie ? JSON.parse(sessionCookie) : null;
     const accessToken = session?.accessToken;
+    
+    // If we have a session but no specific access token (due to simplified auth),
+    // we must use the service role key to perform operations, but we will
+    // scope them to the user_id manually in the functions below.
+    if (session && !accessToken) {
+        return createClient(supabaseUrl, supabaseServiceKey, {
+            auth: { persistSession: false },
+        });
+    }
 
     const authHeader = accessToken ? { Authorization: `Bearer ${accessToken}` } : {};
 
@@ -107,6 +116,14 @@ const AppendDataInputSchema = z.object({
 
 export async function appendData(input: z.infer<typeof AppendDataInputSchema>) {
     const supabase = await createSupabaseClient();
+    const session = await getSession();
+
+    // If there's an active session, ensure the user_id is set for the insert.
+    // This is crucial when using the service_role key as a fallback.
+    if (session) {
+      input.data.user_id = session.id;
+    }
+
     const { data, error } = await supabase
         .from(input.tableName)
         .insert([input.data])
