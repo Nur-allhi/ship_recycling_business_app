@@ -82,10 +82,10 @@ export function DashboardTab({ setActiveTab }: DashboardTabProps) {
             ) : (
                 <div className="text-2xl font-bold font-mono">{totalStockWeight.toFixed(2)} kg</div>
             )}
-            <p className="text-xs text-muted-foreground">
+            <div className="text-xs text-muted-foreground">
               Total Value: 
               {isLoading ? <Skeleton className="h-4 w-1/2 inline-block" /> : <span className="font-mono"> {formatCurrency(totalStockValue)}</span>}
-            </p>
+            </div>
           </CardContent>
         </Card>
       </div>
