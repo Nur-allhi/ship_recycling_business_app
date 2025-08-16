@@ -43,14 +43,15 @@ interface AppState {
   ledgerTransactions: LedgerTransaction[];
   totalPayables: number;
   totalReceivables: number;
+  isLoading: boolean;
 }
 
 interface AppContextType extends AppState {
   reloadData: (options?: { force?: boolean }) => Promise<void>;
   loadRecycleBinData: () => Promise<void>;
-  addCashTransaction: (tx: Omit<CashTransaction, 'id' | 'createdAt' | 'deletedAt'>) => Promise<any>;
-  addBankTransaction: (tx: Omit<BankTransaction, 'id' | 'createdAt' | 'deletedAt'>) => Promise<any>;
-  addStockTransaction: (tx: Omit<StockTransaction, 'id' | 'createdAt' | 'deletedAt'> & { contact_id?: string, contact_name?: string }) => Promise<any>;
+  addCashTransaction: (tx: Omit<CashTransaction, 'id' | 'createdAt' | 'deletedAt'>) => Promise<void>;
+  addBankTransaction: (tx: Omit<BankTransaction, 'id' | 'createdAt' | 'deletedAt'>) => Promise<void>;
+  addStockTransaction: (tx: Omit<StockTransaction, 'id' | 'createdAt' | 'deletedAt'> & { contact_id?: string, contact_name?: string }) => Promise<void>;
   editCashTransaction: (originalTx: CashTransaction, updatedTxData: Partial<Omit<CashTransaction, 'id' | 'date'>>) => void;
   editBankTransaction: (originalTx: BankTransaction, updatedTxData: Partial<Omit<BankTransaction, 'id' | 'date'>>) => void;
   editStockTransaction: (originalTx: StockTransaction, updatedTxData: Partial<Omit<StockTransaction, 'id' | 'date'>>) => void;
@@ -60,9 +61,9 @@ interface AppContextType extends AppState {
   deleteMultipleCashTransactions: (txs: CashTransaction[]) => void;
   deleteMultipleBankTransactions: (txs: BankTransaction[]) => void;
   deleteMultipleStockTransactions: (txs: StockTransaction[]) => void;
-  deleteLedgerTransaction: (tx: LedgerTransaction) => Promise<any>;
+  deleteLedgerTransaction: (tx: LedgerTransaction) => void;
   restoreTransaction: (txType: 'cash' | 'bank' | 'stock' | 'ap_ar', id: string) => void;
-  transferFunds: (from: 'cash' | 'bank', amount: number, date?: string) => void;
+  transferFunds: (from: 'cash' | 'bank', amount: number, date?: string) => Promise<void>;
   addCategory: (type: 'cash' | 'bank', category: string) => void;
   deleteCategory: (type: 'cash' | 'bank', category: string) => void;
   setFontSize: (size: FontSize) => void;
@@ -79,7 +80,7 @@ interface AppContextType extends AppState {
   logout: () => void;
   addVendor: (name: string) => Promise<any>;
   addClient: (name: string) => Promise<any>;
-  addLedgerTransaction: (tx: Omit<LedgerTransaction, 'id' | 'createdAt' | 'deletedAt' | 'user_id' | 'status' | 'paid_amount' | 'installments'>) => Promise<any>;
+  addLedgerTransaction: (tx: Omit<LedgerTransaction, 'id' | 'createdAt' | 'deletedAt' | 'user_id' | 'status' | 'paid_amount' | 'installments'>) => Promise<void>;
   recordInstallment: (tx: LedgerTransaction, paymentAmount: number, paymentMethod: 'cash' | 'bank', paymentDate: Date) => Promise<any>;
 }
 
@@ -112,12 +113,13 @@ const initialAppState: AppState = {
   ledgerTransactions: [],
   totalPayables: 0,
   totalReceivables: 0,
+  isLoading: true,
 };
 
 const getCacheKey = () => `ha-mim-iron-mart-cache`;
 
 const getInitialState = (): AppState => {
-    let state = { ...initialAppState, initialBalanceSet: false };
+    let state = { ...initialAppState, initialBalanceSet: false, isLoading: true };
     if (typeof window === 'undefined') return state;
     try {
         const storedSettings = localStorage.getItem('ha-mim-iron-mart-settings');
@@ -129,7 +131,7 @@ const getInitialState = (): AppState => {
         const appCache = localStorage.getItem(getCacheKey());
         if (appCache) {
             const cachedData = JSON.parse(appCache);
-            state = { ...state, ...cachedData, initialBalanceSet: true };
+            state = { ...state, ...cachedData, initialBalanceSet: true, isLoading: false };
         }
     } catch (e) {
         console.error("Could not parse data from local storage", e);
@@ -175,7 +177,6 @@ const saveStateToLocalStorage = (state: AppState) => {
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AppState>(getInitialState());
-  const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
   const router = useRouter();
   const pathname = usePathname();
@@ -184,7 +185,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem(getCacheKey());
     await serverLogout();
     localStorage.removeItem('ha-mim-iron-mart-settings');
-    setState({...initialAppState, user: null});
+    setState({...initialAppState, user: null, isLoading: false});
     window.location.href = '/login';
   }, []);
 
@@ -218,10 +219,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       } catch (error) {
         console.error("Failed to get session", error);
       } finally {
-        setIsLoading(false);
+        // Only set loading to false after checking session, not in getInitialState
+        setState(prev => ({ ...prev, isLoading: false }));
       }
     };
     checkSessionAndLoadData();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   
   const calculateBalancesAndStock = useCallback((
@@ -273,8 +276,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
   
   const reloadData = useCallback(async (options?: { force?: boolean }) => {
-    if (!state.user && !options?.force) return;
+    const session = await getSession();
+    if (!session) return;
+    if (!options?.force && state.initialBalanceSet) return;
 
+    setState(prev => ({ ...prev, isLoading: true }));
     try {
       const [
         cashData,
@@ -338,22 +344,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
             totalPayables,
             totalReceivables,
         }));
-      } catch (error: any) {
+      } catch (error) {
         console.error("Failed to load data during promise resolution:", error);
-        setState(prev => ({...prev, initialBalanceSet: true}));
         handleApiError(error);
+      } finally {
+        setState(prev => ({...prev, isLoading: false}));
       }
-  }, [state.user, calculateBalancesAndStock, handleApiError, state.initialBalanceSet]);
-  
-  useEffect(() => {
-    if (state.user && !isLoading) {
-        if (!state.initialBalanceSet) {
-             reloadData({ force: true });
-        }
-    } else if (!isLoading && !state.user) {
-        setState(prev => ({...prev, initialBalanceSet: true, needsInitialBalance: true }));
-    }
-  }, [state.user, isLoading, reloadData, state.initialBalanceSet]);
+  }, [state.initialBalanceSet, calculateBalancesAndStock, handleApiError]);
   
   const loadRecycleBinData = useCallback(async () => {
     if(!state.user) return;
@@ -398,25 +395,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
             const savedTx = await appendData({ tableName: 'cash_transactions', data: tx, select: '*' });
             setState(prev => {
                 const newTxs = prev.cashTransactions.map(t => t.id === tempId ? savedTx : t);
-                const { finalCashBalance } = calculateBalancesAndStock(newTxs, prev.bankTransactions, prev.stockTransactions, []);
-                 return {
-                    ...prev,
-                    cashTransactions: newTxs,
-                    cashBalance: finalCashBalance,
-                };
+                return { ...prev, cashTransactions: newTxs };
             });
-            return savedTx;
         } catch (error) {
             toast({ variant: 'destructive', title: 'Failed to save cash transaction.' });
-            setState(prev => {
-                 const newTxs = prev.cashTransactions.filter(t => t.id !== tempId);
-                 const { finalCashBalance } = calculateBalancesAndStock(newTxs, prev.bankTransactions, prev.stockTransactions, []);
-                 return {
-                    ...prev,
-                    cashTransactions: newTxs,
-                    cashBalance: finalCashBalance,
-                };
-            });
+            setState(prev => ({ ...prev, cashTransactions: prev.cashTransactions.filter(t => t.id !== tempId)}));
             handleApiError(error);
         }
     };
@@ -439,25 +422,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
             const savedTx = await appendData({ tableName: 'bank_transactions', data: tx, select: '*' });
              setState(prev => {
                 const newTxs = prev.bankTransactions.map(t => t.id === tempId ? savedTx : t);
-                const { finalBankBalance } = calculateBalancesAndStock(prev.cashTransactions, newTxs, prev.stockTransactions, []);
-                 return {
-                    ...prev,
-                    bankTransactions: newTxs,
-                    bankBalance: finalBankBalance,
-                };
+                 return { ...prev, bankTransactions: newTxs };
             });
-            return savedTx;
         } catch (error) {
             toast({ variant: 'destructive', title: 'Failed to save bank transaction.' });
-            setState(prev => {
-                const newTxs = prev.bankTransactions.filter(t => t.id !== tempId);
-                const { finalBankBalance } = calculateBalancesAndStock(prev.cashTransactions, newTxs, prev.stockTransactions, []);
-                return {
-                    ...prev,
-                    bankTransactions: newTxs,
-                    bankBalance: finalBankBalance,
-                };
-            });
+            setState(prev => ({...prev, bankTransactions: prev.bankTransactions.filter(t => t.id !== tempId)}));
             handleApiError(error);
         }
     };
@@ -482,32 +451,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
             const savedTx = await appendData({ tableName: 'ap_ar_transactions', data: { ...tx, status: 'unpaid', paid_amount: 0 }, select: '*, installments:payment_installments(*)' });
             setState(prev => {
                 const newLedgerTxs = prev.ledgerTransactions.map(t => t.id === tempId ? savedTx : t);
-                const totalPayables = newLedgerTxs.filter(t => t.type === 'payable' && t.status !== 'paid').reduce((acc, t) => acc + (t.amount - t.paid_amount), 0);
-                const totalReceivables = newLedgerTxs.filter(t => t.type === 'receivable' && t.status !== 'paid').reduce((acc, t) => acc + (t.amount - t.paid_amount), 0);
-
-                return {
-                    ...prev,
-                    ledgerTransactions: newLedgerTxs,
-                    totalPayables,
-                    totalReceivables
-                };
+                return { ...prev, ledgerTransactions: newLedgerTxs };
             });
-            return savedTx;
         } catch (error) {
             toast({ variant: 'destructive', title: 'Failed to save ledger transaction.' });
-            setState(prev => {
-                 const newLedgerTxs = prev.ledgerTransactions.filter(t => t.id !== tempId);
-                 const totalPayables = newLedgerTxs.filter(t => t.type === 'payable' && t.status !== 'paid').reduce((acc, t) => acc + (t.amount - t.paid_amount), 0);
-                 const totalReceivables = newLedgerTxs.filter(t => t.type === 'receivable' && t.status !== 'paid').reduce((acc, t) => acc + (t.amount - t.paid_amount), 0);
-                return {
-                    ...prev,
-                    ledgerTransactions: newLedgerTxs,
-                    totalPayables,
-                    totalReceivables
-                };
-            });
+            setState(prev => ({...prev, ledgerTransactions: prev.ledgerTransactions.filter(t => t.id !== tempId)}));
             handleApiError(error);
-            return null;
         }
     }
 
@@ -555,7 +504,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
             throw new Error(`Could not find a name for the selected ${tx.type === 'purchase' ? 'vendor' : 'client'}.`);
           }
           
-          await addLedgerTransaction({
+          // Do not await this, let it run in the background
+          addLedgerTransaction({
               type: ledgerType,
               description,
               amount: totalValue,
@@ -575,14 +525,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
           };
 
           if (tx.paymentMethod === 'cash') {
-              await addCashTransaction({ ...financialTxData, type: tx.type === 'purchase' ? 'expense' : 'income' });
+              // Do not await this, let it run in the background
+              addCashTransaction({ ...financialTxData, type: tx.type === 'purchase' ? 'expense' : 'income' });
           } else if (tx.paymentMethod === 'bank') { 
-              await addBankTransaction({ ...financialTxData, type: tx.type === 'purchase' ? 'withdrawal' : 'deposit' });
+              // Do not await this, let it run in the background
+              addBankTransaction({ ...financialTxData, type: tx.type === 'purchase' ? 'withdrawal' : 'deposit' });
           }
       }
       
       toast({ title: "Success", description: "Stock transaction recorded."});
-      return newStockTx;
     } catch (error: any) {
        // Rollback stock transaction on error
        setState(prev => {
@@ -598,84 +549,155 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const editCashTransaction = async (originalTx: CashTransaction, updatedTxData: Partial<Omit<CashTransaction, 'id' | 'date'>>) => {
-      try {
-        await updateData({ tableName: 'cash_transactions', id: originalTx.id, data: updatedTxData });
-        toast({ title: "Success", description: "Cash transaction updated."});
-        reloadData({ force: true });
-      } catch (error) {
-        handleApiError(error);
-      }
+  const editCashTransaction = (originalTx: CashTransaction, updatedTxData: Partial<Omit<CashTransaction, 'id' | 'date'>>) => {
+      const updatedTx = { ...originalTx, ...updatedTxData, lastEdited: new Date().toISOString() };
+      
+      // Optimistic update
+      setState(prev => {
+          const newTxs = prev.cashTransactions.map(tx => tx.id === originalTx.id ? updatedTx : tx);
+          const { finalCashBalance, aggregatedStockItems } = calculateBalancesAndStock(newTxs, prev.bankTransactions, prev.stockTransactions, []);
+          return { ...prev, cashTransactions: newTxs, cashBalance: finalCashBalance, stockItems: aggregatedStockItems };
+      });
+      
+      // Background save
+      updateData({ tableName: 'cash_transactions', id: originalTx.id, data: updatedTxData })
+        .then(() => toast({ title: "Success", description: "Cash transaction updated." }))
+        .catch(error => {
+            handleApiError(error);
+            // Rollback on failure
+            setState(prev => {
+                const newTxs = prev.cashTransactions.map(tx => tx.id === originalTx.id ? originalTx : tx);
+                const { finalCashBalance, aggregatedStockItems } = calculateBalancesAndStock(newTxs, prev.bankTransactions, prev.stockTransactions, []);
+                return { ...prev, cashTransactions: newTxs, cashBalance: finalCashBalance, stockItems: aggregatedStockItems };
+            });
+        });
   };
 
-  const editBankTransaction = async (originalTx: BankTransaction, updatedTxData: Partial<Omit<BankTransaction, 'id'| 'date'>>) => {
-      try {
-        await updateData({ tableName: 'bank_transactions', id: originalTx.id, data: updatedTxData });
-        toast({ title: "Success", description: "Bank transaction updated."});
-        reloadData({ force: true });
-      } catch (error) {
-        handleApiError(error);
-      }
+  const editBankTransaction = (originalTx: BankTransaction, updatedTxData: Partial<Omit<BankTransaction, 'id'| 'date'>>) => {
+      const updatedTx = { ...originalTx, ...updatedTxData, lastEdited: new Date().toISOString() };
+      
+      // Optimistic update
+      setState(prev => {
+          const newTxs = prev.bankTransactions.map(tx => tx.id === originalTx.id ? updatedTx : tx);
+          const { finalBankBalance, aggregatedStockItems } = calculateBalancesAndStock(prev.cashTransactions, newTxs, prev.stockTransactions, []);
+          return { ...prev, bankTransactions: newTxs, bankBalance: finalBankBalance, stockItems: aggregatedStockItems };
+      });
+
+      // Background save
+      updateData({ tableName: 'bank_transactions', id: originalTx.id, data: updatedTxData })
+        .then(() => toast({ title: "Success", description: "Bank transaction updated."}))
+        .catch(error => {
+            handleApiError(error);
+            // Rollback on failure
+            setState(prev => {
+                const newTxs = prev.bankTransactions.map(tx => tx.id === originalTx.id ? originalTx : tx);
+                const { finalBankBalance, aggregatedStockItems } = calculateBalancesAndStock(prev.cashTransactions, newTxs, prev.stockTransactions, []);
+                return { ...prev, bankTransactions: newTxs, bankBalance: finalBankBalance, stockItems: aggregatedStockItems };
+            });
+        });
   };
 
-  const editStockTransaction = async (originalTx: StockTransaction, updatedTxData: Partial<Omit<StockTransaction, 'id' | 'date'>>) => {
-      try {
-        await updateData({ tableName: 'stock_transactions', id: originalTx.id, data: updatedTxData });
-        toast({ 
+  const editStockTransaction = (originalTx: StockTransaction, updatedTxData: Partial<Omit<StockTransaction, 'id' | 'date'>>) => {
+      const updatedTx = { ...originalTx, ...updatedTxData, lastEdited: new Date().toISOString() };
+      
+      // Optimistic update
+      setState(prev => {
+          const newTxs = prev.stockTransactions.map(tx => tx.id === originalTx.id ? updatedTx : tx);
+          const { aggregatedStockItems } = calculateBalancesAndStock(prev.cashTransactions, prev.bankTransactions, newTxs, []);
+          return { ...prev, stockTransactions: newTxs, stockItems: aggregatedStockItems };
+      });
+      
+      // Background save
+      updateData({ tableName: 'stock_transactions', id: originalTx.id, data: updatedTxData })
+        .then(() => toast({ 
             title: "Success", 
             description: "Stock transaction updated. Please manually update the corresponding financial transaction if amount has changed.",
             duration: 5000,
+        }))
+        .catch(error => {
+            handleApiError(error);
+             // Rollback on failure
+            setState(prev => {
+                const newTxs = prev.stockTransactions.map(tx => tx.id === originalTx.id ? originalTx : tx);
+                const { aggregatedStockItems } = calculateBalancesAndStock(prev.cashTransactions, prev.bankTransactions, newTxs, []);
+                return { ...prev, stockTransactions: newTxs, stockItems: aggregatedStockItems };
+            });
         });
-        reloadData({ force: true });
-      } catch (error) {
-        handleApiError(error);
-      }
   };
 
-  const deleteCashTransaction = async (tx: CashTransaction) => {
-    try {
-        await deleteData({ tableName: "cash_transactions", id: tx.id });
-        if(tx.linkedStockTxId) {
-             await deleteData({ tableName: "stock_transactions", id: tx.linkedStockTxId });
-        }
-        toast({ title: "Success", description: "Cash transaction and any linked stock entry have been moved to the recycle bin."});
-        reloadData({ force: true });
-    } catch(error) {
-        handleApiError(error);
-    }
+  const deleteCashTransaction = (txToDelete: CashTransaction) => {
+    const originalTxs = state.cashTransactions;
+    // Optimistic update
+    setState(prev => {
+        const newTxs = prev.cashTransactions.filter(tx => tx.id !== txToDelete.id);
+        const { finalCashBalance, aggregatedStockItems } = calculateBalancesAndStock(newTxs, prev.bankTransactions, prev.stockTransactions, []);
+        return { ...prev, cashTransactions: newTxs, cashBalance: finalCashBalance, stockItems: aggregatedStockItems };
+    });
+
+    // Background delete
+    deleteData({ tableName: "cash_transactions", id: txToDelete.id })
+        .then(() => {
+            if (txToDelete.linkedStockTxId) {
+                return deleteData({ tableName: "stock_transactions", id: txToDelete.linkedStockTxId });
+            }
+        })
+        .then(() => toast({ title: "Success", description: "Cash transaction moved to recycle bin."}))
+        .catch((error) => {
+            handleApiError(error);
+            setState(prev => ({...prev, cashTransactions: originalTxs})); // Rollback
+        });
   };
 
-  const deleteBankTransaction = async (tx: BankTransaction) => {
-    try {
-        await deleteData({ tableName: "bank_transactions", id: tx.id });
-        if(tx.linkedStockTxId) {
-             await deleteData({ tableName: "stock_transactions", id: tx.linkedStockTxId });
-        }
-        toast({ title: "Success", description: "Bank transaction and any linked stock entry have been moved to the recycle bin."});
-        reloadData({ force: true });
-    } catch(error) {
-        handleApiError(error);
-    }
+  const deleteBankTransaction = (txToDelete: BankTransaction) => {
+    const originalTxs = state.bankTransactions;
+     // Optimistic update
+    setState(prev => {
+        const newTxs = prev.bankTransactions.filter(tx => tx.id !== txToDelete.id);
+        const { finalBankBalance, aggregatedStockItems } = calculateBalancesAndStock(prev.cashTransactions, newTxs, prev.stockTransactions, []);
+        return { ...prev, bankTransactions: newTxs, bankBalance: finalBankBalance, stockItems: aggregatedStockItems };
+    });
+
+    // Background delete
+    deleteData({ tableName: "bank_transactions", id: txToDelete.id })
+        .then(() => {
+            if(txToDelete.linkedStockTxId) {
+                return deleteData({ tableName: "stock_transactions", id: txToDelete.linkedStockTxId });
+            }
+        })
+        .then(() => toast({ title: "Success", description: "Bank transaction moved to recycle bin."}))
+        .catch(error => {
+            handleApiError(error);
+            setState(prev => ({...prev, bankTransactions: originalTxs})); // Rollback
+        });
   };
   
-  const deleteStockTransaction = async (tx: StockTransaction) => {
-    try {
-        await deleteData({ tableName: "stock_transactions", id: tx.id });
-        const { data: allCashTxs } = await supabase.from('cash_transactions').select('id, deletedAt').eq('linkedStockTxId', tx.id);
-        if (allCashTxs && allCashTxs.length > 0 && !allCashTxs[0].deletedAt) {
-            await deleteData({ tableName: "cash_transactions", id: allCashTxs[0].id });
-        }
-
-        const { data: allBankTxs } = await supabase.from('bank_transactions').select('id, deletedAt').eq('linkedStockTxId', tx.id);
-        if (allBankTxs && allBankTxs.length > 0 && !allBankTxs[0].deletedAt) {
-            await deleteData({ tableName: "bank_transactions", id: allBankTxs[0].id });
-        }
-        
-        toast({ title: "Stock Transaction Deleted", description: "The corresponding financial entry was also moved to the recycle bin."});
-        reloadData({ force: true });
-    } catch(error) {
-        handleApiError(error);
-    }
+  const deleteStockTransaction = (txToDelete: StockTransaction) => {
+     const originalTxs = state.stockTransactions;
+     // Optimistic update
+    setState(prev => {
+        const newTxs = prev.stockTransactions.filter(tx => tx.id !== txToDelete.id);
+        const { aggregatedStockItems } = calculateBalancesAndStock(prev.cashTransactions, prev.bankTransactions, newTxs, []);
+        return { ...prev, stockTransactions: newTxs, stockItems: aggregatedStockItems };
+    });
+    
+    // Background delete
+    deleteData({ tableName: "stock_transactions", id: txToDelete.id })
+        .then(async () => {
+            const { data: allCashTxs } = await supabase.from('cash_transactions').select('id, deletedAt').eq('linkedStockTxId', txToDelete.id);
+            if (allCashTxs && allCashTxs.length > 0 && !allCashTxs[0].deletedAt) {
+                await deleteData({ tableName: "cash_transactions", id: allCashTxs[0].id });
+            }
+    
+            const { data: allBankTxs } = await supabase.from('bank_transactions').select('id, deletedAt').eq('linkedStockTxId', txToDelete.id);
+            if (allBankTxs && allBankTxs.length > 0 && !allBankTxs[0].deletedAt) {
+                await deleteData({ tableName: "bank_transactions", id: allBankTxs[0].id });
+            }
+        })
+        .then(() => toast({ title: "Stock Transaction Deleted", description: "The corresponding financial entry was also moved to the recycle bin."}))
+        .catch(error => {
+            handleApiError(error);
+            setState(prev => ({...prev, stockTransactions: originalTxs})); // Rollback
+        });
   };
   
   const restoreTransaction = async (txType: 'cash' | 'bank' | 'stock' | 'ap_ar', id: string) => {
@@ -924,18 +946,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const deleteLedgerTransaction = async (tx: LedgerTransaction) => {
+  const deleteLedgerTransaction = (txToDelete: LedgerTransaction) => {
     if (!state.user || state.user.role !== 'admin') {
         toast({ variant: 'destructive', title: 'Permission Denied', description: 'Only admins can delete transactions.' });
-        return null;
+        return;
     }
-    try {
-        await deleteData({ tableName: 'ap_ar_transactions', id: tx.id });
-        toast({ title: 'Transaction moved to recycle bin.' });
-        reloadData({ force: true });
-    } catch(error) {
-        handleApiError(error);
-    }
+
+    const originalTxs = state.ledgerTransactions;
+    // Optimistic Delete
+    setState(prev => ({
+        ...prev,
+        ledgerTransactions: prev.ledgerTransactions.filter(tx => tx.id !== txToDelete.id)
+    }));
+
+    // Background delete
+    deleteData({ tableName: 'ap_ar_transactions', id: txToDelete.id })
+      .then(() => toast({ title: 'Transaction moved to recycle bin.' }))
+      .catch(error => {
+          handleApiError(error);
+          setState(prev => ({...prev, ledgerTransactions: originalTxs})); // Rollback
+      });
   }
   
   const recordInstallment = async (tx: LedgerTransaction, paymentAmount: number, paymentMethod: 'cash' | 'bank', paymentDate: Date) => {
@@ -963,7 +993,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     saveStateToLocalStorage(state);
   }, [state])
 
-  if (isLoading && pathname !== '/login') {
+  if (state.isLoading && pathname !== '/login') {
     return <AppLoading />;
   }
 
