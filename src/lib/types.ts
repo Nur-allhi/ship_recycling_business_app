@@ -43,6 +43,28 @@ export interface StockTransaction {
   user_id?: string;
 }
 
+export interface Vendor {
+    id: string;
+    name: string;
+    user_id?: string;
+}
+
+export interface CreditTransaction {
+    id: string;
+    date: string;
+    description: string;
+    amount: number;
+    vendorId: string;
+    status: 'paid' | 'unpaid';
+    paidAt?: string;
+    paymentMethod?: 'cash' | 'bank';
+    linkedTxId?: string; // To link to the cash/bank tx when paid
+    lastEdited?: string;
+    deletedAt?: string;
+    createdAt: string;
+    user_id?: string;
+}
+
 export interface User {
     id: string;
     username: string;

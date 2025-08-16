@@ -17,6 +17,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { RecycleBinTab } from "./recycle-bin-tab"
 import { ExportImportTab } from "./export-import-tab"
 import { UserManagementTab } from "./user-management-tab"
+import { VendorManagementTab } from "./vendor-management-tab"
 
 const bodyFontOptions = [
     { name: "Inter", value: "Inter, sans-serif" },
@@ -152,6 +153,7 @@ export function SettingsTab() {
           {isAdmin && <TabsTrigger value="balances">Initial Balances</TabsTrigger>}
           {isAdmin && <TabsTrigger value="wastage">Wastage</TabsTrigger>}
           {isAdmin && <TabsTrigger value="categories">Categories</TabsTrigger>}
+          {isAdmin && <TabsTrigger value="vendors">Vendors</TabsTrigger>}
           <TabsTrigger value="appearance">Appearance</TabsTrigger>
           {isAdmin && <TabsTrigger value="recycle_bin">Recycle Bin</TabsTrigger>}
           <TabsTrigger value="export_import">Export/Import</TabsTrigger>
@@ -264,6 +266,10 @@ export function SettingsTab() {
               </div>
             </CardContent>
           </Card>
+        </TabsContent>}
+
+        {isAdmin && <TabsContent value="vendors">
+            <VendorManagementTab />
         </TabsContent>}
 
         <TabsContent value="appearance">

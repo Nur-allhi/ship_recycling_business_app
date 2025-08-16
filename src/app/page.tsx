@@ -3,12 +3,13 @@
 import { useState, useEffect } from 'react';
 import { useAppContext } from './store';
 import { cn } from '@/lib/utils';
-import { Wallet, Landmark, Boxes, Settings, PlusCircle, LogOut } from 'lucide-react';
+import { Wallet, Landmark, Boxes, Settings, PlusCircle, LogOut, CreditCard } from 'lucide-react';
 import { DashboardTab } from '@/components/dashboard-tab';
 import { CashTab } from '@/components/cash-tab';
 import { BankTab } from '@/components/bank-tab';
 import { StockTab } from '@/components/stock-tab';
 import { SettingsTab } from '@/components/settings-tab';
+import { CreditTab } from '@/components/credit-tab';
 import { UnifiedTransactionForm } from '@/components/unified-transaction-form';
 import { Dialog, DialogContent, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -28,6 +29,7 @@ const navItems = [
     { value: 'dashboard', label: 'Dashboard', icon: Wallet },
     { value: 'cash', label: 'Cash', icon: Wallet },
     { value: 'bank', label: 'Bank', icon: Landmark },
+    { value: 'credit', label: 'Credit', icon: CreditCard },
     { value: 'stock', label: 'Stock', icon: Boxes },
     { value: 'settings', label: 'Settings', icon: Settings },
 ]
@@ -138,7 +140,7 @@ function ShipShapeLedger() {
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
              {!isMobile && (
                 <div className="overflow-x-auto pb-2">
-                    <TabsList className="grid w-full grid-cols-5 min-w-[600px]">
+                    <TabsList className="grid w-full grid-cols-6 min-w-[700px]">
                         {navItems.map(item => {
                             const Icon = item.icon;
                             return (
@@ -159,6 +161,9 @@ function ShipShapeLedger() {
             </TabsContent>
             <TabsContent value="bank" className="mt-6 animate-slide-in-up">
               <BankTab />
+            </TabsContent>
+            <TabsContent value="credit" className="mt-6 animate-slide-in-up">
+              <CreditTab />
             </TabsContent>
             <TabsContent value="stock" className="mt-6 animate-slide-in-up">
               <StockTab />
