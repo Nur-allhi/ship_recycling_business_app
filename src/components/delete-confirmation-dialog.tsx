@@ -42,5 +42,3 @@ export function DeleteConfirmationDialog({ isOpen, setIsOpen, onConfirm, itemCou
     </AlertDialog>
   );
 }
-
-    

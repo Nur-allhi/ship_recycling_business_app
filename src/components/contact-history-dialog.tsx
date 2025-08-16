@@ -48,7 +48,7 @@ export function ContactHistoryDialog({ isOpen, setIsOpen, contact, contactType }
     const history: (LedgerTransaction | (PaymentInstallment & { originalDescription: string }))[] = [];
     transactions.forEach(tx => {
         history.push(tx);
-        tx.installments.forEach(inst => {
+        (tx.installments || []).forEach(inst => {
             history.push({ ...inst, originalDescription: tx.description });
         });
     });
@@ -225,7 +225,7 @@ export function ContactHistoryDialog({ isOpen, setIsOpen, contact, contactType }
                         </TableRow>
                         <TableRow>
                             <TableCell colSpan={4} className="text-right font-bold">Total Credit</TableCell>
-                            <TableCell className="text-right font-bold font-mono">{formatCurrency(totalCredit)}</TableCell>
+                            <TableCell className="text-right font-mono">{formatCurrency(totalCredit)}</TableCell>
                         </TableRow>
                         <TableRow className="bg-muted/50">
                             <TableCell colSpan={4} className="text-right font-bold text-lg">Balance Due</TableCell>
@@ -246,5 +246,3 @@ export function ContactHistoryDialog({ isOpen, setIsOpen, contact, contactType }
     </Dialog>
   );
 }
-
-    
