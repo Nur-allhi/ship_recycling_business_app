@@ -322,7 +322,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   
   const addStockTransaction = async (tx: Omit<StockTransaction, 'id' | 'createdAt' | 'deletedAt' | 'user_id'>, contact_id?: string) => {
     try {
-      const stockTxPayload = { ...tx };
+      // The payload for the stock_transactions table should not include contact_id.
+      // We de-structure it to ensure it's not sent.
+      const { ...stockTxPayload } = tx;
+
       const result = await appendData({ tableName: 'stock_transactions', data: stockTxPayload });
       if (!result) throw new Error("Stock transaction creation failed. The 'stock_transactions' table may not exist.");
       const newStockTx = result[0];
@@ -883,3 +886,5 @@ export function AppLoading() {
         </div>
     );
 }
+
+    
