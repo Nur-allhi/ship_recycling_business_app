@@ -16,7 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { RecycleBinTab } from "./recycle-bin-tab"
 import { ExportImportTab } from "./export-import-tab"
-import { UserManagementTab } from "./user-management-tab"
+import { ContactsTab } from "./contacts-tab"
 
 const bodyFontOptions = [
     { name: "Inter", value: "Inter, sans-serif" },
@@ -146,16 +146,16 @@ export function SettingsTab() {
   }
 
   return (
-    <div className="max-w-2xl mx-auto">
+    <div className="max-w-4xl mx-auto">
       <Tabs defaultValue="appearance" className="w-full">
         <TabsList className="flex flex-wrap h-auto">
           {isAdmin && <TabsTrigger value="balances">Initial Balances</TabsTrigger>}
           {isAdmin && <TabsTrigger value="wastage">Wastage</TabsTrigger>}
           {isAdmin && <TabsTrigger value="categories">Categories</TabsTrigger>}
           <TabsTrigger value="appearance">Appearance</TabsTrigger>
+          {isAdmin && <TabsTrigger value="contacts">Contacts</TabsTrigger>}
           {isAdmin && <TabsTrigger value="recycle_bin">Recycle Bin</TabsTrigger>}
           <TabsTrigger value="export_import">Export/Import</TabsTrigger>
-          {isAdmin && <TabsTrigger value="user_management">User Management</TabsTrigger>}
         </TabsList>
         
         {isAdmin && <TabsContent value="balances">
@@ -343,6 +343,10 @@ export function SettingsTab() {
           </Card>
         </TabsContent>
 
+        {isAdmin && <TabsContent value="contacts">
+            <ContactsTab />
+        </TabsContent>}
+
         {isAdmin && <TabsContent value="recycle_bin">
           <RecycleBinTab />
         </TabsContent>}
@@ -351,11 +355,9 @@ export function SettingsTab() {
             <ExportImportTab />
         </TabsContent>
 
-        {isAdmin && <TabsContent value="user_management">
-            <UserManagementTab />
-        </TabsContent>}
-
       </Tabs>
     </div>
   )
 }
+
+    
