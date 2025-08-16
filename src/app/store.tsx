@@ -50,7 +50,7 @@ interface AppContextType extends AppState {
   loadRecycleBinData: () => Promise<void>;
   addCashTransaction: (tx: Omit<CashTransaction, 'id' | 'createdAt' | 'deletedAt' | 'user_id'>) => void;
   addBankTransaction: (tx: Omit<BankTransaction, 'id' | 'createdAt' | 'deletedAt' | 'user_id'>) => void;
-  addStockTransaction: (tx: Omit<StockTransaction, 'id' | 'createdAt' | 'deletedAt' | 'user_id'>, contact_id?: string) => void;
+  addStockTransaction: (tx: Omit<StockTransaction, 'id' | 'createdAt' | 'deletedAt' | 'user_id'> & { contact_id?: string }) => void;
   editCashTransaction: (originalTx: CashTransaction, updatedTxData: Partial<Omit<CashTransaction, 'id' | 'date'>>) => void;
   editBankTransaction: (originalTx: BankTransaction, updatedTxData: Partial<Omit<BankTransaction, 'id' | 'date'>>) => void;
   editStockTransaction: (originalTx: StockTransaction, updatedTxData: Partial<Omit<StockTransaction, 'id' | 'date'>>) => void;
@@ -320,13 +320,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
   
-  const addStockTransaction = async (tx: Omit<StockTransaction, 'id' | 'createdAt' | 'deletedAt' | 'user_id'>, contact_id?: string) => {
+  const addStockTransaction = async (tx: Omit<StockTransaction, 'id' | 'createdAt' | 'deletedAt' | 'user_id'> & { contact_id?: string }) => {
     try {
-      // The payload for the stock_transactions table should not include contact_id.
-      // We de-structure it to ensure it's not sent.
-      const { ...stockTxPayload } = tx;
+      const { contact_id, ...stockTxData } = tx;
 
-      const result = await appendData({ tableName: 'stock_transactions', data: stockTxPayload });
+      const result = await appendData({ tableName: 'stock_transactions', data: stockTxData });
       if (!result) throw new Error("Stock transaction creation failed. The 'stock_transactions' table may not exist.");
       const newStockTx = result[0];
       
@@ -335,18 +333,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (tx.paymentMethod === 'credit' && contact_id) {
           const ledgerType = tx.type === 'purchase' ? 'payable' : 'receivable';
           const description = `${tx.type === 'purchase' ? 'Purchase' : 'Sale'} of ${tx.weight}kg of ${tx.stockItemName} on credit`;
-          const contactList = tx.type === 'purchase' ? state.vendors : state.clients;
-          const contact = contactList.find(c => c.id === contact_id);
-
-          if (!contact) throw new Error("Contact not found for credit transaction.");
           
           await addLedgerTransaction({
               type: ledgerType,
               description,
               amount: totalValue,
               date: tx.date,
-              contact_id: contact.id,
-              contact_name: contact.name,
+              contact_id: contact_id,
           });
       } else {
           const description = `${tx.type === 'purchase' ? 'Purchase' : 'Sale'} of ${tx.weight}kg of ${tx.stockItemName}`;
@@ -761,6 +754,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   
   const settleLedgerTransaction = async (tx: LedgerTransaction, paymentMethod: 'cash' | 'bank', paymentDate: Date) => {
     if (!state.user) throw new Error("User not authenticated.");
+    const contactList = tx.type === 'payable' ? state.vendors : state.clients;
+    const contact = contactList.find(c => c.id === tx.contact_id);
+    if(!contact) throw new Error("Contact not found for settlement");
 
     try {
         await updateData({
