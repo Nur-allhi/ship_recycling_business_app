@@ -13,7 +13,7 @@ import { SettlePaymentDialog } from "./settle-payment-dialog";
 
 
 export function PayablesList() {
-    const { ledgerTransactions, currency, vendors } = useAppContext();
+    const { ledgerTransactions, currency } = useAppContext();
     const [settleDialogState, setSettleDialogState] = useState<{isOpen: boolean, transaction: LedgerTransaction | null}>({isOpen: false, transaction: null});
 
     const payables = ledgerTransactions.filter(tx => tx.type === 'payable' && tx.status === 'unpaid');

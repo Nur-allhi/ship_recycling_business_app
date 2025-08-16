@@ -48,10 +48,12 @@ const formSchema = z.object({
   // transfer specific
   transferFrom: z.enum(['cash', 'bank']).optional(),
 
-  // A/R A/P specific
-  ledgerType: z.enum(['payable', 'receivable']).optional(),
+  // A/R A/P or Stock-on-credit specific
   contact_id: z.string().optional(),
   newContact: z.string().optional(),
+
+  // A/R A/P specific
+  ledgerType: z.enum(['payable', 'receivable']).optional(),
 
 
 }).superRefine((data, ctx) => {
@@ -61,13 +63,13 @@ const formSchema = z.object({
         if (!data.weight || data.weight <= 0) ctx.addIssue({ code: 'custom', message: 'Weight must be positive.', path: ['weight'] });
         if (data.pricePerKg === undefined || data.pricePerKg < 0) ctx.addIssue({ code: 'custom', message: 'Price must be non-negative.', path: ['pricePerKg'] });
         if (!data.paymentMethod) ctx.addIssue({ code: 'custom', message: 'Payment method is required.', path: ['paymentMethod'] });
+        
         if (data.paymentMethod === 'credit') {
+            const contactType = data.stockType === 'purchase' ? 'Vendor' : 'Client';
             if (data.contact_id === 'new' && !data.newContact) {
-                const contactType = data.stockType === 'purchase' ? 'Vendor' : 'Client';
                 ctx.addIssue({ code: 'custom', message: `New ${contactType} name is required.`, path: ['newContact'] });
             }
-            if (data.contact_id !== 'new' && !data.contact_id) {
-                const contactType = data.stockType === 'purchase' ? 'Vendor' : 'Client';
+            if (!data.contact_id) {
                 ctx.addIssue({ code: 'custom', message: `Please select a ${contactType}.`, path: ['contact_id'] });
             }
         }
@@ -84,13 +86,15 @@ const formSchema = z.object({
         if (!data.transferFrom) ctx.addIssue({ code: 'custom', message: 'Transfer source is required.', path: ['transferFrom'] });
     }
     if(data.transactionType === 'ap_ar') {
+        const contactType = data.ledgerType === 'payable' ? 'Vendor' : 'Client';
         if (!data.ledgerType) ctx.addIssue({ code: 'custom', message: 'Please select Payable or Receivable.', path: ['ledgerType'] });
         if (!data.description) ctx.addIssue({ code: 'custom', message: 'Description is required.', path: ['description'] });
+        
         if (data.contact_id === 'new' && !data.newContact) {
-            ctx.addIssue({ code: 'custom', message: 'New contact name is required.', path: ['newContact'] });
+            ctx.addIssue({ code: 'custom', message: `New ${contactType} name is required.`, path: ['newContact'] });
         }
-        if (data.contact_id !== 'new' && !data.contact_id) {
-            ctx.addIssue({ code: 'custom', message: 'Please select a contact.', path: ['contact_id'] });
+        if (!data.contact_id) {
+            ctx.addIssue({ code: 'custom', message: `Please select a ${contactType}.`, path: ['contact_id'] });
         }
     }
 });
@@ -148,15 +152,9 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
   }, [transactionType, reset]);
   
   useEffect(() => {
-    // Clear contact selection when stock type changes
     setValue('contact_id', undefined);
     setValue('newContact', '');
-  }, [stockType, setValue]);
-
-  useEffect(() => {
-    setValue('contact_id', undefined);
-    setValue('newContact', '');
-  }, [ledgerType, setValue]);
+  }, [stockType, ledgerType, setValue]);
 
   const onSubmit = async (data: FormData) => {
     const transactionDate = data.date.toISOString();
@@ -181,20 +179,18 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                 });
                 break;
             case 'stock':
-                let contactNameForStock: string | undefined;
-                
+                let stockContactId: string | undefined;
                 if (data.paymentMethod === 'credit') {
                     if (data.contact_id === 'new') {
                         const newContact = data.stockType === 'purchase' ? await addVendor(data.newContact!) : await addClient(data.newContact!);
-                        if(!newContact) throw new Error(`Failed to create new ${data.stockType === 'purchase' ? 'vendor' : 'client'}.`);
-                        contactNameForStock = newContact.name;
+                        if (!newContact) throw new Error(`Failed to create new ${data.stockType === 'purchase' ? 'vendor' : 'client'}.`);
+                        stockContactId = newContact.id;
                     } else {
-                        const contactList = data.stockType === 'purchase' ? vendors : clients;
-                        contactNameForStock = contactList.find(c => c.id === data.contact_id)?.name;
+                        stockContactId = data.contact_id;
                     }
-                    if (!contactNameForStock) throw new Error("Could not find contact name for credit transaction.");
+                    if (!stockContactId) throw new Error("Contact ID is required for credit transaction.");
                 }
-                
+
                 await addStockTransaction({
                     type: data.stockType!,
                     stockItemName: data.stockItemName!,
@@ -203,29 +199,30 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                     paymentMethod: data.paymentMethod!,
                     description: data.description,
                     date: transactionDate,
-                    contact_name: contactNameForStock,
+                    contact_id: stockContactId,
                 });
                 break;
             case 'transfer':
                 await transferFunds(data.transferFrom!, data.amount!, transactionDate);
                 break;
             case 'ap_ar':
-                let contactNameForLedger = '';
-                let finalContactList = data.ledgerType === 'payable' ? vendors : clients;
+                let ledgerContactId: string | undefined;
+                let ledgerContactName: string | undefined;
+                const contactType = data.ledgerType === 'payable' ? 'vendor' : 'client';
+                const contactList = data.ledgerType === 'payable' ? vendors : clients;
 
-                if(data.contact_id === 'new') {
-                    const newContact = data.ledgerType === 'payable' ? await addVendor(data.newContact!) : await addClient(data.newContact!);
-                    if(!newContact) throw new Error(`Failed to create new ${data.ledgerType === 'payable' ? 'vendor' : 'client'}.`);
-                    contactNameForLedger = newContact.name;
+                if (data.contact_id === 'new') {
+                    const newContact = await (data.ledgerType === 'payable' ? addVendor(data.newContact!) : addClient(data.newContact!));
+                    if (!newContact) throw new Error(`Failed to create new ${contactType}.`);
+                    ledgerContactId = newContact.id;
+                    ledgerContactName = newContact.name;
                 } else {
-                    const foundContact = finalContactList.find(c => c.id === data.contact_id);
-                    if (foundContact) {
-                        contactNameForLedger = foundContact.name;
-                    }
+                    ledgerContactId = data.contact_id;
+                    ledgerContactName = contactList.find(c => c.id === ledgerContactId)?.name;
                 }
                 
-                if(!contactNameForLedger) {
-                    throw new Error("A contact name is required for this transaction.");
+                if(!ledgerContactId || !ledgerContactName) {
+                    throw new Error("A contact is required for this transaction.");
                 }
 
                 await addLedgerTransaction({
@@ -233,7 +230,8 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                     description: data.description!,
                     amount: data.amount!,
                     date: transactionDate,
-                    contact_name: contactNameForLedger,
+                    contact_id: ledgerContactId,
+                    contact_name: ledgerContactName,
                 });
                 break;
         }
@@ -249,6 +247,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
   const stockCreditContactType = stockType === 'purchase' ? 'Vendor' : 'Client';
   const stockCreditContacts = stockType === 'purchase' ? vendors : clients;
   
+  const currentLedgerContactType = ledgerType === 'payable' ? 'Vendor' : 'Client';
   const currentLedgerContacts = ledgerType === 'payable' ? vendors : clients;
   
   const dateField = (
@@ -583,14 +582,14 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
 
                                 {ledgerType && (
                                     <div className="space-y-2 animate-fade-in">
-                                        <Label>{ledgerType === 'payable' ? 'Vendor' : 'Client'}</Label>
+                                        <Label>{currentLedgerContactType}</Label>
                                         <Controller
                                             control={control}
                                             name="contact_id"
                                             render={({ field }) => (
                                                 <Select onValueChange={field.onChange} value={field.value}>
                                                     <SelectTrigger>
-                                                        <SelectValue placeholder={`Select a ${ledgerType === 'payable' ? 'Vendor' : 'Client'}`} />
+                                                        <SelectValue placeholder={`Select a ${currentLedgerContactType}`} />
                                                     </SelectTrigger>
                                                     <SelectContent>
                                                         {currentLedgerContacts.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
@@ -606,8 +605,8 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                                         {contact_id === 'new' && (
                                             <div className="flex items-end gap-2 pt-2 animate-fade-in">
                                                 <div className="flex-grow space-y-1">
-                                                    <Label htmlFor="newContact">New {ledgerType === 'payable' ? 'Vendor' : 'Client'} Name</Label>
-                                                    <Input {...register('newContact')} placeholder={`Enter new ${ledgerType === 'payable' ? 'vendor' : 'client'} name`}/>
+                                                    <Label htmlFor="newContact">New {currentLedgerContactType} Name</Label>
+                                                    <Input {...register('newContact')} placeholder={`Enter new ${currentLedgerContactType.toLowerCase()} name`}/>
                                                 </div>
                                             </div>
                                         )}

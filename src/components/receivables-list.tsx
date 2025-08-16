@@ -13,7 +13,7 @@ import { SettlePaymentDialog } from "./settle-payment-dialog";
 
 
 export function ReceivablesList() {
-    const { ledgerTransactions, currency, clients } = useAppContext();
+    const { ledgerTransactions, currency } = useAppContext();
     const [settleDialogState, setSettleDialogState] = useState<{isOpen: boolean, transaction: LedgerTransaction | null}>({isOpen: false, transaction: null});
 
     const receivables = ledgerTransactions.filter(tx => tx.type === 'receivable' && tx.status === 'unpaid');
