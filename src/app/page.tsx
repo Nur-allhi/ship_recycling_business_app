@@ -1,10 +1,9 @@
-
 "use client";
 
 import { useState, useEffect } from 'react';
 import { useAppContext } from './store';
 import { cn } from '@/lib/utils';
-import { Wallet, Landmark, Boxes, Settings, PlusCircle, LogOut, CreditCard } from 'lucide-react';
+import { Wallet, Landmark, Boxes, Settings, PlusCircle, LogOut, CreditCard, UserPlus } from 'lucide-react';
 import { DashboardTab } from '@/components/dashboard-tab';
 import { CashTab } from '@/components/cash-tab';
 import { BankTab } from '@/components/bank-tab';
@@ -30,7 +29,7 @@ const navItems = [
     { value: 'dashboard', label: 'Dashboard', icon: Wallet },
     { value: 'cash', label: 'Cash', icon: Wallet },
     { value: 'bank', label: 'Bank', icon: Landmark },
-    { value: 'credit', label: 'A/R & A/P', icon: CreditCard },
+    { value: 'credit', label: 'A/R & A/P', icon: UserPlus },
     { value: 'stock', label: 'Stock', icon: Boxes },
     { value: 'settings', label: 'Settings', icon: Settings },
 ]
@@ -129,7 +128,7 @@ function ShipShapeLedger() {
                 <DialogTrigger asChild>
                   <Button className="w-full sm:w-auto flex-shrink-0"><PlusCircle className="mr-2 h-4 w-4" /> Add Transaction</Button>
                 </DialogTrigger>
-                <DialogContent className="sm:max-w-2xl">
+                <DialogContent className="sm:max-w-3xl">
                     <UnifiedTransactionForm setDialogOpen={setIsDialogOpen}/>
                 </DialogContent>
               </Dialog>

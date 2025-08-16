@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect } from 'react';
@@ -18,7 +17,7 @@ import {
 } from '@/components/ui/select';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useToast } from '@/hooks/use-toast';
-import { CalendarIcon, PlusCircle, Wallet, Landmark, Boxes, ArrowRightLeft } from 'lucide-react';
+import { CalendarIcon, Plus, PlusCircle, Wallet, Landmark, Boxes, ArrowRightLeft, UserPlus } from 'lucide-react';
 import { DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
@@ -28,7 +27,7 @@ import { Separator } from './ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 
 const formSchema = z.object({
-  transactionType: z.enum(['cash', 'bank', 'stock', 'transfer']),
+  transactionType: z.enum(['cash', 'bank', 'stock', 'transfer', 'ap_ar']),
   amount: z.coerce.number().optional(),
   description: z.string().optional(),
   category: z.string().optional(),
@@ -47,6 +46,12 @@ const formSchema = z.object({
   // transfer specific
   transferFrom: z.enum(['cash', 'bank']).optional(),
 
+  // A/R A/P specific
+  ledgerType: z.enum(['payable', 'receivable']).optional(),
+  contactId: z.string().optional(),
+  newContactName: z.string().optional(),
+
+
 }).superRefine((data, ctx) => {
     if (data.transactionType === 'stock') {
         if (!data.stockType) ctx.addIssue({ code: 'custom', message: 'Please select purchase or sale.', path: ['stockType'] });
@@ -55,7 +60,7 @@ const formSchema = z.object({
         if (data.pricePerKg === undefined || data.pricePerKg < 0) ctx.addIssue({ code: 'custom', message: 'Price must be non-negative.', path: ['pricePerKg'] });
         if (!data.paymentMethod) ctx.addIssue({ code: 'custom', message: 'Payment method is required.', path: ['paymentMethod'] });
     }
-    if (data.transactionType === 'cash' || data.transactionType === 'bank' || data.transactionType === 'transfer') {
+    if (['cash', 'bank', 'transfer', 'ap_ar'].includes(data.transactionType)) {
         if(!data.amount || data.amount <=0) ctx.addIssue({ code: 'custom', message: 'Amount must be positive.', path: ['amount'] });
     }
     if(data.transactionType === 'cash' || data.transactionType === 'bank') {
@@ -65,6 +70,16 @@ const formSchema = z.object({
     }
     if(data.transactionType === 'transfer') {
         if (!data.transferFrom) ctx.addIssue({ code: 'custom', message: 'Transfer source is required.', path: ['transferFrom'] });
+    }
+    if(data.transactionType === 'ap_ar') {
+        if (!data.ledgerType) ctx.addIssue({ code: 'custom', message: 'Please select Payable or Receivable.', path: ['ledgerType'] });
+        if (!data.description) ctx.addIssue({ code: 'custom', message: 'Description is required.', path: ['description'] });
+        if (data.contactId === 'new' && !data.newContactName) {
+            ctx.addIssue({ code: 'custom', message: 'New contact name is required.', path: ['newContactName'] });
+        }
+        if (data.contactId !== 'new' && !data.contactId) {
+            ctx.addIssue({ code: 'custom', message: 'Please select a contact.', path: ['contactId'] });
+        }
     }
 });
 
@@ -80,15 +95,20 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
     addCashTransaction, 
     addBankTransaction, 
     addStockTransaction, 
+    addLedgerTransaction,
+    addVendor,
+    addClient,
     transferFunds,
     cashCategories,
     bankCategories,
-    stockItems
+    stockItems,
+    vendors,
+    clients,
   } = useAppContext();
   
   const { toast } = useToast();
   
-  const { register, handleSubmit, control, watch, reset, formState: { errors } } = useForm<FormData>({
+  const { register, handleSubmit, control, watch, reset, formState: { errors, isSubmitting } } = useForm<FormData>({
     resolver: zodResolver(formSchema),
     defaultValues: {
         transactionType: 'cash',
@@ -100,6 +120,8 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
 
   const transactionType = watch('transactionType');
   const stockType = watch('stockType');
+  const ledgerType = watch('ledgerType');
+  const contactId = watch('contactId');
   const [isNewStockItem, setIsNewStockItem] = useState(false);
 
   useEffect(() => {
@@ -112,48 +134,75 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
     setIsNewStockItem(false);
   }, [transactionType, reset]);
 
-  const onSubmit = (data: FormData) => {
+  const onSubmit = async (data: FormData) => {
     const transactionDate = data.date.toISOString();
-    switch(data.transactionType) {
-        case 'cash':
-            addCashTransaction({
-                type: data.inOutType === 'in' ? 'income' : 'expense',
-                amount: data.amount!,
-                description: data.description!,
-                category: data.category!,
-                date: transactionDate,
-            });
-            break;
-        case 'bank':
-             addBankTransaction({
-                type: data.inOutType === 'in' ? 'deposit' : 'withdrawal',
-                amount: data.amount!,
-                description: data.description!,
-                category: data.category!,
-                date: transactionDate,
-            });
-            break;
-        case 'stock':
-            addStockTransaction({
-                type: data.stockType!,
-                stockItemName: data.stockItemName!,
-                weight: data.weight!,
-                pricePerKg: data.pricePerKg!,
-                paymentMethod: data.paymentMethod!,
-                description: data.description,
-                date: transactionDate,
-            });
-            break;
-        case 'transfer':
-            transferFunds(data.transferFrom!, data.amount!, transactionDate);
-            break;
+    try {
+        switch(data.transactionType) {
+            case 'cash':
+                await addCashTransaction({
+                    type: data.inOutType === 'in' ? 'income' : 'expense',
+                    amount: data.amount!,
+                    description: data.description!,
+                    category: data.category!,
+                    date: transactionDate,
+                });
+                break;
+            case 'bank':
+                 await addBankTransaction({
+                    type: data.inOutType === 'in' ? 'deposit' : 'withdrawal',
+                    amount: data.amount!,
+                    description: data.description!,
+                    category: data.category!,
+                    date: transactionDate,
+                });
+                break;
+            case 'stock':
+                await addStockTransaction({
+                    type: data.stockType!,
+                    stockItemName: data.stockItemName!,
+                    weight: data.weight!,
+                    pricePerKg: data.pricePerKg!,
+                    paymentMethod: data.paymentMethod!,
+                    description: data.description,
+                    date: transactionDate,
+                });
+                break;
+            case 'transfer':
+                await transferFunds(data.transferFrom!, data.amount!, transactionDate);
+                break;
+            case 'ap_ar':
+                let finalContactId = data.contactId!;
+                let contactName = '';
+                if(data.contactId === 'new') {
+                    const newContact = data.ledgerType === 'payable' ? await addVendor(data.newContactName!) : await addClient(data.newContactName!);
+                    if(!newContact) throw new Error(`Failed to create new ${data.ledgerType === 'payable' ? 'vendor' : 'client'}.`);
+                    finalContactId = newContact.id;
+                    contactName = newContact.name;
+                } else {
+                    const existingContact = data.ledgerType === 'payable' ? vendors.find(v => v.id === finalContactId) : clients.find(c => c.id === finalContactId);
+                    contactName = existingContact?.name || '';
+                }
+
+                await addLedgerTransaction({
+                    type: data.ledgerType!,
+                    contactId: finalContactId,
+                    contactName,
+                    description: data.description!,
+                    amount: data.amount!,
+                    date: transactionDate
+                });
+                break;
+        }
+        toast({ title: "Transaction Added", description: "Your transaction has been successfully recorded." });
+        reset();
+        setDialogOpen(false);
+    } catch(error: any) {
+         toast({ variant: "destructive", title: "Operation Failed", description: error.message || "An unexpected error occurred." });
     }
-    toast({ title: "Transaction Added", description: "Your transaction has been successfully recorded." });
-    reset();
-    setDialogOpen(false);
   };
 
   const currentCategories = transactionType === 'cash' ? cashCategories : bankCategories;
+  const currentContacts = ledgerType === 'payable' ? vendors : clients;
   
   const dateField = (
       <div className="space-y-2">
@@ -202,11 +251,12 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
             rules={{ required: true }}
             render={({ field }) => (
                 <Tabs value={field.value} onValueChange={field.onChange} className="w-full">
-                    <TabsList className="grid w-full grid-cols-4">
-                        <TabsTrigger value="cash"><Wallet className="mr-2 h-4 w-4" />Cash</TabsTrigger>
-                        <TabsTrigger value="bank"><Landmark className="mr-2 h-4 w-4" />Bank</TabsTrigger>
-                        <TabsTrigger value="stock"><Boxes className="mr-2 h-4 w-4" />Stock</TabsTrigger>
-                        <TabsTrigger value="transfer"><ArrowRightLeft className="mr-2 h-4 w-4" />Transfer</TabsTrigger>
+                    <TabsList className="grid w-full grid-cols-5 h-auto">
+                        <TabsTrigger value="cash"><Wallet className="mr-1 h-4 w-4" />Cash</TabsTrigger>
+                        <TabsTrigger value="bank"><Landmark className="mr-1 h-4 w-4" />Bank</TabsTrigger>
+                        <TabsTrigger value="stock"><Boxes className="mr-1 h-4 w-4" />Stock</TabsTrigger>
+                        <TabsTrigger value="transfer"><ArrowRightLeft className="mr-1 h-4 w-4" />Transfer</TabsTrigger>
+                        <TabsTrigger value="ap_ar"><UserPlus className="mr-1 h-4 w-4" />A/R & A/P</TabsTrigger>
                     </TabsList>
                     <form onSubmit={handleSubmit(onSubmit)}>
                         <div className="space-y-4 pt-6">
@@ -414,26 +464,87 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                                     {errors.transferFrom && <p className="text-sm text-destructive">{errors.transferFrom.message}</p>}
                                 </div>
                             </TabsContent>
-                        </div>
 
-                        {transactionType && (
-                            <div className="space-y-4 pt-4 animate-fade-in">
-                                <Separator />
-                                {(transactionType === 'cash' || transactionType === 'bank' || transactionType === 'stock') && (
+                             <TabsContent value="ap_ar" className="m-0 space-y-4 animate-fade-in">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        {dateField}
+                                    </div>
                                     <div className="space-y-2">
-                                        <Label htmlFor="description">Description</Label>
-                                        <Input id="description" {...register('description')} placeholder={
-                                            transactionType === 'stock' ? "Optional notes (e.g., invoice #)" :
-                                            "e.g., Weekly groceries"
-                                        } />
-                                        {errors.description && <p className="text-sm text-destructive">{errors.description.message}</p>}
+                                        <Label htmlFor="amount-ledger">Amount</Label>
+                                        <Input id="amount-ledger" type="number" step="0.01" {...register('amount')} placeholder="0.00"/>
+                                        {errors.amount && <p className="text-sm text-destructive">{errors.amount.message}</p>}
+                                    </div>
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>Type</Label>
+                                    <Controller 
+                                        control={control}
+                                        name="ledgerType"
+                                        render={({ field }) => (
+                                            <RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex pt-2 gap-4">
+                                                <Label className="flex items-center gap-2 cursor-pointer"><RadioGroupItem value="payable" />Payable (Expense on Credit)</Label>
+                                                <Label className="flex items-center gap-2 cursor-pointer"><RadioGroupItem value="receivable" />Receivable (Sale on Credit)</Label>
+                                            </RadioGroup>
+                                        )}
+                                    />
+                                    {errors.ledgerType && <p className="text-sm text-destructive">{errors.ledgerType.message}</p>}
+                                </div>
+
+                                {ledgerType && (
+                                    <div className="space-y-2 animate-fade-in">
+                                        <Label>{ledgerType === 'payable' ? 'Vendor' : 'Client'}</Label>
+                                        <Controller
+                                            control={control}
+                                            name="contactId"
+                                            render={({ field }) => (
+                                                <Select onValueChange={field.onChange} value={field.value}>
+                                                    <SelectTrigger>
+                                                        <SelectValue placeholder={`Select a ${ledgerType === 'payable' ? 'Vendor' : 'Client'}`} />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {currentContacts.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                                                        <SelectItem value="new">
+                                                          <span className="flex items-center gap-2"><Plus className="h-4 w-4"/>Add New</span>
+                                                        </SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            )}
+                                        />
+                                        {errors.contactId && <p className="text-sm text-destructive">{errors.contactId.message}</p>}
+                                    
+                                        {contactId === 'new' && (
+                                            <div className="flex items-end gap-2 pt-2 animate-fade-in">
+                                                <div className="flex-grow space-y-1">
+                                                    <Label htmlFor="newContactName">New {ledgerType === 'payable' ? 'Vendor' : 'Client'} Name</Label>
+                                                    <Input {...register('newContactName')} placeholder={`Enter new ${ledgerType === 'payable' ? 'vendor' : 'client'} name`}/>
+                                                </div>
+                                            </div>
+                                        )}
+                                        {errors.newContactName && <p className="text-sm text-destructive">{errors.newContactName.message}</p>}
                                     </div>
                                 )}
-                                
+                            </TabsContent>
+                        </div>
+
+                        {(transactionType && transactionType !== 'transfer') && (
+                            <div className="space-y-4 pt-4 animate-fade-in">
+                                <Separator />
+                                <div className="space-y-2">
+                                    <Label htmlFor="description">Description</Label>
+                                    <Input id="description" {...register('description')} placeholder={
+                                        transactionType === 'stock' ? "Optional notes (e.g., invoice #)" :
+                                        "e.g., Weekly groceries"
+                                    } />
+                                    {errors.description && <p className="text-sm text-destructive">{errors.description.message}</p>}
+                                </div>
                             </div>
                         )}
                         <div className="flex justify-end pt-6">
-                            <Button type="submit" className="w-full sm:w-auto" disabled={!transactionType}>Record Transaction</Button>
+                            <Button type="submit" className="w-full sm:w-auto" disabled={isSubmitting || !transactionType}>
+                                {isSubmitting && <PlusCircle className="mr-2 h-4 w-4 animate-spin" />}
+                                Record Transaction
+                            </Button>
                         </div>
                     </form>
                 </Tabs>
