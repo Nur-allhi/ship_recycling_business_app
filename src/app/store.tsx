@@ -50,7 +50,7 @@ interface AppContextType extends AppState {
   loadRecycleBinData: () => Promise<void>;
   addCashTransaction: (tx: Omit<CashTransaction, 'id' | 'createdAt' | 'deletedAt' | 'user_id'>) => void;
   addBankTransaction: (tx: Omit<BankTransaction, 'id' | 'createdAt' | 'deletedAt' | 'user_id'>) => void;
-  addStockTransaction: (tx: Omit<StockTransaction, 'id' | 'createdAt' | 'deletedAt' | 'user_id'> & { contact_id?: string; }) => void;
+  addStockTransaction: (tx: Omit<StockTransaction, 'id' | 'createdAt' | 'deletedAt' | 'user_id'> & { contact_id?: string; contact_name?: string }) => void;
   editCashTransaction: (originalTx: CashTransaction, updatedTxData: Partial<Omit<CashTransaction, 'id' | 'date'>>) => void;
   editBankTransaction: (originalTx: BankTransaction, updatedTxData: Partial<Omit<BankTransaction, 'id' | 'date'>>) => void;
   editStockTransaction: (originalTx: StockTransaction, updatedTxData: Partial<Omit<StockTransaction, 'id' | 'date'>>) => void;
@@ -320,9 +320,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
   
-  const addStockTransaction = async (tx: Omit<StockTransaction, 'id' | 'createdAt' | 'deletedAt' | 'user_id'> & { contact_id?: string }) => {
+  const addStockTransaction = async (tx: Omit<StockTransaction, 'id' | 'createdAt' | 'deletedAt' | 'user_id'> & { contact_id?: string; contact_name?: string }) => {
     try {
-      const { contact_id, ...stockTxData } = tx;
+      const { contact_id, contact_name, ...stockTxData } = tx;
 
       const result = await appendData({ tableName: 'stock_transactions', data: { ...stockTxData } });
       if (!result) throw new Error("Stock transaction creation failed. The 'stock_transactions' table may not exist.");
@@ -330,27 +330,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
       
       const totalValue = tx.weight * tx.pricePerKg;
 
-      if (tx.paymentMethod === 'credit' && contact_id) {
+      if (tx.paymentMethod === 'credit' && contact_name) {
           const ledgerType = tx.type === 'purchase' ? 'payable' : 'receivable';
           const description = `${tx.type === 'purchase' ? 'Purchase' : 'Sale'} of ${tx.weight}kg of ${tx.stockItemName} on credit`;
           
-          let contactName = '';
-          if (ledgerType === 'payable') {
-              const vendor = state.vendors.find(v => v.id === contact_id);
-              if (vendor) contactName = vendor.name;
-          } else {
-              const client = state.clients.find(c => c.id === contact_id);
-              if (client) contactName = client.name;
-          }
-
-          if (!contactName) throw new Error("Could not find contact name for credit transaction.");
-
           await addLedgerTransaction({
               type: ledgerType,
               description,
               amount: totalValue,
               date: tx.date,
-              contact_name: contactName,
+              contact_name: contact_name,
           });
       } else {
           const description = `${tx.type === 'purchase' ? 'Purchase' : 'Sale'} of ${tx.weight}kg of ${tx.stockItemName}`;

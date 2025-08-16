@@ -181,14 +181,18 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                 });
                 break;
             case 'stock':
-                let final_contact_id = data.contact_id;
+                let contactNameForStock: string | undefined;
                 
                 if (data.paymentMethod === 'credit') {
                     if (data.contact_id === 'new') {
                         const newContact = data.stockType === 'purchase' ? await addVendor(data.newContact!) : await addClient(data.newContact!);
                         if(!newContact) throw new Error(`Failed to create new ${data.stockType === 'purchase' ? 'vendor' : 'client'}.`);
-                        final_contact_id = newContact.id;
+                        contactNameForStock = newContact.name;
+                    } else {
+                        const contactList = data.stockType === 'purchase' ? vendors : clients;
+                        contactNameForStock = contactList.find(c => c.id === data.contact_id)?.name;
                     }
+                    if (!contactNameForStock) throw new Error("Could not find contact name for credit transaction.");
                 }
                 
                 await addStockTransaction({
@@ -199,28 +203,28 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                     paymentMethod: data.paymentMethod!,
                     description: data.description,
                     date: transactionDate,
-                    contact_id: final_contact_id,
+                    contact_name: contactNameForStock,
                 });
                 break;
             case 'transfer':
                 await transferFunds(data.transferFrom!, data.amount!, transactionDate);
                 break;
             case 'ap_ar':
-                let contactName = '';
+                let contactNameForLedger = '';
                 let finalContactList = data.ledgerType === 'payable' ? vendors : clients;
 
                 if(data.contact_id === 'new') {
                     const newContact = data.ledgerType === 'payable' ? await addVendor(data.newContact!) : await addClient(data.newContact!);
                     if(!newContact) throw new Error(`Failed to create new ${data.ledgerType === 'payable' ? 'vendor' : 'client'}.`);
-                    contactName = newContact.name;
+                    contactNameForLedger = newContact.name;
                 } else {
                     const foundContact = finalContactList.find(c => c.id === data.contact_id);
                     if (foundContact) {
-                        contactName = foundContact.name;
+                        contactNameForLedger = foundContact.name;
                     }
                 }
                 
-                if(!contactName) {
+                if(!contactNameForLedger) {
                     throw new Error("A contact name is required for this transaction.");
                 }
 
@@ -229,7 +233,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                     description: data.description!,
                     amount: data.amount!,
                     date: transactionDate,
-                    contact_name: contactName,
+                    contact_name: contactNameForLedger,
                 });
                 break;
         }
