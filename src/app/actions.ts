@@ -62,7 +62,7 @@ export async function readData(input: z.infer<typeof ReadDataInputSchema>) {
       .from(input.tableName)
       .select(input.select);
 
-    const softDeleteTables = ['cash_transactions', 'bank_transactions', 'stock_transactions', 'ap_ar_transactions'];
+    const softDeleteTables = ['cash_transactions', 'bank_transactions', 'stock_transactions'];
     
     if (softDeleteTables.includes(input.tableName)) {
       query = query.is('deletedAt', null);
@@ -108,6 +108,7 @@ export async function readDeletedData(input: z.infer<typeof ReadDataInputSchema>
 const AppendDataInputSchema = z.object({
   tableName: z.string(),
   data: z.record(z.any()),
+  select: z.string().optional().default('*'),
 });
 
 export async function appendData(input: z.infer<typeof AppendDataInputSchema>) {
@@ -120,7 +121,7 @@ export async function appendData(input: z.infer<typeof AppendDataInputSchema>) {
         const { data, error } = await supabase
             .from(input.tableName)
             .insert([input.data]) 
-            .select();
+            .select(input.select);
 
         if (error) {
             if (error.code === '42P01') {
@@ -129,7 +130,7 @@ export async function appendData(input: z.infer<typeof AppendDataInputSchema>) {
             }
             throw new Error(error.message);
         }
-        return data;
+        return data ? data[0] : null;
     } catch (error) {
         return handleApiError(error);
     }
@@ -173,12 +174,20 @@ export async function deleteData(input: z.infer<typeof DeleteDataInputSchema>) {
     
     const supabase = await getAuthenticatedSupabaseClient();
 
-    const { error } = await supabase
-        .from(input.tableName)
-        .update({ deletedAt: new Date().toISOString() })
-        .eq('id', input.id);
-            
-    if (error) throw new Error(error.message);
+    if(input.tableName === 'ap_ar_transactions'){
+        const { error } = await supabase
+            .from(input.tableName)
+            .delete()
+            .eq('id', input.id);
+        if (error) throw new Error(error.message);
+    } else {
+        const { error } = await supabase
+            .from(input.tableName)
+            .update({ deletedAt: new Date().toISOString() })
+            .eq('id', input.id);
+                
+        if (error) throw new Error(error.message);
+    }
     
     return { success: true };
   } catch(error) {
@@ -432,15 +441,27 @@ export async function addPaymentInstallment(input: z.infer<typeof AddInstallment
     if (session?.role !== 'admin') throw new Error("Only admins can settle payments.");
 
     try {
-        // 1. Add the installment payment record
-        await supabase.from('payment_installments').insert({
+        const newPaidAmount = input.already_paid_amount + input.payment_amount;
+        const newStatus = newPaidAmount >= input.original_amount ? 'paid' : 'partially paid';
+        
+        const {data: updatedParent, error: updateError} = await supabase.from('ap_ar_transactions').update({
+            paid_amount: newPaidAmount,
+            status: newStatus
+        }).eq('id', input.ap_ar_transaction_id).select().single();
+
+        if (updateError) throw updateError;
+
+
+        const {data: newInstallment, error: installmentError} = await supabase.from('payment_installments').insert({
             ap_ar_transaction_id: input.ap_ar_transaction_id,
             amount: input.payment_amount,
             date: input.payment_date,
             payment_method: input.payment_method,
-        });
+        }).select().single();
 
-        // 2. Add the corresponding financial transaction
+        if(installmentError) throw installmentError;
+
+
         const financialTxData = {
             date: input.payment_date,
             amount: input.payment_amount,
@@ -448,28 +469,27 @@ export async function addPaymentInstallment(input: z.infer<typeof AddInstallment
             category: input.ledger_type === 'payable' ? 'A/P Settlement' : 'A/R Settlement',
         };
 
+        let newFinancialTx = null;
         if (input.payment_method === 'cash') {
-            await supabase.from('cash_transactions').insert({
+            newFinancialTx = await supabase.from('cash_transactions').insert({
                 ...financialTxData,
                 type: input.ledger_type === 'payable' ? 'expense' : 'income',
-            });
+            }).select().single();
         } else { // bank
-            await supabase.from('bank_transactions').insert({
+            newFinancialTx = await supabase.from('bank_transactions').insert({
                 ...financialTxData,
                 type: input.ledger_type === 'payable' ? 'withdrawal' : 'deposit',
-            });
+            }).select().single();
         }
 
-        // 3. Update the parent AP/AR transaction
-        const newPaidAmount = input.already_paid_amount + input.payment_amount;
-        const newStatus = newPaidAmount >= input.original_amount ? 'paid' : 'partially paid';
-        
-        await supabase.from('ap_ar_transactions').update({
-            paid_amount: newPaidAmount,
-            status: newStatus
-        }).eq('id', input.ap_ar_transaction_id);
+        if(newFinancialTx.error) throw newFinancialTx.error;
 
-        return { success: true };
+        return { 
+            updatedParent, 
+            newInstallment, 
+            newFinancialTx: newFinancialTx.data,
+            paymentMethod: input.payment_method
+        };
 
     } catch (error: any) {
         console.error("Error adding installment:", error);

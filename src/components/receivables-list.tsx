@@ -78,14 +78,16 @@ export function ReceivablesList() {
                                         <div className="text-xs text-muted-foreground font-normal">of {formatCurrency(tx.amount)}</div>
                                     </TableCell>
                                     <TableCell className="text-center space-x-1">
-                                        <Button variant="outline" size="sm" onClick={() => handleSettleClick(tx)}>
-                                            <HandCoins className="mr-2 h-4 w-4"/>
-                                            Receive
-                                        </Button>
-                                         {isAdmin && (
-                                            <Button variant="destructive" size="icon" className="h-9 w-9" onClick={() => handleDeleteClick(tx)}>
-                                                <Trash2 className="h-4 w-4"/>
-                                            </Button>
+                                        {isAdmin && (
+                                            <>
+                                                <Button variant="outline" size="sm" onClick={() => handleSettleClick(tx)}>
+                                                    <HandCoins className="mr-2 h-4 w-4"/>
+                                                    Receive
+                                                </Button>
+                                                <Button variant="destructive" size="icon" className="h-9 w-9" onClick={() => handleDeleteClick(tx)}>
+                                                    <Trash2 className="h-4 w-4"/>
+                                                </Button>
+                                            </>
                                         )}
                                     </TableCell>
                                 </TableRow>
@@ -110,9 +112,8 @@ export function ReceivablesList() {
                 setIsOpen={(isOpen) => setDeleteDialogState({ isOpen: isOpen, txToDelete: null })}
                 onConfirm={confirmDeletion}
                 itemCount={1}
+                isPermanent={true}
             />
         </>
     )
 }
-
-    
