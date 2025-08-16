@@ -116,8 +116,8 @@ const initialAppState: AppState = {
 
 const getCacheKey = () => `ha-mim-iron-mart-cache`;
 
-const getInitialState = (user: User | null): AppState => {
-    let state = { ...initialAppState, user, initialBalanceSet: false };
+const getInitialState = (): AppState => {
+    let state = { ...initialAppState, initialBalanceSet: false };
     try {
         const storedSettings = localStorage.getItem('ha-mim-iron-mart-settings');
         if (storedSettings) {
@@ -172,7 +172,7 @@ const saveStateToLocalStorage = (state: AppState) => {
 
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<AppState>(initialAppState);
+  const [state, setState] = useState<AppState>(getInitialState());
   const [sessionChecked, setSessionChecked] = useState(false);
   const { toast } = useToast();
   const router = useRouter();
@@ -208,7 +208,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const checkSessionAndLoadData = async () => {
       try {
         const session = await getSession();
-        setState(getInitialState(session));
+        // Update user in state, but keep cached data until fresh data is loaded
+        setState(prev => ({...prev, user: session }));
       } catch (error) {
         console.error("Failed to get session", error);
       } finally {
@@ -586,8 +587,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         let cashTx, bankTx;
         if(from === 'cash') {
             await addCashTransaction({ ...baseTx, type: 'expense' });
+            await addBankTransaction({ ...baseTx, type: 'deposit' });
         } else {
             await addBankTransaction({ ...baseTx, type: 'withdrawal' });
+            await addCashTransaction({ ...baseTx, type: 'income' });
         }
         
      } catch (error) {
@@ -820,7 +823,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     saveStateToLocalStorage(state);
   }, [state])
 
-  if (!sessionChecked) {
+  if (!sessionChecked && !state.initialBalanceSet) {
     return <AppLoading />;
   }
 
@@ -875,5 +878,3 @@ export function useAppContext() {
   }
   return context;
 }
-
-    
