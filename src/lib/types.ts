@@ -41,7 +41,6 @@ export interface StockTransaction {
   deletedAt?: string;
   createdAt: string;
   user_id?: string;
-  contact_id?: string;
 }
 
 export interface User {
@@ -81,5 +80,3 @@ export interface LedgerTransaction {
   createdAt: string;
   user_id?: string;
 }
-
-    
