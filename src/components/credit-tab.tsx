@@ -1,3 +1,4 @@
+
 "use client";
 
 import React from 'react';
@@ -19,46 +20,38 @@ export function CreditTab() {
         return new Intl.NumberFormat('en-US', { style: 'currency', currency: currency, currencyDisplay: 'symbol' }).format(amount)
     }
 
-    const payablesCard = (
-        <Card>
-            <CardHeader>
-                <CardTitle>Accounts Payable</CardTitle>
-                <CardDescription>
-                    Money you owe to vendors. Total outstanding: <span className="font-bold text-destructive">{formatCurrency(totalPayables)}</span>
-                </CardDescription>
-            </CardHeader>
-            <CardContent>
-                <PayablesList />
-            </CardContent>
-        </Card>
+    const payablesContent = (
+        <div>
+            <div className="p-4 text-center rounded-lg bg-red-50 dark:bg-red-900/20 mb-4">
+                <div className="text-sm text-red-600 dark:text-red-300">Total Outstanding</div>
+                <div className="text-2xl font-bold text-red-700 dark:text-red-200">{formatCurrency(totalPayables)}</div>
+            </div>
+            <PayablesList />
+        </div>
     );
 
-    const receivablesCard = (
-         <Card>
-            <CardHeader>
-                <CardTitle>Accounts Receivable</CardTitle>
-                <CardDescription>
-                    Money your clients owe you. Total outstanding: <span className="font-bold text-accent">{formatCurrency(totalReceivables)}</span>
-                </CardDescription>
-            </CardHeader>
-            <CardContent>
-                <ReceivablesList />
-            </CardContent>
-        </Card>
+    const receivablesContent = (
+        <div>
+            <div className="p-4 text-center rounded-lg bg-green-50 dark:bg-green-900/20 mb-4">
+                <div className="text-sm text-green-600 dark:text-green-300">Total Outstanding</div>
+                <div className="text-2xl font-bold text-green-700 dark:text-green-200">{formatCurrency(totalReceivables)}</div>
+            </div>
+            <ReceivablesList />
+        </div>
     );
     
     if (isMobile) {
         return (
             <Tabs defaultValue="payables" className="w-full">
                 <TabsList className="grid w-full grid-cols-2">
-                    <TabsTrigger value="payables">Payables</TabsTrigger>
-                    <TabsTrigger value="receivables">Receivables</TabsTrigger>
+                    <TabsTrigger value="payables">Payables ({formatCurrency(totalPayables)})</TabsTrigger>
+                    <TabsTrigger value="receivables">Receivables ({formatCurrency(totalReceivables)})</TabsTrigger>
                 </TabsList>
                 <TabsContent value="payables" className="mt-4">
-                    {payablesCard}
+                    {payablesContent}
                 </TabsContent>
                 <TabsContent value="receivables" className="mt-4">
-                    {receivablesCard}
+                    {receivablesContent}
                 </TabsContent>
             </Tabs>
         )
@@ -67,10 +60,10 @@ export function CreditTab() {
     return (
        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div className="space-y-6">
-                {payablesCard}
+                {payablesContent}
             </div>
             <div className="space-y-6">
-                {receivablesCard}
+                {receivablesContent}
             </div>
        </div>
     )

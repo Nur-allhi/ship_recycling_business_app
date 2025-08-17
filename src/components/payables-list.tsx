@@ -8,17 +8,19 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from ".
 import { Card, CardContent } from "./ui/card";
 import { Button } from "./ui/button";
 import { format } from "date-fns";
-import { HandCoins, Trash2 } from "lucide-react";
+import { HandCoins, Trash2, Eye, EyeOff } from "lucide-react";
 import { SettlePaymentDialog } from "./settle-payment-dialog";
 import { DeleteConfirmationDialog } from "./delete-confirmation-dialog";
 import { Progress } from "./ui/progress";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./ui/tooltip";
 
 
 export function PayablesList() {
     const { ledgerTransactions, currency, deleteLedgerTransaction, user } = useAppContext();
     const [settleDialogState, setSettleDialogState] = useState<{isOpen: boolean, transaction: LedgerTransaction | null}>({isOpen: false, transaction: null});
     const [deleteDialogState, setDeleteDialogState] = useState<{isOpen: boolean, txToDelete: LedgerTransaction | null}>({isOpen: false, txToDelete: null});
+    const [showActions, setShowActions] = useState(false);
     const isAdmin = user?.role === 'admin';
     const isMobile = useIsMobile();
 
@@ -54,7 +56,7 @@ export function PayablesList() {
                         <TableHead>Vendor</TableHead>
                         <TableHead>Description</TableHead>
                         <TableHead className="text-right">Balance Due</TableHead>
-                        <TableHead className="text-center">Action</TableHead>
+                        {showActions && <TableHead className="text-center">Action</TableHead>}
                     </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -80,9 +82,9 @@ export function PayablesList() {
                                     <div>{formatCurrency(remainingBalance)}</div>
                                     <div className="text-xs text-muted-foreground font-normal">of {formatCurrency(tx.amount)}</div>
                                 </TableCell>
-                                <TableCell className="text-center space-x-1">
-                                    {isAdmin && (
-                                        <>
+                                {showActions && (
+                                    <TableCell className="text-center">
+                                        <div className="flex items-center justify-center gap-1">
                                             <Button variant="outline" size="sm" onClick={() => handleSettleClick(tx)}>
                                                 <HandCoins className="mr-2 h-4 w-4"/>
                                                 Pay
@@ -90,14 +92,14 @@ export function PayablesList() {
                                             <Button variant="destructive" size="icon" className="h-9 w-9" onClick={() => handleDeleteClick(tx)}>
                                                 <Trash2 className="h-4 w-4"/>
                                             </Button>
-                                        </>
-                                    )}
-                                </TableCell>
+                                        </div>
+                                    </TableCell>
+                                )}
                             </TableRow>
                         )})
                     ) : (
                         <TableRow>
-                            <TableCell colSpan={5} className="text-center h-24">No outstanding payables.</TableCell>
+                            <TableCell colSpan={showActions ? 4 : 3} className="text-center h-24">No outstanding payables.</TableCell>
                         </TableRow>
                     )}
                 </TableBody>
@@ -131,7 +133,7 @@ export function PayablesList() {
                                     <span className="text-xs text-muted-foreground font-mono">{progress.toFixed(0)}% paid</span>
                                 </div>
 
-                                {isAdmin && (
+                                {showActions && isAdmin && (
                                     <div className="flex gap-2 pt-2">
                                         <Button variant="outline" size="sm" className="flex-1" onClick={() => handleSettleClick(tx)}>
                                             <HandCoins className="mr-2 h-4 w-4"/>
@@ -154,7 +156,34 @@ export function PayablesList() {
 
     return (
         <>
-            {isMobile ? renderMobileView() : renderDesktopView()}
+            <Card>
+                <CardHeader>
+                    <div className="flex justify-between items-center">
+                        <div>
+                            <CardTitle>Accounts Payable</CardTitle>
+                            <CardDescription>Money you owe to vendors.</CardDescription>
+                        </div>
+                        {isAdmin && (
+                             <TooltipProvider>
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <Button size="icon" variant="ghost" onClick={() => setShowActions(!showActions)}>
+                                            {showActions ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                        </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                    <p>{showActions ? 'Hide' : 'Show'} Actions</p>
+                                    </TooltipContent>
+                                </Tooltip>
+                            </TooltipProvider>
+                        )}
+                    </div>
+                </CardHeader>
+                <CardContent>
+                    {isMobile ? renderMobileView() : renderDesktopView()}
+                </CardContent>
+            </Card>
+
             {settleDialogState.transaction && (
                 <SettlePaymentDialog 
                     isOpen={settleDialogState.isOpen}
