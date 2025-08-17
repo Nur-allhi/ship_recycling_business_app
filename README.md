@@ -81,7 +81,8 @@ LEFT JOIN
 ALTER TABLE banks ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Users can manage their own bank accounts"
 ON banks FOR ALL
-USING (auth.uid() = user_id);
+USING (auth.uid() = user_id)
+WITH CHECK (auth.uid() = user_id);
 
 ALTER TABLE activity_log ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Admins can view all activity logs"
