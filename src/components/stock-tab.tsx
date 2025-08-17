@@ -21,7 +21,7 @@ import { EditTransactionSheet } from "./edit-transaction-sheet"
 import { DeleteConfirmationDialog } from "./delete-confirmation-dialog"
 import { Checkbox } from "./ui/checkbox"
 import { format, subMonths, addMonths } from "date-fns"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { ResponsiveSelect, ResponsiveSelectItem } from "@/components/ui/responsive-select"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { Badge } from "./ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -114,7 +114,7 @@ export function StockTab() {
 
   const formatCurrency = (amount: number) => {
     if (currency === 'BDT') {
-      return `৳${new Intl.NumberFormat('en-US').format(amount)}`;
+      return `BDT ${new Intl.NumberFormat('en-US').format(amount)}`;
     }
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: currency, currencyDisplay: 'symbol' }).format(amount)
   }
@@ -493,16 +493,15 @@ export function StockTab() {
                             Showing page {currentPage} of {totalPages}
                             </div>
                             <div className="flex items-center gap-2">
-                            <Select value={String(itemsPerPage)} onValueChange={(value) => { setItemsPerPage(Number(value)); setCurrentPage(1); }}>
-                                <SelectTrigger className="w-[120px]">
-                                <SelectValue placeholder="Records per page" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                <SelectItem value="10">10 / page</SelectItem>
-                                <SelectItem value="20">20 / page</SelectItem>
-                                <SelectItem value="30">30 / page</SelectItem>
-                                </SelectContent>
-                            </Select>
+                            <ResponsiveSelect
+                                value={String(itemsPerPage)} 
+                                onValueChange={(value) => { setItemsPerPage(Number(value)); setCurrentPage(1); }}
+                                title="Records per page"
+                            >
+                                <ResponsiveSelectItem value="10">10 / page</ResponsiveSelectItem>
+                                <ResponsiveSelectItem value="20">20 / page</ResponsiveSelectItem>
+                                <ResponsiveSelectItem value="30">30 / page</ResponsiveSelectItem>
+                            </ResponsiveSelect>
                             <Button variant="outline" size="sm" onClick={() => setCurrentPage(prev => prev - 1)} disabled={currentPage === 1}>
                                 Previous
                             </Button>
@@ -544,3 +543,5 @@ export function StockTab() {
     </>
   )
 }
+
+    

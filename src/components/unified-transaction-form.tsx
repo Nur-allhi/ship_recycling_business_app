@@ -9,13 +9,7 @@ import { useAppContext } from '@/app/store';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { ResponsiveSelect, ResponsiveSelectItem } from '@/components/ui/responsive-select';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useToast } from '@/hooks/use-toast';
 import { CalendarIcon, Plus, PlusCircle, Wallet, Landmark, Boxes, ArrowRightLeft, UserPlus } from 'lucide-react';
@@ -302,17 +296,17 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
             control={control}
             name="contact_id"
             render={({ field }) => (
-                <Select onValueChange={field.onChange} value={field.value}>
-                    <SelectTrigger>
-                        <SelectValue placeholder={`Select a ${stockCreditContactType}`} />
-                    </SelectTrigger>
-                    <SelectContent>
-                        {stockCreditContacts.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
-                        <SelectItem value="new">
-                          <span className="flex items-center gap-2"><Plus className="h-4 w-4"/>Add New</span>
-                        </SelectItem>
-                    </SelectContent>
-                </Select>
+                <ResponsiveSelect 
+                    onValueChange={field.onChange} 
+                    value={field.value}
+                    title={`Select a ${stockCreditContactType}`}
+                    placeholder={`Select a ${stockCreditContactType}`}
+                >
+                    {stockCreditContacts.map(c => <ResponsiveSelectItem key={c.id} value={c.id}>{c.name}</ResponsiveSelectItem>)}
+                    <ResponsiveSelectItem value="new">
+                      <span className="flex items-center gap-2"><Plus className="h-4 w-4"/>Add New</span>
+                    </ResponsiveSelectItem>
+                </ResponsiveSelect>
             )}
         />
         {errors.contact_id && <p className="text-sm text-destructive">{errors.contact_id.message}</p>}
@@ -385,12 +379,14 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                                         control={control}
                                         name="category"
                                         render={({ field }) => (
-                                            <Select onValueChange={field.onChange} defaultValue={field.value}>
-                                                <SelectTrigger><SelectValue placeholder="Select a category" /></SelectTrigger>
-                                                <SelectContent>
-                                                    {currentCategories.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-                                                </SelectContent>
-                                            </Select>
+                                            <ResponsiveSelect 
+                                                onValueChange={field.onChange} 
+                                                value={field.value}
+                                                title="Select a category"
+                                                placeholder="Select a category"
+                                            >
+                                                {currentCategories.map(c => <ResponsiveSelectItem key={c} value={c}>{c}</ResponsiveSelectItem>)}
+                                            </ResponsiveSelect>
                                         )}
                                     />
                                     {errors.category && <p className="text-sm text-destructive">{errors.category.message}</p>}
@@ -432,12 +428,14 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                                         control={control}
                                         name="category"
                                         render={({ field }) => (
-                                            <Select onValueChange={field.onChange} defaultValue={field.value}>
-                                                <SelectTrigger><SelectValue placeholder="Select a category" /></SelectTrigger>
-                                                <SelectContent>
-                                                    {currentCategories.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-                                                </SelectContent>
-                                            </Select>
+                                            <ResponsiveSelect
+                                                onValueChange={field.onChange}
+                                                value={field.value}
+                                                title="Select a category"
+                                                placeholder="Select a category"
+                                            >
+                                                {currentCategories.map(c => <ResponsiveSelectItem key={c} value={c}>{c}</ResponsiveSelectItem>)}
+                                            </ResponsiveSelect>
                                         )}
                                     />
                                     {errors.category && <p className="text-sm text-destructive">{errors.category.message}</p>}
@@ -471,12 +469,14 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                                                     control={control}
                                                     name="stockItemName"
                                                     render={({ field }) => (
-                                                        <Select onValueChange={field.onChange} value={field.value}>
-                                                            <SelectTrigger><SelectValue placeholder="Select existing item" /></SelectTrigger>
-                                                            <SelectContent>
-                                                                {stockItems.map(item => <SelectItem key={item.id} value={item.name}>{item.name}</SelectItem>)}
-                                                            </SelectContent>
-                                                        </Select>
+                                                        <ResponsiveSelect
+                                                            onValueChange={field.onChange}
+                                                            value={field.value}
+                                                            title="Select an item"
+                                                            placeholder="Select existing item"
+                                                        >
+                                                            {stockItems.map(item => <ResponsiveSelectItem key={item.id} value={item.name}>{item.name}</ResponsiveSelectItem>)}
+                                                        </ResponsiveSelect>
                                                     )}
                                                 />
                                             )}
@@ -489,12 +489,14 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                                             control={control}
                                             name="stockItemName"
                                             render={({ field }) => (
-                                                <Select onValueChange={field.onChange} value={field.value}>
-                                                    <SelectTrigger><SelectValue placeholder="Select item to sell" /></SelectTrigger>
-                                                    <SelectContent>
-                                                        {stockItems.filter(i => i.weight > 0).map(item => <SelectItem key={item.id} value={item.name}>{item.name}</SelectItem>)}
-                                                    </SelectContent>
-                                                </Select>
+                                                <ResponsiveSelect
+                                                    onValueChange={field.onChange}
+                                                    value={field.value}
+                                                    title="Select an item"
+                                                    placeholder="Select item to sell"
+                                                >
+                                                    {stockItems.filter(i => i.weight > 0).map(item => <ResponsiveSelectItem key={item.id} value={item.name}>{item.name}</ResponsiveSelectItem>)}
+                                                </ResponsiveSelect>
                                             )}
                                         />
                                     )}
@@ -590,17 +592,17 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                                             control={control}
                                             name="contact_id"
                                             render={({ field }) => (
-                                                <Select onValueChange={field.onChange} value={field.value}>
-                                                    <SelectTrigger>
-                                                        <SelectValue placeholder={`Select a ${currentLedgerContactType}`} />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        {currentLedgerContacts.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
-                                                        <SelectItem value="new">
-                                                          <span className="flex items-center gap-2"><Plus className="h-4 w-4"/>Add New</span>
-                                                        </SelectItem>
-                                                    </SelectContent>
-                                                </Select>
+                                                <ResponsiveSelect
+                                                    onValueChange={field.onChange}
+                                                    value={field.value}
+                                                    title={`Select a ${currentLedgerContactType}`}
+                                                    placeholder={`Select a ${currentLedgerContactType}`}
+                                                >
+                                                    {currentLedgerContacts.map(c => <ResponsiveSelectItem key={c.id} value={c.id}>{c.name}</ResponsiveSelectItem>)}
+                                                    <ResponsiveSelectItem value="new">
+                                                      <span className="flex items-center gap-2"><Plus className="h-4 w-4"/>Add New</span>
+                                                    </ResponsiveSelectItem>
+                                                </ResponsiveSelect>
                                             )}
                                         />
                                         {errors.contact_id && <p className="text-sm text-destructive">{errors.contact_id.message}</p>}

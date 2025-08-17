@@ -55,7 +55,7 @@ export function ReceivablesList() {
     
     const formatCurrency = (amount: number) => {
         if (currency === 'BDT') {
-            return `৳${new Intl.NumberFormat('en-US').format(amount)}`;
+            return `BDT ${new Intl.NumberFormat('en-US').format(amount)}`;
         }
         return new Intl.NumberFormat('en-US', { style: 'currency', currency: currency, currencyDisplay: 'symbol' }).format(amount)
     }
@@ -204,3 +204,5 @@ export function ReceivablesList() {
         </>
     )
 }
+
+    

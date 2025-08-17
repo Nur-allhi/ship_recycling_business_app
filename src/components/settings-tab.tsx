@@ -12,7 +12,7 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { Badge } from "@/components/ui/badge"
 import { Plus, Trash2, Eye, EyeOff, Users, Settings, Palette, FileCog, Recycle } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { ResponsiveSelect, ResponsiveSelectItem } from "@/components/ui/responsive-select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { RecycleBinTab } from "./recycle-bin-tab"
 import { ExportImportTab } from "./export-import-tab"
@@ -247,19 +247,19 @@ export function SettingsTab() {
               </div>
                <div>
                 <Label>Currency</Label>
-                <Select value={currency} onValueChange={handleCurrencyChange}>
-                    <SelectTrigger className="w-[180px] mt-2">
-                        <SelectValue placeholder="Select currency" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="USD">USD ($)</SelectItem>
-                        <SelectItem value="EUR">EUR (€)</SelectItem>
-                        <SelectItem value="GBP">GBP (£)</SelectItem>
-                        <SelectItem value="JPY">JPY (¥)</SelectItem>
-                        <SelectItem value="INR">INR (₹)</SelectItem>
-                        <SelectItem value="BDT">BDT (৳)</SelectItem>
-                    </SelectContent>
-                </Select>
+                <ResponsiveSelect
+                    value={currency}
+                    onValueChange={handleCurrencyChange}
+                    title="Select currency"
+                    className="mt-2"
+                >
+                    <ResponsiveSelectItem value="USD">USD ($)</ResponsiveSelectItem>
+                    <ResponsiveSelectItem value="EUR">EUR (€)</ResponsiveSelectItem>
+                    <ResponsiveSelectItem value="GBP">GBP (£)</ResponsiveSelectItem>
+                    <ResponsiveSelectItem value="JPY">JPY (¥)</ResponsiveSelectItem>
+                    <ResponsiveSelectItem value="INR">INR (₹)</ResponsiveSelectItem>
+                    <ResponsiveSelectItem value="BDT">BDT (৳)</ResponsiveSelectItem>
+                </ResponsiveSelect>
               </div>
               <Separator />
               <div>
@@ -290,3 +290,5 @@ export function SettingsTab() {
     </div>
   )
 }
+
+    

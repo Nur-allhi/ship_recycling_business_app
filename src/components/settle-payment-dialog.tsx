@@ -25,7 +25,7 @@ import type { LedgerTransaction } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { Input } from './ui/input';
 import { useState, useMemo } from 'react';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { ResponsiveSelect, ResponsiveSelectItem } from './ui/responsive-select';
 
 const formSchema = z.object({
   paymentMethod: z.enum(['cash', 'bank'], { required_error: "Please select a payment method." }),
@@ -82,7 +82,7 @@ export function SettlePaymentDialog({ isOpen, setIsOpen, transactions, contactNa
 
     const formatCurrency = (amount: number) => {
         if (currency === 'BDT') {
-            return `৳${new Intl.NumberFormat('en-US').format(amount)}`;
+            return `BDT ${new Intl.NumberFormat('en-US').format(amount)}`;
         }
         return new Intl.NumberFormat('en-US', { style: 'currency', currency: currency, currencyDisplay: 'symbol' }).format(amount)
     }
@@ -119,24 +119,23 @@ export function SettlePaymentDialog({ isOpen, setIsOpen, transactions, contactNa
                                 control={control}
                                 name="transactionId"
                                 render={({ field }) => (
-                                    <Select onValueChange={(value) => {
-                                        field.onChange(value);
-                                        const tx = transactions.find(t => t.id === value);
-                                        if (tx) {
-                                            setValue('paymentAmount', tx.amount - tx.paid_amount);
-                                        }
-                                    }} value={field.value}>
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="Select a bill or invoice" />
-                                    </SelectTrigger>
-                                    <SelectContent>
+                                    <ResponsiveSelect
+                                        onValueChange={(value) => {
+                                            field.onChange(value);
+                                            const tx = transactions.find(t => t.id === value);
+                                            if (tx) {
+                                                setValue('paymentAmount', tx.amount - tx.paid_amount);
+                                            }
+                                        }}
+                                        value={field.value}
+                                        title="Select an Outstanding Transaction"
+                                    >
                                         {transactions.map(tx => (
-                                        <SelectItem key={tx.id} value={tx.id}>
-                                            {`${format(new Date(tx.date), 'dd-MM-yy')} - ${tx.description} (${formatCurrency(tx.amount - tx.paid_amount)} due)`}
-                                        </SelectItem>
+                                            <ResponsiveSelectItem key={tx.id} value={tx.id}>
+                                                {`${format(new Date(tx.date), 'dd-MM-yy')} - ${tx.description} (${formatCurrency(tx.amount - tx.paid_amount)} due)`}
+                                            </ResponsiveSelectItem>
                                         ))}
-                                    </SelectContent>
-                                    </Select>
+                                    </ResponsiveSelect>
                                 )}
                             />
                             {errors.transactionId && <p className="text-sm text-destructive">{errors.transactionId.message}</p>}
@@ -205,3 +204,5 @@ export function SettlePaymentDialog({ isOpen, setIsOpen, transactions, contactNa
         </Dialog>
     )
 }
+
+    
