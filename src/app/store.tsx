@@ -496,8 +496,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (tx.paymentMethod === 'credit' && contact_id) {
           const ledgerType = tx.type === 'purchase' ? 'payable' : 'receivable';
           const description = `${tx.type === 'purchase' ? 'Purchase' : 'Sale'} of ${tx.weight}kg of ${tx.stockItemName} on credit`;
-          const contactList = tx.type === 'purchase' ? state.vendors : state.clients;
-          const finalContactName = contact_name || contactList.find(c => c.id === contact_id)?.name;
+          
+          let finalContactName = contact_name;
+          if (!finalContactName) {
+            const contactList = tx.type === 'purchase' ? state.vendors : state.clients;
+            finalContactName = contactList.find(c => c.id === contact_id)?.name;
+          }
           
           if (!finalContactName) {
             throw new Error(`Could not find a name for the selected ${tx.type === 'purchase' ? 'vendor' : 'client'}.`);
