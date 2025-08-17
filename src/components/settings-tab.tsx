@@ -10,17 +10,20 @@ import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { Badge } from "@/components/ui/badge"
-import { Plus, Trash2, Eye, EyeOff, Users, Settings, Palette, FileCog, Recycle } from "lucide-react"
+import { Plus, Trash2, Eye, EyeOff, Users, Settings, Palette, FileCog, Recycle, Landmark, Activity } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { ResponsiveSelect, ResponsiveSelectItem } from "@/components/ui/responsive-select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { RecycleBinTab } from "./recycle-bin-tab"
 import { ExportImportTab } from "./export-import-tab"
 import { ContactsTab } from "./contacts-tab"
+import { ActivityLogTab } from "./activity-log-tab"
 
 export function SettingsTab() {
   const {
     user,
+    banks,
+    addBank,
     setInitialBalances,
     addInitialStockItem,
     fontSize,
@@ -48,7 +51,17 @@ export function SettingsTab() {
   const stockWeightRef = useRef<HTMLInputElement>(null)
   const stockPriceRef = useRef<HTMLInputElement>(null)
 
+  const newBankNameRef = useRef<HTMLInputElement>(null)
+
   const isAdmin = user?.role === 'admin';
+
+  const handleAddBank = () => {
+    const name = newBankNameRef.current?.value.trim();
+    if (name) {
+      addBank(name);
+      if (newBankNameRef.current) newBankNameRef.current.value = "";
+    }
+  }
 
   const handleBalanceSave = () => {
     const cash = parseFloat(cashBalanceRef.current?.value || '')
@@ -122,6 +135,7 @@ export function SettingsTab() {
           <TabsTrigger value="appearance"><Palette className="mr-2 h-4 w-4"/>Appearance</TabsTrigger>
           {isAdmin && <TabsTrigger value="general_settings"><Settings className="mr-2 h-4 w-4"/>General</TabsTrigger>}
           {isAdmin && <TabsTrigger value="contacts"><Users className="mr-2 h-4 w-4"/>Contacts & Users</TabsTrigger>}
+          {isAdmin && <TabsTrigger value="activity_log"><Activity className="mr-2 h-4 w-4"/>Activity Log</TabsTrigger>}
           {isAdmin && <TabsTrigger value="recycle_bin"><Recycle className="mr-2 h-4 w-4"/>Recycle Bin</TabsTrigger>}
           <TabsTrigger value="export_import"><FileCog className="mr-2 h-4 w-4"/>Export/Import</TabsTrigger>
         </TabsList>
@@ -142,7 +156,7 @@ export function SettingsTab() {
                             <Input id="cash-balance" type="number" ref={cashBalanceRef} placeholder="0.00" />
                         </div>
                         <div className="space-y-2">
-                            <Label htmlFor="bank-balance">Initial Bank Balance</Label>
+                            <Label htmlFor="bank-balance">Initial Bank Balance (for default bank)</Label>
                             <Input id="bank-balance" type="number" ref={bankBalanceRef} placeholder="0.00"/>
                         </div>
                         <Button onClick={handleBalanceSave}>Save Financial Balances</Button>
@@ -171,6 +185,32 @@ export function SettingsTab() {
                   </div>
               </CardContent>
             </Card>
+
+            <Card>
+                <CardHeader>
+                    <CardTitle>Bank Accounts</CardTitle>
+                    <CardDescription>Manage your bank accounts.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                     <div>
+                        <h3 className="font-semibold mb-2">Existing Bank Accounts</h3>
+                        {banks.length > 0 ? (
+                            <ul className="list-disc pl-5 space-y-1 text-sm">
+                                {banks.map(bank => <li key={bank.id}>{bank.name}</li>)}
+                            </ul>
+                        ) : <p className="text-sm text-muted-foreground">No bank accounts created yet.</p>}
+                     </div>
+                     <Separator/>
+                     <div>
+                        <h3 className="font-semibold mb-2">Add New Bank Account</h3>
+                        <div className="flex gap-2">
+                            <Input placeholder="New bank account name" ref={newBankNameRef} />
+                            <Button size="icon" onClick={handleAddBank}><Plus className="h-4 w-4" /></Button>
+                        </div>
+                     </div>
+                </CardContent>
+            </Card>
+            
             <Card>
               <CardHeader>
                 <CardTitle>Category Management</CardTitle>
@@ -218,7 +258,7 @@ export function SettingsTab() {
                 <CardHeader>
                 <CardTitle>Wastage Settings</CardTitle>
                 <CardDescription>Set a default wastage percentage for stock sales. This is applied to the weight of the sold item.</CardDescription>
-                </CardHeader>
+                </Header>
                 <CardContent className="space-y-4">
                 <div className="space-y-2">
                     <Label htmlFor="wastage-percentage">Wastage Percentage (%)</Label>
@@ -278,6 +318,10 @@ export function SettingsTab() {
             <ContactsTab />
         </TabsContent>}
 
+        {isAdmin && <TabsContent value="activity_log">
+            <ActivityLogTab />
+        </TabsContent>}
+
         {isAdmin && <TabsContent value="recycle_bin">
           <RecycleBinTab />
         </TabsContent>}
@@ -290,5 +334,3 @@ export function SettingsTab() {
     </div>
   )
 }
-
-    

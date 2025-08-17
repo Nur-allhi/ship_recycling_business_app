@@ -23,7 +23,7 @@ const getAuthenticatedSupabaseClient = async () => {
     const session = await getSession();
     if (!session?.accessToken) {
         // This will trigger a logout on the client-side if the session is missing or invalid
-        throw new Error("User not authenticated.");
+        throw new Error("SESSION_EXPIRED");
     }
 
     return createClient(
@@ -45,6 +45,17 @@ const handleApiError = (error: any) => {
         throw new Error("SESSION_EXPIRED"); 
     }
     throw error;
+}
+
+const logActivity = async (description: string) => {
+    try {
+        const session = await getSession();
+        if (!session) return; // Don't log if no session
+        const supabase = await getAuthenticatedSupabaseClient();
+        await supabase.from('activity_log').insert({ description });
+    } catch(e) {
+        console.error("Failed to log activity:", e);
+    }
 }
 
 
@@ -109,6 +120,7 @@ const AppendDataInputSchema = z.object({
   tableName: z.string(),
   data: z.record(z.any()),
   select: z.string().optional(),
+  logDescription: z.string().optional(),
 });
 
 export async function appendData(input: z.infer<typeof AppendDataInputSchema>) {
@@ -131,6 +143,9 @@ export async function appendData(input: z.infer<typeof AppendDataInputSchema>) {
             }
             throw new Error(error.message);
         }
+        if (input.logDescription) {
+            await logActivity(input.logDescription);
+        }
         return data;
     } catch (error) {
         return handleApiError(error);
@@ -141,6 +156,7 @@ const UpdateDataInputSchema = z.object({
   tableName: z.string(),
   id: z.string(),
   data: z.record(z.any()),
+  logDescription: z.string().optional(),
 });
 
 export async function updateData(input: z.infer<typeof UpdateDataInputSchema>) {
@@ -157,6 +173,10 @@ export async function updateData(input: z.infer<typeof UpdateDataInputSchema>) {
         .select();
 
     if (error) throw new Error(error.message);
+
+    if (input.logDescription) {
+        await logActivity(input.logDescription);
+    }
     return data;
   } catch(error) {
     return handleApiError(error);
@@ -166,6 +186,7 @@ export async function updateData(input: z.infer<typeof UpdateDataInputSchema>) {
 const DeleteDataInputSchema = z.object({
   tableName: z.string(),
   id: z.string(),
+  logDescription: z.string().optional(),
 });
 
 export async function deleteData(input: z.infer<typeof DeleteDataInputSchema>) {
@@ -182,6 +203,10 @@ export async function deleteData(input: z.infer<typeof DeleteDataInputSchema>) {
             
     if (error) throw new Error(error.message);
     
+    if (input.logDescription) {
+        await logActivity(input.logDescription);
+    }
+
     return { success: true };
   } catch(error) {
     return handleApiError(error);
@@ -206,6 +231,9 @@ export async function restoreData(input: z.infer<typeof RestoreDataInputSchema>)
             .eq('id', input.id);
 
         if (error) throw new Error(error.message);
+        
+        await logActivity(`Restored item from ${input.tableName} with ID: ${input.id}`);
+
         return { success: true };
     } catch (error) {
         return handleApiError(error);
@@ -215,7 +243,7 @@ export async function restoreData(input: z.infer<typeof RestoreDataInputSchema>)
 export async function exportAllData() {
     try {
         const supabase = await getAuthenticatedSupabaseClient();
-        const tables = ['cash_transactions', 'bank_transactions', 'stock_transactions', 'initial_stock', 'categories', 'vendors', 'clients', 'ap_ar_transactions', 'payment_installments'];
+        const tables = ['banks', 'cash_transactions', 'bank_transactions', 'stock_transactions', 'initial_stock', 'categories', 'vendors', 'clients', 'ap_ar_transactions', 'payment_installments'];
         const exportedData: Record<string, any[]> = {};
         
         for (const tableName of tables) {
@@ -229,7 +257,7 @@ export async function exportAllData() {
             exportedData[tableName] = data;
             }
         }
-
+        await logActivity("Exported all data to a backup file.");
         return exportedData;
     } catch (error) {
         return handleApiError(error);
@@ -241,7 +269,7 @@ const ImportDataSchema = z.record(z.array(z.record(z.any())));
 
 export async function batchImportData(dataToImport: z.infer<typeof ImportDataSchema>) {
     const supabase = createSupabaseClient(true);
-    const tables = ['cash_transactions', 'bank_transactions', 'stock_transactions', 'initial_stock', 'categories', 'vendors', 'clients', 'ap_ar_transactions', 'payment_installments'];
+    const tables = ['banks', 'cash_transactions', 'bank_transactions', 'stock_transactions', 'initial_stock', 'categories', 'vendors', 'clients', 'ap_ar_transactions', 'payment_installments'];
     const session = await getSession();
     if (!session) throw new Error("No active session for import.");
     if (session.role !== 'admin') throw new Error("Only admins can import data.");
@@ -266,6 +294,7 @@ export async function batchImportData(dataToImport: z.infer<typeof ImportDataSch
                 if (insertError && insertError.code !== '42P01') throw new Error(`Failed to import to ${tableName}: ${insertError.message}`);
             }
         }
+        await logActivity("Imported data from a backup file, overwriting existing data.");
         return { success: true };
     } catch(error: any) {
         console.error("Batch import failed:", error);
@@ -289,7 +318,7 @@ export async function deleteAllData() {
             }
         }
         
-        const tables = ['payment_installments', 'ap_ar_transactions', 'cash_transactions', 'bank_transactions', 'stock_transactions', 'initial_stock', 'categories', 'vendors', 'clients'];
+        const tables = ['payment_installments', 'ap_ar_transactions', 'cash_transactions', 'bank_transactions', 'stock_transactions', 'initial_stock', 'categories', 'vendors', 'clients', 'banks', 'activity_log'];
         for (const tableName of tables) {
             const { error } = await supabase.from(tableName).delete().neq('id', '00000000-0000-0000-0000-000000000000');
             if (error && error.code !== '42P01') {
@@ -298,6 +327,7 @@ export async function deleteAllData() {
             }
         }
         
+        await logActivity("DELETED ALL DATA AND USERS.");
         await logout();
 
         return { success: true };
@@ -309,13 +339,23 @@ export async function deleteAllData() {
 
 // --- Auth Actions ---
 
+export async function hasUsers() {
+    const supabaseAdmin = createSupabaseClient(true);
+    const { data, error } = await supabaseAdmin.auth.admin.listUsers();
+    if(error) throw new Error(error.message);
+    return data.users.length > 0;
+}
+
+
 const LoginInputSchema = z.object({
     username: z.string().email("Username must be a valid email address."),
     password: z.string(),
+    rememberMe: z.boolean().optional(),
 });
 
 export async function login(input: z.infer<typeof LoginInputSchema>) {
     const supabase = createSupabaseClient();
+    let isFirstUser = false;
     
     const { data, error } = await supabase.auth.signInWithPassword({
         email: input.username,
@@ -328,6 +368,7 @@ export async function login(input: z.infer<typeof LoginInputSchema>) {
              const { data: allUsers } = await supabaseAdmin.auth.admin.listUsers();
 
              if(allUsers?.users.length === 0) {
+                isFirstUser = true;
                 const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
                     email: input.username,
                     password: input.password,
@@ -351,7 +392,10 @@ export async function login(input: z.infer<typeof LoginInputSchema>) {
                 role: loginData.user.user_metadata.role || 'user',
                 accessToken: loginData.session.access_token,
             };
-            await createSession(sessionPayload);
+            await createSession(sessionPayload, input.rememberMe);
+            if (isFirstUser) {
+                await logActivity("Created the first admin user and logged in.");
+            }
             return { success: true };
         }
         throw new Error(error.message);
@@ -364,7 +408,8 @@ export async function login(input: z.infer<typeof LoginInputSchema>) {
         accessToken: data.session.access_token,
     }
     
-    await createSession(sessionData);
+    await createSession(sessionData, input.rememberMe);
+    await logActivity("User logged in.");
     return { success: true };
 }
 
@@ -395,6 +440,7 @@ export async function addUser(input: z.infer<typeof AddUserInputSchema>) {
     if (error) {
         throw new Error(error.message);
     }
+    await logActivity(`Added new user: ${input.username} with role: ${input.role}`);
     return { success: true };
 }
 
@@ -405,10 +451,13 @@ export async function deleteUser(id: string) {
     const supabase = createSupabaseClient(true);
     const { error } = await supabase.auth.admin.deleteUser(id);
     if (error) throw new Error(error.message);
+    
+    await logActivity(`Deleted user with ID: ${id}`);
     return { success: true };
 }
 
 export async function logout() {
+  await logActivity("User logged out.");
   await removeSession();
 }
 
@@ -421,6 +470,7 @@ const RecordPaymentAgainstTotalInputSchema = z.object({
     payment_date: z.string(),
     payment_method: z.enum(['cash', 'bank']),
     ledger_type: z.enum(['payable', 'receivable']),
+    bank_id: z.string().optional(),
 });
 
 export async function recordPaymentAgainstTotal(input: z.infer<typeof RecordPaymentAgainstTotalInputSchema>) {
@@ -478,6 +528,8 @@ export async function recordPaymentAgainstTotal(input: z.infer<typeof RecordPaym
             description: `Payment ${input.ledger_type === 'payable' ? 'to' : 'from'} ${input.contact_name}`,
             category: input.ledger_type === 'payable' ? 'A/P Settlement' : 'A/R Settlement',
         };
+        
+        const logDescription = `Recorded payment of ${financialTxData.amount} ${input.ledger_type === 'payable' ? 'to' : 'from'} ${input.contact_name} via ${input.payment_method}`;
 
         if (input.payment_method === 'cash') {
             await supabase.from('cash_transactions').insert({
@@ -485,12 +537,15 @@ export async function recordPaymentAgainstTotal(input: z.infer<typeof RecordPaym
                 type: input.ledger_type === 'payable' ? 'expense' : 'income',
             });
         } else { // bank
+            if (!input.bank_id) throw new Error("Bank ID is required for bank payments.");
             await supabase.from('bank_transactions').insert({
                 ...financialTxData,
                 type: input.ledger_type === 'payable' ? 'withdrawal' : 'deposit',
+                bank_id: input.bank_id,
             });
         }
         
+        await logActivity(logDescription);
         return { success: true };
 
     } catch (error: any) {

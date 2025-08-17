@@ -15,8 +15,15 @@ export interface CashTransaction extends Transaction {
   type: 'income' | 'expense';
 }
 
+export interface Bank {
+    id: string;
+    name: string;
+    createdAt: string;
+}
+
 export interface BankTransaction extends Transaction {
   type: 'deposit' | 'withdrawal';
+  bank_id: string;
 }
 
 export interface StockItem {
@@ -34,6 +41,7 @@ export interface StockTransaction {
   weight: number; // in kg
   pricePerKg: number;
   paymentMethod: 'cash' | 'bank' | 'credit';
+  bank_id?: string | null;
   description?: string;
   lastEdited?: string;
   deletedAt?: string;
@@ -83,5 +91,11 @@ export interface LedgerTransaction {
   installments: PaymentInstallment[];
 }
     
-
+export interface ActivityLog {
+    id: string;
+    created_at: string;
+    user_id: string;
+    username: string;
+    description: string;
+}
     

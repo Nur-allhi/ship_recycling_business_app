@@ -12,15 +12,17 @@ export interface SessionPayload {
     accessToken: string; // JWT token
 }
 
-export async function createSession(payload: SessionPayload) {
+export async function createSession(payload: SessionPayload, rememberMe?: boolean) {
   const sessionPayload = JSON.stringify(payload);
+  const maxAge = rememberMe ? 60 * 60 * 24 * 30 : 60 * 60 * 24; // 30 days or 1 day
+
   cookies().set('session', sessionPayload, {
     httpOnly: true,
     // The `secure` flag is required for `sameSite: 'none'`.
     // We set it to true for all environments because the editor preview
     // operates in a cross-site context.
     secure: true, 
-    maxAge: 60 * 60 * 24, // 1 day
+    maxAge: maxAge,
     path: '/',
     // This is the critical change. 'lax' (the default) prevents the cookie
     // from being sent in a cross-site iframe context (the editor preview).
@@ -51,5 +53,3 @@ export async function removeSession() {
     expires: new Date(0),
   });
 }
-
-    
