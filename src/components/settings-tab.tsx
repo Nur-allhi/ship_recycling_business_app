@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useRef } from "react"
@@ -257,7 +258,7 @@ export function SettingsTab() {
                 <CardHeader>
                 <CardTitle>Wastage Settings</CardTitle>
                 <CardDescription>Set a default wastage percentage for stock sales. This is applied to the weight of the sold item.</CardDescription>
-                </Header>
+                </CardHeader>
                 <CardContent className="space-y-4">
                 <div className="space-y-2">
                     <Label htmlFor="wastage-percentage">Wastage Percentage (%)</Label>
