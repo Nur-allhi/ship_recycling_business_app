@@ -43,7 +43,7 @@ export function ResponsiveDialog({
     return (
       <Sheet {...props}>
         {header}
-        <SheetContent>
+        <SheetContent side="bottom" className="max-h-[80dvh] overflow-y-auto">
           <SheetHeader className="text-left">
             {title && <SheetTitle>{title}</SheetTitle>}
             {description && <SheetDescription>{description}</SheetDescription>}
@@ -78,5 +78,3 @@ ResponsiveDialog.Trigger = React.forwardRef<
 })
 
 export { DialogTrigger as ResponsiveDialogTrigger }
-
-    
