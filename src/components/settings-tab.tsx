@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useRef } from "react"
@@ -38,7 +37,7 @@ export function SettingsTab() {
     setCurrency,
     showStockValue,
     setShowStockValue,
-  } = useAppContext()
+  } = useAppContext();
   const { toast } = useToast()
 
   const cashBalanceRef = useRef<HTMLInputElement>(null)
