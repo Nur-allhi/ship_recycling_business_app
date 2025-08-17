@@ -133,7 +133,7 @@ const AppendDataInputSchema = z.object({
 export async function appendData(input: z.infer<typeof AppendDataInputSchema>) {
     try {
         const session = await getSession();
-        if (session?.role !== 'admin') throw new Error("Only admins can add new data.");
+        if (!session) throw new Error("Authentication required to add new data.");
         
         const supabase = await getAuthenticatedSupabaseClient();
         
