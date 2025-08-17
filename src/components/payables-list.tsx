@@ -5,7 +5,7 @@ import { useState } from "react";
 import { useAppContext } from "@/app/store";
 import { LedgerTransaction } from "@/lib/types";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
-import { Card, CardContent } from "./ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "./ui/card";
 import { Button } from "./ui/button";
 import { format } from "date-fns";
 import { HandCoins, Trash2, Eye, EyeOff } from "lucide-react";
