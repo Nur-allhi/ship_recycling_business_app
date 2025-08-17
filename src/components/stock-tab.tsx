@@ -329,6 +329,94 @@ export function StockTab() {
     </div>
   )
 
+  const renderDesktopInventory = () => (
+     <div className="overflow-x-auto">
+        <Table>
+            <TableHeader>
+                <TableRow>
+                <TableHead className="text-center">Item Name</TableHead>
+                <TableHead className="text-center">Weight (kg)</TableHead>
+                <TableHead className="text-center">Avg. Price/kg</TableHead>
+                <TableHead className="text-center">Current Value</TableHead>
+                </TableRow>
+            </TableHeader>
+            <TableBody>
+                {stockItems.length > 0 ? (
+                stockItems.map((item: StockItem) => (
+                    <TableRow key={item.id}>
+                    <TableCell className="font-medium text-center">{item.name}</TableCell>
+                    <TableCell className="text-center font-mono">{item.weight.toFixed(2)}</TableCell>
+                    <TableCell className="text-center font-mono">{formatCurrency(item.purchasePricePerKg)}</TableCell>
+                    <TableCell className="text-center font-medium font-mono">{formatCurrency(item.weight * item.purchasePricePerKg)}</TableCell>
+                    </TableRow>
+                ))
+                ) : (
+                <TableRow>
+                    <TableCell colSpan={4} className="text-center h-24">No stock items yet.</TableCell>
+                </TableRow>
+                )}
+            </TableBody>
+            {stockItems.length > 0 && (
+                <TableFoot>
+                    <TableRow>
+                    <TableCell className="font-bold text-center">Totals</TableCell>
+                    <TableCell className="text-center font-bold font-mono">{totalStockWeight.toFixed(2)} kg</TableCell>
+                    <TableCell className="text-center font-bold font-mono">{formatCurrency(weightedAveragePrice)}</TableCell>
+                    <TableCell className="text-center font-bold font-mono">{formatCurrency(totalStockValue)}</TableCell>
+                    </TableRow>
+                </TableFoot>
+            )}
+        </Table>
+    </div>
+  )
+
+  const renderMobileInventory = () => (
+    <div className="space-y-4">
+        {stockItems.length > 0 ? (
+            stockItems.map((item: StockItem) => (
+                <Card key={item.id}>
+                    <CardContent className="p-4 space-y-2">
+                        <div className="flex justify-between items-start">
+                            <div className="font-semibold text-lg">{item.name}</div>
+                            <div className="text-right">
+                                <div className="font-bold text-primary text-xl font-mono">{formatCurrency(item.weight * item.purchasePricePerKg)}</div>
+                                <div className="text-xs text-muted-foreground">Current Value</div>
+                            </div>
+                        </div>
+                        <div className="flex justify-between text-sm text-muted-foreground font-mono pt-2">
+                            <span>{item.weight.toFixed(2)} kg</span>
+                            <span>@ {formatCurrency(item.purchasePricePerKg)}/kg</span>
+                        </div>
+                    </CardContent>
+                </Card>
+            ))
+        ) : (
+            <div className="text-center text-muted-foreground py-12">No stock items yet.</div>
+        )}
+
+        {stockItems.length > 0 && (
+            <Card className="bg-muted/50">
+                <CardHeader>
+                    <CardTitle className="text-base">Total Inventory Summary</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                     <div className="flex justify-between items-center text-lg">
+                        <span className="font-semibold">Total Value</span>
+                        <span className="font-bold font-mono">{formatCurrency(totalStockValue)}</span>
+                    </div>
+                     <div className="flex justify-between items-center text-sm text-muted-foreground">
+                        <span className="">Total Weight</span>
+                        <span className="font-mono">{totalStockWeight.toFixed(2)} kg</span>
+                    </div>
+                     <div className="flex justify-between items-center text-sm text-muted-foreground">
+                        <span className="">Avg. Price/kg</span>
+                        <span className="font-mono">{formatCurrency(weightedAveragePrice)}</span>
+                    </div>
+                </CardContent>
+            </Card>
+        )}
+    </div>
+  )
 
   return (
     <>
@@ -433,44 +521,7 @@ export function StockTab() {
                     <CardDescription>An overview of your current stock levels and value.</CardDescription>
                     </CardHeader>
                     <CardContent>
-                    <div className="overflow-x-auto">
-                        <Table>
-                        <TableHeader>
-                            <TableRow>
-                            <TableHead className="text-center">Item Name</TableHead>
-                            <TableHead className="text-center">Weight (kg)</TableHead>
-                            <TableHead className="text-center">Avg. Price/kg</TableHead>
-                            <TableHead className="text-center">Current Value</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {stockItems.length > 0 ? (
-                            stockItems.map((item: StockItem) => (
-                                <TableRow key={item.id}>
-                                <TableCell className="font-medium text-center">{item.name}</TableCell>
-                                <TableCell className="text-center font-mono">{item.weight.toFixed(2)}</TableCell>
-                                <TableCell className="text-center font-mono">{formatCurrency(item.purchasePricePerKg)}</TableCell>
-                                <TableCell className="text-center font-medium font-mono">{formatCurrency(item.weight * item.purchasePricePerKg)}</TableCell>
-                                </TableRow>
-                            ))
-                            ) : (
-                            <TableRow>
-                                <TableCell colSpan={4} className="text-center h-24">No stock items yet.</TableCell>
-                            </TableRow>
-                            )}
-                        </TableBody>
-                        {stockItems.length > 0 && (
-                            <TableFoot>
-                                <TableRow>
-                                <TableCell className="font-bold text-center">Totals</TableCell>
-                                <TableCell className="text-center font-bold font-mono">{totalStockWeight.toFixed(2)} kg</TableCell>
-                                <TableCell className="text-center font-bold font-mono">{formatCurrency(weightedAveragePrice)}</TableCell>
-                                <TableCell className="text-center font-bold font-mono">{formatCurrency(totalStockValue)}</TableCell>
-                                </TableRow>
-                            </TableFoot>
-                        )}
-                        </Table>
-                    </div>
+                        {isMobile ? renderMobileInventory() : renderDesktopInventory()}
                     </CardContent>
                 </Card>
             </TabsContent>
