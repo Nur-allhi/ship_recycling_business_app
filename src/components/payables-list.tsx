@@ -56,7 +56,8 @@ export function PayablesList() {
                         <TableHead>Vendor</TableHead>
                         <TableHead>Description</TableHead>
                         <TableHead className="text-right">Balance Due</TableHead>
-                        {showActions && <TableHead className="text-center">Action</TableHead>}
+                        <TableHead className="text-center">Settle</TableHead>
+                        {showActions && <TableHead className="text-center">Actions</TableHead>}
                     </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -82,24 +83,37 @@ export function PayablesList() {
                                     <div>{formatCurrency(remainingBalance)}</div>
                                     <div className="text-xs text-muted-foreground font-normal">of {formatCurrency(tx.amount)}</div>
                                 </TableCell>
+                                 <TableCell className="text-center">
+                                    <TooltipProvider>
+                                        <Tooltip>
+                                            <TooltipTrigger asChild>
+                                                <Button variant="outline" size="icon" className="h-9 w-9" onClick={() => handleSettleClick(tx)}>
+                                                    <HandCoins className="h-4 w-4"/>
+                                                </Button>
+                                            </TooltipTrigger>
+                                            <TooltipContent><p>Settle Payment</p></TooltipContent>
+                                        </Tooltip>
+                                    </TooltipProvider>
+                                </TableCell>
                                 {showActions && (
                                     <TableCell className="text-center">
-                                        <div className="flex items-center justify-center gap-1">
-                                            <Button variant="outline" size="sm" onClick={() => handleSettleClick(tx)}>
-                                                <HandCoins className="mr-2 h-4 w-4"/>
-                                                Pay
-                                            </Button>
-                                            <Button variant="destructive" size="icon" className="h-9 w-9" onClick={() => handleDeleteClick(tx)}>
-                                                <Trash2 className="h-4 w-4"/>
-                                            </Button>
-                                        </div>
+                                         <TooltipProvider>
+                                            <Tooltip>
+                                                <TooltipTrigger asChild>
+                                                     <Button variant="destructive" size="icon" className="h-9 w-9" onClick={() => handleDeleteClick(tx)}>
+                                                        <Trash2 className="h-4 w-4"/>
+                                                    </Button>
+                                                </TooltipTrigger>
+                                                <TooltipContent><p>Delete Entry</p></TooltipContent>
+                                            </Tooltip>
+                                        </TooltipProvider>
                                     </TableCell>
                                 )}
                             </TableRow>
                         )})
                     ) : (
                         <TableRow>
-                            <TableCell colSpan={showActions ? 4 : 3} className="text-center h-24">No outstanding payables.</TableCell>
+                            <TableCell colSpan={showActions ? 5 : 4} className="text-center h-24">No outstanding payables.</TableCell>
                         </TableRow>
                     )}
                 </TableBody>
@@ -132,16 +146,17 @@ export function PayablesList() {
                                     <Progress value={progress} className="h-2 flex-1" />
                                     <span className="text-xs text-muted-foreground font-mono">{progress.toFixed(0)}% paid</span>
                                 </div>
-
-                                {showActions && isAdmin && (
+                                {isAdmin && (
                                     <div className="flex gap-2 pt-2">
                                         <Button variant="outline" size="sm" className="flex-1" onClick={() => handleSettleClick(tx)}>
                                             <HandCoins className="mr-2 h-4 w-4"/>
                                             Settle Payment
                                         </Button>
-                                        <Button variant="destructive" size="icon" onClick={() => handleDeleteClick(tx)}>
-                                            <Trash2 className="h-4 w-4"/>
-                                        </Button>
+                                         {showActions && (
+                                            <Button variant="destructive" size="icon" onClick={() => handleDeleteClick(tx)}>
+                                                <Trash2 className="h-4 w-4"/>
+                                            </Button>
+                                        )}
                                     </div>
                                 )}
                             </CardContent>
