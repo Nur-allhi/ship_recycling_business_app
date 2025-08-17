@@ -39,6 +39,15 @@ $$;
 ALTER TABLE ap_ar_transactions
 ADD CONSTRAINT ap_ar_transactions_status_check
 CHECK (status IN ('unpaid', 'partially paid', 'paid'));
+
+-- SECURE: Enable RLS for the new table
+ALTER TABLE payment_installments ENABLE ROW LEVEL SECURITY;
+
+-- SECURE: Policy to allow users to manage their own installment payments
+CREATE POLICY "Users can manage their own payment installments"
+ON payment_installments FOR ALL
+USING (auth.uid() = user_id)
+WITH CHECK (auth.uid() = user_id);
 ```
 
 To enable multi-bank accounts and activity logging, please run the following SQL code:
@@ -74,16 +83,17 @@ CREATE TABLE activity_log (
 );
 
 -- Create a view to easily query activity logs with usernames
-CREATE OR REPLACE VIEW activity_log_with_users AS
-SELECT 
+-- SECURE: This view is now defined with SECURITY_INVOKER to respect RLS policies
+CREATE OR REPLACE VIEW activity_log_with_users WITH (security_invoker = true) AS
+SELECT
     al.id,
     al.created_at,
     al.user_id,
     u.email AS username,
     al.description
-FROM 
+FROM
     activity_log al
-LEFT JOIN 
+LEFT JOIN
     auth.users u ON al.user_id = u.id;
 
 -- RLS Policies for new tables
@@ -94,9 +104,6 @@ USING (auth.uid() = user_id)
 WITH CHECK (auth.uid() = user_id);
 
 ALTER TABLE activity_log ENABLE ROW LEVEL SECURITY;
-
--- Drop the old policy if it exists to avoid conflicts
-DROP POLICY IF EXISTS "Admins can view all activity logs" ON activity_log;
 
 -- This policy allows users with the 'admin' role to view all logs
 CREATE POLICY "Admins can view all activity logs"
