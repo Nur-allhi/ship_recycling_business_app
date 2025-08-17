@@ -2,7 +2,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
-import type { CashTransaction, BankTransaction, StockItem, StockTransaction, User, Vendor, Client, LedgerTransaction, PaymentInstallment } from '@/lib/types';
+import type { CashTransaction, BankTransaction, StockItem, StockTransaction, User, Vendor, Client, LedgerTransaction, PaymentInstallment, Bank } from '@/lib/types';
 import { useToast } from "@/hooks/use-toast"
 import { readData, appendData, updateData, deleteData, readDeletedData, restoreData, exportAllData, batchImportData, deleteAllData, logout as serverLogout, recordPaymentAgainstTotal } from '@/app/actions';
 import { format } from 'date-fns';
@@ -43,6 +43,7 @@ interface AppState {
   totalPayables: number;
   totalReceivables: number;
   isLoading: boolean;
+  banks: Bank[];
 }
 
 interface AppContextType extends AppState {
@@ -51,9 +52,9 @@ interface AppContextType extends AppState {
   addCashTransaction: (tx: Omit<CashTransaction, 'id' | 'createdAt' | 'deletedAt'>) => Promise<void>;
   addBankTransaction: (tx: Omit<BankTransaction, 'id' | 'createdAt' | 'deletedAt'>) => Promise<void>;
   addStockTransaction: (tx: Omit<StockTransaction, 'id' | 'createdAt' | 'deletedAt'> & { contact_id?: string, contact_name?: string }) => Promise<void>;
-  editCashTransaction: (originalTx: CashTransaction, updatedTxData: Partial<Omit<CashTransaction, 'id' | 'date'>>) => void;
-  editBankTransaction: (originalTx: BankTransaction, updatedTxData: Partial<Omit<BankTransaction, 'id' | 'date'>>) => void;
-  editStockTransaction: (originalTx: StockTransaction, updatedTxData: Partial<Omit<StockTransaction, 'id' | 'date'>>) => void;
+  editCashTransaction: (originalTx: CashTransaction, updatedTxData: Partial<Omit<CashTransaction, 'id' | 'date' | 'createdAt'>>) => Promise<void>;
+  editBankTransaction: (originalTx: BankTransaction, updatedTxData: Partial<Omit<BankTransaction, 'id' | 'date' | 'createdAt'>>) => Promise<void>;
+  editStockTransaction: (originalTx: StockTransaction, updatedTxData: Partial<Omit<StockTransaction, 'id' | 'date' | 'createdAt'>>) => Promise<void>;
   deleteCashTransaction: (tx: CashTransaction) => void;
   deleteBankTransaction: (tx: BankTransaction) => void;
   deleteStockTransaction: (tx: StockTransaction) => void;
@@ -62,14 +63,14 @@ interface AppContextType extends AppState {
   deleteMultipleStockTransactions: (txs: StockTransaction[]) => void;
   deleteLedgerTransaction: (tx: LedgerTransaction) => void;
   restoreTransaction: (txType: 'cash' | 'bank' | 'stock' | 'ap_ar', id: string) => void;
-  transferFunds: (from: 'cash' | 'bank', amount: number, date?: string) => Promise<void>;
+  transferFunds: (from: 'cash' | 'bank', amount: number, date?: string, bankId?: string) => Promise<void>;
   addCategory: (type: 'cash' | 'bank', category: string) => void;
   deleteCategory: (type: 'cash' | 'bank', category: string) => void;
   setFontSize: (size: FontSize) => void;
   setWastagePercentage: (percentage: number) => void;
   setCurrency: (currency: string) => void;
   setShowStockValue: (show: boolean) => void;
-  setInitialBalances: (cash: number, bank: number) => void;
+  setInitialBalances: (cash: number, bankTotals: Record<string, number>) => void;
   addInitialStockItem: (item: { name: string; weight: number; pricePerKg: number }) => void;
   handleExport: () => void;
   handleImport: (file: File) => void;
@@ -77,8 +78,9 @@ interface AppContextType extends AppState {
   logout: () => void;
   addVendor: (name: string) => Promise<any>;
   addClient: (name: string) => Promise<any>;
+  addBank: (name: string) => Promise<void>;
   addLedgerTransaction: (tx: Omit<LedgerTransaction, 'id' | 'createdAt' | 'deletedAt' | 'user_id' | 'status' | 'paid_amount' | 'installments'>) => Promise<void>;
-  recordPayment: (contactId: string, contactName: string, paymentAmount: number, paymentMethod: 'cash' | 'bank', paymentDate: Date, ledgerType: 'payable' | 'receivable') => Promise<void>;
+  recordPayment: (contactId: string, contactName: string, paymentAmount: number, paymentMethod: 'cash' | 'bank', paymentDate: Date, ledgerType: 'payable' | 'receivable', bankId?: string) => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -110,6 +112,7 @@ const initialAppState: AppState = {
   totalPayables: 0,
   totalReceivables: 0,
   isLoading: true,
+  banks: [],
 };
 
 const getCacheKey = () => `ha-mim-iron-mart-cache`;
@@ -161,6 +164,7 @@ const saveStateToLocalStorage = (state: AppState) => {
             ledgerTransactions: state.ledgerTransactions,
             totalPayables: state.totalPayables,
             totalReceivables: state.totalReceivables,
+            banks: state.banks,
         };
         localStorage.setItem(getCacheKey(), JSON.stringify(appStateToCache));
 
@@ -233,13 +237,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     cashTxs: CashTransaction[], 
     bankTxs: BankTransaction[],
     stockTxs: StockTransaction[],
+    initialStock: StockItem[],
   ) => {
       const finalCashBalance = cashTxs.reduce((acc, tx) => acc + (tx.type === 'income' ? tx.amount : -tx.amount), 0);
       const finalBankBalance = bankTxs.reduce((acc, tx) => acc + (tx.type === 'deposit' ? tx.amount : -tx.amount), 0);
         
       const stockPortfolio: Record<string, { weight: number, totalValue: number }> = {};
 
-      state.initialStockItems.forEach(item => {
+      initialStock.forEach(item => {
           if (!stockPortfolio[item.name]) {
               stockPortfolio[item.name] = { weight: 0, totalValue: 0 };
           }
@@ -274,7 +279,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }));
 
       return { finalCashBalance, finalBankBalance, aggregatedStockItems };
-  }, [state.initialStockItems]);
+  }, []);
   
   const reloadData = useCallback(async (options?: { force?: boolean }) => {
     const session = await getSession();
@@ -293,6 +298,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         clientsData,
         ledgerData,
         installmentsData,
+        banksData,
       ] = await Promise.all([
         readData({ tableName: 'cash_transactions' }),
         readData({ tableName: 'bank_transactions' }),
@@ -303,6 +309,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         readData({ tableName: 'clients' }),
         readData({ tableName: 'ap_ar_transactions', select: '*, installments:payment_installments(*)' }),
         readData({ tableName: 'payment_installments' }),
+        readData({ tableName: 'banks' }),
       ]);
         
         const cashTransactions: CashTransaction[] = cashData?.map((tx: any) => ({...tx, date: new Date(tx.date).toISOString() })) || [];
@@ -312,7 +319,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
         const needsInitialBalance = cashTransactions.length === 0 && bankTransactions.length === 0 && initialStockItems.length === 0;
         
-        const { finalCashBalance, finalBankBalance, aggregatedStockItems } = calculateBalancesAndStock(cashTransactions, bankTransactions, stockTransactions);
+        const { finalCashBalance, finalBankBalance, aggregatedStockItems } = calculateBalancesAndStock(cashTransactions, bankTransactions, stockTransactions, initialStockItems);
         
         const cashCategories = categoriesData?.filter((c: any) => c.type === 'cash').map((c: any) => c.name);
         const bankCategories = categoriesData?.filter((c: any) => c.type === 'bank').map((c: any) => c.name);
@@ -345,6 +352,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             ledgerTransactions: ledgerTransactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
             totalPayables,
             totalReceivables,
+            banks: banksData || [],
         }));
       } catch (error: any) {
         console.error("Failed to load data during promise resolution:", error);
@@ -385,7 +393,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
         setState(prev => {
             const newTxs = [newTxForUI, ...prev.cashTransactions];
-            const { finalCashBalance } = calculateBalancesAndStock(newTxs, prev.bankTransactions, prev.stockTransactions);
+            const { finalCashBalance } = calculateBalancesAndStock(newTxs, prev.bankTransactions, prev.stockTransactions, prev.initialStockItems);
             return {
                 ...prev,
                 cashTransactions: newTxs.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
@@ -412,7 +420,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
         setState(prev => {
             const newTxs = [newTxForUI, ...prev.bankTransactions];
-            const { finalBankBalance } = calculateBalancesAndStock(prev.cashTransactions, newTxs, prev.stockTransactions);
+            const { finalBankBalance } = calculateBalancesAndStock(prev.cashTransactions, newTxs, prev.stockTransactions, prev.initialStockItems);
             return {
                 ...prev,
                 bankTransactions: newTxs.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
@@ -477,7 +485,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // Optimistic UI for stock
     setState(prev => {
         const newStockTxs = [newTxForUI, ...prev.stockTransactions];
-        const { aggregatedStockItems } = calculateBalancesAndStock(prev.cashTransactions, prev.bankTransactions, newStockTxs);
+        const { aggregatedStockItems } = calculateBalancesAndStock(prev.cashTransactions, prev.bankTransactions, newStockTxs, prev.initialStockItems);
         return {
             ...prev,
             stockTransactions: newStockTxs.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
@@ -493,12 +501,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       // Replace temp stock record
        setState(prev => {
             const newStockTxs = prev.stockTransactions.map(t => t.id === tempId ? newStockTx : t);
-            const { aggregatedStockItems } = calculateBalancesAndStock(prev.cashTransactions, prev.bankTransactions, newStockTxs);
-            return {
-                ...prev,
-                stockTransactions: newStockTxs,
-                stockItems: aggregatedStockItems
-            };
+            return { ...prev, stockTransactions: newStockTxs };
        });
 
       const totalValue = tx.weight * tx.pricePerKg;
@@ -537,18 +540,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
           };
 
           if (tx.paymentMethod === 'cash') {
-              addCashTransaction({ ...financialTxData, type: tx.type === 'purchase' ? 'expense' : 'income' });
+              await addCashTransaction({ ...financialTxData, type: tx.type === 'purchase' ? 'expense' : 'income' });
           } else if (tx.paymentMethod === 'bank') { 
-              addBankTransaction({ ...financialTxData, type: tx.type === 'purchase' ? 'withdrawal' : 'deposit' });
+              await addBankTransaction({ ...financialTxData, type: tx.type === 'purchase' ? 'withdrawal' : 'deposit', bank_id: tx.bank_id! });
           }
       }
       
       toast({ title: "Success", description: "Stock transaction recorded."});
+      reloadData({ force: true });
     } catch (error: any) {
        // Rollback stock transaction on error
        setState(prev => {
             const newStockTxs = prev.stockTransactions.filter(t => t.id !== tempId);
-            const { aggregatedStockItems } = calculateBalancesAndStock(prev.cashTransactions, prev.bankTransactions, newStockTxs);
+            const { aggregatedStockItems } = calculateBalancesAndStock(prev.cashTransactions, prev.bankTransactions, newStockTxs, prev.initialStockItems);
              return {
                 ...prev,
                 stockTransactions: newStockTxs,
@@ -559,80 +563,97 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const editCashTransaction = (originalTx: CashTransaction, updatedTxData: Partial<Omit<CashTransaction, 'id' | 'date'>>) => {
+  const editCashTransaction = async (originalTx: CashTransaction, updatedTxData: Partial<Omit<CashTransaction, 'id' | 'date' | 'createdAt'>>) => {
       const updatedTx = { ...originalTx, ...updatedTxData, lastEdited: new Date().toISOString() };
       
       // Optimistic update
       setState(prev => {
           const newTxs = prev.cashTransactions.map(tx => tx.id === originalTx.id ? updatedTx : tx);
-          const { finalCashBalance, aggregatedStockItems } = calculateBalancesAndStock(newTxs, prev.bankTransactions, prev.stockTransactions);
+          const { finalCashBalance, aggregatedStockItems } = calculateBalancesAndStock(newTxs, prev.bankTransactions, prev.stockTransactions, prev.initialStockItems);
           return { ...prev, cashTransactions: newTxs, cashBalance: finalCashBalance, stockItems: aggregatedStockItems };
       });
       
-      // Background save
-      updateData({ tableName: 'cash_transactions', id: originalTx.id, data: updatedTxData })
-        .then(() => toast({ title: "Success", description: "Cash transaction updated." }))
-        .catch(error => {
+      try {
+        await updateData({ tableName: 'cash_transactions', id: originalTx.id, data: updatedTxData });
+        toast({ title: "Success", description: "Cash transaction updated." });
+        reloadData({ force: true });
+      } catch (error) {
             handleApiError(error);
             // Rollback on failure
             setState(prev => {
                 const newTxs = prev.cashTransactions.map(tx => tx.id === originalTx.id ? originalTx : tx);
-                const { finalCashBalance, aggregatedStockItems } = calculateBalancesAndStock(newTxs, prev.bankTransactions, prev.stockTransactions);
+                const { finalCashBalance, aggregatedStockItems } = calculateBalancesAndStock(newTxs, prev.bankTransactions, prev.stockTransactions, prev.initialStockItems);
                 return { ...prev, cashTransactions: newTxs, cashBalance: finalCashBalance, stockItems: aggregatedStockItems };
             });
-        });
+      }
   };
 
-  const editBankTransaction = (originalTx: BankTransaction, updatedTxData: Partial<Omit<BankTransaction, 'id'| 'date'>>) => {
+  const editBankTransaction = async (originalTx: BankTransaction, updatedTxData: Partial<Omit<BankTransaction, 'id'| 'date' | 'createdAt'>>) => {
       const updatedTx = { ...originalTx, ...updatedTxData, lastEdited: new Date().toISOString() };
       
       // Optimistic update
       setState(prev => {
           const newTxs = prev.bankTransactions.map(tx => tx.id === originalTx.id ? updatedTx : tx);
-          const { finalBankBalance, aggregatedStockItems } = calculateBalancesAndStock(prev.cashTransactions, newTxs, prev.stockTransactions);
+          const { finalBankBalance, aggregatedStockItems } = calculateBalancesAndStock(prev.cashTransactions, newTxs, prev.stockTransactions, prev.initialStockItems);
           return { ...prev, bankTransactions: newTxs, bankBalance: finalBankBalance, stockItems: aggregatedStockItems };
       });
 
-      // Background save
-      updateData({ tableName: 'bank_transactions', id: originalTx.id, data: updatedTxData })
-        .then(() => toast({ title: "Success", description: "Bank transaction updated."}))
-        .catch(error => {
+      try {
+        await updateData({ tableName: 'bank_transactions', id: originalTx.id, data: updatedTxData });
+        toast({ title: "Success", description: "Bank transaction updated."});
+        reloadData({ force: true });
+      } catch(error) {
             handleApiError(error);
             // Rollback on failure
             setState(prev => {
                 const newTxs = prev.bankTransactions.map(tx => tx.id === originalTx.id ? originalTx : tx);
-                const { finalBankBalance, aggregatedStockItems } = calculateBalancesAndStock(prev.cashTransactions, newTxs, prev.stockTransactions);
+                const { finalBankBalance, aggregatedStockItems } = calculateBalancesAndStock(prev.cashTransactions, newTxs, prev.stockTransactions, prev.initialStockItems);
                 return { ...prev, bankTransactions: newTxs, bankBalance: finalBankBalance, stockItems: aggregatedStockItems };
             });
-        });
+      }
   };
 
-  const editStockTransaction = (originalTx: StockTransaction, updatedTxData: Partial<Omit<StockTransaction, 'id' | 'date'>>) => {
+  const editStockTransaction = async (originalTx: StockTransaction, updatedTxData: Partial<Omit<StockTransaction, 'id' | 'date' | 'createdAt'>>) => {
       const updatedTx = { ...originalTx, ...updatedTxData, lastEdited: new Date().toISOString() };
       
       // Optimistic update
       setState(prev => {
           const newTxs = prev.stockTransactions.map(tx => tx.id === originalTx.id ? updatedTx : tx);
-          const { aggregatedStockItems } = calculateBalancesAndStock(prev.cashTransactions, prev.bankTransactions, newTxs);
+          const { aggregatedStockItems } = calculateBalancesAndStock(prev.cashTransactions, prev.bankTransactions, newTxs, prev.initialStockItems);
           return { ...prev, stockTransactions: newTxs, stockItems: aggregatedStockItems };
       });
       
-      // Background save
-      updateData({ tableName: 'stock_transactions', id: originalTx.id, data: updatedTxData })
-        .then(() => toast({ 
-            title: "Success", 
-            description: "Stock transaction updated. Please manually update the corresponding financial transaction if amount has changed.",
-            duration: 5000,
-        }))
-        .catch(error => {
-            handleApiError(error);
-             // Rollback on failure
-            setState(prev => {
-                const newTxs = prev.stockTransactions.map(tx => tx.id === originalTx.id ? originalTx : tx);
-                const { aggregatedStockItems } = calculateBalancesAndStock(prev.cashTransactions, prev.bankTransactions, newTxs);
-                return { ...prev, stockTransactions: newTxs, stockItems: aggregatedStockItems };
-            });
-        });
+      try {
+          await updateData({ tableName: 'stock_transactions', id: originalTx.id, data: updatedTxData });
+          
+          if (originalTx.paymentMethod === 'cash' || originalTx.paymentMethod === 'bank') {
+              const tableName = `${originalTx.paymentMethod}_transactions`;
+              const { data: linkedTxs } = await readData({ tableName, select: `id, linkedStockTxId`});
+              const linkedTx = (linkedTxs as any[])?.find(tx => tx.linkedStockTxId === originalTx.id);
+
+              if (linkedTx) {
+                  const newAmount = updatedTx.weight * updatedTx.pricePerKg;
+                  const newDescription = `${updatedTx.type === 'purchase' ? 'Purchase' : 'Sale'} of ${updatedTx.weight}kg of ${updatedTx.stockItemName}`;
+                  await updateData({ tableName, id: linkedTx.id, data: { amount: newAmount, description: newDescription } });
+              }
+          }
+          
+          toast({ 
+              title: "Success", 
+              description: "Stock transaction and linked financial entry updated.",
+              duration: 5000,
+          });
+          reloadData({ force: true });
+
+      } catch(error) {
+          handleApiError(error);
+           // Rollback on failure
+          setState(prev => {
+              const newTxs = prev.stockTransactions.map(tx => tx.id === originalTx.id ? originalTx : tx);
+              const { aggregatedStockItems } = calculateBalancesAndStock(prev.cashTransactions, prev.bankTransactions, newTxs, prev.initialStockItems);
+              return { ...prev, stockTransactions: newTxs, stockItems: aggregatedStockItems };
+          });
+      }
   };
 
   const deleteCashTransaction = (txToDelete: CashTransaction) => {
@@ -640,7 +661,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // Optimistic update
     setState(prev => {
         const newTxs = prev.cashTransactions.filter(tx => tx.id !== txToDelete.id);
-        const { finalCashBalance, aggregatedStockItems } = calculateBalancesAndStock(newTxs, prev.bankTransactions, prev.stockTransactions);
+        const { finalCashBalance, aggregatedStockItems } = calculateBalancesAndStock(newTxs, prev.bankTransactions, prev.stockTransactions, prev.initialStockItems);
         return { ...prev, cashTransactions: newTxs, cashBalance: finalCashBalance, stockItems: aggregatedStockItems };
     });
 
@@ -651,7 +672,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
                 return deleteData({ tableName: "stock_transactions", id: txToDelete.linkedStockTxId });
             }
         })
-        .then(() => toast({ title: "Success", description: "Cash transaction moved to recycle bin."}))
+        .then(() => {
+          toast({ title: "Success", description: "Cash transaction moved to recycle bin."});
+          reloadData({ force: true });
+        })
         .catch((error) => {
             handleApiError(error);
             setState(prev => ({...prev, cashTransactions: originalTxs})); // Rollback
@@ -663,7 +687,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
      // Optimistic update
     setState(prev => {
         const newTxs = prev.bankTransactions.filter(tx => tx.id !== txToDelete.id);
-        const { finalBankBalance, aggregatedStockItems } = calculateBalancesAndStock(prev.cashTransactions, newTxs, prev.stockTransactions);
+        const { finalBankBalance, aggregatedStockItems } = calculateBalancesAndStock(prev.cashTransactions, newTxs, prev.stockTransactions, prev.initialStockItems);
         return { ...prev, bankTransactions: newTxs, bankBalance: finalBankBalance, stockItems: aggregatedStockItems };
     });
 
@@ -674,7 +698,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
                 return deleteData({ tableName: "stock_transactions", id: txToDelete.linkedStockTxId });
             }
         })
-        .then(() => toast({ title: "Success", description: "Bank transaction moved to recycle bin."}))
+        .then(() => {
+          toast({ title: "Success", description: "Bank transaction moved to recycle bin."});
+          reloadData({ force: true });
+        })
         .catch(error => {
             handleApiError(error);
             setState(prev => ({...prev, bankTransactions: originalTxs})); // Rollback
@@ -686,7 +713,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
      // Optimistic update
     setState(prev => {
         const newTxs = prev.stockTransactions.filter(tx => tx.id !== txToDelete.id);
-        const { aggregatedStockItems } = calculateBalancesAndStock(prev.cashTransactions, prev.bankTransactions, newTxs);
+        const { aggregatedStockItems } = calculateBalancesAndStock(prev.cashTransactions, prev.bankTransactions, newTxs, prev.initialStockItems);
         return { ...prev, stockTransactions: newTxs, stockItems: aggregatedStockItems };
     });
     
@@ -694,16 +721,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
     deleteData({ tableName: "stock_transactions", id: txToDelete.id })
         .then(async () => {
             const { data: allCashTxs } = await supabase.from('cash_transactions').select('id, deletedAt').eq('linkedStockTxId', txToDelete.id);
-            if (allCashTxs && allCashTxs.length > 0 && !allCashTxs[0].deletedAt) {
-                await deleteData({ tableName: "cash_transactions", id: allCashTxs[0].id });
+            const activeCashTx = allCashTxs?.find(tx => !tx.deletedAt);
+            if (activeCashTx) {
+                await deleteData({ tableName: "cash_transactions", id: activeCashTx.id });
             }
     
             const { data: allBankTxs } = await supabase.from('bank_transactions').select('id, deletedAt').eq('linkedStockTxId', txToDelete.id);
-            if (allBankTxs && allBankTxs.length > 0 && !allBankTxs[0].deletedAt) {
-                await deleteData({ tableName: "bank_transactions", id: allBankTxs[0].id });
+            const activeBankTx = allBankTxs?.find(tx => !tx.deletedAt);
+            if (activeBankTx) {
+                await deleteData({ tableName: "bank_transactions", id: activeBankTx.id });
             }
+
+            toast({ title: "Stock Transaction Deleted", description: "The corresponding financial entry was also moved to the recycle bin."});
+            reloadData({ force: true });
         })
-        .then(() => toast({ title: "Stock Transaction Deleted", description: "The corresponding financial entry was also moved to the recycle bin."}))
         .catch(error => {
             handleApiError(error);
             setState(prev => ({...prev, stockTransactions: originalTxs})); // Rollback
@@ -768,7 +799,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const transferFunds = async (from: 'cash' | 'bank', amount: number, date?: string) => {
+  const transferFunds = async (from: 'cash' | 'bank', amount: number, date?: string, bankId?: string) => {
      const transactionDate = date || new Date().toISOString();
      const description = from === 'cash' ? 'Transfer to Bank' : 'Transfer from Bank';
 
@@ -777,12 +808,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
         
         if(from === 'cash') {
             await addCashTransaction({ ...baseTx, type: 'expense' });
-            await addBankTransaction({ ...baseTx, type: 'deposit' });
+            await addBankTransaction({ ...baseTx, type: 'deposit', bank_id: bankId! });
         } else {
-            await addBankTransaction({ ...baseTx, type: 'withdrawal' });
+            await addBankTransaction({ ...baseTx, type: 'withdrawal', bank_id: bankId! });
             await addCashTransaction({ ...baseTx, type: 'income' });
         }
-        
+        reloadData({ force: true });
      } catch (error) {
         handleApiError(error);
      }
@@ -816,18 +847,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
   };
 
-  const setInitialBalances = async (cash: number, bank: number) => {
+  const setInitialBalances = async (cash: number, bankTotals: Record<string, number>) => {
     try {
         const date = new Date().toISOString();
         if (cash > 0) {
             await addCashTransaction({ date, type: 'income', amount: cash, description: 'Initial Balance', category: 'Initial Balance' });
         }
-        if (bank > 0) {
-            await addBankTransaction({ date, type: 'deposit', amount: bank, description: 'Initial Balance', category: 'Initial Balance' });
+        for (const [bankId, amount] of Object.entries(bankTotals)) {
+            if (amount > 0) {
+                await addBankTransaction({ date, type: 'deposit', amount, description: 'Initial Balance', category: 'Initial Balance', bank_id: bankId });
+            }
         }
         
         toast({ title: "Initial balances set." });
         setState(prev => ({ ...prev, needsInitialBalance: false }));
+        reloadData({ force: true });
 
     } catch (e) {
         handleApiError(e);
@@ -956,6 +990,37 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const addBank = async (name: string) => {
+    if (!state.user) {
+      toast({
+        variant: 'destructive',
+        title: 'Authentication Error',
+        description: 'You must be logged in to add a bank.',
+      });
+      return;
+    }
+    try {
+        const newBank = await appendData({
+            tableName: 'banks',
+            data: { name },
+            select: '*'
+        });
+        if (!newBank) {
+            toast({
+                variant: 'destructive',
+                title: 'Setup Incomplete',
+                description: 'Could not save to the "banks" table. Please ensure it exists and RLS is configured.'
+            });
+            return;
+        }
+        setState(prev => ({ ...prev, banks: [...prev.banks, newBank] }));
+        toast({ title: 'Bank Added' });
+        reloadData({ force: true });
+    } catch (error: any) {
+        handleApiError(error);
+    }
+  }
+
   const deleteLedgerTransaction = (txToDelete: LedgerTransaction) => {
     if (!state.user || state.user.role !== 'admin') {
         toast({ variant: 'destructive', title: 'Permission Denied', description: 'Only admins can delete transactions.' });
@@ -978,8 +1043,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       });
   }
   
-  const recordPayment = async (contactId: string, contactName: string, paymentAmount: number, paymentMethod: 'cash' | 'bank', paymentDate: Date, ledgerType: 'payable' | 'receivable') => {
+  const recordPayment = async (contactId: string, contactName: string, paymentAmount: number, paymentMethod: 'cash' | 'bank', paymentDate: Date, ledgerType: 'payable' | 'receivable', bankId?: string) => {
     try {
+        if(paymentMethod === 'bank' && !bankId) {
+            throw new Error("Please select a bank account for this payment.");
+        }
         await recordPaymentAgainstTotal({
             contact_id: contactId,
             contact_name: contactName,
@@ -987,6 +1055,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             payment_date: paymentDate.toISOString(),
             payment_method: paymentMethod,
             ledger_type: ledgerType,
+            bank_id: bankId,
         });
 
         // Optimistically update the UI. For a full refresh, we'll call reloadData.
@@ -1047,6 +1116,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         addClient,
         addLedgerTransaction,
         recordPayment,
+        addBank,
     }}>
       {children}
     </AppContext.Provider>

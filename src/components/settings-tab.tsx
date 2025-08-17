@@ -39,10 +39,12 @@ export function SettingsTab() {
     showStockValue,
     setShowStockValue,
   } = useAppContext();
+
   const { toast } = useToast()
 
   const cashBalanceRef = useRef<HTMLInputElement>(null)
-  const bankBalanceRef = useRef<HTMLInputElement>(null)
+  const bankRefs = useRef<Record<string, HTMLInputElement | null>>({});
+
   const cashCategoryRef = useRef<HTMLInputElement>(null)
   const bankCategoryRef = useRef<HTMLInputElement>(null)
   const wastageRef = useRef<HTMLInputElement>(null)
@@ -64,20 +66,33 @@ export function SettingsTab() {
   }
 
   const handleBalanceSave = () => {
-    const cash = parseFloat(cashBalanceRef.current?.value || '')
-    const bank = parseFloat(bankBalanceRef.current?.value || '')
+    const cash = parseFloat(cashBalanceRef.current?.value || '0');
+    const bankTotals: Record<string, number> = {};
 
-     if (isNaN(cash) || isNaN(bank) || cash < 0 || bank < 0) {
+    for(const bank of banks) {
+        const bankVal = parseFloat(bankRefs.current[bank.id]?.value || '0');
+        if (isNaN(bankVal) || bankVal < 0) {
+            toast({
+                variant: "destructive",
+                title: "Invalid Input",
+                description: `Please enter a valid, non-negative number for ${bank.name}.`,
+            });
+            return;
+        }
+        bankTotals[bank.id] = bankVal;
+    }
+
+    if (isNaN(cash) || cash < 0) {
         toast({
             variant: "destructive",
             title: "Invalid Input",
-            description: "Please enter valid, non-negative numbers for balances.",
+            description: "Please enter a valid, non-negative number for cash balance.",
         });
         return;
     }
 
-    setInitialBalances(cash, bank)
-    toast({ title: "Balances Updated", description: "Initial cash and bank balances have been set." })
+    setInitialBalances(cash, bankTotals);
+    toast({ title: "Balances Updated", description: "Initial cash and bank balances have been set." });
   }
 
   const handleInitialStockSave = () => {
@@ -155,10 +170,17 @@ export function SettingsTab() {
                             <Label htmlFor="cash-balance">Initial Cash Balance</Label>
                             <Input id="cash-balance" type="number" ref={cashBalanceRef} placeholder="0.00" />
                         </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="bank-balance">Initial Bank Balance (for default bank)</Label>
-                            <Input id="bank-balance" type="number" ref={bankBalanceRef} placeholder="0.00"/>
-                        </div>
+                        {banks.map(bank => (
+                            <div key={bank.id} className="space-y-2">
+                                <Label htmlFor={`bank-balance-${bank.id}`}>Initial Balance for {bank.name}</Label>
+                                <Input 
+                                    id={`bank-balance-${bank.id}`} 
+                                    type="number" 
+                                    ref={el => bankRefs.current[bank.id] = el} 
+                                    placeholder="0.00"
+                                />
+                            </div>
+                        ))}
                         <Button onClick={handleBalanceSave}>Save Financial Balances</Button>
                     </div>
                   </div>
@@ -332,5 +354,5 @@ export function SettingsTab() {
 
       </Tabs>
     </div>
-  )
+  );
 }
