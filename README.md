@@ -1,3 +1,4 @@
+
 # Firebase Studio
 
 This is a NextJS starter in Firebase Studio.
@@ -54,6 +55,7 @@ To enable multi-bank accounts and activity logging, please run the following SQL
 
 ```sql
 -- Create a helper function to safely get the role from user_metadata
+-- This may already exist from previous steps, CREATE OR REPLACE is safe.
 CREATE OR REPLACE FUNCTION get_user_role(user_id uuid)
 RETURNS text AS $$
 BEGIN
@@ -71,30 +73,27 @@ CREATE TABLE banks (
 );
 
 -- Add a foreign key to bank_transactions to link to a specific bank
-ALTER TABLE bank_transactions
-ADD COLUMN bank_id UUID REFERENCES banks(id) ON DELETE SET NULL;
+-- This may already exist from previous steps, this is safe to run again.
+DO $$
+BEGIN
+   IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='bank_transactions' and column_name='bank_id') THEN
+      ALTER TABLE bank_transactions ADD COLUMN bank_id UUID REFERENCES banks(id) ON DELETE SET NULL;
+   END IF;
+END
+$$;
+
 
 -- Create the activity log table to track user actions
 CREATE TABLE activity_log (
     id BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
     created_at TIMESTAMPTZ DEFAULT now() NOT NULL,
     user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+    username TEXT, -- We will store the username directly
     description TEXT
 );
 
--- Create a view to easily query activity logs with usernames
--- SECURE: This view is now defined with SECURITY_INVOKER to respect RLS policies
-CREATE OR REPLACE VIEW activity_log_with_users WITH (security_invoker = true) AS
-SELECT
-    al.id,
-    al.created_at,
-    al.user_id,
-    u.email AS username,
-    al.description
-FROM
-    activity_log al
-LEFT JOIN
-    auth.users u ON al.user_id = u.id;
+-- Drop the problematic view if it exists
+DROP VIEW IF EXISTS activity_log_with_users;
 
 -- RLS Policies for new tables
 ALTER TABLE banks ENABLE ROW LEVEL SECURITY;
@@ -118,3 +117,5 @@ ON activity_log FOR INSERT
 TO authenticated
 WITH CHECK (auth.uid() = user_id);
 ```
+
+    

@@ -51,10 +51,17 @@ const logActivity = async (description: string) => {
     try {
         const session = await getSession();
         if (!session) return; // Don't log if no session
+        
+        // Use a client-side authenticated client to insert, respecting RLS.
         const supabase = await getAuthenticatedSupabaseClient();
-        await supabase.from('activity_log').insert({ description });
+        await supabase.from('activity_log').insert({ 
+            description,
+            user_id: session.id,
+            username: session.username, // Now we store the username directly
+        });
     } catch(e) {
         console.error("Failed to log activity:", e);
+        // We don't re-throw here because logging failure shouldn't block the user's action.
     }
 }
 
@@ -559,3 +566,5 @@ export async function recordPaymentAgainstTotal(input: z.infer<typeof RecordPaym
         return handleApiError(error);
     }
 }
+
+    
