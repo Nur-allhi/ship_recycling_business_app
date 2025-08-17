@@ -28,6 +28,7 @@ import { useIsMobile } from "@/hooks/use-mobile"
 type SelectContextValue = {
   value?: string
   onValueChange: (value: string) => void
+  setOpen: (open: boolean) => void
 }
 
 const SelectContext = React.createContext<SelectContextValue | null>(null)
@@ -76,17 +77,19 @@ const ResponsiveSelect = React.forwardRef<
     }, [children, value])
 
     const content = (
-      <Command>
-        <CommandInput placeholder="Search..." />
-        <CommandList>
-          <CommandEmpty>No results found.</CommandEmpty>
-          <CommandGroup>{children}</CommandGroup>
-        </CommandList>
-      </Command>
+       <SelectContext.Provider value={{ value, onValueChange, setOpen }}>
+          <Command>
+            <CommandInput placeholder="Search..." />
+            <CommandList>
+              <CommandEmpty>No results found.</CommandEmpty>
+              <CommandGroup>{children}</CommandGroup>
+            </CommandList>
+          </Command>
+      </SelectContext.Provider>
     )
 
     return (
-      <SelectContext.Provider value={{ value, onValueChange }}>
+      <SelectContext.Provider value={{ value, onValueChange, setOpen }}>
         {isMobile ? (
           <ResponsiveDialog
             open={open}
@@ -141,15 +144,18 @@ ResponsiveSelect.displayName = "ResponsiveSelect"
 const ResponsiveSelectItem = React.forwardRef<
   React.ElementRef<typeof CommandItem>,
   React.ComponentProps<typeof CommandItem>
->(({ className, children, ...props }, ref) => {
-  const { value, onValueChange } = useSelectContext()
+>(({ className, children, onSelect, value, ...props }, ref) => {
+  const { value: contextValue, onValueChange, setOpen } = useSelectContext()
 
   return (
     <CommandItem
-      onSelect={(currentValue) => {
-        onValueChange(currentValue === value ? "" : currentValue)
-      }}
       ref={ref}
+      onSelect={(currentValue) => {
+        onValueChange(currentValue === contextValue ? "" : currentValue)
+        setOpen(false)
+        onSelect?.(currentValue)
+      }}
+      value={value}
       className={cn("flex items-center justify-between", className)}
       {...props}
     >
@@ -157,7 +163,7 @@ const ResponsiveSelectItem = React.forwardRef<
       <Check
         className={cn(
           "h-4 w-4",
-          value === props.value ? "opacity-100" : "opacity-0"
+          contextValue === value ? "opacity-100" : "opacity-0"
         )}
       />
     </CommandItem>
