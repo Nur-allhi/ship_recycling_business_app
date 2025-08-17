@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useAppContext } from "@/app/store";
 import { LedgerTransaction } from "@/lib/types";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
@@ -15,16 +15,43 @@ import { Progress } from "./ui/progress";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./ui/tooltip";
 
+interface AggregatedContact {
+    contact_id: string;
+    contact_name: string;
+    total_amount: number;
+    total_paid: number;
+    transactions: LedgerTransaction[];
+}
 
 export function PayablesList() {
     const { ledgerTransactions, currency, deleteLedgerTransaction, user } = useAppContext();
-    const [settleDialogState, setSettleDialogState] = useState<{isOpen: boolean, transaction: LedgerTransaction | null}>({isOpen: false, transaction: null});
+    const [settleDialogState, setSettleDialogState] = useState<{isOpen: boolean, transactions: LedgerTransaction[], contactName: string | null}>({isOpen: false, transactions: [], contactName: null});
     const [deleteDialogState, setDeleteDialogState] = useState<{isOpen: boolean, txToDelete: LedgerTransaction | null}>({isOpen: false, txToDelete: null});
     const [showActions, setShowActions] = useState(false);
     const isAdmin = user?.role === 'admin';
     const isMobile = useIsMobile();
 
-    const payables = ledgerTransactions.filter(tx => tx.type === 'payable' && tx.status !== 'paid');
+    const payablesByContact = useMemo(() => {
+        const unpaidTxs = ledgerTransactions.filter(tx => tx.type === 'payable' && tx.status !== 'paid');
+        const groups: Record<string, AggregatedContact> = {};
+
+        unpaidTxs.forEach(tx => {
+            if (!groups[tx.contact_id]) {
+                groups[tx.contact_id] = {
+                    contact_id: tx.contact_id,
+                    contact_name: tx.contact_name,
+                    total_amount: 0,
+                    total_paid: 0,
+                    transactions: [],
+                };
+            }
+            groups[tx.contact_id].total_amount += tx.amount;
+            groups[tx.contact_id].total_paid += tx.paid_amount;
+            groups[tx.contact_id].transactions.push(tx);
+        });
+
+        return Object.values(groups);
+    }, [ledgerTransactions]);
     
     const formatCurrency = (amount: number) => {
         if (currency === 'BDT') {
@@ -33,8 +60,8 @@ export function PayablesList() {
         return new Intl.NumberFormat('en-US', { style: 'currency', currency: currency, currencyDisplay: 'symbol' }).format(amount)
     }
 
-    const handleSettleClick = (tx: LedgerTransaction) => {
-        setSettleDialogState({ isOpen: true, transaction: tx });
+    const handleSettleClick = (contact: AggregatedContact) => {
+        setSettleDialogState({ isOpen: true, transactions: contact.transactions, contactName: contact.contact_name });
     }
 
     const handleDeleteClick = (tx: LedgerTransaction) => {
@@ -54,26 +81,19 @@ export function PayablesList() {
                 <TableHeader>
                     <TableRow>
                         <TableHead>Vendor</TableHead>
-                        <TableHead>Description</TableHead>
                         <TableHead className="text-right">Balance Due</TableHead>
                         <TableHead className="text-center">Settle</TableHead>
-                        {showActions && <TableHead className="text-center">Actions</TableHead>}
                     </TableRow>
                 </TableHeader>
                 <TableBody>
-                    {payables.length > 0 ? (
-                        payables.map(tx => {
-                            const remainingBalance = tx.amount - tx.paid_amount;
-                            const progress = (tx.paid_amount / tx.amount) * 100;
-
+                    {payablesByContact.length > 0 ? (
+                        payablesByContact.map(contact => {
+                            const remainingBalance = contact.total_amount - contact.total_paid;
+                            const progress = (contact.total_paid / contact.total_amount) * 100;
                             return (
-                            <TableRow key={tx.id}>
+                            <TableRow key={contact.contact_id}>
                                 <TableCell className="font-medium">
-                                    <div>{tx.contact_name}</div>
-                                    <div className="text-xs text-muted-foreground font-mono">{format(new Date(tx.date), 'dd-MM-yy')}</div>
-                                </TableCell>
-                                <TableCell>
-                                    <div>{tx.description}</div>
+                                    <div>{contact.contact_name}</div>
                                     <div className="flex items-center gap-2 mt-1">
                                         <Progress value={progress} className="h-2 w-24" />
                                         <span className="text-xs text-muted-foreground font-mono">{progress.toFixed(0)}%</span>
@@ -81,13 +101,13 @@ export function PayablesList() {
                                 </TableCell>
                                 <TableCell className="text-right font-mono font-semibold">
                                     <div>{formatCurrency(remainingBalance)}</div>
-                                    <div className="text-xs text-muted-foreground font-normal">of {formatCurrency(tx.amount)}</div>
+                                    <div className="text-xs text-muted-foreground font-normal">of {formatCurrency(contact.total_amount)}</div>
                                 </TableCell>
                                  <TableCell className="text-center">
                                     <TooltipProvider>
                                         <Tooltip>
                                             <TooltipTrigger asChild>
-                                                <Button variant="outline" size="icon" className="h-9 w-9" onClick={() => handleSettleClick(tx)}>
+                                                <Button variant="outline" size="icon" className="h-9 w-9" onClick={() => handleSettleClick(contact)}>
                                                     <HandCoins className="h-4 w-4"/>
                                                 </Button>
                                             </TooltipTrigger>
@@ -95,25 +115,11 @@ export function PayablesList() {
                                         </Tooltip>
                                     </TooltipProvider>
                                 </TableCell>
-                                {showActions && (
-                                    <TableCell className="text-center">
-                                         <TooltipProvider>
-                                            <Tooltip>
-                                                <TooltipTrigger asChild>
-                                                     <Button variant="destructive" size="icon" className="h-9 w-9" onClick={() => handleDeleteClick(tx)}>
-                                                        <Trash2 className="h-4 w-4"/>
-                                                    </Button>
-                                                </TooltipTrigger>
-                                                <TooltipContent><p>Delete Entry</p></TooltipContent>
-                                            </Tooltip>
-                                        </TooltipProvider>
-                                    </TableCell>
-                                )}
                             </TableRow>
                         )})
                     ) : (
                         <TableRow>
-                            <TableCell colSpan={showActions ? 5 : 4} className="text-center h-24">No outstanding payables.</TableCell>
+                            <TableCell colSpan={3} className="text-center h-24">No outstanding payables.</TableCell>
                         </TableRow>
                     )}
                 </TableBody>
@@ -123,22 +129,21 @@ export function PayablesList() {
     
     const renderMobileView = () => (
         <div className="space-y-4">
-            {payables.length > 0 ? (
-                payables.map(tx => {
-                    const remainingBalance = tx.amount - tx.paid_amount;
-                    const progress = (tx.paid_amount / tx.amount) * 100;
+            {payablesByContact.length > 0 ? (
+                payablesByContact.map(contact => {
+                    const remainingBalance = contact.total_amount - contact.total_paid;
+                    const progress = (contact.total_paid / contact.total_amount) * 100;
                     return (
-                        <Card key={tx.id}>
+                        <Card key={contact.contact_id}>
                             <CardContent className="p-4 space-y-3">
                                 <div className="flex justify-between items-start">
                                     <div>
-                                        <div className="font-semibold">{tx.contact_name}</div>
-                                        <div className="text-sm text-muted-foreground">{tx.description}</div>
-                                        <div className="text-xs text-muted-foreground font-mono">{format(new Date(tx.date), 'PPP')}</div>
+                                        <div className="font-semibold">{contact.contact_name}</div>
+                                        <div className="text-sm text-muted-foreground">{contact.transactions.length} open bill(s)</div>
                                     </div>
                                     <div className="text-right">
                                         <div className="font-bold text-destructive text-lg">{formatCurrency(remainingBalance)}</div>
-                                        <div className="text-xs text-muted-foreground">of {formatCurrency(tx.amount)}</div>
+                                        <div className="text-xs text-muted-foreground">of {formatCurrency(contact.total_amount)}</div>
                                     </div>
                                 </div>
                                 
@@ -148,15 +153,10 @@ export function PayablesList() {
                                 </div>
                                 {isAdmin && (
                                     <div className="flex gap-2 pt-2">
-                                        <Button variant="outline" size="sm" className="flex-1" onClick={() => handleSettleClick(tx)}>
+                                        <Button variant="outline" size="sm" className="flex-1" onClick={() => handleSettleClick(contact)}>
                                             <HandCoins className="mr-2 h-4 w-4"/>
                                             Settle Payment
                                         </Button>
-                                         {showActions && (
-                                            <Button variant="destructive" size="icon" onClick={() => handleDeleteClick(tx)}>
-                                                <Trash2 className="h-4 w-4"/>
-                                            </Button>
-                                        )}
                                     </div>
                                 )}
                             </CardContent>
@@ -178,20 +178,6 @@ export function PayablesList() {
                             <CardTitle>Accounts Payable</CardTitle>
                             <CardDescription>Money you owe to vendors.</CardDescription>
                         </div>
-                        {isAdmin && (
-                             <TooltipProvider>
-                                <Tooltip>
-                                    <TooltipTrigger asChild>
-                                        <Button size="icon" variant="ghost" onClick={() => setShowActions(!showActions)}>
-                                            {showActions ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                                        </Button>
-                                    </TooltipTrigger>
-                                    <TooltipContent>
-                                    <p>{showActions ? 'Hide' : 'Show'} Actions</p>
-                                    </TooltipContent>
-                                </Tooltip>
-                            </TooltipProvider>
-                        )}
                     </div>
                 </CardHeader>
                 <CardContent>
@@ -199,11 +185,12 @@ export function PayablesList() {
                 </CardContent>
             </Card>
 
-            {settleDialogState.transaction && (
+            {settleDialogState.transactions.length > 0 && (
                 <SettlePaymentDialog 
                     isOpen={settleDialogState.isOpen}
-                    setIsOpen={(isOpen) => setSettleDialogState({ isOpen, transaction: isOpen ? settleDialogState.transaction : null })}
-                    transaction={settleDialogState.transaction}
+                    setIsOpen={(isOpen) => setSettleDialogState({ isOpen, transactions: [], contactName: null })}
+                    transactions={settleDialogState.transactions}
+                    contactName={settleDialogState.contactName!}
                 />
             )}
              <DeleteConfirmationDialog 
