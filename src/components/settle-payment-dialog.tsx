@@ -21,17 +21,21 @@ import { CalendarIcon, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { useAppContext } from '@/app/store';
-import type { LedgerTransaction } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { Input } from './ui/input';
-import { useState, useMemo } from 'react';
-import { ResponsiveSelect, ResponsiveSelectItem } from './ui/responsive-select';
+
+interface AggregatedContact {
+    contact_id: string;
+    contact_name: string;
+    total_amount: number;
+    total_paid: number;
+    type: 'payable' | 'receivable';
+}
 
 const formSchema = z.object({
   paymentMethod: z.enum(['cash', 'bank'], { required_error: "Please select a payment method." }),
   paymentDate: z.date({ required_error: "Please select a payment date." }),
   paymentAmount: z.coerce.number().positive("Payment amount must be positive."),
-  transactionId: z.string({ required_error: "Please select a transaction to settle." }),
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -39,46 +43,27 @@ type FormData = z.infer<typeof formSchema>;
 interface SettlePaymentDialogProps {
   isOpen: boolean;
   setIsOpen: (open: boolean) => void;
-  transactions: LedgerTransaction[];
-  contactName: string;
+  contact: AggregatedContact;
 }
 
-export function SettlePaymentDialog({ isOpen, setIsOpen, transactions, contactName }: SettlePaymentDialogProps) {
-    const { recordInstallment, currency } = useAppContext();
+export function SettlePaymentDialog({ isOpen, setIsOpen, contact }: SettlePaymentDialogProps) {
+    const { recordPayment, currency } = useAppContext();
     const { toast } = useToast();
-    const [selectedTxId, setSelectedTxId] = useState<string | null>(null);
-
-    const selectedTransaction = useMemo(() => {
-        return transactions.find(tx => tx.id === selectedTxId);
-    }, [transactions, selectedTxId]);
-
-    const remainingBalance = selectedTransaction ? selectedTransaction.amount - selectedTransaction.paid_amount : 0;
     
-    const { control, handleSubmit, register, formState: { errors, isSubmitting }, setValue, watch } = useForm<FormData>({
+    const remainingBalance = contact.total_amount - contact.total_paid;
+
+    const { control, handleSubmit, register, formState: { errors, isSubmitting }} = useForm<FormData>({
         resolver: zodResolver(formSchema.refine(data => {
-            if (!selectedTransaction) return false;
-            const balance = selectedTransaction.amount - selectedTransaction.paid_amount;
-            return data.paymentAmount <= balance;
+            return data.paymentAmount <= remainingBalance;
         }, {
-            message: "Payment cannot exceed the remaining balance for the selected transaction.",
+            message: "Payment cannot exceed the remaining balance.",
             path: ["paymentAmount"],
         })),
         defaultValues: {
             paymentDate: new Date(),
+            paymentAmount: remainingBalance
         },
     });
-
-    const transactionId = watch('transactionId');
-
-    useState(() => {
-        if(transactionId) {
-            const tx = transactions.find(t => t.id === transactionId);
-            if(tx) {
-                setValue('paymentAmount', tx.amount - tx.paid_amount);
-            }
-        }
-    }, [transactionId, transactions, setValue]);
-
 
     const formatCurrency = (amount: number) => {
         if (currency === 'BDT') {
@@ -88,14 +73,8 @@ export function SettlePaymentDialog({ isOpen, setIsOpen, transactions, contactNa
     }
 
     const onSubmit = async (data: FormData) => {
-        const transactionToSettle = transactions.find(tx => tx.id === data.transactionId);
-        if (!transactionToSettle) {
-            toast({ variant: 'destructive', title: 'Error', description: 'Selected transaction not found.' });
-            return;
-        }
-
         try {
-            await recordInstallment(transactionToSettle, data.paymentAmount, data.paymentMethod, data.paymentDate);
+            await recordPayment(contact.contact_id, contact.contact_name, data.paymentAmount, data.paymentMethod, data.paymentDate, contact.type);
             setIsOpen(false);
         } catch (error: any) {
             toast({ variant: 'destructive', title: 'Payment Failed', description: error.message });
@@ -106,74 +85,44 @@ export function SettlePaymentDialog({ isOpen, setIsOpen, transactions, contactNa
         <Dialog open={isOpen} onOpenChange={setIsOpen}>
             <DialogContent>
                 <DialogHeader>
-                    <DialogTitle>Record Payment for {contactName}</DialogTitle>
+                    <DialogTitle>Record Payment for {contact.contact_name}</DialogTitle>
                     <DialogDescription>
-                        Select a transaction to record a full or partial payment.
+                        The total outstanding balance is <span className="font-bold">{formatCurrency(remainingBalance)}</span>.
                     </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4 py-2 text-sm">
                     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-                        <div className="space-y-2">
-                           <Label htmlFor="transactionId">Outstanding Transaction</Label>
-                           <Controller
-                                control={control}
-                                name="transactionId"
-                                render={({ field }) => (
-                                    <ResponsiveSelect
-                                        onValueChange={(value) => {
-                                            field.onChange(value);
-                                            const tx = transactions.find(t => t.id === value);
-                                            if (tx) {
-                                                setValue('paymentAmount', tx.amount - tx.paid_amount);
-                                            }
-                                        }}
-                                        value={field.value}
-                                        title="Select an Outstanding Transaction"
-                                    >
-                                        {transactions.map(tx => (
-                                            <ResponsiveSelectItem key={tx.id} value={tx.id}>
-                                                {`${format(new Date(tx.date), 'dd-MM-yy')} - ${tx.description} (${formatCurrency(tx.amount - tx.paid_amount)} due)`}
-                                            </ResponsiveSelectItem>
-                                        ))}
-                                    </ResponsiveSelect>
-                                )}
-                            />
-                            {errors.transactionId && <p className="text-sm text-destructive">{errors.transactionId.message}</p>}
-                        </div>
-                        
-                        {transactionId && (
-                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-fade-in">
-                                <div className="space-y-2">
-                                    <Label htmlFor="paymentAmount">Payment Amount</Label>
-                                    <Input id="paymentAmount" type="number" step="0.01" {...register('paymentAmount')} />
-                                    {errors.paymentAmount && <p className="text-sm text-destructive">{errors.paymentAmount.message}</p>}
-                                </div>
-                                <div className="space-y-2">
-                                    <Label>Payment Date</Label>
-                                    <Controller
-                                        control={control}
-                                        name="paymentDate"
-                                        render={({ field }) => (
-                                            <Popover>
-                                                <PopoverTrigger asChild>
-                                                    <Button
-                                                        variant={"outline"}
-                                                        className={cn("w-full justify-start text-left font-normal", !field.value && "text-muted-foreground")}
-                                                    >
-                                                        <CalendarIcon className="mr-2 h-4 w-4" />
-                                                        {field.value ? format(field.value, "PPP") : <span>Pick a date</span>}
-                                                    </Button>
-                                                </PopoverTrigger>
-                                                <PopoverContent className="w-auto p-0">
-                                                    <Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus />
-                                                </PopoverContent>
-                                            </Popover>
-                                        )}
-                                    />
-                                    {errors.paymentDate && <p className="text-sm text-destructive">{errors.paymentDate.message}</p>}
-                                </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <Label htmlFor="paymentAmount">Payment Amount</Label>
+                                <Input id="paymentAmount" type="number" step="0.01" {...register('paymentAmount')} />
+                                {errors.paymentAmount && <p className="text-sm text-destructive">{errors.paymentAmount.message}</p>}
                             </div>
-                        )}
+                            <div className="space-y-2">
+                                <Label>Payment Date</Label>
+                                <Controller
+                                    control={control}
+                                    name="paymentDate"
+                                    render={({ field }) => (
+                                        <Popover>
+                                            <PopoverTrigger asChild>
+                                                <Button
+                                                    variant={"outline"}
+                                                    className={cn("w-full justify-start text-left font-normal", !field.value && "text-muted-foreground")}
+                                                >
+                                                    <CalendarIcon className="mr-2 h-4 w-4" />
+                                                    {field.value ? format(field.value, "PPP") : <span>Pick a date</span>}
+                                                </Button>
+                                            </PopoverTrigger>
+                                            <PopoverContent className="w-auto p-0">
+                                                <Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus />
+                                            </PopoverContent>
+                                        </Popover>
+                                    )}
+                                />
+                                {errors.paymentDate && <p className="text-sm text-destructive">{errors.paymentDate.message}</p>}
+                            </div>
+                        </div>
                         
                         <div className="space-y-2">
                             <Label>Pay from / into</Label>
@@ -204,5 +153,3 @@ export function SettlePaymentDialog({ isOpen, setIsOpen, transactions, contactNa
         </Dialog>
     )
 }
-
-    

@@ -414,78 +414,87 @@ export async function logout() {
 
 // --- Specific App Actions ---
 
-const AddInstallmentInputSchema = z.object({
-    ap_ar_transaction_id: z.string(),
-    original_amount: z.number(),
-    already_paid_amount: z.number(),
+const RecordPaymentAgainstTotalInputSchema = z.object({
+    contact_id: z.string(),
+    contact_name: z.string(),
     payment_amount: z.number(),
     payment_date: z.string(),
     payment_method: z.enum(['cash', 'bank']),
     ledger_type: z.enum(['payable', 'receivable']),
-    description: z.string(),
 });
 
-export async function addPaymentInstallment(input: z.infer<typeof AddInstallmentInputSchema>) {
+export async function recordPaymentAgainstTotal(input: z.infer<typeof RecordPaymentAgainstTotalInputSchema>) {
     const supabase = await getAuthenticatedSupabaseClient();
     const session = await getSession();
     if (session?.role !== 'admin') throw new Error("Only admins can settle payments.");
 
     try {
-        const newPaidAmount = input.already_paid_amount + input.payment_amount;
-        const newStatus = newPaidAmount >= input.original_amount ? 'paid' : 'partially paid';
-        
-        const {data: updatedParent, error: updateError} = await supabase.from('ap_ar_transactions').update({
-            paid_amount: newPaidAmount,
-            status: newStatus
-        }).eq('id', input.ap_ar_transaction_id).select().single();
+        // 1. Fetch all outstanding transactions for this contact, oldest first
+        const { data: outstandingTxs, error: fetchError } = await supabase
+            .from('ap_ar_transactions')
+            .select('*')
+            .eq('contact_id', input.contact_id)
+            .in('status', ['unpaid', 'partially paid'])
+            .order('date', { ascending: true });
 
-        if (updateError) throw updateError;
+        if (fetchError) throw fetchError;
 
+        let amountToSettle = input.payment_amount;
 
-        const {data: newInstallment, error: installmentError} = await supabase.from('payment_installments').insert({
-            ap_ar_transaction_id: input.ap_ar_transaction_id,
-            amount: input.payment_amount,
-            date: input.payment_date,
-            payment_method: input.payment_method,
-        }).select().single();
+        for (const tx of outstandingTxs) {
+            if (amountToSettle <= 0) break;
 
-        if(installmentError) throw installmentError;
+            const remainingBalance = tx.amount - tx.paid_amount;
+            const paymentForThisTx = Math.min(amountToSettle, remainingBalance);
+            
+            const newPaidAmount = tx.paid_amount + paymentForThisTx;
+            const newStatus = newPaidAmount >= tx.amount ? 'paid' : 'partially paid';
 
+            // 2. Update the ledger transaction
+            const { error: updateError } = await supabase
+                .from('ap_ar_transactions')
+                .update({ paid_amount: newPaidAmount, status: newStatus })
+                .eq('id', tx.id);
+            
+            if (updateError) throw updateError;
+            
+            // 3. Create an installment record for this part of the payment
+            const { error: installmentError } = await supabase.from('payment_installments').insert({
+                ap_ar_transaction_id: tx.id,
+                amount: paymentForThisTx,
+                date: input.payment_date,
+                payment_method: input.payment_method,
+            });
 
+            if (installmentError) throw installmentError;
+
+            amountToSettle -= paymentForThisTx;
+        }
+
+        // 4. Create a single financial transaction for the total payment
         const financialTxData = {
             date: input.payment_date,
             amount: input.payment_amount,
-            description: `Installment for: ${input.description}`,
+            description: `Payment ${input.ledger_type === 'payable' ? 'to' : 'from'} ${input.contact_name}`,
             category: input.ledger_type === 'payable' ? 'A/P Settlement' : 'A/R Settlement',
         };
 
-        let newFinancialTx = null;
         if (input.payment_method === 'cash') {
-            newFinancialTx = await supabase.from('cash_transactions').insert({
+            await supabase.from('cash_transactions').insert({
                 ...financialTxData,
                 type: input.ledger_type === 'payable' ? 'expense' : 'income',
-            }).select().single();
+            });
         } else { // bank
-            newFinancialTx = await supabase.from('bank_transactions').insert({
+            await supabase.from('bank_transactions').insert({
                 ...financialTxData,
                 type: input.ledger_type === 'payable' ? 'withdrawal' : 'deposit',
-            }).select().single();
+            });
         }
-
-        if(newFinancialTx.error) throw newFinancialTx.error;
-
-        return { 
-            updatedParent, 
-            newInstallment, 
-            newFinancialTx: newFinancialTx.data,
-            paymentMethod: input.payment_method
-        };
+        
+        return { success: true };
 
     } catch (error: any) {
-        console.error("Error adding installment:", error);
+        console.error("Error recording payment:", error);
         return handleApiError(error);
     }
 }
-    
-
-    

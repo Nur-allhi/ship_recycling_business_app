@@ -4,7 +4,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import type { CashTransaction, BankTransaction, StockItem, StockTransaction, User, Vendor, Client, LedgerTransaction, PaymentInstallment } from '@/lib/types';
 import { useToast } from "@/hooks/use-toast"
-import { readData, appendData, updateData, deleteData, readDeletedData, restoreData, exportAllData, batchImportData, deleteAllData, logout as serverLogout, addPaymentInstallment } from '@/app/actions';
+import { readData, appendData, updateData, deleteData, readDeletedData, restoreData, exportAllData, batchImportData, deleteAllData, logout as serverLogout, recordPaymentAgainstTotal } from '@/app/actions';
 import { format } from 'date-fns';
 import { supabase } from '@/lib/supabase';
 import { saveAs } from 'file-saver';
@@ -78,7 +78,7 @@ interface AppContextType extends AppState {
   addVendor: (name: string) => Promise<any>;
   addClient: (name: string) => Promise<any>;
   addLedgerTransaction: (tx: Omit<LedgerTransaction, 'id' | 'createdAt' | 'deletedAt' | 'user_id' | 'status' | 'paid_amount' | 'installments'>) => Promise<void>;
-  recordInstallment: (tx: LedgerTransaction, paymentAmount: number, paymentMethod: 'cash' | 'bank', paymentDate: Date) => Promise<any>;
+  recordPayment: (contactId: string, contactName: string, paymentAmount: number, paymentMethod: 'cash' | 'bank', paymentDate: Date, ledgerType: 'payable' | 'receivable') => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -974,57 +974,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
       });
   }
   
-  const recordInstallment = async (tx: LedgerTransaction, paymentAmount: number, paymentMethod: 'cash' | 'bank', paymentDate: Date) => {
+  const recordPayment = async (contactId: string, contactName: string, paymentAmount: number, paymentMethod: 'cash' | 'bank', paymentDate: Date, ledgerType: 'payable' | 'receivable') => {
     try {
-        const result = await addPaymentInstallment({
-            ap_ar_transaction_id: tx.id,
-            original_amount: tx.amount,
-            already_paid_amount: tx.paid_amount,
+        await recordPaymentAgainstTotal({
+            contact_id: contactId,
+            contact_name: contactName,
             payment_amount: paymentAmount,
             payment_date: paymentDate.toISOString(),
             payment_method: paymentMethod,
-            ledger_type: tx.type,
-            description: tx.description
+            ledger_type: ledgerType,
         });
 
-        // Optimistic update of the UI
-        setState(prev => {
-            const updatedLedgerTxs = prev.ledgerTransactions.map(ledgerTx => {
-                if (ledgerTx.id === tx.id) {
-                    return {
-                        ...ledgerTx,
-                        paid_amount: result.updatedParent.paid_amount,
-                        status: result.updatedParent.status,
-                        installments: [...(ledgerTx.installments || []), result.newInstallment]
-                    };
-                }
-                return ledgerTx;
-            });
-            
-            const newFinancialTx = result.newFinancialTx;
-            const newCashTxs = result.paymentMethod === 'cash' ? [...prev.cashTransactions, newFinancialTx] : prev.cashTransactions;
-            const newBankTxs = result.paymentMethod === 'bank' ? [...prev.bankTransactions, newFinancialTx] : prev.bankTransactions;
-
-            const { finalCashBalance, finalBankBalance } = calculateBalancesAndStock(newCashTxs, newBankTxs, prev.stockTransactions);
-
-            const totalPayables = updatedLedgerTxs.filter(t => t.type === 'payable' && t.status !== 'paid').reduce((acc, t) => acc + (t.amount - t.paid_amount), 0);
-            const totalReceivables = updatedLedgerTxs.filter(t => t.type === 'receivable' && t.status !== 'paid').reduce((acc, t) => acc + (t.amount - t.paid_amount), 0);
-
-            return {
-                ...prev,
-                ledgerTransactions: updatedLedgerTxs.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
-                cashTransactions: newCashTxs.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
-                bankTransactions: newBankTxs.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
-                cashBalance: finalCashBalance,
-                bankBalance: finalBankBalance,
-                totalPayables,
-                totalReceivables,
-            };
-        });
+        // Optimistically update the UI. For a full refresh, we'll call reloadData.
+        toast({title: "Payment Recorded", description: "The payment has been recorded and balances are updating."});
+        reloadData({ force: true });
         
-        toast({title: "Payment Recorded", description: "The installment has been recorded and balances updated."});
     } catch (error: any) {
-         handleApiError(new Error(error.message || "An unexpected error occurred during installment recording."));
+         handleApiError(new Error(error.message || "An unexpected error occurred during payment recording."));
          throw error;
     }
   }
@@ -1076,7 +1042,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         addVendor,
         addClient,
         addLedgerTransaction,
-        recordInstallment,
+        recordPayment,
     }}>
       {children}
     </AppContext.Provider>

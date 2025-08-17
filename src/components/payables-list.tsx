@@ -7,10 +7,8 @@ import { LedgerTransaction } from "@/lib/types";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "./ui/card";
 import { Button } from "./ui/button";
-import { format } from "date-fns";
-import { HandCoins, Trash2, Eye, EyeOff } from "lucide-react";
+import { HandCoins } from "lucide-react";
 import { SettlePaymentDialog } from "./settle-payment-dialog";
-import { DeleteConfirmationDialog } from "./delete-confirmation-dialog";
 import { Progress } from "./ui/progress";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./ui/tooltip";
@@ -20,16 +18,14 @@ interface AggregatedContact {
     contact_name: string;
     total_amount: number;
     total_paid: number;
-    transactions: LedgerTransaction[];
+    type: 'payable';
 }
 
 export function PayablesList() {
-    const { ledgerTransactions, currency, deleteLedgerTransaction, user } = useAppContext();
-    const [settleDialogState, setSettleDialogState] = useState<{isOpen: boolean, transactions: LedgerTransaction[], contactName: string | null}>({isOpen: false, transactions: [], contactName: null});
-    const [deleteDialogState, setDeleteDialogState] = useState<{isOpen: boolean, txToDelete: LedgerTransaction | null}>({isOpen: false, txToDelete: null});
-    const [showActions, setShowActions] = useState(false);
-    const isAdmin = user?.role === 'admin';
+    const { ledgerTransactions, currency, user } = useAppContext();
+    const [settleDialogState, setSettleDialogState] = useState<{isOpen: boolean, contact: AggregatedContact | null}>({isOpen: false, contact: null});
     const isMobile = useIsMobile();
+    const isAdmin = user?.role === 'admin';
 
     const payablesByContact = useMemo(() => {
         const unpaidTxs = ledgerTransactions.filter(tx => tx.type === 'payable' && tx.status !== 'paid');
@@ -42,12 +38,11 @@ export function PayablesList() {
                     contact_name: tx.contact_name,
                     total_amount: 0,
                     total_paid: 0,
-                    transactions: [],
+                    type: 'payable'
                 };
             }
             groups[tx.contact_id].total_amount += tx.amount;
             groups[tx.contact_id].total_paid += tx.paid_amount;
-            groups[tx.contact_id].transactions.push(tx);
         });
 
         return Object.values(groups);
@@ -61,18 +56,7 @@ export function PayablesList() {
     }
 
     const handleSettleClick = (contact: AggregatedContact) => {
-        setSettleDialogState({ isOpen: true, transactions: contact.transactions, contactName: contact.contact_name });
-    }
-
-    const handleDeleteClick = (tx: LedgerTransaction) => {
-        setDeleteDialogState({isOpen: true, txToDelete: tx});
-    }
-
-    const confirmDeletion = () => {
-        if(deleteDialogState.txToDelete) {
-            deleteLedgerTransaction(deleteDialogState.txToDelete);
-        }
-        setDeleteDialogState({isOpen: false, txToDelete: null});
+        setSettleDialogState({ isOpen: true, contact });
     }
 
     const renderDesktopView = () => (
@@ -139,7 +123,7 @@ export function PayablesList() {
                                 <div className="flex justify-between items-start">
                                     <div>
                                         <div className="font-semibold">{contact.contact_name}</div>
-                                        <div className="text-sm text-muted-foreground">{contact.transactions.length} open bill(s)</div>
+                                        <div className="text-sm text-muted-foreground">Outstanding Balance</div>
                                     </div>
                                     <div className="text-right">
                                         <div className="font-bold text-destructive text-lg">{formatCurrency(remainingBalance)}</div>
@@ -185,23 +169,13 @@ export function PayablesList() {
                 </CardContent>
             </Card>
 
-            {settleDialogState.transactions.length > 0 && (
+            {settleDialogState.contact && (
                 <SettlePaymentDialog 
                     isOpen={settleDialogState.isOpen}
-                    setIsOpen={(isOpen) => setSettleDialogState({ isOpen, transactions: [], contactName: null })}
-                    transactions={settleDialogState.transactions}
-                    contactName={settleDialogState.contactName!}
+                    setIsOpen={(isOpen) => setSettleDialogState({ isOpen, contact: isOpen ? settleDialogState.contact : null })}
+                    contact={settleDialogState.contact}
                 />
             )}
-             <DeleteConfirmationDialog 
-                isOpen={deleteDialogState.isOpen}
-                setIsOpen={(isOpen) => setDeleteDialogState({ isOpen: isOpen, txToDelete: null })}
-                onConfirm={confirmDeletion}
-                itemCount={1}
-                isPermanent={false}
-            />
         </>
     )
 }
-
-    
