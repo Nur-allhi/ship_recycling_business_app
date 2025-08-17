@@ -44,6 +44,15 @@ CHECK (status IN ('unpaid', 'partially paid', 'paid'));
 To enable multi-bank accounts and activity logging, please run the following SQL code:
 
 ```sql
+-- Create a helper function to safely get the role from user_metadata
+CREATE OR REPLACE FUNCTION get_user_role(user_id uuid)
+RETURNS text AS $$
+BEGIN
+  RETURN (SELECT raw_user_meta_data->>'role' FROM auth.users WHERE id = user_id);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+
 -- Create a table to store different bank accounts
 CREATE TABLE banks (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -85,18 +94,20 @@ USING (auth.uid() = user_id)
 WITH CHECK (auth.uid() = user_id);
 
 ALTER TABLE activity_log ENABLE ROW LEVEL SECURITY;
+
+-- Drop the old policy if it exists to avoid conflicts
+DROP POLICY IF EXISTS "Admins can view all activity logs" ON activity_log;
+
+-- This policy allows users with the 'admin' role to view all logs
 CREATE POLICY "Admins can view all activity logs"
 ON activity_log FOR SELECT
 TO authenticated
 USING (
-  (SELECT role FROM user_roles WHERE user_id = auth.uid()) = 'admin'
+  get_user_role(auth.uid()) = 'admin'
 );
 
 CREATE POLICY "Users can insert their own activity logs"
 ON activity_log FOR INSERT
 TO authenticated
 WITH CHECK (auth.uid() = user_id);
-
--- Note: The activity_log_with_users view will respect the RLS of the underlying tables.
--- Ensure your user_roles setup is correct for the admin view policy to work.
 ```
