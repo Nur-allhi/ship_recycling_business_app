@@ -233,13 +233,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     cashTxs: CashTransaction[], 
     bankTxs: BankTransaction[],
     stockTxs: StockTransaction[],
+    initialStock: StockItem[]
   ) => {
       const finalCashBalance = cashTxs.reduce((acc, tx) => acc + (tx.type === 'income' ? tx.amount : -tx.amount), 0);
       const finalBankBalance = bankTxs.reduce((acc, tx) => acc + (tx.type === 'deposit' ? tx.amount : -tx.amount), 0);
         
       const stockPortfolio: Record<string, { weight: number, totalValue: number }> = {};
 
-      state.initialStockItems.forEach(item => {
+      initialStock.forEach(item => {
           if (!stockPortfolio[item.name]) {
               stockPortfolio[item.name] = { weight: 0, totalValue: 0 };
           }
@@ -274,7 +275,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }));
 
       return { finalCashBalance, finalBankBalance, aggregatedStockItems };
-  }, [state.initialStockItems]);
+  }, []);
   
   const reloadData = useCallback(async (options?: { force?: boolean }) => {
     const session = await getSession();
@@ -311,11 +312,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const initialStockItems: StockItem[] = initialStockData || [];
 
         const needsInitialBalance = cashTransactions.length === 0 && bankTransactions.length === 0 && initialStockItems.length === 0;
-
-        // Temporarily set initial stock in state to use in calculation
-        setState(prev => ({...prev, initialStockItems: initialStockItems}));
         
-        const { finalCashBalance, finalBankBalance, aggregatedStockItems } = calculateBalancesAndStock(cashTransactions, bankTransactions, stockTransactions);
+        const { finalCashBalance, finalBankBalance, aggregatedStockItems } = calculateBalancesAndStock(cashTransactions, bankTransactions, stockTransactions, initialStockItems);
         
         const cashCategories = categoriesData?.filter((c: any) => c.type === 'cash').map((c: any) => c.name);
         const bankCategories = categoriesData?.filter((c: any) => c.type === 'bank').map((c: any) => c.name);
@@ -388,7 +386,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
         setState(prev => {
             const newTxs = [newTxForUI, ...prev.cashTransactions];
-            const { finalCashBalance } = calculateBalancesAndStock(newTxs, prev.bankTransactions, prev.stockTransactions);
+            const { finalCashBalance } = calculateBalancesAndStock(newTxs, prev.bankTransactions, prev.stockTransactions, prev.initialStockItems);
             return {
                 ...prev,
                 cashTransactions: newTxs.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
@@ -415,7 +413,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
         setState(prev => {
             const newTxs = [newTxForUI, ...prev.bankTransactions];
-            const { finalBankBalance } = calculateBalancesAndStock(prev.cashTransactions, newTxs, prev.stockTransactions);
+            const { finalBankBalance } = calculateBalancesAndStock(prev.cashTransactions, newTxs, prev.stockTransactions, prev.initialStockItems);
             return {
                 ...prev,
                 bankTransactions: newTxs.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
@@ -453,7 +451,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
         });
 
         try {
-            const savedTx = await appendData({ tableName: 'ap_ar_transactions', data: { ...tx, status: 'unpaid', paid_amount: 0 }, select: '*, installments:payment_installments(*)' });
+            const savedTxData = { ...tx, status: 'unpaid', paid_amount: 0 };
+            const savedTx = await appendData({ tableName: 'ap_ar_transactions', data: savedTxData, select: '*, installments:payment_installments(*)' });
+            
+            // Ensure savedTx has the installments property, even if empty
+            if (savedTx && !savedTx.installments) {
+                savedTx.installments = [];
+            }
+
             setState(prev => {
                 const newLedgerTxs = prev.ledgerTransactions.map(t => t.id === tempId ? savedTx : t);
                 return { ...prev, ledgerTransactions: newLedgerTxs };
@@ -473,7 +478,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // Optimistic UI for stock
     setState(prev => {
         const newStockTxs = [newTxForUI, ...prev.stockTransactions];
-        const { aggregatedStockItems } = calculateBalancesAndStock(prev.cashTransactions, prev.bankTransactions, newStockTxs);
+        const { aggregatedStockItems } = calculateBalancesAndStock(prev.cashTransactions, prev.bankTransactions, newStockTxs, prev.initialStockItems);
         return {
             ...prev,
             stockTransactions: newStockTxs.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
@@ -489,7 +494,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       // Replace temp stock record
        setState(prev => {
             const newStockTxs = prev.stockTransactions.map(t => t.id === tempId ? newStockTx : t);
-            const { aggregatedStockItems } = calculateBalancesAndStock(prev.cashTransactions, prev.bankTransactions, newStockTxs);
+            const { aggregatedStockItems } = calculateBalancesAndStock(prev.cashTransactions, prev.bankTransactions, newStockTxs, prev.initialStockItems);
             return {
                 ...prev,
                 stockTransactions: newStockTxs,
@@ -513,7 +518,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             throw new Error(`Could not find a name for the selected ${tx.type === 'purchase' ? 'vendor' : 'client'}.`);
           }
           
-          addLedgerTransaction({
+          await addLedgerTransaction({
               type: ledgerType,
               description,
               amount: totalValue,
@@ -544,7 +549,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
        // Rollback stock transaction on error
        setState(prev => {
             const newStockTxs = prev.stockTransactions.filter(t => t.id !== tempId);
-            const { aggregatedStockItems } = calculateBalancesAndStock(prev.cashTransactions, prev.bankTransactions, newStockTxs);
+            const { aggregatedStockItems } = calculateBalancesAndStock(prev.cashTransactions, prev.bankTransactions, newStockTxs, prev.initialStockItems);
              return {
                 ...prev,
                 stockTransactions: newStockTxs,
@@ -561,7 +566,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       // Optimistic update
       setState(prev => {
           const newTxs = prev.cashTransactions.map(tx => tx.id === originalTx.id ? updatedTx : tx);
-          const { finalCashBalance, aggregatedStockItems } = calculateBalancesAndStock(newTxs, prev.bankTransactions, prev.stockTransactions);
+          const { finalCashBalance, aggregatedStockItems } = calculateBalancesAndStock(newTxs, prev.bankTransactions, prev.stockTransactions, prev.initialStockItems);
           return { ...prev, cashTransactions: newTxs, cashBalance: finalCashBalance, stockItems: aggregatedStockItems };
       });
       
@@ -573,7 +578,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             // Rollback on failure
             setState(prev => {
                 const newTxs = prev.cashTransactions.map(tx => tx.id === originalTx.id ? originalTx : tx);
-                const { finalCashBalance, aggregatedStockItems } = calculateBalancesAndStock(newTxs, prev.bankTransactions, prev.stockTransactions);
+                const { finalCashBalance, aggregatedStockItems } = calculateBalancesAndStock(newTxs, prev.bankTransactions, prev.stockTransactions, prev.initialStockItems);
                 return { ...prev, cashTransactions: newTxs, cashBalance: finalCashBalance, stockItems: aggregatedStockItems };
             });
         });
@@ -585,7 +590,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       // Optimistic update
       setState(prev => {
           const newTxs = prev.bankTransactions.map(tx => tx.id === originalTx.id ? updatedTx : tx);
-          const { finalBankBalance, aggregatedStockItems } = calculateBalancesAndStock(prev.cashTransactions, newTxs, prev.stockTransactions);
+          const { finalBankBalance, aggregatedStockItems } = calculateBalancesAndStock(prev.cashTransactions, newTxs, prev.stockTransactions, prev.initialStockItems);
           return { ...prev, bankTransactions: newTxs, bankBalance: finalBankBalance, stockItems: aggregatedStockItems };
       });
 
@@ -597,7 +602,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             // Rollback on failure
             setState(prev => {
                 const newTxs = prev.bankTransactions.map(tx => tx.id === originalTx.id ? originalTx : tx);
-                const { finalBankBalance, aggregatedStockItems } = calculateBalancesAndStock(prev.cashTransactions, newTxs, prev.stockTransactions);
+                const { finalBankBalance, aggregatedStockItems } = calculateBalancesAndStock(prev.cashTransactions, newTxs, prev.stockTransactions, prev.initialStockItems);
                 return { ...prev, bankTransactions: newTxs, bankBalance: finalBankBalance, stockItems: aggregatedStockItems };
             });
         });
@@ -609,7 +614,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       // Optimistic update
       setState(prev => {
           const newTxs = prev.stockTransactions.map(tx => tx.id === originalTx.id ? updatedTx : tx);
-          const { aggregatedStockItems } = calculateBalancesAndStock(prev.cashTransactions, prev.bankTransactions, newTxs);
+          const { aggregatedStockItems } = calculateBalancesAndStock(prev.cashTransactions, prev.bankTransactions, newTxs, prev.initialStockItems);
           return { ...prev, stockTransactions: newTxs, stockItems: aggregatedStockItems };
       });
       
@@ -625,7 +630,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
              // Rollback on failure
             setState(prev => {
                 const newTxs = prev.stockTransactions.map(tx => tx.id === originalTx.id ? originalTx : tx);
-                const { aggregatedStockItems } = calculateBalancesAndStock(prev.cashTransactions, prev.bankTransactions, newTxs);
+                const { aggregatedStockItems } = calculateBalancesAndStock(prev.cashTransactions, prev.bankTransactions, newTxs, prev.initialStockItems);
                 return { ...prev, stockTransactions: newTxs, stockItems: aggregatedStockItems };
             });
         });
@@ -636,7 +641,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // Optimistic update
     setState(prev => {
         const newTxs = prev.cashTransactions.filter(tx => tx.id !== txToDelete.id);
-        const { finalCashBalance, aggregatedStockItems } = calculateBalancesAndStock(newTxs, prev.bankTransactions, prev.stockTransactions);
+        const { finalCashBalance, aggregatedStockItems } = calculateBalancesAndStock(newTxs, prev.bankTransactions, prev.stockTransactions, prev.initialStockItems);
         return { ...prev, cashTransactions: newTxs, cashBalance: finalCashBalance, stockItems: aggregatedStockItems };
     });
 
@@ -659,7 +664,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
      // Optimistic update
     setState(prev => {
         const newTxs = prev.bankTransactions.filter(tx => tx.id !== txToDelete.id);
-        const { finalBankBalance, aggregatedStockItems } = calculateBalancesAndStock(prev.cashTransactions, newTxs, prev.stockTransactions);
+        const { finalBankBalance, aggregatedStockItems } = calculateBalancesAndStock(prev.cashTransactions, newTxs, prev.stockTransactions, prev.initialStockItems);
         return { ...prev, bankTransactions: newTxs, bankBalance: finalBankBalance, stockItems: aggregatedStockItems };
     });
 
@@ -682,7 +687,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
      // Optimistic update
     setState(prev => {
         const newTxs = prev.stockTransactions.filter(tx => tx.id !== txToDelete.id);
-        const { aggregatedStockItems } = calculateBalancesAndStock(prev.cashTransactions, prev.bankTransactions, newTxs);
+        const { aggregatedStockItems } = calculateBalancesAndStock(prev.cashTransactions, prev.bankTransactions, newTxs, prev.initialStockItems);
         return { ...prev, stockTransactions: newTxs, stockItems: aggregatedStockItems };
     });
     
