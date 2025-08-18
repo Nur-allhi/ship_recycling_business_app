@@ -437,52 +437,50 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                             </TabsContent>
 
                             <TabsContent value="bank" className="m-0 space-y-4 animate-fade-in">
-                               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                 <div>
-                                    {dateField}
-                                 </div>
-                                <div className="space-y-2">
-                                    <Label htmlFor="amount-bank">Amount</Label>
-                                    <Input id="amount-bank" type="number" step="0.01" {...register('amount')} placeholder="0.00"/>
-                                    {errors.amount && <p className="text-sm text-destructive">{errors.amount.message}</p>}
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>{dateField}</div>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="amount-bank">Amount</Label>
+                                        <Input id="amount-bank" type="number" step="0.01" {...register('amount')} placeholder="0.00"/>
+                                        {errors.amount && <p className="text-sm text-destructive">{errors.amount.message}</p>}
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label>Bank Account</Label>
+                                        <Controller
+                                            control={control}
+                                            name="bank_id"
+                                            render={({ field }) => (
+                                                <ResponsiveSelect 
+                                                    onValueChange={field.onChange} 
+                                                    value={field.value}
+                                                    title="Select a bank account"
+                                                    placeholder="Select a bank account"
+                                                >
+                                                    {banks.map(b => <ResponsiveSelectItem key={b.id} value={b.id}>{b.name}</ResponsiveSelectItem>)}
+                                                </ResponsiveSelect>
+                                            )}
+                                        />
+                                        {errors.bank_id && <p className="text-sm text-destructive">{errors.bank_id.message}</p>}
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label>Category</Label>
+                                        <Controller
+                                            control={control}
+                                            name="category"
+                                            render={({ field }) => (
+                                                <ResponsiveSelect
+                                                    onValueChange={field.onChange}
+                                                    value={field.value}
+                                                    title="Select a category"
+                                                    placeholder="Select a category"
+                                                >
+                                                    {bankCategories.map((c, index) => <ResponsiveSelectItem key={`${c.name}-${c.type}-${index}`} value={c.name}>{c.name}</ResponsiveSelectItem>)}
+                                                </ResponsiveSelect>
+                                            )}
+                                        />
+                                        {errors.category && <p className="text-sm text-destructive">{errors.category.message}</p>}
+                                    </div>
                                 </div>
-                                <div className="md:col-span-2 space-y-2">
-                                    <Label>Bank Account</Label>
-                                    <Controller
-                                        control={control}
-                                        name="bank_id"
-                                        render={({ field }) => (
-                                            <ResponsiveSelect 
-                                                onValueChange={field.onChange} 
-                                                value={field.value}
-                                                title="Select a bank account"
-                                                placeholder="Select a bank account"
-                                            >
-                                                {banks.map(b => <ResponsiveSelectItem key={b.id} value={b.id}>{b.name}</ResponsiveSelectItem>)}
-                                            </ResponsiveSelect>
-                                        )}
-                                    />
-                                    {errors.bank_id && <p className="text-sm text-destructive">{errors.bank_id.message}</p>}
-                                </div>
-                                <div className="md:col-span-2 space-y-2">
-                                    <Label>Category</Label>
-                                    <Controller
-                                        control={control}
-                                        name="category"
-                                        render={({ field }) => (
-                                            <ResponsiveSelect
-                                                onValueChange={field.onChange}
-                                                value={field.value}
-                                                title="Select a category"
-                                                placeholder="Select a category"
-                                            >
-                                                {bankCategories.map((c, index) => <ResponsiveSelectItem key={`${c.name}-${c.type}-${index}`} value={c.name}>{c.name}</ResponsiveSelectItem>)}
-                                            </ResponsiveSelect>
-                                        )}
-                                    />
-                                    {errors.category && <p className="text-sm text-destructive">{errors.category.message}</p>}
-                                </div>
-                               </div>
                                 {(bankCategory && bankCategories.find(c => c.name === bankCategory)?.type === 'prompt') && (
                                      <div className="space-y-2 animate-fade-in">
                                         <Label>Direction</Label>
@@ -768,5 +766,3 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
     </>
   );
 }
-
-    
