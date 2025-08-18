@@ -137,6 +137,7 @@ export async function appendData(input: z.infer<typeof AppendDataInputSchema>) {
         
         const supabase = await getAuthenticatedSupabaseClient();
         
+        // Securely inject the user_id into every record being inserted.
         const dataToInsert = Array.isArray(input.data)
             ? input.data.map(item => ({ ...item, user_id: session.id }))
             : { ...input.data, user_id: session.id };
@@ -568,3 +569,5 @@ export async function recordPaymentAgainstTotal(input: z.infer<typeof RecordPaym
         return handleApiError(error);
     }
 }
+
+    
