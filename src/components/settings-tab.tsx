@@ -1,7 +1,6 @@
-
 "use client"
 
-import { useRef } from "react"
+import { useRef, useState } from "react"
 import { useAppContext } from "@/app/store"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
@@ -18,6 +17,7 @@ import { RecycleBinTab } from "./recycle-bin-tab"
 import { ExportImportTab } from "./export-import-tab"
 import { ContactsTab } from "./contacts-tab"
 import { ActivityLogTab } from "./activity-log-tab"
+import { RadioGroup, RadioGroupItem } from "./ui/radio-group"
 
 export function SettingsTab() {
   const {
@@ -47,6 +47,7 @@ export function SettingsTab() {
 
   const cashCategoryRef = useRef<HTMLInputElement>(null)
   const bankCategoryRef = useRef<HTMLInputElement>(null)
+  const [bankCategoryDirection, setBankCategoryDirection] = useState<'deposit' | 'withdrawal'>('deposit');
   const wastageRef = useRef<HTMLInputElement>(null)
   
   const stockItemNameRef = useRef<HTMLInputElement>(null)
@@ -120,11 +121,18 @@ export function SettingsTab() {
 
 
   const handleAddCategory = (type: 'cash' | 'bank') => {
-    const ref = type === 'cash' ? cashCategoryRef : bankCategoryRef
-    const category = ref.current?.value.trim()
-    if (category) {
-      addCategory(type, category)
-      if (ref.current) ref.current.value = ""
+    if (type === 'cash') {
+        const category = cashCategoryRef.current?.value.trim();
+        if (category) {
+            addCategory('cash', category);
+            if(cashCategoryRef.current) cashCategoryRef.current.value = "";
+        }
+    } else {
+        const category = bankCategoryRef.current?.value.trim();
+        if (category) {
+            addCategory('bank', category, bankCategoryDirection);
+            if(bankCategoryRef.current) bankCategoryRef.current.value = "";
+        }
     }
   }
 
@@ -259,15 +267,25 @@ export function SettingsTab() {
                 <Separator />
                 <div>
                   <h3 className="font-semibold mb-2">Bank Categories</h3>
-                  <div className="flex gap-2 mb-3">
-                    <Input placeholder="New bank category" ref={bankCategoryRef} />
-                    <Button size="icon" onClick={() => handleAddCategory('bank')}><Plus className="h-4 w-4" /></Button>
+                  <div className="space-y-3">
+                    <div className="flex gap-2">
+                      <Input placeholder="New bank category" ref={bankCategoryRef} />
+                      <Button size="icon" onClick={() => handleAddCategory('bank')}><Plus className="h-4 w-4" /></Button>
+                    </div>
+                    <RadioGroup 
+                      value={bankCategoryDirection} 
+                      onValueChange={(v) => setBankCategoryDirection(v as any)} 
+                      className="flex gap-4"
+                    >
+                        <Label className="flex items-center gap-2 cursor-pointer"><RadioGroupItem value="deposit"/>Deposit (In)</Label>
+                        <Label className="flex items-center gap-2 cursor-pointer"><RadioGroupItem value="withdrawal"/>Withdrawal (Out)</Label>
+                    </RadioGroup>
                   </div>
-                  <div className="flex flex-wrap gap-2">
-                    {bankCategories.map(cat => (
-                      <Badge key={cat} variant="secondary" className="flex items-center gap-2">
-                        {cat}
-                        <button onClick={() => deleteCategory('bank', cat)} className="rounded-full hover:bg-muted-foreground/20">
+                  <div className="flex flex-wrap gap-2 mt-4">
+                    {bankCategories.map((cat, index) => (
+                      <Badge key={`${cat.name}-${cat.type}-${index}`} variant="secondary" className="flex items-center gap-2">
+                        <span>{cat.name} <span className="text-muted-foreground text-xs">({cat.type})</span></span>
+                        <button onClick={() => deleteCategory('bank', cat.name)} className="rounded-full hover:bg-muted-foreground/20">
                           <Trash2 className="h-3 w-3" />
                         </button>
                       </Badge>
