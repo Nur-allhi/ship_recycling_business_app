@@ -12,7 +12,7 @@ import { Label } from '@/components/ui/label';
 import { ResponsiveSelect, ResponsiveSelectItem } from '@/components/ui/responsive-select';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useToast } from '@/hooks/use-toast';
-import { CalendarIcon, Plus, PlusCircle, Wallet, Landmark, Boxes, ArrowRightLeft, UserPlus } from 'lucide-react';
+import { CalendarIcon, Plus, PlusCircle, Wallet, Landmark, Boxes, ArrowRightLeft, UserPlus, Loader2 } from 'lucide-react';
 import { DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
@@ -57,6 +57,7 @@ const formSchema = z.object({
 }).superRefine((data, ctx) => {
     if (data.transactionType === 'bank') {
         if (!data.bank_id) ctx.addIssue({ code: 'custom', message: 'Please select a bank account.', path: ['bank_id'] });
+        if (!data.category) ctx.addIssue({ code: 'custom', message: 'Category is required.', path: ['category'] });
     }
     if (data.transactionType === 'stock') {
         if (!data.stockType) ctx.addIssue({ code: 'custom', message: 'Please select purchase or sale.', path: ['stockType'] });
@@ -79,9 +80,11 @@ const formSchema = z.object({
     if (['cash', 'bank', 'transfer', 'ap_ar'].includes(data.transactionType)) {
         if(!data.amount || data.amount <=0) ctx.addIssue({ code: 'custom', message: 'Amount must be positive.', path: ['amount'] });
     }
-    if(data.transactionType === 'cash' || data.transactionType === 'bank') {
+    if(data.transactionType === 'cash') {
         if (!data.inOutType) ctx.addIssue({ code: 'custom', message: 'Transaction direction is required.', path: ['inOutType'] });
         if (!data.category) ctx.addIssue({ code: 'custom', message: 'Category is required.', path: ['category'] });
+    }
+     if(data.transactionType === 'cash' || (data.transactionType === 'bank' && data.category !== 'Transfer')) {
         if (!data.description) ctx.addIssue({ code: 'custom', message: 'Description is required.', path: ['description'] });
     }
     if(data.transactionType === 'transfer') {
@@ -176,8 +179,11 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                 });
                 break;
             case 'bank':
+                 const bankCategory = bankCategories.find(c => c.name === data.category);
+                 if(!bankCategory) throw new Error("Could not determine transaction type from category.");
+
                  await addBankTransaction({
-                    type: data.inOutType === 'in' ? 'deposit' : 'withdrawal',
+                    type: bankCategory.type,
                     amount: data.amount!,
                     description: data.description!,
                     category: data.category!,
@@ -255,7 +261,6 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
     }
   };
 
-  const currentCategories = transactionType === 'cash' ? cashCategories : bankCategories;
   const stockCreditContactType = stockType === 'purchase' ? 'Vendor' : 'Client';
   const stockCreditContacts = stockType === 'purchase' ? vendors : clients;
   
@@ -350,7 +355,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
             rules={{ required: true }}
             render={({ field }) => (
                 <Tabs value={field.value} onValueChange={field.onChange} className="w-full">
-                    <TabsList className="grid w-full grid-cols-5 h-auto">
+                    <TabsList className="grid w-full grid-cols-3 sm:grid-cols-5 h-auto">
                         <TabsTrigger value="cash"><Wallet className="mr-1 h-4 w-4" />Cash</TabsTrigger>
                         <TabsTrigger value="bank"><Landmark className="mr-1 h-4 w-4" />Bank</TabsTrigger>
                         <TabsTrigger value="stock"><Boxes className="mr-1 h-4 w-4" />Stock</TabsTrigger>
@@ -400,11 +405,16 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                                                 title="Select a category"
                                                 placeholder="Select a category"
                                             >
-                                                {currentCategories.map(c => <ResponsiveSelectItem key={c} value={c}>{c}</ResponsiveSelectItem>)}
+                                                {cashCategories.map(c => <ResponsiveSelectItem key={c} value={c}>{c}</ResponsiveSelectItem>)}
                                             </ResponsiveSelect>
                                         )}
                                     />
                                     {errors.category && <p className="text-sm text-destructive">{errors.category.message}</p>}
+                                </div>
+                                 <div className="space-y-2">
+                                    <Label htmlFor="description-cash">Description</Label>
+                                    <Input id="description-cash" {...register('description')} placeholder="e.g., Weekly groceries" />
+                                    {errors.description && <p className="text-sm text-destructive">{errors.description.message}</p>}
                                 </div>
                             </TabsContent>
 
@@ -437,24 +447,6 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                                     />
                                     {errors.bank_id && <p className="text-sm text-destructive">{errors.bank_id.message}</p>}
                                 </div>
-                                <div className="space-y-2">
-                                    <Label>Direction</Label>
-                                    <Controller 
-                                        control={control}
-                                        name="inOutType"
-                                        render={({ field }) => (
-                                            <RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex pt-2 gap-4">
-                                                <Label htmlFor="in-bank" className="flex items-center gap-2 cursor-pointer">
-                                                    <RadioGroupItem value="in" id="in-bank" />Deposit
-                                                </Label>
-                                                <Label htmlFor="out-bank" className="flex items-center gap-2 cursor-pointer">
-                                                    <RadioGroupItem value="out" id="out-bank" />Withdrawal
-                                                </Label>
-                                            </RadioGroup>
-                                        )}
-                                    />
-                                    {errors.inOutType && <p className="text-sm text-destructive">{errors.inOutType.message}</p>}
-                                </div>
                                <div className="space-y-2">
                                     <Label>Category</Label>
                                     <Controller
@@ -467,11 +459,16 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                                                 title="Select a category"
                                                 placeholder="Select a category"
                                             >
-                                                {currentCategories.map(c => <ResponsiveSelectItem key={c} value={c}>{c}</ResponsiveSelectItem>)}
+                                                {bankCategories.map(c => <ResponsiveSelectItem key={c.name} value={c.name}>{c.name}</ResponsiveSelectItem>)}
                                             </ResponsiveSelect>
                                         )}
                                     />
                                     {errors.category && <p className="text-sm text-destructive">{errors.category.message}</p>}
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="description-bank">Description</Label>
+                                    <Input id="description-bank" {...register('description')} placeholder="e.g., Monthly salary" />
+                                    {errors.description && <p className="text-sm text-destructive">{errors.description.message}</p>}
                                 </div>
                             </TabsContent>
                             
@@ -583,6 +580,11 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                                 </div>
                                 )}
                                 {stockPaymentMethod === 'credit' && stockType && stockCreditFields}
+                                <div className="space-y-2">
+                                    <Label htmlFor="description-stock">Description</Label>
+                                    <Input id="description-stock" {...register('description')} placeholder="Optional notes (e.g., invoice #)" />
+                                    {errors.description && <p className="text-sm text-destructive">{errors.description.message}</p>}
+                                </div>
                             </TabsContent>
 
                             <TabsContent value="transfer" className="m-0 space-y-4 animate-fade-in">
@@ -711,25 +713,16 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                                         {errors.newContact && <p className="text-sm text-destructive">{errors.newContact.message}</p>}
                                     </div>
                                 )}
-                            </TabsContent>
-                        </div>
-
-                        {(transactionType && transactionType !== 'transfer') && (
-                            <div className="space-y-4 pt-4 animate-fade-in">
-                                <Separator />
-                                <div className="space-y-2">
-                                    <Label htmlFor="description">Description</Label>
-                                    <Input id="description" {...register('description')} placeholder={
-                                        transactionType === 'stock' ? "Optional notes (e.g., invoice #)" :
-                                        "e.g., Weekly groceries"
-                                    } />
+                                 <div className="space-y-2">
+                                    <Label htmlFor="description-ap">Description</Label>
+                                    <Input id="description-ap" {...register('description')} placeholder="e.g., Raw materials from X vendor" />
                                     {errors.description && <p className="text-sm text-destructive">{errors.description.message}</p>}
                                 </div>
-                            </div>
-                        )}
+                            </TabsContent>
+                        </div>
                         <div className="flex justify-end pt-6">
                             <Button type="submit" className="w-full sm:w-auto" disabled={isSubmitting || !transactionType}>
-                                {isSubmitting && <PlusCircle className="mr-2 h-4 w-4 animate-spin" />}
+                                {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <PlusCircle className="mr-2 h-4 w-4" />}
                                 Record Transaction
                             </Button>
                         </div>

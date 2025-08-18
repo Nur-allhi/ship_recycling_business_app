@@ -26,15 +26,10 @@ const getAuthenticatedSupabaseClient = async () => {
         throw new Error("SESSION_EXPIRED");
     }
 
-    return createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-        {
-            global: {
-                headers: { Authorization: `Bearer ${session.accessToken}` },
-            },
-        }
-    );
+    // For a shared app model, we can use the service role key for all authenticated actions
+    // that are gated by role checks within the action itself.
+    // This simplifies RLS policies significantly.
+    return createSupabaseClient(true);
 };
 
 
@@ -52,16 +47,14 @@ const logActivity = async (description: string) => {
         const session = await getSession();
         if (!session) return; // Don't log if no session
         
-        // Use a client-side authenticated client to insert, respecting RLS.
-        const supabase = await getAuthenticatedSupabaseClient();
+        const supabase = createSupabaseClient(true);
         await supabase.from('activity_log').insert({ 
             description,
             user_id: session.id,
-            username: session.username, // Now we store the username directly
+            username: session.username, 
         });
     } catch(e) {
         console.error("Failed to log activity:", e);
-        // We don't re-throw here because logging failure shouldn't block the user's action.
     }
 }
 
@@ -74,7 +67,20 @@ const ReadDataInputSchema = z.object({
 
 export async function readData(input: z.infer<typeof ReadDataInputSchema>) {
   try {
-    const supabase = await getAuthenticatedSupabaseClient();
+    // Reading data is allowed for any authenticated user, so we don't need a service role client here.
+    // Using anon key + user's JWT
+    const session = await getSession();
+     if (!session?.accessToken) throw new Error("SESSION_EXPIRED");
+
+    const supabase = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        {
+            global: {
+                headers: { Authorization: `Bearer ${session.accessToken}` },
+            },
+        }
+    );
     
     let query = supabase
       .from(input.tableName)
@@ -103,6 +109,9 @@ export async function readData(input: z.infer<typeof ReadDataInputSchema>) {
 
 export async function readDeletedData(input: z.infer<typeof ReadDataInputSchema>) {
     try {
+        const session = await getSession();
+        if (session?.role !== 'admin') throw new Error("Only admins can view the recycle bin.");
+
         const supabase = await getAuthenticatedSupabaseClient();
         let query = supabase
             .from(input.tableName)
@@ -133,18 +142,14 @@ const AppendDataInputSchema = z.object({
 export async function appendData(input: z.infer<typeof AppendDataInputSchema>) {
     try {
         const session = await getSession();
-        if (!session) throw new Error("Authentication required to add new data.");
+        // Allow any authenticated user to add data, as UI controls will gate this for non-admins.
+        if (!session) throw new Error("Authentication required.");
         
         const supabase = await getAuthenticatedSupabaseClient();
-        
-        // Securely inject the user_id into every record being inserted.
-        const dataToInsert = Array.isArray(input.data)
-            ? input.data.map(item => ({ ...item, user_id: session.id }))
-            : { ...input.data, user_id: session.id };
 
         const { data, error } = await supabase
             .from(input.tableName)
-            .insert(dataToInsert)
+            .insert(input.data)
             .select(input.select || '*');
             
         if (error) {
@@ -176,7 +181,7 @@ const UpdateDataInputSchema = z.object({
 export async function updateData(input: z.infer<typeof UpdateDataInputSchema>) {
   try {
     const session = await getSession();
-    if (!session) throw new Error("Authentication required.");
+    if (session?.role !== 'admin') throw new Error("Only admins can update data.");
     
     const supabase = await getAuthenticatedSupabaseClient();
 
@@ -256,6 +261,9 @@ export async function restoreData(input: z.infer<typeof RestoreDataInputSchema>)
 
 export async function exportAllData() {
     try {
+        const session = await getSession();
+        if (!session) throw new Error("Authentication required.");
+        
         const supabase = await getAuthenticatedSupabaseClient();
         const tables = ['banks', 'cash_transactions', 'bank_transactions', 'stock_transactions', 'initial_stock', 'categories', 'vendors', 'clients', 'ap_ar_transactions', 'payment_installments'];
         const exportedData: Record<string, any[]> = {};
@@ -428,6 +436,9 @@ export async function login(input: z.infer<typeof LoginInputSchema>) {
 }
 
 export async function getUsers() {
+    const session = await getSession();
+    if(session?.role !== 'admin') throw new Error("Only admins can view users.");
+
     const supabase = createSupabaseClient(true);
     const { data, error } = await supabase.auth.admin.listUsers();
     if (error) throw new Error(error.message);
@@ -488,10 +499,11 @@ const RecordPaymentAgainstTotalInputSchema = z.object({
 });
 
 export async function recordPaymentAgainstTotal(input: z.infer<typeof RecordPaymentAgainstTotalInputSchema>) {
-    const supabase = await getAuthenticatedSupabaseClient();
     const session = await getSession();
-    if (!session) throw new Error("Authentication required.");
+    if (!session || session.role !== 'admin') throw new Error("Only admins can record payments.");
 
+    const supabase = await getAuthenticatedSupabaseClient();
+    
     try {
         // 1. Fetch all outstanding transactions for this contact, oldest first
         const { data: outstandingTxs, error: fetchError } = await supabase
@@ -528,7 +540,6 @@ export async function recordPaymentAgainstTotal(input: z.infer<typeof RecordPaym
                 amount: paymentForThisTx,
                 date: input.payment_date,
                 payment_method: input.payment_method,
-                user_id: session.id, // Ensure user_id is set
             });
 
             if (installmentError) throw installmentError;
@@ -542,7 +553,6 @@ export async function recordPaymentAgainstTotal(input: z.infer<typeof RecordPaym
             amount: input.payment_amount,
             description: `Payment ${input.ledger_type === 'payable' ? 'to' : 'from'} ${input.contact_name}`,
             category: input.ledger_type === 'payable' ? 'A/P Settlement' : 'A/R Settlement',
-            user_id: session.id,
         };
         
         const logDescription = `Recorded payment of ${financialTxData.amount} ${input.ledger_type === 'payable' ? 'to' : 'from'} ${input.contact_name} via ${input.payment_method}`;
@@ -569,5 +579,3 @@ export async function recordPaymentAgainstTotal(input: z.infer<typeof RecordPaym
         return handleApiError(error);
     }
 }
-
-    
