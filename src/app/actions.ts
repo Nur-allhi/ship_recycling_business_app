@@ -125,7 +125,7 @@ export async function readDeletedData(input: z.infer<typeof ReadDataInputSchema>
 
 const AppendDataInputSchema = z.object({
   tableName: z.string(),
-  data: z.record(z.any()),
+  data: z.record(z.any()).or(z.array(z.record(z.any()))),
   select: z.string().optional(),
   logDescription: z.string().optional(),
 });
@@ -137,19 +137,15 @@ export async function appendData(input: z.infer<typeof AppendDataInputSchema>) {
         
         const supabase = await getAuthenticatedSupabaseClient();
         
-        const dataArray = Array.isArray(input.data) ? input.data : [input.data];
-
-        const dataWithUserId = dataArray.map(item => ({
-            ...item,
-            user_id: session.id,
-        }));
+        const dataToInsert = Array.isArray(input.data)
+            ? input.data.map(item => ({ ...item, user_id: session.id }))
+            : { ...input.data, user_id: session.id };
 
         const { data, error } = await supabase
             .from(input.tableName)
-            .insert(dataWithUserId)
-            .select(input.select || '*')
-            .single();
-
+            .insert(dataToInsert)
+            .select(input.select || '*');
+            
         if (error) {
             if (error.code === '42P01') {
                 console.warn(`Attempted to append to a non-existent table: ${input.tableName}`);
@@ -160,7 +156,10 @@ export async function appendData(input: z.infer<typeof AppendDataInputSchema>) {
         if (input.logDescription) {
             await logActivity(input.logDescription);
         }
-        return data;
+
+        // If the original data was not an array, return the single object, otherwise return the array
+        return Array.isArray(input.data) ? data : data?.[0];
+
     } catch (error) {
         return handleApiError(error);
     }
