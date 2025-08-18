@@ -64,7 +64,7 @@ interface AppContextType extends AppState {
   deleteLedgerTransaction: (tx: LedgerTransaction) => void;
   restoreTransaction: (txType: 'cash' | 'bank' | 'stock' | 'ap_ar', id: string) => void;
   transferFunds: (from: 'cash' | 'bank', amount: number, date?: string, bankId?: string) => Promise<void>;
-  addCategory: (type: 'cash' | 'bank', category: string) => void;
+  addCategory: (type: 'cash' | 'bank', category: string, direction?: 'deposit' | 'withdrawal') => void;
   deleteCategory: (type: 'cash' | 'bank', category: string) => void;
   setFontSize: (size: FontSize) => void;
   setWastagePercentage: (percentage: number) => void;
@@ -333,6 +333,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         
         const cashCategories = categoriesData?.filter((c: any) => c.type === 'cash').map((c: any) => c.name);
         
+        const bankCategories = categoriesData?.filter((c: any) => c.type === 'bank').map((c: any) => ({ name: c.name, type: c.direction }));
+
         const installments: PaymentInstallment[] = installmentsData || [];
         const ledgerTransactions: LedgerTransaction[] = (ledgerData || []).map((tx: any) => ({
             ...tx, 
@@ -354,6 +356,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             bankBalance: finalBankBalance,
             needsInitialBalance,
             cashCategories: cashCategories?.length > 0 ? cashCategories : prev.cashCategories,
+            bankCategories: bankCategories?.length > 0 ? [...prev.bankCategories.filter(c => c.name === 'Transfer'), ...bankCategories] : prev.bankCategories,
             initialBalanceSet: true,
             vendors: vendorsData || [],
             clients: clientsData || [],
@@ -836,13 +839,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
      }
   };
 
-  const addCategory = async (type: 'cash' | 'bank', category: string) => {
-    if(!state.user) return;
+  const addCategory = async (type: 'cash' | 'bank', category: string, direction?: 'deposit' | 'withdrawal') => {
+    if(!state.user || state.user.role !== 'admin') return;
     
-    // Simplified: UI controls prevent non-admins from accessing this.
     try {
-      // In a simplified model, we might manage categories client-side or have a simple table without user_id
-      const newCategory = await appendData({ tableName: 'categories', data: { name: category, type } });
+      const dataToSave: { name: string; type: 'cash' | 'bank'; direction?: 'deposit' | 'withdrawal' } = { name: category, type };
+      if (type === 'bank') {
+        if (!direction) {
+          toast({ variant: 'destructive', title: 'Direction required', description: 'Please specify if the bank category is for deposits or withdrawals.' });
+          return;
+        }
+        dataToSave.direction = direction;
+      }
+      
+      const newCategory = await appendData({ tableName: 'categories', data: dataToSave });
+      
       if (newCategory) {
           reloadData({ force: true });
           toast({ title: "Success", description: "Category added." });
@@ -855,13 +866,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const deleteCategory = async (type: 'cash' | 'bank', category: string) => {
     console.warn("Database deletion for categories is not implemented. Removing from local state only.");
     setState(prev => {
-      const categories = type === 'cash' ? prev.cashCategories : prev.bankCategories;
-      // This part needs adjustment because bankCategories is now an array of objects
       if(type === 'cash') {
-          const newCategories = (categories as string[]).filter(c => c !== category);
+          const newCategories = prev.cashCategories.filter(c => c !== category);
           return { ...prev, cashCategories: newCategories };
       }
-      return { ...prev }; // Deleting bank categories from UI is more complex now, skip for now
+      // For now, we don't allow deleting bank categories from the UI to avoid complexity
+      return prev;
     });
   };
 
@@ -869,18 +879,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (state.user?.role !== 'admin') return;
     try {
         const date = new Date().toISOString();
-        const cashData = { date, type: 'income', amount: cash, description: 'Initial Balance', category: 'Initial Balance' };
+        const cashData = { date, type: 'income' as const, amount: cash, description: 'Initial Balance', category: 'Initial Balance' };
         
-        const bankPromises = Object.entries(bankTotals).filter(([, amount]) => amount > 0).map(([bankId, amount]) => {
-            return appendData({
-                tableName: 'bank_transactions',
-                data: { date, type: 'deposit', amount, description: 'Initial Balance', category: 'Initial Balance', bank_id: bankId }
-            });
-        });
-
-        const promises = [...bankPromises];
+        const bankData = Object.entries(bankTotals).filter(([, amount]) => amount > 0).map(([bankId, amount]) => ({
+            date,
+            type: 'deposit' as const,
+            amount,
+            description: 'Initial Balance',
+            category: 'Initial Balance',
+            bank_id: bankId,
+        }));
+        
+        const promises = [];
         if (cash > 0) {
-            promises.unshift(appendData({tableName: 'cash_transactions', data: cashData }));
+            promises.push(appendData({tableName: 'cash_transactions', data: cashData }));
+        }
+        if (bankData.length > 0) {
+            promises.push(appendData({tableName: 'bank_transactions', data: bankData }));
         }
         
         await Promise.all(promises);

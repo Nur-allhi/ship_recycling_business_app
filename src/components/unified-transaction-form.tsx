@@ -355,7 +355,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
             rules={{ required: true }}
             render={({ field }) => (
                 <Tabs value={field.value} onValueChange={field.onChange} className="w-full">
-                    <TabsList className="grid w-full grid-cols-3 sm:grid-cols-5 h-auto">
+                    <TabsList className="grid w-full grid-cols-3 sm:grid-cols-5 h-auto flex-wrap">
                         <TabsTrigger value="cash"><Wallet className="mr-1 h-4 w-4" />Cash</TabsTrigger>
                         <TabsTrigger value="bank"><Landmark className="mr-1 h-4 w-4" />Bank</TabsTrigger>
                         <TabsTrigger value="stock"><Boxes className="mr-1 h-4 w-4" />Stock</TabsTrigger>
@@ -459,7 +459,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                                                 title="Select a category"
                                                 placeholder="Select a category"
                                             >
-                                                {bankCategories.map(c => <ResponsiveSelectItem key={`${c.name}-${c.type}`} value={c.name}>{c.name}</ResponsiveSelectItem>)}
+                                                {bankCategories.map((c, index) => <ResponsiveSelectItem key={`${c.name}-${c.type}-${index}`} value={c.name}>{c.name}</ResponsiveSelectItem>)}
                                             </ResponsiveSelect>
                                         )}
                                     />
