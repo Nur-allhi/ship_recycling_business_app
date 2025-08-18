@@ -68,19 +68,9 @@ const ReadDataInputSchema = z.object({
 export async function readData(input: z.infer<typeof ReadDataInputSchema>) {
   try {
     // Reading data is allowed for any authenticated user, so we don't need a service role client here.
-    // Using anon key + user's JWT
-    const session = await getSession();
-     if (!session?.accessToken) throw new Error("SESSION_EXPIRED");
-
-    const supabase = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-        {
-            global: {
-                headers: { Authorization: `Bearer ${session.accessToken}` },
-            },
-        }
-    );
+    // RLS policies (or lack thereof) will determine what they can see.
+    // For a shared app model, this is fine as all data is public to authenticated users.
+    const supabase = await getAuthenticatedSupabaseClient();
     
     let query = supabase
       .from(input.tableName)
@@ -142,8 +132,9 @@ const AppendDataInputSchema = z.object({
 export async function appendData(input: z.infer<typeof AppendDataInputSchema>) {
     try {
         const session = await getSession();
-        // Allow any authenticated user to add data, as UI controls will gate this for non-admins.
-        if (!session) throw new Error("Authentication required.");
+        // The UI should prevent non-admins from triggering this.
+        // This is a server-side check for security.
+        if (session?.role !== 'admin') throw new Error("Permission denied. Only admins can add data.");
         
         const supabase = await getAuthenticatedSupabaseClient();
 
@@ -579,5 +570,3 @@ export async function recordPaymentAgainstTotal(input: z.infer<typeof RecordPaym
         return handleApiError(error);
     }
 }
-
-    
