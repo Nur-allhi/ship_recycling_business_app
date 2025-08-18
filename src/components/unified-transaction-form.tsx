@@ -60,8 +60,12 @@ const formSchema = z.object({
         if (!data.bank_id) ctx.addIssue({ code: 'custom', message: 'Please select a bank account.', path: ['bank_id'] });
         if (!data.category) ctx.addIssue({ code: 'custom', message: 'Category is required.', path: ['category'] });
         if (!data.description) ctx.addIssue({ code: 'custom', message: 'Description is required.', path: ['description'] });
-        if (data.category === 'Others' && !data.bank_inOutType) {
-            ctx.addIssue({ code: 'custom', message: 'Please select a direction for "Others" category.', path: ['bank_inOutType'] });
+        
+        const bankCategories = (window as any).__APP_STATE__?.bankCategories || [];
+        const selectedCategory = bankCategories.find((c: any) => c.name === data.category);
+
+        if (selectedCategory?.type === 'prompt' && !data.bank_inOutType) {
+            ctx.addIssue({ code: 'custom', message: 'Please select a direction for this category.', path: ['bank_inOutType'] });
         }
     }
     if (data.transactionType === 'stock') {
@@ -153,6 +157,11 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
   const transferFrom = watch('transferFrom');
   const bankCategory = watch('category');
   const [isNewStockItem, setIsNewStockItem] = useState(false);
+  
+  // This is a workaround to make sure our complex validation has access to the latest state
+  useEffect(() => {
+    (window as any).__APP_STATE__ = { bankCategories };
+  }, [bankCategories]);
 
   useEffect(() => {
     reset({
@@ -437,8 +446,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                                     <Input id="amount-bank" type="number" step="0.01" {...register('amount')} placeholder="0.00"/>
                                     {errors.amount && <p className="text-sm text-destructive">{errors.amount.message}</p>}
                                 </div>
-                               </div>
-                               <div className="space-y-2">
+                                <div className="md:col-span-2 space-y-2">
                                     <Label>Bank Account</Label>
                                     <Controller
                                         control={control}
@@ -456,7 +464,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                                     />
                                     {errors.bank_id && <p className="text-sm text-destructive">{errors.bank_id.message}</p>}
                                 </div>
-                               <div className="space-y-2">
+                                <div className="md:col-span-2 space-y-2">
                                     <Label>Category</Label>
                                     <Controller
                                         control={control}
@@ -468,12 +476,13 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                                                 title="Select a category"
                                                 placeholder="Select a category"
                                             >
-                                                {bankCategories.map((c, index) => <ResponsiveSelectItem key={`${c.name}-${index}`} value={c.name}>{c.name}</ResponsiveSelectItem>)}
+                                                {bankCategories.map((c, index) => <ResponsiveSelectItem key={`${c.name}-${c.type}-${index}`} value={c.name}>{c.name}</ResponsiveSelectItem>)}
                                             </ResponsiveSelect>
                                         )}
                                     />
                                     {errors.category && <p className="text-sm text-destructive">{errors.category.message}</p>}
                                 </div>
+                               </div>
                                 {(bankCategory && bankCategories.find(c => c.name === bankCategory)?.type === 'prompt') && (
                                      <div className="space-y-2 animate-fade-in">
                                         <Label>Direction</Label>
@@ -529,6 +538,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                                                             value={field.value}
                                                             title="Select an item"
                                                             placeholder="Select existing item"
+                                                            className="flex-1"
                                                         >
                                                             {stockItems.map(item => <ResponsiveSelectItem key={item.id} value={item.name}>{item.name}</ResponsiveSelectItem>)}
                                                         </ResponsiveSelect>
@@ -536,7 +546,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                                                 />
                                             )}
                                             <Button type="button" variant="outline" size="sm" onClick={() => setIsNewStockItem(prev => !prev)}>
-                                                {isNewStockItem ? 'Select Existing' : 'Add New Item'}
+                                                {isNewStockItem ? 'Select Existing' : 'Add New'}
                                             </Button>
                                         </div>
                                     ) : (
@@ -758,3 +768,5 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
     </>
   );
 }
+
+    
