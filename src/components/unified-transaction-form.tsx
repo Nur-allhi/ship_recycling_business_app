@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect } from 'react';
@@ -38,6 +39,7 @@ const formSchema = z.object({
   // cash/bank specific
   inOutType: z.enum(['in', 'out']).optional(),
   bank_id: z.string().optional(),
+  bank_inOutType: z.enum(['deposit', 'withdrawal']).optional(),
 
   // transfer specific
   transferFrom: z.enum(['cash', 'bank']).optional(),
@@ -57,6 +59,10 @@ const formSchema = z.object({
     if (data.transactionType === 'bank') {
         if (!data.bank_id) ctx.addIssue({ code: 'custom', message: 'Please select a bank account.', path: ['bank_id'] });
         if (!data.category) ctx.addIssue({ code: 'custom', message: 'Category is required.', path: ['category'] });
+        if (!data.description) ctx.addIssue({ code: 'custom', message: 'Description is required.', path: ['description'] });
+        if (data.category === 'Others' && !data.bank_inOutType) {
+            ctx.addIssue({ code: 'custom', message: 'Please select a direction for "Others" category.', path: ['bank_inOutType'] });
+        }
     }
     if (data.transactionType === 'stock') {
         if (!data.stockType) ctx.addIssue({ code: 'custom', message: 'Please select purchase or sale.', path: ['stockType'] });
@@ -82,8 +88,6 @@ const formSchema = z.object({
     if(data.transactionType === 'cash') {
         if (!data.inOutType) ctx.addIssue({ code: 'custom', message: 'Transaction direction is required.', path: ['inOutType'] });
         if (!data.category) ctx.addIssue({ code: 'custom', message: 'Category is required.', path: ['category'] });
-    }
-     if(data.transactionType === 'cash' || (data.transactionType === 'bank' && data.category !== 'Transfer')) {
         if (!data.description) ctx.addIssue({ code: 'custom', message: 'Description is required.', path: ['description'] });
     }
     if(data.transactionType === 'transfer') {
@@ -147,6 +151,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
   const ledgerType = watch('ledgerType');
   const contact_id = watch('contact_id');
   const transferFrom = watch('transferFrom');
+  const bankCategory = watch('category');
   const [isNewStockItem, setIsNewStockItem] = useState(false);
 
   useEffect(() => {
@@ -178,11 +183,14 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                 });
                 break;
             case 'bank':
-                 const bankCategory = bankCategories.find(c => c.name === data.category);
-                 if(!bankCategory) throw new Error("Could not determine transaction type from category.");
+                 const selectedCategory = bankCategories.find(c => c.name === data.category);
+                 if(!selectedCategory) throw new Error("Could not find the selected category.");
+
+                 const transactionDirection = selectedCategory.type === 'prompt' ? data.bank_inOutType : selectedCategory.type;
+                 if(!transactionDirection) throw new Error("Transaction direction is required for this category.");
 
                  await addBankTransaction({
-                    type: bankCategory.type,
+                    type: transactionDirection,
                     amount: data.amount!,
                     description: data.description!,
                     category: data.category!,
@@ -458,12 +466,28 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                                                 title="Select a category"
                                                 placeholder="Select a category"
                                             >
-                                                {bankCategories.map((c, index) => <ResponsiveSelectItem key={`${c.name}-${c.type}-${index}`} value={c.name}>{c.name}</ResponsiveSelectItem>)}
+                                                {bankCategories.map((c, index) => <ResponsiveSelectItem key={`${c.name}-${index}`} value={c.name}>{c.name}</ResponsiveSelectItem>)}
                                             </ResponsiveSelect>
                                         )}
                                     />
                                     {errors.category && <p className="text-sm text-destructive">{errors.category.message}</p>}
                                 </div>
+                                {(bankCategory === 'Others' || (bankCategory && bankCategories.find(c => c.name === bankCategory)?.type === 'prompt')) && (
+                                     <div className="space-y-2 animate-fade-in">
+                                        <Label>Direction</Label>
+                                        <Controller 
+                                            control={control}
+                                            name="bank_inOutType"
+                                            render={({ field }) => (
+                                                <RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex pt-2 gap-4">
+                                                    <Label className="flex items-center gap-2 cursor-pointer"><RadioGroupItem value="deposit" />Deposit</Label>
+                                                    <Label className="flex items-center gap-2 cursor-pointer"><RadioGroupItem value="withdrawal" />Withdrawal</Label>
+                                                </RadioGroup>
+                                            )}
+                                        />
+                                        {errors.bank_inOutType && <p className="text-sm text-destructive">{errors.bank_inOutType.message}</p>}
+                                    </div>
+                                )}
                                 <div className="space-y-2">
                                     <Label htmlFor="description-bank">Description</Label>
                                     <Input id="description-bank" {...register('description')} placeholder="e.g., Monthly salary" />
@@ -732,3 +756,5 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
     </>
   );
 }
+
+    

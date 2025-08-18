@@ -29,7 +29,7 @@ interface AppState {
   deletedStockTransactions: StockTransaction[];
   deletedLedgerTransactions: LedgerTransaction[];
   cashCategories: string[];
-  bankCategories: { name: string, type: 'deposit' | 'withdrawal'}[];
+  bankCategories: { name: string, type: 'deposit' | 'withdrawal' | 'prompt'}[];
   fontSize: FontSize;
   initialBalanceSet: boolean;
   needsInitialBalance: boolean;
@@ -108,6 +108,7 @@ const initialAppState: AppState = {
     { name: 'Transfer', type: 'deposit' },
     { name: 'Transfer', type: 'withdrawal' },
     { name: 'Initial Balance', type: 'deposit' },
+    { name: 'Others', type: 'prompt' },
   ],
   fontSize: 'base',
   initialBalanceSet: false,
@@ -333,7 +334,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
         
         const cashCategories = categoriesData?.filter((c: any) => c.type === 'cash').map((c: any) => c.name);
         
-        const bankCategories = categoriesData?.filter((c: any) => c.type === 'bank').map((c: any) => ({ name: c.name, type: c.direction }));
+        const dbBankCategories = categoriesData?.filter((c: any) => c.type === 'bank').map((c: any) => ({ name: c.name, type: c.direction }));
+        const allBankCategories = [...initialAppState.bankCategories, ...dbBankCategories];
+        // Remove duplicates, giving preference to DB categories
+        const uniqueBankCategories = allBankCategories.reduce((acc, current) => {
+            if (!acc.find(item => item.name === current.name)) {
+                acc.push(current);
+            }
+            return acc;
+        }, [] as { name: string, type: 'deposit' | 'withdrawal' | 'prompt' }[]);
 
         const installments: PaymentInstallment[] = installmentsData || [];
         const ledgerTransactions: LedgerTransaction[] = (ledgerData || []).map((tx: any) => ({
@@ -356,7 +365,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             bankBalance: finalBankBalance,
             needsInitialBalance,
             cashCategories: cashCategories?.length > 0 ? cashCategories : prev.cashCategories,
-            bankCategories: bankCategories?.length > 0 ? [...prev.bankCategories.filter(c => c.name === 'Transfer'), ...bankCategories] : prev.bankCategories,
+            bankCategories: uniqueBankCategories,
             initialBalanceSet: true,
             vendors: vendorsData || [],
             clients: clientsData || [],
@@ -554,7 +563,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
               await addCashTransaction({ ...financialTxData, type: tx.type === 'purchase' ? 'expense' : 'income' });
           } else if (tx.paymentMethod === 'bank') { 
               const bankCategory = state.bankCategories.find(c => c.name === category);
-              if(!bankCategory) throw new Error("Bank category for stock transaction not found.");
+              if(!bankCategory || bankCategory.type === 'prompt') throw new Error("Bank category for stock transaction not found or is invalid.");
               await addBankTransaction({ ...financialTxData, type: bankCategory.type, bank_id: tx.bank_id! });
           }
       }
@@ -642,12 +651,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
           if (originalTx.paymentMethod === 'cash' || originalTx.paymentMethod === 'bank') {
               const tableName = `${originalTx.paymentMethod}_transactions`;
               const { data: linkedTxs } = await readData({ tableName, select: `id, linkedStockTxId`});
-              const linkedTx = (linkedTxs as any[])?.find(tx => tx.linkedStockTxId === originalTx.id);
+              const activeLinkedTx = (linkedTxs as any[])?.find(tx => tx.linkedStockTxId === originalTx.id);
 
-              if (linkedTx) {
+              if (activeLinkedTx) {
                   const newAmount = updatedTx.weight * updatedTx.pricePerKg;
                   const newDescription = `${updatedTx.type === 'purchase' ? 'Purchase' : 'Sale'} of ${updatedTx.weight}kg of ${updatedTx.stockItemName}`;
-                  await updateData({ tableName, id: linkedTx.id, data: { amount: newAmount, description: newDescription } });
+                  await updateData({ tableName, id: activeLinkedTx.id, data: { amount: newAmount, description: newDescription } });
               }
           }
           
@@ -825,11 +834,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if(from === 'cash') {
             await addCashTransaction({ ...baseTx, type: 'expense' });
             const bankCategory = state.bankCategories.find(c => c.name === 'Transfer' && c.type === 'deposit');
-            if(!bankCategory) throw new Error("Bank category for transfer not found.");
+            if(!bankCategory || bankCategory.type === 'prompt') throw new Error("Bank category for transfer not found.");
             await addBankTransaction({ ...baseTx, type: bankCategory.type, bank_id: bankId! });
         } else {
              const bankCategory = state.bankCategories.find(c => c.name === 'Transfer' && c.type === 'withdrawal');
-            if(!bankCategory) throw new Error("Bank category for transfer not found.");
+            if(!bankCategory || bankCategory.type === 'prompt') throw new Error("Bank category for transfer not found.");
             await addBankTransaction({ ...baseTx, type: bankCategory.type, bank_id: bankId! });
             await addCashTransaction({ ...baseTx, type: 'income' });
         }
@@ -852,7 +861,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         dataToSave.direction = direction;
       }
       
-      const newCategory = await appendData({ tableName: 'categories', data: dataToSave });
+      const newCategory = await appendData({ tableName: 'categories', data: dataToSave, select: '*' });
       
       if (newCategory) {
           reloadData({ force: true });
@@ -1177,3 +1186,5 @@ export function useAppContext() {
   }
   return context;
 }
+
+    

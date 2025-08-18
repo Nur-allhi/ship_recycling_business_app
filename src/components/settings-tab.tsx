@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useRef, useState } from "react"
@@ -281,8 +282,8 @@ export function SettingsTab() {
                         <Label className="flex items-center gap-2 cursor-pointer"><RadioGroupItem value="withdrawal"/>Withdrawal (Out)</Label>
                     </RadioGroup>
                   </div>
-                  <div className="flex flex-wrap gap-2 mt-4">
-                    {bankCategories.map((cat, index) => (
+                   <div className="flex flex-wrap gap-2 mt-4">
+                    {bankCategories.filter(c => c.type !== 'prompt').map((cat, index) => (
                       <Badge key={`${cat.name}-${cat.type}-${index}`} variant="secondary" className="flex items-center gap-2">
                         <span>{cat.name} <span className="text-muted-foreground text-xs">({cat.type})</span></span>
                         <button onClick={() => deleteCategory('bank', cat.name)} className="rounded-full hover:bg-muted-foreground/20">
@@ -374,3 +375,5 @@ export function SettingsTab() {
     </div>
   );
 }
+
+    
