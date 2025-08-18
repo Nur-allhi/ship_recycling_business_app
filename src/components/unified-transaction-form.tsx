@@ -360,7 +360,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                         <TabsTrigger value="bank"><Landmark className="mr-1 h-4 w-4" />Bank</TabsTrigger>
                         <TabsTrigger value="stock"><Boxes className="mr-1 h-4 w-4" />Stock</TabsTrigger>
                         <TabsTrigger value="transfer"><ArrowRightLeft className="mr-1 h-4 w-4" />Transfer</TabsTrigger>
-                        <TabsTrigger value="ap_ar"><UserPlus className="mr-1 h-4 w-4" />A/R & A/P</TabsTrigger>
+                        <TabsTrigger value="ap_ar"><UserPlus className="mr-1 h-4 w-4" />A/R &amp; A/P</TabsTrigger>
                     </TabsList>
                     <form onSubmit={handleSubmit(onSubmit)}>
                         <div className="space-y-4 pt-6">
@@ -733,3 +733,5 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
     </>
   );
 }
+
+    
