@@ -850,14 +850,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const setInitialBalances = async (cash: number, bankTotals: Record<string, number>) => {
     try {
         const date = new Date().toISOString();
-        if (cash > 0) {
-            await appendData({ tableName: 'cash_transactions', data: { date, type: 'income', amount: cash, description: 'Initial Balance', category: 'Initial Balance' } });
-        }
-        for (const [bankId, amount] of Object.entries(bankTotals)) {
+        const cashPromise = cash > 0 ? appendData({ tableName: 'cash_transactions', data: { date, type: 'income', amount: cash, description: 'Initial Balance', category: 'Initial Balance' } }) : Promise.resolve();
+
+        const bankPromises = Object.entries(bankTotals).map(([bankId, amount]) => {
             if (amount > 0) {
-                await appendData({ tableName: 'bank_transactions', data: { date, type: 'deposit', amount, description: 'Initial Balance', category: 'Initial Balance', bank_id: bankId } });
+                return appendData({ tableName: 'bank_transactions', data: { date, type: 'deposit', amount, description: 'Initial Balance', category: 'Initial Balance', bank_id: bankId } });
             }
-        }
+            return Promise.resolve();
+        });
+        
+        await Promise.all([cashPromise, ...bankPromises]);
         
         toast({ title: "Initial balances set." });
         setState(prev => ({ ...prev, needsInitialBalance: false }));
@@ -1130,7 +1132,3 @@ export function useAppContext() {
   }
   return context;
 }
-
-    
-
-    

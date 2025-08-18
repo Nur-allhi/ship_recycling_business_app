@@ -137,15 +137,16 @@ export async function appendData(input: z.infer<typeof AppendDataInputSchema>) {
         
         const supabase = await getAuthenticatedSupabaseClient();
         
-        // Ensure user_id is set for tables that need it.
-        const dataWithUserId = {
-            ...input.data,
+        const dataArray = Array.isArray(input.data) ? input.data : [input.data];
+
+        const dataWithUserId = dataArray.map(item => ({
+            ...item,
             user_id: session.id,
-        };
+        }));
 
         const { data, error } = await supabase
             .from(input.tableName)
-            .insert([dataWithUserId]) 
+            .insert(dataWithUserId)
             .select(input.select || '*')
             .single();
 
@@ -566,5 +567,3 @@ export async function recordPaymentAgainstTotal(input: z.infer<typeof RecordPaym
         return handleApiError(error);
     }
 }
-
-    
