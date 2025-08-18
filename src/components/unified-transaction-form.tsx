@@ -186,7 +186,9 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                  const selectedCategory = bankCategories.find(c => c.name === data.category);
                  if(!selectedCategory) throw new Error("Could not find the selected category.");
 
-                 const transactionDirection = selectedCategory.type === 'prompt' ? data.bank_inOutType : selectedCategory.type;
+                 const directionFromCategory = bankCategories.find(c => c.name === data.category)?.type;
+                 const transactionDirection = directionFromCategory === 'prompt' ? data.bank_inOutType : directionFromCategory;
+
                  if(!transactionDirection) throw new Error("Transaction direction is required for this category.");
 
                  await addBankTransaction({
@@ -472,7 +474,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                                     />
                                     {errors.category && <p className="text-sm text-destructive">{errors.category.message}</p>}
                                 </div>
-                                {(bankCategory === 'Others' || (bankCategory && bankCategories.find(c => c.name === bankCategory)?.type === 'prompt')) && (
+                                {(bankCategory && bankCategories.find(c => c.name === bankCategory)?.type === 'prompt') && (
                                      <div className="space-y-2 animate-fade-in">
                                         <Label>Direction</Label>
                                         <Controller 
@@ -756,5 +758,3 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
     </>
   );
 }
-
-    

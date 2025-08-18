@@ -286,9 +286,6 @@ export function SettingsTab() {
                     {bankCategories.filter(c => c.type !== 'prompt').map((cat, index) => (
                       <Badge key={`${cat.name}-${cat.type}-${index}`} variant="secondary" className="flex items-center gap-2">
                         <span>{cat.name} <span className="text-muted-foreground text-xs">({cat.type})</span></span>
-                        <button onClick={() => deleteCategory('bank', cat.name)} className="rounded-full hover:bg-muted-foreground/20">
-                          <Trash2 className="h-3 w-3" />
-                        </button>
                       </Badge>
                     ))}
                   </div>
@@ -375,5 +372,3 @@ export function SettingsTab() {
     </div>
   );
 }
-
-    

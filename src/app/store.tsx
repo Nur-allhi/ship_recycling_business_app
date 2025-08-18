@@ -85,6 +85,19 @@ interface AppContextType extends AppState {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
+const fixedBankCategories: { name: string, type: 'deposit' | 'withdrawal' | 'prompt' }[] = [
+    { name: 'Deposit', type: 'deposit' },
+    { name: 'Withdrawal', type: 'withdrawal' },
+    { name: 'Stock Purchase', type: 'withdrawal' },
+    { name: 'Stock Sale', type: 'deposit' },
+    { name: 'A/R Settlement', type: 'deposit' },
+    { name: 'A/P Settlement', type: 'withdrawal' },
+    { name: 'Transfer', type: 'deposit' },
+    { name: 'Transfer', type: 'withdrawal' },
+    { name: 'Initial Balance', type: 'deposit' },
+    { name: 'Others', type: 'prompt' },
+];
+
 const initialAppState: AppState = {
   cashBalance: 0,
   cashTransactions: [],
@@ -98,18 +111,7 @@ const initialAppState: AppState = {
   deletedStockTransactions: [],
   deletedLedgerTransactions: [],
   cashCategories: ['Salary', 'Groceries', 'Transport', 'Utilities', 'Stock Purchase', 'Stock Sale'],
-  bankCategories: [
-    { name: 'Deposit', type: 'deposit' },
-    { name: 'Withdrawal', type: 'withdrawal' },
-    { name: 'Stock Purchase', type: 'withdrawal' },
-    { name: 'Stock Sale', type: 'deposit' },
-    { name: 'A/R Settlement', type: 'deposit' },
-    { name: 'A/P Settlement', type: 'withdrawal' },
-    { name: 'Transfer', type: 'deposit' },
-    { name: 'Transfer', type: 'withdrawal' },
-    { name: 'Initial Balance', type: 'deposit' },
-    { name: 'Others', type: 'prompt' },
-  ],
+  bankCategories: [...fixedBankCategories],
   fontSize: 'base',
   initialBalanceSet: false,
   needsInitialBalance: false,
@@ -334,8 +336,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         
         const cashCategories = categoriesData?.filter((c: any) => c.type === 'cash').map((c: any) => c.name);
         
-        const dbBankCategories = categoriesData?.filter((c: any) => c.type === 'bank').map((c: any) => ({ name: c.name, type: c.direction }));
-        const allBankCategories = [...initialAppState.bankCategories, ...dbBankCategories];
+        const customBankCategories = categoriesData?.filter((c: any) => c.type === 'bank').map((c: any) => ({ name: c.name, type: c.direction }));
+        const allBankCategories = [...fixedBankCategories, ...customBankCategories];
         // Remove duplicates, giving preference to DB categories
         const uniqueBankCategories = allBankCategories.reduce((acc, current) => {
             if (!acc.find(item => item.name === current.name)) {
@@ -343,6 +345,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             }
             return acc;
         }, [] as { name: string, type: 'deposit' | 'withdrawal' | 'prompt' }[]);
+
 
         const installments: PaymentInstallment[] = installmentsData || [];
         const ledgerTransactions: LedgerTransaction[] = (ledgerData || []).map((tx: any) => ({
@@ -1186,5 +1189,3 @@ export function useAppContext() {
   }
   return context;
 }
-
-    
