@@ -459,7 +459,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                                                 title="Select a category"
                                                 placeholder="Select a category"
                                             >
-                                                {bankCategories.map(c => <ResponsiveSelectItem key={c.name} value={c.name}>{c.name}</ResponsiveSelectItem>)}
+                                                {bankCategories.map(c => <ResponsiveSelectItem key={`${c.name}-${c.type}`} value={c.name}>{c.name}</ResponsiveSelectItem>)}
                                             </ResponsiveSelect>
                                         )}
                                     />
