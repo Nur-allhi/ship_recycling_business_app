@@ -23,6 +23,7 @@ import { cn } from '@/lib/utils';
 import { useAppContext } from '@/app/store';
 import { useToast } from '@/hooks/use-toast';
 import { Input } from './ui/input';
+import { ResponsiveSelect, ResponsiveSelectItem } from './ui/responsive-select';
 
 interface AggregatedContact {
     contact_id: string;
@@ -36,6 +37,15 @@ const formSchema = z.object({
   paymentMethod: z.enum(['cash', 'bank'], { required_error: "Please select a payment method." }),
   paymentDate: z.date({ required_error: "Please select a payment date." }),
   paymentAmount: z.coerce.number().positive("Payment amount must be positive."),
+  bank_id: z.string().optional(),
+}).superRefine((data, ctx) => {
+    if (data.paymentMethod === 'bank' && !data.bank_id) {
+        ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['bank_id'],
+            message: 'A bank account is required for bank payments.',
+        });
+    }
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -47,12 +57,12 @@ interface SettlePaymentDialogProps {
 }
 
 export function SettlePaymentDialog({ isOpen, setIsOpen, contact }: SettlePaymentDialogProps) {
-    const { recordPayment, currency } = useAppContext();
+    const { recordPayment, currency, banks } = useAppContext();
     const { toast } = useToast();
     
     const remainingBalance = contact.total_amount - contact.total_paid;
 
-    const { control, handleSubmit, register, formState: { errors, isSubmitting }} = useForm<FormData>({
+    const { control, handleSubmit, register, watch, formState: { errors, isSubmitting }} = useForm<FormData>({
         resolver: zodResolver(formSchema.refine(data => {
             return data.paymentAmount <= remainingBalance;
         }, {
@@ -65,6 +75,8 @@ export function SettlePaymentDialog({ isOpen, setIsOpen, contact }: SettlePaymen
         },
     });
 
+    const paymentMethod = watch('paymentMethod');
+
     const formatCurrency = (amount: number) => {
         if (currency === 'BDT') {
             return `BDT ${new Intl.NumberFormat('en-US').format(amount)}`;
@@ -74,7 +86,7 @@ export function SettlePaymentDialog({ isOpen, setIsOpen, contact }: SettlePaymen
 
     const onSubmit = async (data: FormData) => {
         try {
-            await recordPayment(contact.contact_id, contact.contact_name, data.paymentAmount, data.paymentMethod, data.paymentDate, contact.type);
+            await recordPayment(contact.contact_id, contact.contact_name, data.paymentAmount, data.paymentMethod, data.paymentDate, contact.type, data.bank_id);
             setIsOpen(false);
         } catch (error: any) {
             toast({ variant: 'destructive', title: 'Payment Failed', description: error.message });
@@ -139,6 +151,28 @@ export function SettlePaymentDialog({ isOpen, setIsOpen, contact }: SettlePaymen
                             {errors.paymentMethod && <p className="text-sm text-destructive">{errors.paymentMethod.message}</p>}
                         </div>
 
+                        {paymentMethod === 'bank' && (
+                            <div className="space-y-2 animate-fade-in">
+                                <Label>Bank Account</Label>
+                                <Controller 
+                                    control={control}
+                                    name="bank_id"
+                                    render={({ field }) => (
+                                        <ResponsiveSelect
+                                            onValueChange={field.onChange}
+                                            value={field.value}
+                                            title="Select a Bank Account"
+                                            placeholder="Select a bank..."
+                                        >
+                                            {banks.map(bank => (
+                                                <ResponsiveSelectItem key={bank.id} value={bank.id}>{bank.name}</ResponsiveSelectItem>
+                                            ))}
+                                        </ResponsiveSelect>
+                                    )}
+                                />
+                                {errors.bank_id && <p className="text-sm text-destructive">{errors.bank_id.message}</p>}
+                            </div>
+                        )}
 
                         <DialogFooter>
                             <Button type="button" variant="outline" onClick={() => setIsOpen(false)}>Cancel</Button>

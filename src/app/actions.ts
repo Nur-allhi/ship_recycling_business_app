@@ -176,7 +176,7 @@ const UpdateDataInputSchema = z.object({
 export async function updateData(input: z.infer<typeof UpdateDataInputSchema>) {
   try {
     const session = await getSession();
-    if (session?.role !== 'admin') throw new Error("Only admins can update data.");
+    if (!session) throw new Error("Authentication required.");
     
     const supabase = await getAuthenticatedSupabaseClient();
 
@@ -490,7 +490,7 @@ const RecordPaymentAgainstTotalInputSchema = z.object({
 export async function recordPaymentAgainstTotal(input: z.infer<typeof RecordPaymentAgainstTotalInputSchema>) {
     const supabase = await getAuthenticatedSupabaseClient();
     const session = await getSession();
-    if (session?.role !== 'admin') throw new Error("Only admins can settle payments.");
+    if (!session) throw new Error("Authentication required.");
 
     try {
         // 1. Fetch all outstanding transactions for this contact, oldest first
@@ -528,6 +528,7 @@ export async function recordPaymentAgainstTotal(input: z.infer<typeof RecordPaym
                 amount: paymentForThisTx,
                 date: input.payment_date,
                 payment_method: input.payment_method,
+                user_id: session.id, // Ensure user_id is set
             });
 
             if (installmentError) throw installmentError;
@@ -541,6 +542,7 @@ export async function recordPaymentAgainstTotal(input: z.infer<typeof RecordPaym
             amount: input.payment_amount,
             description: `Payment ${input.ledger_type === 'payable' ? 'to' : 'from'} ${input.contact_name}`,
             category: input.ledger_type === 'payable' ? 'A/P Settlement' : 'A/R Settlement',
+            user_id: session.id,
         };
         
         const logDescription = `Recorded payment of ${financialTxData.amount} ${input.ledger_type === 'payable' ? 'to' : 'from'} ${input.contact_name} via ${input.payment_method}`;

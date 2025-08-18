@@ -16,40 +16,53 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { Landmark, Wallet } from 'lucide-react';
+import { Separator } from './ui/separator';
 
 interface InitialBalanceDialogProps {
   isOpen: boolean;
 }
 
 export function InitialBalanceDialog({ isOpen }: InitialBalanceDialogProps) {
-  const { setInitialBalances } = useAppContext();
+  const { setInitialBalances, banks } = useAppContext();
   const { toast } = useToast();
   const cashRef = useRef<HTMLInputElement>(null);
-  const bankRef = useRef<HTMLInputElement>(null);
+  const bankRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   const handleSave = () => {
     const cash = parseFloat(cashRef.current?.value || '0');
-    const bank = parseFloat(bankRef.current?.value || '0');
-
-    if (isNaN(cash) || isNaN(bank) || cash < 0 || bank < 0) {
+    if (isNaN(cash) || cash < 0) {
       toast({
         variant: 'destructive',
         title: 'Invalid Input',
-        description: 'Please enter valid, non-negative numbers for balances.',
+        description: 'Please enter a valid, non-negative number for the cash balance.',
       });
       return;
     }
     
-    setInitialBalances(cash, bank);
+    const bankTotals: Record<string, number> = {};
+    for (const bank of banks) {
+      const value = parseFloat(bankRefs.current[bank.id]?.value || '0');
+      if (isNaN(value) || value < 0) {
+        toast({
+            variant: 'destructive',
+            title: 'Invalid Input',
+            description: `Please enter a valid, non-negative number for ${bank.name}.`,
+        });
+        return;
+      }
+      bankTotals[bank.id] = value;
+    }
+    
+    setInitialBalances(cash, bankTotals);
   };
 
   return (
     <Dialog open={isOpen}>
-      <DialogContent className="sm:max-w-[425px]" onInteractOutside={(e) => e.preventDefault()}>
+      <DialogContent className="sm:max-w-md" onInteractOutside={(e) => e.preventDefault()}>
         <DialogHeader>
           <DialogTitle>Set Initial Balances</DialogTitle>
           <DialogDescription>
-            Welcome! To get started, please set your initial cash and bank balances. You can add initial stock from the Settings tab.
+            Welcome! To get started, please set your initial balances. You can add initial stock from the Settings tab later.
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4 py-4">
@@ -66,19 +79,28 @@ export function InitialBalanceDialog({ isOpen }: InitialBalanceDialogProps) {
               defaultValue="0"
             />
           </div>
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="bank-balance" className="text-right">
-              <Landmark className="h-5 w-5 inline-block" />
-            </Label>
-            <Input
-              id="bank-balance"
-              ref={bankRef}
-              type="number"
-              placeholder="Initial Bank"
-              className="col-span-3"
-              defaultValue="0"
-            />
-          </div>
+          <Separator />
+          {banks.map(bank => (
+            <div key={bank.id} className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor={`bank-balance-${bank.id}`} className="text-right text-sm">
+                {bank.name}
+              </Label>
+              <Input
+                id={`bank-balance-${bank.id}`}
+                ref={el => bankRefs.current[bank.id] = el}
+                type="number"
+                placeholder="Initial Bank Balance"
+                className="col-span-3"
+                defaultValue="0"
+              />
+            </div>
+          ))}
+          {banks.length === 0 && (
+            <p className="text-sm text-muted-foreground text-center col-span-4">
+              No bank accounts found. You can add them in Settings {'>'} General.
+            </p>
+          )}
+
         </div>
         <DialogFooter>
           <Button onClick={handleSave}>Save and Continue</Button>

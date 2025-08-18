@@ -38,9 +38,13 @@ const formSchema = z.object({
 
   // cash/bank specific
   inOutType: z.enum(['in', 'out']).optional(),
+  bank_id: z.string().optional(),
 
   // transfer specific
   transferFrom: z.enum(['cash', 'bank']).optional(),
+  transferToBankId: z.string().optional(),
+  transferFromBankId: z.string().optional(),
+
 
   // A/R A/P or Stock-on-credit specific
   contact_id: z.string().optional(),
@@ -51,12 +55,16 @@ const formSchema = z.object({
 
 
 }).superRefine((data, ctx) => {
+    if (data.transactionType === 'bank') {
+        if (!data.bank_id) ctx.addIssue({ code: 'custom', message: 'Please select a bank account.', path: ['bank_id'] });
+    }
     if (data.transactionType === 'stock') {
         if (!data.stockType) ctx.addIssue({ code: 'custom', message: 'Please select purchase or sale.', path: ['stockType'] });
         if (!data.stockItemName) ctx.addIssue({ code: 'custom', message: 'Stock item name is required.', path: ['stockItemName'] });
         if (!data.weight || data.weight <= 0) ctx.addIssue({ code: 'custom', message: 'Weight must be positive.', path: ['weight'] });
         if (data.pricePerKg === undefined || data.pricePerKg < 0) ctx.addIssue({ code: 'custom', message: 'Price must be non-negative.', path: ['pricePerKg'] });
         if (!data.paymentMethod) ctx.addIssue({ code: 'custom', message: 'Payment method is required.', path: ['paymentMethod'] });
+        if (data.paymentMethod === 'bank' && !data.bank_id) ctx.addIssue({ code: 'custom', message: 'A bank account is required.', path: ['bank_id']});
         
         if (data.paymentMethod === 'credit') {
             const contactType = data.stockType === 'purchase' ? 'Vendor' : 'Client';
@@ -78,6 +86,8 @@ const formSchema = z.object({
     }
     if(data.transactionType === 'transfer') {
         if (!data.transferFrom) ctx.addIssue({ code: 'custom', message: 'Transfer source is required.', path: ['transferFrom'] });
+        if (data.transferFrom === 'cash' && !data.transferToBankId) ctx.addIssue({ code: 'custom', message: 'Destination bank is required.', path: ['transferToBankId']});
+        if (data.transferFrom === 'bank' && !data.transferFromBankId) ctx.addIssue({ code: 'custom', message: 'Source bank is required.', path: ['transferFromBankId']});
     }
     if(data.transactionType === 'ap_ar') {
         const contactType = data.ledgerType === 'payable' ? 'Vendor' : 'Client';
@@ -114,6 +124,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
     stockItems,
     vendors,
     clients,
+    banks,
   } = useAppContext();
   
   const { toast } = useToast();
@@ -133,6 +144,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
   const stockPaymentMethod = watch('paymentMethod');
   const ledgerType = watch('ledgerType');
   const contact_id = watch('contact_id');
+  const transferFrom = watch('transferFrom');
   const [isNewStockItem, setIsNewStockItem] = useState(false);
 
   useEffect(() => {
@@ -170,6 +182,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                     description: data.description!,
                     category: data.category!,
                     date: transactionDate,
+                    bank_id: data.bank_id!,
                 });
                 break;
             case 'stock':
@@ -197,10 +210,12 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                     date: transactionDate,
                     contact_id: stockContactId,
                     contact_name: stockContactName,
+                    bank_id: data.bank_id,
                 });
                 break;
             case 'transfer':
-                await transferFunds(data.transferFrom!, data.amount!, transactionDate);
+                const bankId = data.transferFrom === 'cash' ? data.transferToBankId : data.transferFromBankId;
+                await transferFunds(data.transferFrom!, data.amount!, transactionDate, bankId);
                 break;
             case 'ap_ar':
                 let ledgerContactId: string | undefined;
@@ -403,7 +418,26 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                                     <Input id="amount-bank" type="number" step="0.01" {...register('amount')} placeholder="0.00"/>
                                     {errors.amount && <p className="text-sm text-destructive">{errors.amount.message}</p>}
                                 </div>
-                                <div className="space-y-2 md:col-span-2">
+                               </div>
+                               <div className="space-y-2">
+                                    <Label>Bank Account</Label>
+                                    <Controller
+                                        control={control}
+                                        name="bank_id"
+                                        render={({ field }) => (
+                                            <ResponsiveSelect 
+                                                onValueChange={field.onChange} 
+                                                value={field.value}
+                                                title="Select a bank account"
+                                                placeholder="Select a bank account"
+                                            >
+                                                {banks.map(b => <ResponsiveSelectItem key={b.id} value={b.id}>{b.name}</ResponsiveSelectItem>)}
+                                            </ResponsiveSelect>
+                                        )}
+                                    />
+                                    {errors.bank_id && <p className="text-sm text-destructive">{errors.bank_id.message}</p>}
+                                </div>
+                                <div className="space-y-2">
                                     <Label>Direction</Label>
                                     <Controller 
                                         control={control}
@@ -421,7 +455,6 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                                     />
                                     {errors.inOutType && <p className="text-sm text-destructive">{errors.inOutType.message}</p>}
                                 </div>
-                              </div>
                                <div className="space-y-2">
                                     <Label>Category</Label>
                                     <Controller
@@ -529,6 +562,26 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                                     />
                                     {errors.paymentMethod && <p className="text-sm text-destructive">{errors.paymentMethod.message}</p>}
                                 </div>
+                                {stockPaymentMethod === 'bank' && (
+                                    <div className="space-y-2 animate-fade-in">
+                                    <Label>Bank Account</Label>
+                                    <Controller
+                                        control={control}
+                                        name="bank_id"
+                                        render={({ field }) => (
+                                            <ResponsiveSelect 
+                                                onValueChange={field.onChange} 
+                                                value={field.value}
+                                                title="Select a bank account"
+                                                placeholder="Select a bank account"
+                                            >
+                                                {banks.map(b => <ResponsiveSelectItem key={b.id} value={b.id}>{b.name}</ResponsiveSelectItem>)}
+                                            </ResponsiveSelect>
+                                        )}
+                                    />
+                                    {errors.bank_id && <p className="text-sm text-destructive">{errors.bank_id.message}</p>}
+                                </div>
+                                )}
                                 {stockPaymentMethod === 'credit' && stockType && stockCreditFields}
                             </TabsContent>
 
@@ -549,7 +602,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                                         control={control}
                                         name="transferFrom"
                                         render={({ field }) => (
-                                            <RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex pt-2 gap-4">
+                                            <RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex flex-col sm:flex-row pt-2 gap-4">
                                                 <Label htmlFor="from_cash" className="flex items-center gap-2 cursor-pointer"><RadioGroupItem value="cash" id="from_cash" /><span>Cash to Bank</span></Label>
                                                 <Label htmlFor="from_bank" className="flex items-center gap-2 cursor-pointer"><RadioGroupItem value="bank" id="from_bank" /><span>Bank to Cash</span></Label>
                                             </RadioGroup>
@@ -557,6 +610,46 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                                     />
                                     {errors.transferFrom && <p className="text-sm text-destructive">{errors.transferFrom.message}</p>}
                                 </div>
+                                {transferFrom === 'cash' && (
+                                    <div className="space-y-2 animate-fade-in">
+                                        <Label>To Bank Account</Label>
+                                        <Controller
+                                            control={control}
+                                            name="transferToBankId"
+                                            render={({ field }) => (
+                                                <ResponsiveSelect 
+                                                    onValueChange={field.onChange} 
+                                                    value={field.value}
+                                                    title="Select destination bank"
+                                                    placeholder="Select a bank account"
+                                                >
+                                                    {banks.map(b => <ResponsiveSelectItem key={b.id} value={b.id}>{b.name}</ResponsiveSelectItem>)}
+                                                </ResponsiveSelect>
+                                            )}
+                                        />
+                                        {errors.transferToBankId && <p className="text-sm text-destructive">{errors.transferToBankId.message}</p>}
+                                    </div>
+                                )}
+                                {transferFrom === 'bank' && (
+                                    <div className="space-y-2 animate-fade-in">
+                                        <Label>From Bank Account</Label>
+                                        <Controller
+                                            control={control}
+                                            name="transferFromBankId"
+                                            render={({ field }) => (
+                                                <ResponsiveSelect 
+                                                    onValueChange={field.onChange} 
+                                                    value={field.value}
+                                                    title="Select source bank"
+                                                    placeholder="Select a bank account"
+                                                >
+                                                    {banks.map(b => <ResponsiveSelectItem key={b.id} value={b.id}>{b.name}</ResponsiveSelectItem>)}
+                                                </ResponsiveSelect>
+                                            )}
+                                        />
+                                        {errors.transferFromBankId && <p className="text-sm text-destructive">{errors.transferFromBankId.message}</p>}
+                                    </div>
+                                )}
                             </TabsContent>
 
                              <TabsContent value="ap_ar" className="m-0 space-y-4 animate-fade-in">
@@ -647,5 +740,3 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
     </>
   );
 }
-
-    

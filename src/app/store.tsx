@@ -804,6 +804,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
      const description = from === 'cash' ? 'Transfer to Bank' : 'Transfer from Bank';
 
      try {
+        if(from === 'cash' && !bankId) throw new Error("A destination bank account is required.");
+        if(from === 'bank' && !bankId) throw new Error("A source bank account is required.");
+
         const baseTx = { date: transactionDate, amount, description, category: 'Transfer' };
         
         if(from === 'cash') {
@@ -1017,7 +1020,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
         setState(prev => ({ ...prev, banks: [...prev.banks, newBank] }));
         toast({ title: 'Bank Added' });
-        reloadData({ force: true });
     } catch (error: any) {
         handleApiError(error);
     }
@@ -1038,7 +1040,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     // Background delete
     deleteData({ tableName: 'ap_ar_transactions', id: txToDelete.id })
-      .then(() => toast({ title: 'Transaction moved to recycle bin.' }))
+      .then(() => {
+        toast({ title: 'Transaction moved to recycle bin.' });
+        reloadData({ force: true });
+      })
       .catch(error => {
           handleApiError(error);
           setState(prev => ({...prev, ledgerTransactions: originalTxs})); // Rollback

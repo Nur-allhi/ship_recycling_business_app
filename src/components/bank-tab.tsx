@@ -38,7 +38,7 @@ type SortKey = keyof BankTransaction | null;
 type SortDirection = 'asc' | 'desc';
 
 export function BankTab() {
-  const { bankBalance, bankTransactions, transferFunds, deleteBankTransaction, deleteMultipleBankTransactions, currency, user } = useAppContext()
+  const { bankBalance, bankTransactions, transferFunds, deleteBankTransaction, deleteMultipleBankTransactions, currency, user, banks } = useAppContext()
   const [isTransferSheetOpen, setIsTransferSheetOpen] = useState(false)
   const [editSheetState, setEditSheetState] = useState<{isOpen: boolean, transaction: BankTransaction | null}>({ isOpen: false, transaction: null});
   const [deleteDialogState, setDeleteDialogState] = useState<{isOpen: boolean, txToDelete: BankTransaction | null, txsToDelete: BankTransaction[] | null}>({ isOpen: false, txToDelete: null, txsToDelete: null });
@@ -50,8 +50,14 @@ export function BankTab() {
   const [showActions, setShowActions] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey>('date');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+  const [selectedBankId, setSelectedBankId] = useState<string | 'all'>('all');
   const isMobile = useIsMobile();
   const isAdmin = user?.role === 'admin';
+
+  const filteredByBank = useMemo(() => {
+    if (selectedBankId === 'all') return bankTransactions;
+    return bankTransactions.filter(tx => tx.bank_id === selectedBankId);
+  }, [bankTransactions, selectedBankId]);
 
   const handleSort = (key: SortKey) => {
     if (sortKey === key) {
@@ -63,9 +69,9 @@ export function BankTab() {
   };
 
   const sortedTransactions = useMemo(() => {
-    if (!sortKey) return bankTransactions;
+    if (!sortKey) return filteredByBank;
 
-    return [...bankTransactions].sort((a, b) => {
+    return [...filteredByBank].sort((a, b) => {
       const aValue = a[sortKey];
       const bValue = b[sortKey];
       
@@ -80,7 +86,7 @@ export function BankTab() {
 
       return sortDirection === 'asc' ? result : -result;
     });
-  }, [bankTransactions, sortKey, sortDirection]);
+  }, [filteredByBank, sortKey, sortDirection]);
 
   const filteredByMonth = useMemo(() => {
     return sortedTransactions.filter(tx => {
@@ -95,6 +101,11 @@ export function BankTab() {
   }, [filteredByMonth, currentPage, itemsPerPage]);
 
   const totalPages = Math.ceil(filteredByMonth.length / itemsPerPage);
+
+  const currentBankBalance = useMemo(() => {
+    if (selectedBankId === 'all') return bankBalance;
+    return filteredByBank.reduce((acc, tx) => acc + (tx.type === 'deposit' ? tx.amount : -tx.amount), 0);
+  }, [filteredByBank, bankBalance, selectedBankId]);
 
   const handleEditClick = (tx: BankTransaction) => {
     setEditSheetState({ isOpen: true, transaction: tx });
@@ -130,9 +141,10 @@ export function BankTab() {
     const handleTransferSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     const formData = new FormData(event.currentTarget)
-    const amount = parseFloat(formData.get('amount') as string)
-    if (amount > 0) {
-      transferFunds('bank', amount)
+    const amount = parseFloat(formData.get('amount') as string);
+    const bankId = formData.get('bank_id') as string;
+    if (amount > 0 && bankId) {
+      transferFunds('bank', amount, new Date().toISOString(), bankId);
       setIsTransferSheetOpen(false)
     }
   }
@@ -338,17 +350,31 @@ export function BankTab() {
                 <div className="flex-1">
                     <CardTitle>Bank Ledger</CardTitle>
                     <CardDescription>
-                    Current Balance: <span className="font-bold text-primary font-mono">{formatCurrency(bankBalance)}</span>
+                    Current Balance: <span className="font-bold text-primary font-mono">{formatCurrency(currentBankBalance)}</span>
                     </CardDescription>
                 </div>
-                <div className="flex items-center gap-2 self-center sm:self-auto">
-                    <Button variant="outline" size="icon" onClick={goToPreviousMonth} className="h-9 w-9">
-                        <ChevronLeft className="h-4 w-4" />
-                    </Button>
-                    <span className="text-sm font-medium w-28 sm:w-32 text-center">{format(currentMonth, "MMMM yyyy")}</span>
-                    <Button variant="outline" size="icon" onClick={goToNextMonth} className="h-9 w-9">
-                        <ChevronRight className="h-4 w-4" />
-                    </Button>
+                <div className="flex items-center gap-2">
+                     <ResponsiveSelect
+                        value={selectedBankId}
+                        onValueChange={(value) => setSelectedBankId(value)}
+                        title="Select a Bank Account"
+                        placeholder="All Banks"
+                        className="w-[150px]"
+                    >
+                        <ResponsiveSelectItem value="all">All Banks</ResponsiveSelectItem>
+                        {banks.map(bank => (
+                            <ResponsiveSelectItem key={bank.id} value={bank.id}>{bank.name}</ResponsiveSelectItem>
+                        ))}
+                    </ResponsiveSelect>
+                    <div className="flex items-center gap-1">
+                        <Button variant="outline" size="icon" onClick={goToPreviousMonth} className="h-9 w-9">
+                            <ChevronLeft className="h-4 w-4" />
+                        </Button>
+                        <span className="text-sm font-medium w-24 text-center">{format(currentMonth, "MMMM yyyy")}</span>
+                        <Button variant="outline" size="icon" onClick={goToNextMonth} className="h-9 w-9">
+                            <ChevronRight className="h-4 w-4" />
+                        </Button>
+                    </div>
                 </div>
             </div>
              {isAdmin && <div className="flex flex-col items-center justify-center gap-2 pt-4">
@@ -382,6 +408,14 @@ export function BankTab() {
                                 <div className="space-y-2">
                                     <Label htmlFor="amount">Amount</Label>
                                     <Input id="amount" name="amount" type="number" step="0.01" placeholder="0.00" required />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="bank_id">From Bank Account</Label>
+                                    <ResponsiveSelect name="bank_id" title="Select a Bank Account" required>
+                                        {banks.map(bank => (
+                                            <ResponsiveSelectItem key={bank.id} value={bank.id}>{bank.name}</ResponsiveSelectItem>
+                                        ))}
+                                    </ResponsiveSelect>
                                 </div>
                                 <Button type="submit" className="w-full">Transfer to Cash</Button>
                             </form>
@@ -440,5 +474,3 @@ export function BankTab() {
     </>
   )
 }
-
-    
