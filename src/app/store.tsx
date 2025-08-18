@@ -851,11 +851,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
         const date = new Date().toISOString();
         if (cash > 0) {
-            await addCashTransaction({ date, type: 'income', amount: cash, description: 'Initial Balance', category: 'Initial Balance' });
+            await appendData({ tableName: 'cash_transactions', data: { date, type: 'income', amount: cash, description: 'Initial Balance', category: 'Initial Balance' } });
         }
         for (const [bankId, amount] of Object.entries(bankTotals)) {
             if (amount > 0) {
-                await addBankTransaction({ date, type: 'deposit', amount, description: 'Initial Balance', category: 'Initial Balance', bank_id: bankId });
+                await appendData({ tableName: 'bank_transactions', data: { date, type: 'deposit', amount, description: 'Initial Balance', category: 'Initial Balance', bank_id: bankId } });
             }
         }
         
@@ -1130,5 +1130,7 @@ export function useAppContext() {
   }
   return context;
 }
+
+    
 
     
