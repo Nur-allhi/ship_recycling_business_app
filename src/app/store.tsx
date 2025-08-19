@@ -4,7 +4,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import type { CashTransaction, BankTransaction, StockItem, StockTransaction, User, Vendor, Client, LedgerTransaction, PaymentInstallment, Bank, Category } from '@/lib/types';
 import { toast } from 'sonner';
-import { readData, appendData, updateData, deleteData, readDeletedData, restoreData, exportAllData, batchImportData, deleteAllData, logout as serverLogout, recordPaymentAgainstTotal, recordDirectPayment, hasInitialData } from '@/app/actions';
+import { readData, appendData, updateData, deleteData, readDeletedData, restoreData, exportAllData, batchImportData, deleteAllData, logout as serverLogout, recordPaymentAgainstTotal, recordDirectPayment } from '@/app/actions';
 import { format } from 'date-fns';
 import { supabase } from '@/lib/supabase';
 import { saveAs } from 'file-saver';
@@ -55,7 +55,7 @@ interface AppState {
 }
 
 interface AppContextType extends AppState {
-  reloadData: (options?: { force?: boolean; full?: boolean }) => Promise<void>;
+  reloadData: (options?: { force?: boolean; full?: boolean, needsInitialBalance?: boolean }) => Promise<void>;
   loadDataForTab: (tab: keyof Omit<DataStatus, 'dashboard'>) => Promise<void>;
   loadRecycleBinData: () => Promise<void>;
   addCashTransaction: (tx: Omit<CashTransaction, 'id' | 'createdAt' | 'deletedAt'>) => Promise<void>;
@@ -109,7 +109,7 @@ const initialAppState: AppState = {
   cashCategories: [],
   bankCategories: [],
   fontSize: 'base',
-  initialBalanceSet: false,
+  initialBalanceSet: true,
   needsInitialBalance: false,
   wastagePercentage: 0,
   currency: 'BDT',
@@ -135,7 +135,7 @@ const initialAppState: AppState = {
 const getCacheKey = (userId: string | null) => `ha-mim-iron-mart-cache-${userId || 'guest'}`;
 
 const getInitialState = (): AppState => {
-    let state = { ...initialAppState, initialBalanceSet: false, isLoading: true };
+    let state = { ...initialAppState, isLoading: true };
     if (typeof window === 'undefined') return state;
     
     try {
@@ -161,30 +161,6 @@ const saveStateToLocalStorage = (state: AppState) => {
             showStockValue: state.showStockValue,
         };
         localStorage.setItem('ha-mim-iron-mart-settings', JSON.stringify(settingsToSave));
-
-        const appStateToCache = {
-            cashBalance: state.cashBalance,
-            bankBalance: state.bankBalance,
-            initialStockItems: state.initialStockItems,
-            stockItems: state.stockItems,
-            cashCategories: state.cashCategories,
-            bankCategories: state.bankCategories,
-            vendors: state.vendors,
-            clients: state.clients,
-            totalPayables: state.totalPayables,
-            totalReceivables: state.totalReceivables,
-            banks: state.banks,
-            cashTransactions: state.dataLoaded.cash ? state.cashTransactions : [],
-            bankTransactions: state.dataLoaded.bank ? state.bankTransactions : [],
-            stockTransactions: state.dataLoaded.stock ? state.stockTransactions : [],
-            ledgerTransactions: state.dataLoaded.credit ? state.ledgerTransactions : [],
-            deletedCashTransactions: state.deletedCashTransactions,
-            deletedBankTransactions: state.deletedBankTransactions,
-            deletedStockTransactions: state.deletedStockTransactions,
-            deletedLedgerTransactions: state.deletedLedgerTransactions,
-        };
-        localStorage.setItem(getCacheKey(state.user.id), JSON.stringify(appStateToCache));
-
     } catch (e) {
         console.error("Could not save state to local storage", e);
     }
@@ -222,11 +198,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const logout = useCallback(async () => {
-    if (state.user) {
-        localStorage.removeItem(getCacheKey(state.user.id));
-    }
     await serverLogout();
     localStorage.removeItem('ha-mim-iron-mart-settings');
+    localStorage.removeItem(getCacheKey(state.user?.id || ''));
     setState({...initialAppState, user: null, isLoading: false});
     window.location.href = '/login';
   }, [state.user]);
@@ -294,7 +268,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return { finalCashBalance, finalBankBalance, aggregatedStockItems };
   }, []);
   
-  const reloadData = useCallback(async (options?: { force?: boolean; full?: boolean }) => {
+  const reloadData = useCallback(async (options?: { force?: boolean; full?: boolean, needsInitialBalance?: boolean }) => {
     if (state.dataLoaded.dashboard && !options?.force) return;
 
     setState(prev => ({ ...prev, isLoading: true }));
@@ -305,66 +279,30 @@ export function AppProvider({ children }: { children: ReactNode }) {
             vendorsData,
             clientsData,
             banksData,
-            cashTxs,
-            bankTxs,
-            stockTxs,
-            ledgerTxs,
-            installmentsData,
-            initialDataExists,
         ] = await Promise.all([
             readData({ tableName: 'initial_stock' }),
             readData({ tableName: 'categories' }),
             readData({ tableName: 'vendors' }),
             readData({ tableName: 'clients' }),
             readData({ tableName: 'banks' }),
-            readData({ tableName: 'cash_transactions' }),
-            readData({ tableName: 'bank_transactions' }),
-            readData({ tableName: 'stock_transactions' }),
-            readData({ tableName: 'ap_ar_transactions' }),
-            readData({ tableName: 'payment_installments' }),
-            hasInitialData(),
         ]);
 
         const dbCashCategories: Category[] = (categoriesData || []).filter((c: any) => c.type === 'cash');
         const dbBankCategories: Category[] = (categoriesData || []).filter((c: any) => c.type === 'bank');
-        const initialStockItems: StockItem[] = initialStockData || [];
-
-        const needsInitialBalance = !initialDataExists;
-
-        const session = await getSession();
-
-        const { finalCashBalance, finalBankBalance, aggregatedStockItems } = calculateBalancesAndStock(cashTxs, bankTxs, stockTxs, initialStockItems);
-
-        const updatedLedgerTxs = (ledgerTxs || []).map((tx: any) => ({
-            ...tx,
-            installments: (installmentsData || []).filter((ins: any) => ins.ap_ar_transaction_id === tx.id)
-        }));
-
-        const totalPayables = updatedLedgerTxs.filter((tx: any) => tx.type === 'payable' && tx.status !== 'paid').reduce((acc: number, tx: any) => acc + (tx.amount - tx.paid_amount), 0);
-        const totalReceivables = updatedLedgerTxs.filter((tx: any) => tx.type === 'receivable' && tx.status !== 'paid').reduce((acc: number, tx: any) => acc + (tx.amount - tx.paid_amount), 0);
-
+        
         setState(prev => ({
             ...prev,
-            user: session,
-            needsInitialBalance,
-            initialBalanceSet: !needsInitialBalance,
-            initialStockItems,
+            needsInitialBalance: !!options?.needsInitialBalance,
+            initialBalanceSet: !options?.needsInitialBalance,
+            initialStockItems: initialStockData || [],
             cashCategories: [...FIXED_CASH_CATEGORIES, ...dbCashCategories],
             bankCategories: [...FIXED_BANK_CATEGORIES, ...dbBankCategories],
             vendors: vendorsData || [],
             clients: clientsData || [],
             banks: banksData || [],
-            cashBalance: finalCashBalance,
-            bankBalance: finalBankBalance,
-            stockItems: aggregatedStockItems,
-            totalPayables,
-            totalReceivables,
-            cashTransactions: cashTxs,
-            bankTransactions: bankTxs,
-            stockTransactions: stockTxs,
-            ledgerTransactions: updatedLedgerTxs,
             dataLoaded: {
-              dashboard: true, cash: true, bank: true, stock: true, credit: true, settings: true,
+              ...prev.dataLoaded,
+              dashboard: true,
             }
         }));
         
@@ -374,7 +312,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } finally {
         setState(prev => ({...prev, isLoading: false}));
     }
-  }, [handleApiError, calculateBalancesAndStock]);
+  }, [state.dataLoaded.dashboard, handleApiError]);
 
   const loadDataForTab = useCallback(async (tab: keyof Omit<DataStatus, 'dashboard'>) => {
     if (state.dataLoaded[tab]) return;
@@ -436,17 +374,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!isMounted) return;
 
     const checkSessionAndLoadData = async () => {
-      const session = await getSession();
-      if (session) {
-        // User is logged in, load initial shell data.
-        await reloadData({full: true});
-      } else {
-        // No session, finish loading.
-        setState(prev => ({ ...prev, isLoading: false }));
-      }
+        const session = await getSession();
+        setState(prev => ({ ...prev, user: session, isLoading: false }));
     };
     checkSessionAndLoadData();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isMounted]);
 
   useEffect(() => {
@@ -965,7 +896,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         await Promise.all(promises);
         
         toast.success("Initial balances set.");
-        setState(prev => ({ ...prev, needsInitialBalance: false }));
+        setState(prev => ({ ...prev, needsInitialBalance: false, initialBalanceSet: true }));
         reloadData({ force: true, full: true });
 
     } catch (e) {

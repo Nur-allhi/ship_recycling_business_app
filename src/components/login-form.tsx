@@ -15,6 +15,7 @@ import { login, hasUsers } from '@/app/actions';
 import { Loader2 } from 'lucide-react';
 import Logo from './logo';
 import { Checkbox } from './ui/checkbox';
+import { useAppContext } from '@/app/store';
 
 const formSchema = z.object({
   username: z.string().email("Username must be a valid email address."),
@@ -27,6 +28,7 @@ type FormData = z.infer<typeof formSchema>;
 export function LoginForm() {
   const [isLoading, setIsLoading] = useState(false);
   const [doesAnyUserExist, setDoesAnyUserExist] = useState(true);
+  const { reloadData } = useAppContext();
 
   useEffect(() => {
     const checkUsers = async () => {
@@ -62,7 +64,7 @@ export function LoginForm() {
   const onSubmit = async (data: FormData) => {
     setIsLoading(true);
     try {
-      await login(data);
+      const result = await login(data);
 
       if (data.rememberMe) {
           localStorage.setItem('rememberedUsername', data.username);
@@ -70,16 +72,17 @@ export function LoginForm() {
           localStorage.removeItem('rememberedUsername');
       }
 
-      toast.success("Login Successful", { description: "Welcome!" });
-      // Clear cache for the new user then force a hard reload
-      localStorage.removeItem('ha-mim-iron-mart-cache');
+      toast.success("Login Successful", { description: "Welcome back!" });
+      // Reload the main app data with the flag from the server
+      await reloadData({ force: true, needsInitialBalance: result.needsInitialBalance });
       window.location.href = '/'; 
     } catch (error: any) {
       toast.error(
         'Login Failed',
         {description: error.message}
       );
-      setIsLoading(false);
+    } finally {
+        setIsLoading(false);
     }
   };
   

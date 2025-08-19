@@ -366,41 +366,32 @@ export async function hasUsers() {
     return data.users.length > 0;
 }
 
-export async function hasInitialData(): Promise<boolean> {
-    try {
-        const supabase = await getAuthenticatedSupabaseClient();
-        const { data: cashCheck, error: cashError } = await supabase.from('cash_transactions').select('id', { count: 'exact', head: true });
-        if (cashError && cashError.code !== '42P01') throw cashError;
-
-        const { data: bankCheck, error: bankError } = await supabase.from('bank_transactions').select('id', { count: 'exact', head: true });
-        if (bankError && bankError.code !== '42P01') throw bankError;
-
-        return (cashCheck?.count ?? 0) > 0 || (bankCheck?.count ?? 0) > 0;
-    } catch (error: any) {
-        // If an auth error occurs, it means the session is invalid.
-        // Returning true prevents the dialog from showing during the logout process.
-        const isAuthError = error.message.includes('JWT') || error.message.includes('Unauthorized') || error.message.includes("SESSION_EXPIRED");
-        if (isAuthError) {
-            return true;
-        }
-        console.error("Error checking for initial data:", error);
-        // Default to true to prevent showing the dialog on unexpected errors.
-        return true; 
-    }
-}
-
-
 const LoginInputSchema = z.object({
     username: z.string().email("Username must be a valid email address."),
     password: z.string(),
     rememberMe: z.boolean().optional(),
 });
 
+async function checkInitialData(client: ReturnType<typeof createClient>) {
+    try {
+        const { data: cashCheck, error: cashError } = await client.from('cash_transactions').select('id', { count: 'exact', head: true });
+        if (cashError && cashError.code !== '42P01') throw cashError;
+
+        const { data: bankCheck, error: bankError } = await client.from('bank_transactions').select('id', { count: 'exact', head: true });
+        if (bankError && bankError.code !== '42P01') throw bankError;
+
+        return (cashCheck?.count ?? 0) > 0 || (bankCheck?.count ?? 0) > 0;
+    } catch (error) {
+        console.error("Error checking for initial data:", error);
+        return true; 
+    }
+}
+
 export async function login(input: z.infer<typeof LoginInputSchema>) {
     const supabase = createSupabaseClient();
     let isFirstUser = false;
     
-    const { data, error } = await supabase.auth.signInWithPassword({
+    let { data, error } = await supabase.auth.signInWithPassword({
         email: input.username,
         password: input.password,
     });
@@ -412,7 +403,7 @@ export async function login(input: z.infer<typeof LoginInputSchema>) {
 
              if(allUsers?.users.length === 0) {
                 isFirstUser = true;
-                const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
+                const { error: createError } = await supabaseAdmin.auth.admin.createUser({
                     email: input.username,
                     password: input.password,
                     email_confirm: true, 
@@ -428,32 +419,31 @@ export async function login(input: z.infer<typeof LoginInputSchema>) {
                 password: input.password,
             });
             if(loginError) throw new Error(loginError.message);
-
-            const sessionPayload = {
-                id: loginData.user.id,
-                username: loginData.user.email!,
-                role: loginData.user.user_metadata.role || 'user',
-                accessToken: loginData.session.access_token,
-            };
-            await createSession(sessionPayload, input.rememberMe);
-            if (isFirstUser) {
-                await logActivity("Created the first admin user and logged in.");
-            }
-            return { success: true };
+            data = loginData;
+        } else {
+           throw new Error(error.message);
         }
-        throw new Error(error.message);
     }
     
-    const sessionData = {
+    const sessionPayload = {
         id: data.user.id,
         username: data.user.email!,
         role: data.user.user_metadata.role || 'user',
         accessToken: data.session.access_token,
-    }
+    };
     
-    await createSession(sessionData, input.rememberMe);
-    await logActivity("User logged in.");
-    return { success: true };
+    await createSession(sessionPayload, input.rememberMe);
+
+    // After session is created, we can check for initial data using the user's token.
+    const hasData = await checkInitialData(supabase);
+    
+    if (isFirstUser) {
+        await logActivity("Created the first admin user and logged in.");
+    } else {
+        await logActivity("User logged in.");
+    }
+
+    return { success: true, needsInitialBalance: !hasData };
 }
 
 export async function getUsers() {
