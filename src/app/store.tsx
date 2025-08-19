@@ -165,6 +165,10 @@ const saveStateToLocalStorage = (state: AppState) => {
             totalPayables: state.totalPayables,
             totalReceivables: state.totalReceivables,
             banks: state.banks,
+            deletedCashTransactions: state.deletedCashTransactions,
+            deletedBankTransactions: state.deletedBankTransactions,
+            deletedStockTransactions: state.deletedStockTransactions,
+            deletedLedgerTransactions: state.deletedLedgerTransactions,
         };
         localStorage.setItem(getCacheKey(), JSON.stringify(appStateToCache));
 
