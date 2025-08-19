@@ -297,16 +297,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const reloadData = useCallback(async (options?: { force?: boolean, full?: boolean }) => {
     const session = await getSession();
     if (!session) return;
-
-    // This check prevents re-fetching if data is already present.
-    // Full reload is now handled by loadDataForTab or specific actions.
-    if (!options?.force && state.initialBalanceSet && state.user?.id === session.id) {
-        return;
-    }
     
     setState(prev => ({ ...prev, isLoading: true }));
     try {
-        // Initial load only fetches data required for dashboard calculations.
         const [
             initialStockData,
             cashData, 
@@ -370,7 +363,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } finally {
         setState(prev => ({...prev, isLoading: false}));
     }
-  }, [calculateBalancesAndStock, handleApiError, state.initialBalanceSet, state.user?.id]);
+  }, [calculateBalancesAndStock, handleApiError]);
 
 
   const loadDataForTab = useCallback(async (tab: 'cash' | 'bank' | 'stock' | 'credit' | 'settings') => {
@@ -382,7 +375,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
         if ((tab === 'cash' || tab === 'bank' || tab === 'stock') && !state.dataLoaded[tab]) {
             // Data is already fetched on initial load, just mark as loaded.
-            // This can be extended to re-fetch if needed.
         }
         if (tab === 'credit' && !state.dataLoaded.credit) {
             const [ledgerData, installmentsData] = await Promise.all([
@@ -1156,7 +1148,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     saveStateToLocalStorage(state);
   }, [state])
 
-  if (state.isLoading && !state.initialBalanceSet) {
+  if (state.isLoading) {
     return <AppLoading />;
   }
 
