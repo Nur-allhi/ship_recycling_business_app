@@ -69,7 +69,7 @@ export function ContactHistoryDialog({ isOpen, setIsOpen, contact, contactType }
 
   const formatCurrency = (amount: number) => {
     if (currency === 'BDT') {
-      return `BDT ${new Intl.NumberFormat('en-US').format(amount)}`;
+      return `৳ ${new Intl.NumberFormat('en-US').format(amount)}`;
     }
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: currency, currencyDisplay: 'symbol' }).format(amount)
   }
@@ -273,13 +273,15 @@ export function ContactHistoryDialog({ isOpen, setIsOpen, contact, contactType }
             </Table>
         </div>
         <DialogFooter>
-            <Button onClick={handleExportPdf}>
-                <FileText className="mr-2 h-4 w-4" />
-                Export to PDF
-            </Button>
-            <Button variant="outline" onClick={() => setIsOpen(false)}>Close</Button>
+          <Button onClick={handleExportPdf}>
+              <FileText className="mr-2 h-4 w-4" />
+              Export to PDF
+          </Button>
+          <Button variant="outline" onClick={() => setIsOpen(false)}>Close</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   );
 }
+
+    
