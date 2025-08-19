@@ -1,16 +1,18 @@
 
 "use client";
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from './ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { useAppContext } from '@/app/store';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { PayablesList } from './payables-list';
 import { ReceivablesList } from './receivables-list';
+import { ResponsiveSelect } from './ui/responsive-select';
 
 export function CreditTab() {
     const { totalPayables, totalReceivables, currency } = useAppContext();
+    const [mobileView, setMobileView] = useState<'payables' | 'receivables'>('payables');
     const isMobile = useIsMobile();
     
     const formatCurrency = (amount: number) => {
@@ -42,18 +44,18 @@ export function CreditTab() {
     
     if (isMobile) {
         return (
-            <Tabs defaultValue="payables" className="w-full">
-                <TabsList className="grid w-full grid-cols-2">
-                    <TabsTrigger value="payables">Payables ({formatCurrency(totalPayables)})</TabsTrigger>
-                    <TabsTrigger value="receivables">Receivables ({formatCurrency(totalReceivables)})</TabsTrigger>
-                </TabsList>
-                <TabsContent value="payables" className="mt-4">
-                    {payablesContent}
-                </TabsContent>
-                <TabsContent value="receivables" className="mt-4">
-                    {receivablesContent}
-                </TabsContent>
-            </Tabs>
+            <div className="space-y-4">
+                <ResponsiveSelect 
+                    value={mobileView}
+                    onValueChange={(value) => setMobileView(value as any)}
+                    title="Select View"
+                    items={[
+                        { value: 'payables', label: `Payables (${formatCurrency(totalPayables)})` },
+                        { value: 'receivables', label: `Receivables (${formatCurrency(totalReceivables)})` },
+                    ]}
+                />
+                {mobileView === 'payables' ? payablesContent : receivablesContent}
+            </div>
         )
     }
 
@@ -68,5 +70,3 @@ export function CreditTab() {
        </div>
     )
 }
-
-    
