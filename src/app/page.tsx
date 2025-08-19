@@ -50,6 +50,8 @@ function ShipShapeLedger() {
     }
   }
 
+  const roleDisplayName = user?.role ? user.role.charAt(0).toUpperCase() + user.role.slice(1) : '';
+
   return (
     <div className={cn('min-h-screen bg-background text-foreground animate-fade-in', fontClasses[fontSize] || 'text-base')}>
       {isAdmin && <InitialBalanceDialog isOpen={needsInitialBalance} />}
@@ -106,7 +108,7 @@ function ShipShapeLedger() {
                   </div>
                 </div>
                 <p className="text-muted-foreground text-sm sm:text-base">
-                  Welcome, {user?.username} ({user?.role})
+                  Welcome {roleDisplayName}
                 </p>
             </div>
           </div>
