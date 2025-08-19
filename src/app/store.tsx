@@ -90,8 +90,6 @@ const fixedBankCategories: { name: string, type: 'deposit' | 'withdrawal' | 'pro
     { name: 'Stock Sale', type: 'deposit' },
     { name: 'A/R Settlement', type: 'deposit' },
     { name: 'A/P Settlement', type: 'withdrawal' },
-    { name: 'Transfer', type: 'prompt' },
-    { name: 'Initial Balance', type: 'deposit' },
     { name: 'Others', type: 'prompt' },
 ];
 
@@ -360,6 +358,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
     };
     checkSessionAndLoadData();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathname]);
 
   useEffect(() => {
@@ -1144,5 +1143,3 @@ export function useAppContext() {
   }
   return context;
 }
-
-    
