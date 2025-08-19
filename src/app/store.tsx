@@ -178,9 +178,7 @@ const FIXED_CASH_CATEGORIES = [
     { name: 'Stock Sale', direction: 'credit', is_deletable: false },
     { name: 'Utilities', direction: 'debit', is_deletable: false },
     { name: 'Operational', direction: 'debit', is_deletable: false },
-    { name: 'A/P Settlement', direction: 'debit', is_deletable: false },
-    { name: 'A/R Settlement', direction: 'credit', is_deletable: false },
-    { name: 'Transfer', direction: null, is_deletable: false }, // Direction handled by logic
+    { name: 'Transfer', direction: null, is_deletable: false },
     { name: 'Initial Balance', direction: 'credit', is_deletable: false },
 ];
 
@@ -191,7 +189,7 @@ const FIXED_BANK_CATEGORIES = [
     { name: 'Stock Sale', direction: 'credit', is_deletable: false },
     { name: 'A/P Settlement', direction: 'debit', is_deletable: false },
     { name: 'A/R Settlement', direction: 'credit', is_deletable: false },
-    { name: 'Transfer', direction: null, is_deletable: false }, // Direction handled by logic
+    { name: 'Transfer', direction: null, is_deletable: false },
     { name: 'Initial Balance', direction: 'credit', is_deletable: false },
 ];
 
@@ -335,8 +333,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
             cashBalance: finalCashBalance,
             bankBalance: finalBankBalance,
             needsInitialBalance,
-            cashCategories: [...FIXED_CASH_CATEGORIES.filter(c => c.direction), ...dbCashCategories],
-            bankCategories: [...FIXED_BANK_CATEGORIES.filter(c => c.direction), ...dbBankCategories],
+            cashCategories: [...FIXED_CASH_CATEGORIES, ...dbCashCategories],
+            bankCategories: [...FIXED_BANK_CATEGORIES, ...dbBankCategories],
             initialBalanceSet: true,
             vendors: vendorsData || [],
             clients: clientsData || [],
@@ -447,7 +445,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
                 contact_id: contactId,
                 contact_name: contactName,
             });
-            // reloadData will be called by the form, so we don't need to manually update state here
+            // Calling reloadData directly as this flow is more complex than a simple insertion
+            reloadData({ force: true });
             return;
         }
 
@@ -837,7 +836,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const addCategory = async (type: 'cash' | 'bank', category: string, direction: 'credit' | 'debit') => {
     if (!state.user || state.user.role !== 'admin') return;
     try {
-      const dataToSave = { name: category, type, direction };
+      const dataToSave = { name: category, type, direction, is_deletable: true };
 
       const newCategory = await appendData({ tableName: 'categories', data: dataToSave, select: '*' });
 

@@ -315,7 +315,6 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                 break;
         }
         toast({ title: "Transaction Added", description: "Your transaction has been successfully recorded." });
-        reloadData({ force: true });
         setDialogOpen(false);
     } catch(error: any) {
          toast({ variant: "destructive", title: "Operation Failed", description: error.message || "An unexpected error occurred." });
