@@ -37,9 +37,7 @@ const formSchema = z.object({
   paymentMethod: z.enum(['cash', 'bank', 'credit']).optional(),
 
   // cash/bank specific
-  inOutType: z.enum(['in', 'out']).optional(),
   bank_id: z.string().optional(),
-  bank_inOutType: z.enum(['deposit', 'withdrawal']).optional(),
 
   // transfer specific
   transferFrom: z.enum(['cash', 'bank']).optional(),
@@ -59,13 +57,6 @@ const formSchema = z.object({
     if (data.transactionType === 'bank') {
         if (!data.bank_id) ctx.addIssue({ code: 'custom', message: 'Please select a bank account.', path: ['bank_id'] });
         if (!data.category) ctx.addIssue({ code: 'custom', message: 'Category is required.', path: ['category'] });
-        
-        const bankCategories = (window as any).__APP_STATE__?.bankCategories || [];
-        const selectedCategory = bankCategories.find((c: any) => c.name === data.category);
-
-        if (selectedCategory?.type === 'prompt' && !data.bank_inOutType) {
-            ctx.addIssue({ code: 'custom', message: 'Please select a direction for this category.', path: ['bank_inOutType'] });
-        }
         
         if (data.category === 'A/R Settlement' || data.category === 'A/P Settlement') {
              if (!data.contact_id) {
@@ -97,7 +88,6 @@ const formSchema = z.object({
         if(!data.amount || data.amount <=0) ctx.addIssue({ code: 'custom', message: 'Amount must be positive.', path: ['amount'] });
     }
     if(data.transactionType === 'cash') {
-        if (!data.inOutType) ctx.addIssue({ code: 'custom', message: 'Transaction direction is required.', path: ['inOutType'] });
         if (!data.category) ctx.addIssue({ code: 'custom', message: 'Category is required.', path: ['category'] });
         if (!data.description) ctx.addIssue({ code: 'custom', message: 'Description is required.', path: ['description'] });
     }
@@ -163,12 +153,8 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
   const ledgerType = watch('ledgerType');
   const contact_id = watch('contact_id');
   const transferFrom = watch('transferFrom');
-  const bankCategory = watch('category');
+  const bankCategoryName = watch('category');
   const [isNewStockItem, setIsNewStockItem] = useState(false);
-  
-  useEffect(() => {
-    (window as any).__APP_STATE__ = { bankCategories };
-  }, [bankCategories]);
 
   useEffect(() => {
     reset({
@@ -183,28 +169,27 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
   useEffect(() => {
     setValue('contact_id', undefined);
     setValue('newContact', '');
-  }, [stockType, ledgerType, bankCategory, setValue]);
+  }, [stockType, ledgerType, bankCategoryName, setValue]);
 
   const onSubmit = async (data: FormData) => {
     const transactionDate = data.date.toISOString();
     try {
         switch(data.transactionType) {
-            case 'cash':
+            case 'cash': {
+                const category = cashCategories.find(c => c.name === data.category);
+                if (!category || !category.direction) throw new Error("Selected category is invalid.");
                 await addCashTransaction({
-                    type: data.inOutType === 'in' ? 'income' : 'expense',
+                    type: category.direction === 'credit' ? 'income' : 'expense',
                     amount: data.amount!,
                     description: data.description!,
                     category: data.category!,
                     date: transactionDate,
                 });
                 break;
+            }
             case 'bank': {
                  const selectedCategory = bankCategories.find(c => c.name === data.category);
-                 if(!selectedCategory) throw new Error("Could not find the selected category.");
-
-                 const directionFromCategory = bankCategories.find(c => c.name === data.category)?.type;
-                 const transactionDirection = directionFromCategory === 'prompt' ? data.bank_inOutType : directionFromCategory;
-                 if(!transactionDirection) throw new Error("Transaction direction is required for this category.");
+                 if(!selectedCategory || !selectedCategory.direction) throw new Error("Could not find a valid direction for the selected category.");
 
                  let contactName: string | undefined;
                  if (data.category === 'A/R Settlement') {
@@ -217,7 +202,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                     : data.description!;
 
                  await addBankTransaction({
-                    type: transactionDirection,
+                    type: selectedCategory.direction === 'credit' ? 'deposit' : 'withdrawal',
                     amount: data.amount!,
                     description: description,
                     category: data.category!,
@@ -380,8 +365,8 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
     </div>
   )
   
-  const cashCategoryItems = useMemo(() => cashCategories.map(c => ({ value: c, label: c })), [cashCategories]);
-  const bankCategoryItems = useMemo(() => bankCategories.map(c => ({ value: c.name, label: c.name })), [bankCategories]);
+  const cashCategoryItems = useMemo(() => cashCategories.map(c => ({ value: c.name, label: `${c.name} (${c.direction})` })), [cashCategories]);
+  const bankCategoryItems = useMemo(() => bankCategories.map(c => ({ value: c.name, label: `${c.name} (${c.direction})` })), [bankCategories]);
   const bankAccountItems = useMemo(() => banks.map(b => ({ value: b.id, label: b.name })), [banks]);
   const stockItemsForSale = useMemo(() => stockItems.filter(i => i.weight > 0).map(item => ({ value: item.name, label: item.name })), [stockItems]);
   const stockItemsForPurchase = useMemo(() => stockItems.map(item => ({ value: item.name, label: item.name })), [stockItems]);
@@ -427,24 +412,6 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                                     <Label htmlFor="amount">Amount</Label>
                                     <Input id="amount" type="number" step="0.01" {...register('amount')} placeholder="0.00"/>
                                     {errors.amount && <p className="text-sm text-destructive">{errors.amount.message}</p>}
-                                </div>
-                                <div className="space-y-2">
-                                    <Label>Direction</Label>
-                                    <Controller 
-                                        control={control}
-                                        name="inOutType"
-                                        render={({ field }) => (
-                                            <RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex pt-2 gap-4">
-                                                <Label htmlFor="in" className="flex items-center gap-2 cursor-pointer">
-                                                    <RadioGroupItem value="in" id="in" />Income
-                                                </Label>
-                                                <Label htmlFor="out" className="flex items-center gap-2 cursor-pointer">
-                                                    <RadioGroupItem value="out" id="out" />Expense
-                                                </Label>
-                                            </RadioGroup>
-                                        )}
-                                    />
-                                    {errors.inOutType && <p className="text-sm text-destructive">{errors.inOutType.message}</p>}
                                 </div>
                               </div>
                                <div className="space-y-2">
@@ -514,23 +481,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                                     />
                                     {errors.category && <p className="text-sm text-destructive">{errors.category.message}</p>}
                                 </div>
-                                {(bankCategory && bankCategories.find(c => c.name === bankCategory)?.type === 'prompt') && (
-                                     <div className="space-y-2 animate-fade-in">
-                                        <Label>Direction</Label>
-                                        <Controller 
-                                            control={control}
-                                            name="bank_inOutType"
-                                            render={({ field }) => (
-                                                <RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex pt-2 gap-4">
-                                                    <Label className="flex items-center gap-2 cursor-pointer"><RadioGroupItem value="deposit" />Deposit</Label>
-                                                    <Label className="flex items-center gap-2 cursor-pointer"><RadioGroupItem value="withdrawal" />Withdrawal</Label>
-                                                </RadioGroup>
-                                            )}
-                                        />
-                                        {errors.bank_inOutType && <p className="text-sm text-destructive">{errors.bank_inOutType.message}</p>}
-                                    </div>
-                                )}
-                                {bankCategory === 'A/R Settlement' && (
+                                {bankCategoryName === 'A/R Settlement' && (
                                      <div className="space-y-2 animate-fade-in">
                                         <Label>Client</Label>
                                         <Controller
@@ -543,7 +494,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                                         {errors.contact_id && <p className="text-sm text-destructive">{errors.contact_id.message}</p>}
                                     </div>
                                 )}
-                                {bankCategory === 'A/P Settlement' && (
+                                {bankCategoryName === 'A/P Settlement' && (
                                      <div className="space-y-2 animate-fade-in">
                                         <Label>Vendor</Label>
                                         <Controller
@@ -556,7 +507,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                                         {errors.contact_id && <p className="text-sm text-destructive">{errors.contact_id.message}</p>}
                                     </div>
                                 )}
-                                {(bankCategory !== 'A/R Settlement' && bankCategory !== 'A/P Settlement') && (
+                                {(bankCategoryName !== 'A/R Settlement' && bankCategoryName !== 'A/P Settlement') && (
                                     <div className="space-y-2">
                                         <Label htmlFor="description-bank">Description</Label>
                                         <Input id="description-bank" {...register('description')} placeholder="e.g., Monthly salary" />

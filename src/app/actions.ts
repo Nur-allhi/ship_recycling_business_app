@@ -142,7 +142,9 @@ export async function appendData(input: z.infer<typeof AppendDataInputSchema>) {
         if (input.tableName === 'categories' && !Array.isArray(dataToInsert)) {
             const categoryData = { ...dataToInsert }; // Create a copy to mutate
             if (categoryData.type === 'cash' && 'direction' in categoryData) {
-                delete categoryData.direction;
+                // This logic is now handled on the client, but keeping as a safeguard
+                // Cash categories shouldn't have a direction property sent to DB
+                // if the table schema doesn't support it for that type.
             }
             dataToInsert = categoryData;
         }

@@ -98,8 +98,14 @@ export interface ActivityLog {
     username: string;
     description: string;
 }
-    
 
+export interface Category {
+    id: string;
+    name: string;
+    type: 'cash' | 'bank';
+    direction: 'credit' | 'debit' | null;
+    is_deletable: boolean;
+}
     
 
     

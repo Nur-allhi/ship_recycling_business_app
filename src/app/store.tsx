@@ -2,7 +2,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
-import type { CashTransaction, BankTransaction, StockItem, StockTransaction, User, Vendor, Client, LedgerTransaction, PaymentInstallment, Bank } from '@/lib/types';
+import type { CashTransaction, BankTransaction, StockItem, StockTransaction, User, Vendor, Client, LedgerTransaction, PaymentInstallment, Bank, Category } from '@/lib/types';
 import { useToast } from "@/hooks/use-toast"
 import { readData, appendData, updateData, deleteData, readDeletedData, restoreData, exportAllData, batchImportData, deleteAllData, logout as serverLogout, recordPaymentAgainstTotal, recordDirectPayment } from '@/app/actions';
 import { format } from 'date-fns';
@@ -28,8 +28,8 @@ interface AppState {
   deletedBankTransactions: BankTransaction[];
   deletedStockTransactions: StockTransaction[];
   deletedLedgerTransactions: LedgerTransaction[];
-  cashCategories: string[];
-  bankCategories: { name: string, type: 'deposit' | 'withdrawal' | 'prompt'}[];
+  cashCategories: Category[];
+  bankCategories: Category[];
   fontSize: FontSize;
   initialBalanceSet: boolean;
   needsInitialBalance: boolean;
@@ -64,8 +64,8 @@ interface AppContextType extends AppState {
   deleteLedgerTransaction: (tx: LedgerTransaction) => void;
   restoreTransaction: (txType: 'cash' | 'bank' | 'stock' | 'ap_ar', id: string) => void;
   transferFunds: (from: 'cash' | 'bank', amount: number, date?: string, bankId?: string) => Promise<void>;
-  addCategory: (type: 'cash' | 'bank', category: string, direction?: 'deposit' | 'withdrawal') => void;
-  deleteCategory: (type: 'cash' | 'bank', category: string) => void;
+  addCategory: (type: 'cash' | 'bank', category: string, direction: 'credit' | 'debit') => void;
+  deleteCategory: (id: string) => void;
   setFontSize: (size: FontSize) => void;
   setWastagePercentage: (percentage: number) => void;
   setCurrency: (currency: string) => void;
@@ -85,16 +85,6 @@ interface AppContextType extends AppState {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-const fixedBankCategories: { name: string, type: 'deposit' | 'withdrawal' | 'prompt' }[] = [
-    { name: 'Stock Purchase', type: 'withdrawal' },
-    { name: 'Stock Sale', type: 'deposit' },
-    { name: 'A/R Settlement', type: 'deposit' },
-    { name: 'A/P Settlement', type: 'withdrawal' },
-    { name: 'Deposit', type: 'deposit'},
-    { name: 'Withdrawal', type: 'withdrawal'},
-    { name: 'Others', type: 'prompt' },
-];
-
 const initialAppState: AppState = {
   cashBalance: 0,
   cashTransactions: [],
@@ -107,8 +97,8 @@ const initialAppState: AppState = {
   deletedBankTransactions: [],
   deletedStockTransactions: [],
   deletedLedgerTransactions: [],
-  cashCategories: ['Salary', 'Groceries', 'Transport', 'Utilities', 'Stock Purchase', 'Stock Sale'],
-  bankCategories: [...fixedBankCategories],
+  cashCategories: [],
+  bankCategories: [],
   fontSize: 'base',
   initialBalanceSet: false,
   needsInitialBalance: false,
@@ -310,9 +300,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         
         const { finalCashBalance, finalBankBalance, aggregatedStockItems } = calculateBalancesAndStock(cashTransactions, bankTransactions, stockTransactions, initialStockItems);
         
-        const cashCategories = categoriesData?.filter((c: any) => c.type === 'cash').map((c: any) => c.name);
-        const customBankCategories = categoriesData?.filter((c: any) => c.type === 'bank').map((c: any) => ({ name: c.name, type: c.direction || 'prompt' }));
-        const combinedBankCategories = [...fixedBankCategories, ...customBankCategories];
+        const cashCategories: Category[] = (categoriesData || []).filter((c: any) => c.type === 'cash');
+        const bankCategories: Category[] = (categoriesData || []).filter((c: any) => c.type === 'bank');
         
         setState(prev => ({
             ...prev,
@@ -324,8 +313,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
             cashBalance: finalCashBalance,
             bankBalance: finalBankBalance,
             needsInitialBalance,
-            cashCategories: cashCategories?.length > 0 ? cashCategories : prev.cashCategories,
-            bankCategories: combinedBankCategories,
+            cashCategories: cashCategories,
+            bankCategories: bankCategories,
             initialBalanceSet: true,
             vendors: vendorsData || [],
             clients: clientsData || [],
@@ -351,10 +340,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const checkSessionAndLoadData = async () => {
         const session = await getSession();
         if (session) {
-            setState(prev => ({ ...prev, user: session }));
             if (pathname === '/login') {
                 router.replace('/');
-            } else {
+            } else if (state.user?.id !== session.id || !state.initialBalanceSet) {
                  await reloadData({ force: true });
             }
         } else {
@@ -370,7 +358,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (isMounted) {
       checkSessionAndLoadData();
     }
-  }, [pathname, isMounted, router]); // Dependency on router
+  }, [pathname, isMounted, router, state.user?.id, state.initialBalanceSet, reloadData, state.isLoading]);
   
   const loadRecycleBinData = useCallback(async () => {
     if(!state.user || state.user.role !== 'admin') return;
@@ -553,21 +541,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
           });
       } else {
           const description = `${tx.type === 'purchase' ? 'Purchase' : 'Sale'} of ${tx.weight}kg of ${tx.stockItemName}`;
-          const category = tx.type === 'purchase' ? 'Stock Purchase' : 'Stock Sale';
-          const financialTxData = {
-              date: tx.date,
-              amount: totalValue,
-              description,
-              category,
-              linkedStockTxId: newStockTx.id
-          };
-
+          
           if (tx.paymentMethod === 'cash') {
-              await addCashTransaction({ ...financialTxData, type: tx.type === 'purchase' ? 'expense' : 'income' });
+              const category = tx.type === 'purchase' ? 'Stock Purchase' : 'Stock Sale';
+              await addCashTransaction({ date: tx.date, amount: totalValue, description, category, type: tx.type === 'purchase' ? 'expense' : 'income', linkedStockTxId: newStockTx.id });
           } else if (tx.paymentMethod === 'bank') { 
-              const bankCategory = state.bankCategories.find(c => c.name === category);
-              if(!bankCategory || bankCategory.type === 'prompt') throw new Error("Bank category for stock transaction not found or is invalid.");
-              await addBankTransaction({ ...financialTxData, type: bankCategory.type, bank_id: tx.bank_id! });
+              const category = tx.type === 'purchase' ? 'Stock Purchase' : 'Stock Sale';
+              await addBankTransaction({ date: tx.date, amount: totalValue, description, category, type: tx.type === 'purchase' ? 'withdrawal' : 'deposit', bank_id: tx.bank_id!, linkedStockTxId: newStockTx.id });
           }
       }
       
@@ -813,20 +793,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const transferFunds = async (from: 'cash' | 'bank', amount: number, date?: string, bankId?: string) => {
      const transactionDate = date || new Date().toISOString();
-     const description = from === 'cash' ? 'Transfer to Bank' : 'Transfer from Bank';
-
+     
      try {
-        if(from === 'cash' && !bankId) throw new Error("A destination bank account is required.");
-        if(from === 'bank' && !bankId) throw new Error("A source bank account is required.");
-
-        const baseTx = { date: transactionDate, amount, description, category: 'Transfer' };
-        
         if(from === 'cash') {
-            await addCashTransaction({ ...baseTx, type: 'expense' });
-            await addBankTransaction({ ...baseTx, type: 'deposit', bank_id: bankId! });
-        } else {
-            await addBankTransaction({ ...baseTx, type: 'withdrawal', bank_id: bankId! });
-            await addCashTransaction({ ...baseTx, type: 'income' });
+            if(!bankId) throw new Error("A destination bank account is required.");
+            const description = 'Transfer to Bank';
+            await addCashTransaction({ date: transactionDate, amount, description, category: 'Transfer', type: 'expense' });
+            await addBankTransaction({ date: transactionDate, amount, description, category: 'Transfer', type: 'deposit', bank_id: bankId! });
+        } else { // from bank
+            if(!bankId) throw new Error("A source bank account is required.");
+            const description = 'Transfer from Bank';
+            await addBankTransaction({ date: transactionDate, amount, description, category: 'Transfer', type: 'withdrawal', bank_id: bankId! });
+            await addCashTransaction({ date: transactionDate, amount, description, category: 'Transfer', type: 'income' });
         }
         reloadData({ force: true });
      } catch (error) {
@@ -834,14 +812,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
      }
   };
 
-  const addCategory = async (type: 'cash' | 'bank', category: string, direction?: 'deposit' | 'withdrawal') => {
+  const addCategory = async (type: 'cash' | 'bank', category: string, direction: 'credit' | 'debit') => {
     if(!state.user || state.user.role !== 'admin') return;
     
     try {
-        const dataToSave: { name: string; type: string; direction?: string } = { name: category, type };
-        if (type === 'bank') {
-            dataToSave.direction = direction;
-        }
+      const dataToSave = { name: category, type, direction };
 
       const newCategory = await appendData({ tableName: 'categories', data: dataToSave, select: '*' });
 
@@ -854,10 +829,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const deleteCategory = async (type: 'cash' | 'bank', category: string) => {
+  const deleteCategory = async (id: string) => {
     if(!state.user || state.user.role !== 'admin') return;
     try {
-        const { error } = await supabase.from('categories').delete().eq('name', category).eq('type', type);
+        const { error } = await supabase.from('categories').delete().eq('id', id).eq('is_deletable', true);
         if(error) throw error;
         reloadData({ force: true });
         toast({ title: "Success", description: "Category deleted." });

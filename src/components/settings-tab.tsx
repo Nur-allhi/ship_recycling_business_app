@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { Badge } from "@/components/ui/badge"
-import { Plus, Trash2, Eye, EyeOff, Users, Settings, Palette, FileCog, Recycle, Landmark, Activity } from "lucide-react"
+import { Plus, Trash2, Eye, EyeOff, Users, Settings, Palette, FileCog, Recycle, Landmark, Activity, ArrowUpCircle, ArrowDownCircle } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { ResponsiveSelect } from "@/components/ui/responsive-select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -46,9 +46,9 @@ export function SettingsTab() {
   const cashBalanceRef = useRef<HTMLInputElement>(null)
   const bankRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
-  const cashCategoryRef = useRef<HTMLInputElement>(null)
-  const bankCategoryRef = useRef<HTMLInputElement>(null)
-  const [bankCategoryDirection, setBankCategoryDirection] = useState<'deposit' | 'withdrawal' | undefined>();
+  const newCategoryNameRef = useRef<HTMLInputElement>(null)
+  const [newCategoryType, setNewCategoryType] = useState<'cash' | 'bank'>('cash');
+  const [newCategoryDirection, setNewCategoryDirection] = useState<'credit' | 'debit' | undefined>();
 
   const wastageRef = useRef<HTMLInputElement>(null)
   
@@ -121,23 +121,19 @@ export function SettingsTab() {
   }
 
 
-  const handleAddCategory = (type: 'cash' | 'bank') => {
-    if (type === 'cash') {
-        const category = cashCategoryRef.current?.value.trim();
-        if (category) {
-            addCategory('cash', category);
-            if(cashCategoryRef.current) cashCategoryRef.current.value = "";
-        }
-    } else {
-        const category = bankCategoryRef.current?.value.trim();
-        if (category && bankCategoryDirection) {
-            addCategory('bank', category, bankCategoryDirection);
-            if(bankCategoryRef.current) bankCategoryRef.current.value = "";
-            setBankCategoryDirection(undefined);
-        } else if (!bankCategoryDirection) {
-            toast({ variant: 'destructive', title: 'Direction Required', description: 'Please select a direction (deposit or withdrawal) for the new bank category.'})
-        }
+  const handleAddCategory = () => {
+    const name = newCategoryNameRef.current?.value.trim();
+    if (!name) {
+        toast({variant: 'destructive', title: 'Category name required'});
+        return;
     }
+    if (!newCategoryDirection) {
+        toast({variant: 'destructive', title: 'Category direction required'});
+        return;
+    }
+    addCategory(newCategoryType, name, newCategoryDirection);
+    if(newCategoryNameRef.current) newCategoryNameRef.current.value = "";
+    setNewCategoryDirection(undefined);
   }
 
   const handleWastageSave = () => {
@@ -164,13 +160,8 @@ export function SettingsTab() {
     { value: 'BDT', label: 'BDT (৳)' },
   ], []);
 
-  const fixedCategoryNames = useMemo(() => new Set([
-    'Stock Purchase', 'Stock Sale', 'A/R Settlement', 'A/P Settlement', 'Transfer', 'Initial Balance', 'Others'
-  ]), []);
-
-  const customBankCategories = useMemo(() => 
-    bankCategories.filter(c => !fixedCategoryNames.has(c.name))
-  , [bankCategories, fixedCategoryNames]);
+  const deletableCashCategories = useMemo(() => cashCategories.filter(c => c.is_deletable), [cashCategories]);
+  const deletableBankCategories = useMemo(() => bankCategories.filter(c => c.is_deletable), [bankCategories]);
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -269,43 +260,63 @@ export function SettingsTab() {
               </CardHeader>
               <CardContent className="space-y-6">
                 <div>
-                  <h3 className="font-semibold mb-2">Cash Categories</h3>
-                  <div className="flex gap-2 mb-3">
-                    <Input placeholder="New cash category" ref={cashCategoryRef} />
-                    <Button size="icon" onClick={() => handleAddCategory('cash')}><Plus className="h-4 w-4" /></Button>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {cashCategories.map(cat => (
-                      <Badge key={cat} variant="secondary" className="flex items-center gap-2">
-                        {cat}
-                        <button onClick={() => deleteCategory('cash', cat)} className="rounded-full hover:bg-muted-foreground/20">
-                          <Trash2 className="h-3 w-3" />
-                        </button>
-                      </Badge>
-                    ))}
+                  <h3 className="font-semibold mb-2">Add New Category</h3>
+                  <div className="p-4 border rounded-lg space-y-4">
+                    <div className="space-y-2">
+                      <Label>Type</Label>
+                      <RadioGroup onValueChange={(v) => setNewCategoryType(v as any)} value={newCategoryType} className="flex pt-2 gap-4">
+                          <Label className="flex items-center gap-2 cursor-pointer"><RadioGroupItem value="cash" /> Cash</Label>
+                          <Label className="flex items-center gap-2 cursor-pointer"><RadioGroupItem value="bank" /> Bank</Label>
+                      </RadioGroup>
+                    </div>
+                     <div className="space-y-2">
+                        <Label htmlFor="new-cat-name">Category Name</Label>
+                        <Input id="new-cat-name" placeholder="e.g. Office Supplies" ref={newCategoryNameRef} />
+                    </div>
+                     <div className="space-y-2">
+                        <Label>Direction</Label>
+                        <RadioGroup onValueChange={(v) => setNewCategoryDirection(v as any)} value={newCategoryDirection} className="flex pt-2 gap-4">
+                            <Label className="flex items-center gap-2 cursor-pointer"><RadioGroupItem value="credit" /> Credit (Money In)</Label>
+                            <Label className="flex items-center gap-2 cursor-pointer"><RadioGroupItem value="debit" /> Debit (Money Out)</Label>
+                        </RadioGroup>
+                    </div>
+                    <Button size="sm" onClick={handleAddCategory}><Plus className="mr-2 h-4 w-4" /> Add Category</Button>
                   </div>
                 </div>
                  <Separator />
                 <div>
-                  <h3 className="font-semibold mb-2">Bank Categories</h3>
-                  <div className="flex flex-col sm:flex-row gap-2 mb-3">
-                    <Input placeholder="New bank category" ref={bankCategoryRef} className="flex-1"/>
-                     <RadioGroup onValueChange={(v) => setBankCategoryDirection(v as any)} value={bankCategoryDirection} className="flex items-center gap-4 pt-2 sm:pt-0">
-                        <Label className="flex items-center gap-2 cursor-pointer"><RadioGroupItem value="deposit" /> Deposit</Label>
-                        <Label className="flex items-center gap-2 cursor-pointer"><RadioGroupItem value="withdrawal" /> Withdrawal</Label>
-                    </RadioGroup>
-                    <Button size="icon" onClick={() => handleAddCategory('bank')}><Plus className="h-4 w-4" /></Button>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {customBankCategories.map(cat => (
-                      <Badge key={cat.name} variant="secondary" className="flex items-center gap-2">
-                        {cat.name}
-                        <button onClick={() => deleteCategory('bank', cat.name)} className="rounded-full hover:bg-muted-foreground/20">
-                          <Trash2 className="h-3 w-3" />
-                        </button>
-                      </Badge>
-                    ))}
-                    {customBankCategories.length === 0 && <p className="text-sm text-muted-foreground">No custom bank categories added yet.</p>}
+                  <h3 className="font-semibold mb-2">Custom Categories</h3>
+                  <div className="space-y-4">
+                     <div>
+                        <h4 className="font-medium text-muted-foreground mb-2">Cash</h4>
+                         <div className="flex flex-wrap gap-2">
+                            {deletableCashCategories.map(cat => (
+                            <Badge key={cat.id} variant="secondary" className="flex items-center gap-2">
+                                {cat.name}
+                                {cat.direction === 'credit' ? <ArrowUpCircle className="h-3 w-3 text-green-500"/> : <ArrowDownCircle className="h-3 w-3 text-red-500" />}
+                                <button onClick={() => deleteCategory(cat.id)} className="rounded-full hover:bg-muted-foreground/20">
+                                <Trash2 className="h-3 w-3" />
+                                </button>
+                            </Badge>
+                            ))}
+                            {deletableCashCategories.length === 0 && <p className="text-sm text-muted-foreground">No custom cash categories.</p>}
+                        </div>
+                     </div>
+                     <div>
+                        <h4 className="font-medium text-muted-foreground mb-2">Bank</h4>
+                        <div className="flex flex-wrap gap-2">
+                            {deletableBankCategories.map(cat => (
+                            <Badge key={cat.id} variant="secondary" className="flex items-center gap-2">
+                                {cat.name}
+                                {cat.direction === 'credit' ? <ArrowUpCircle className="h-3 w-3 text-green-500"/> : <ArrowDownCircle className="h-3 w-3 text-red-500" />}
+                                <button onClick={() => deleteCategory(cat.id)} className="rounded-full hover:bg-muted-foreground/20">
+                                <Trash2 className="h-3 w-3" />
+                                </button>
+                            </Badge>
+                            ))}
+                             {deletableBankCategories.length === 0 && <p className="text-sm text-muted-foreground">No custom bank categories.</p>}
+                        </div>
+                     </div>
                   </div>
                 </div>
               </CardContent>
@@ -384,5 +395,3 @@ export function SettingsTab() {
     </div>
   );
 }
-
-    
