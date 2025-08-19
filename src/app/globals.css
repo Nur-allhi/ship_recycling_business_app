@@ -2,10 +2,6 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
-  font-family: Arial, Helvetica, sans-serif;
-}
-
 @layer base {
   :root {
     --background: 204 17% 95%;
@@ -41,6 +37,9 @@ body {
     --sidebar-accent-foreground: 240 5.9% 10%;
     --sidebar-border: 220 13% 91%;
     --sidebar-ring: 217.2 91.2% 59.8%;
+
+    --font-sans: "Roboto Slab", sans-serif;
+    --font-mono: "Roboto Mono", monospace;
   }
   .dark {
     --background: 210 29% 15%;
