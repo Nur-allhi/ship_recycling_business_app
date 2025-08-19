@@ -378,7 +378,7 @@ export function BankTab() {
                     Current Balance: <span className="font-bold text-primary font-mono">{formatCurrency(currentBankBalance)}</span>
                     </CardDescription>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                      <ResponsiveSelect
                         value={selectedBankId}
                         onValueChange={(value) => setSelectedBankId(value)}
