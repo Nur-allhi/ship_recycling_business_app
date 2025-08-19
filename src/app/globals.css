@@ -85,6 +85,12 @@ body {
   body {
     @apply bg-background text-foreground;
   }
+  table {
+    @apply border-collapse border border-slate-400;
+  }
+  td, th {
+    @apply border border-slate-300;
+  }
 }
 
 .loader {
