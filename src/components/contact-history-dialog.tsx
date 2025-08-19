@@ -19,7 +19,7 @@ import { Button } from "./ui/button";
 import { FileText, ArrowRight } from "lucide-react";
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
-import { useToast } from "@/hooks/use-toast";
+import { toast } from 'sonner';
 
 interface ContactHistoryDialogProps {
   isOpen: boolean;
@@ -36,7 +36,6 @@ declare module 'jspdf' {
 
 export function ContactHistoryDialog({ isOpen, setIsOpen, contact, contactType }: ContactHistoryDialogProps) {
   const { ledgerTransactions, currency } = useAppContext();
-  const { toast } = useToast();
 
   const transactions = useMemo(() => {
     return ledgerTransactions
@@ -185,7 +184,7 @@ export function ContactHistoryDialog({ isOpen, setIsOpen, contact, contactType }
     });
 
     doc.save(`${contact.name}_statement_${format(new Date(), 'yyyy-MM-dd')}.pdf`);
-    toast({ title: "PDF Exported", description: `Statement for ${contact.name} has been saved.`});
+    toast.success("PDF Exported", { description: `Statement for ${contact.name} has been saved.`});
   }
 
 
@@ -283,5 +282,3 @@ export function ContactHistoryDialog({ isOpen, setIsOpen, contact, contactType }
     </Dialog>
   );
 }
-
-    

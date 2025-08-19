@@ -244,7 +244,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             description: error.message || 'An unknown error occurred. Please try again.',
         });
     }
-  }, [toast, logout]);
+  }, [logout]);
   
   const calculateBalancesAndStock = useCallback((
     cashTxs: CashTransaction[], 

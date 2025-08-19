@@ -77,7 +77,7 @@ export function LoginForm() {
     } catch (error: any) {
       toast.error(
         'Login Failed',
-        {description: error.message,}
+        {description: error.message}
       );
       setIsLoading(false);
     }

@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ResponsiveSelect } from '@/components/ui/responsive-select';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { useToast } from '@/hooks/use-toast';
+import { toast } from 'sonner';
 import { CalendarIcon, Plus, PlusCircle, Wallet, Landmark, Boxes, ArrowRightLeft, UserPlus, Loader2 } from 'lucide-react';
 import { DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
@@ -177,8 +177,6 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
     reloadData,
   } = useAppContext();
   
-  const { toast } = useToast();
-
   const currentSchema = formSchemas[transactionType];
 
   const { register, handleSubmit, control, watch, reset, setValue, formState: { errors, isSubmitting } } = useForm({
@@ -314,10 +312,10 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                 });
                 break;
         }
-        toast({ title: "Transaction Added", description: "Your transaction has been successfully recorded." });
+        toast.success("Transaction Added", { description: "Your transaction has been successfully recorded." });
         setDialogOpen(false);
     } catch(error: any) {
-         toast({ variant: "destructive", title: "Operation Failed", description: error.message || "An unexpected error occurred." });
+         toast.error("Operation Failed", { description: error.message || "An unexpected error occurred." });
     }
   };
 

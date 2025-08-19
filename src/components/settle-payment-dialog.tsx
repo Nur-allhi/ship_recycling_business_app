@@ -21,7 +21,7 @@ import { CalendarIcon, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { useAppContext } from '@/app/store';
-import { useToast } from '@/hooks/use-toast';
+import { toast } from 'sonner';
 import { Input } from './ui/input';
 import { ResponsiveSelect } from './ui/responsive-select';
 import { useState } from 'react';
@@ -59,7 +59,6 @@ interface SettlePaymentDialogProps {
 
 export function SettlePaymentDialog({ isOpen, setIsOpen, contact }: SettlePaymentDialogProps) {
     const { recordPayment, currency, banks } = useAppContext();
-    const { toast } = useToast();
     const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
     
     const remainingBalance = contact.total_amount - contact.total_paid;
@@ -91,7 +90,7 @@ export function SettlePaymentDialog({ isOpen, setIsOpen, contact }: SettlePaymen
             await recordPayment(contact.contact_id, contact.contact_name, data.paymentAmount, data.paymentMethod, data.paymentDate, contact.type, data.bank_id);
             setIsOpen(false);
         } catch (error: any) {
-            toast({ variant: 'destructive', title: 'Payment Failed', description: error.message });
+            toast.error('Payment Failed', { description: error.message });
         }
     };
     
@@ -196,5 +195,3 @@ export function SettlePaymentDialog({ isOpen, setIsOpen, contact }: SettlePaymen
         </Dialog>
     )
 }
-
-    

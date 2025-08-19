@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ResponsiveSelect } from '@/components/ui/responsive-select';
 import { Plus, Trash2, Loader2, RefreshCw } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
+import { toast } from 'sonner';
 import { getUsers, addUser, deleteUser } from '@/app/actions';
 import type { User } from '@/lib/types';
 import { useAppContext } from '@/app/store';
@@ -40,7 +40,6 @@ type NewUserFormData = z.infer<typeof newUserSchema>;
 
 export function UserManagementTab() {
   const { user: currentUser } = useAppContext();
-  const { toast } = useToast();
   const [users, setUsers] = useState<Omit<User, 'password'>[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -54,11 +53,11 @@ export function UserManagementTab() {
       const fetchedUsers = await getUsers();
       setUsers(fetchedUsers);
     } catch (error: any) {
-      toast({ variant: 'destructive', title: 'Error fetching users', description: error.message });
+      toast.error('Error fetching users', { description: error.message });
     } finally {
       setIsLoading(false);
     }
-  }, [toast]);
+  }, []);
 
   useEffect(() => {
     fetchUsers();
@@ -67,21 +66,21 @@ export function UserManagementTab() {
   const onAddUser = async (data: NewUserFormData) => {
     try {
       await addUser(data);
-      toast({ title: 'User added successfully' });
+      toast.success('User added successfully');
       reset();
       fetchUsers();
     } catch (error: any) {
-      toast({ variant: 'destructive', title: 'Error adding user', description: error.message });
+      toast.error('Error adding user', { description: error.message });
     }
   };
   
   const onDeleteUser = async (userId: string) => {
     try {
         await deleteUser(userId);
-        toast({ title: 'User deleted successfully' });
+        toast.success('User deleted successfully');
         fetchUsers();
     } catch (error: any) {
-        toast({ variant: 'destructive', title: 'Error deleting user', description: error.message });
+        toast.error('Error deleting user', { description: error.message });
     }
   };
 

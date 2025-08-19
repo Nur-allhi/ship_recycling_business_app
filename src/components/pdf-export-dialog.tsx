@@ -13,7 +13,7 @@ import {
   DialogFooter,
 } from './ui/dialog';
 import { Label } from './ui/label';
-import { useToast } from '@/hooks/use-toast';
+import { toast } from 'sonner';
 import { CalendarIcon, FileText } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
@@ -41,7 +41,6 @@ declare module 'jspdf' {
 
 export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
   const { cashTransactions, bankTransactions, stockTransactions, currency } = useAppContext();
-  const { toast } = useToast();
   const [dataSource, setDataSource] = useState<DataSource>('cash');
   const [dateRange, setDateRange] = useState<{ from: Date; to: Date }>({
     from: startOfMonth(new Date()),
@@ -50,9 +49,7 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
 
   const handleExport = async () => {
     if (!dateRange.from || !dateRange.to) {
-        toast({
-            variant: 'destructive',
-            title: 'Invalid Date Range',
+        toast.error('Invalid Date Range', {
             description: 'Please select both a start and end date.'
         });
         return;
@@ -109,9 +106,7 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
 
     } catch (e) {
       console.error("Failed to build PDF header:", e);
-      toast({
-        variant: 'destructive',
-        title: 'PDF Error',
+      toast.error('PDF Error', {
         description: 'Could not generate the PDF header.'
       })
     }
@@ -260,7 +255,7 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
             );
             doc.text(
                 `Page ${data.pageNumber}`,
-                doc.internal.pageSize.getWidth() - data.settings.margin.right,
+                data.settings.margin.right,
                 doc.internal.pageSize.getHeight() - 10,
                 { align: 'right' }
             );
@@ -268,7 +263,7 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
     });
 
     doc.save(`${dataSource}_report_${format(new Date(), 'yyyy-MM-dd')}.pdf`);
-    toast({ title: 'Export Successful', description: 'Your PDF has been generated.' });
+    toast.success('Export Successful', { description: 'Your PDF has been generated.' });
     setIsOpen(false);
   };
 

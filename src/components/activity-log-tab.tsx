@@ -6,13 +6,12 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from '@/components/ui/button';
 import { Loader2, RefreshCw } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
+import { toast } from 'sonner';
 import { readData } from '@/app/actions';
 import type { ActivityLog } from '@/lib/types';
 import { format, parseISO } from 'date-fns';
 
 export function ActivityLogTab() {
-  const { toast } = useToast();
   const [logs, setLogs] = useState<ActivityLog[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -23,11 +22,11 @@ export function ActivityLogTab() {
       // Supabase might return null, so ensure we have an array
       setLogs(fetchedLogs?.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()) || []);
     } catch (error: any) {
-      toast({ variant: 'destructive', title: 'Error fetching activity logs', description: error.message });
+      toast.error('Error fetching activity logs', { description: error.message });
     } finally {
       setIsLoading(false);
     }
-  }, [toast]);
+  }, []);
 
   useEffect(() => {
     fetchLogs();
@@ -77,5 +76,3 @@ export function ActivityLogTab() {
     </Card>
   );
 }
-
-    
