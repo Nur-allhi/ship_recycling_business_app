@@ -18,6 +18,7 @@ import { RecycleBinTab } from "./recycle-bin-tab"
 import { ExportImportTab } from "./export-import-tab"
 import { ContactsTab } from "./contacts-tab"
 import { ActivityLogTab } from "./activity-log-tab"
+import { RadioGroup, RadioGroupItem } from "./ui/radio-group"
 
 export function SettingsTab() {
   const {
@@ -29,6 +30,7 @@ export function SettingsTab() {
     fontSize,
     setFontSize,
     cashCategories,
+    bankCategories,
     addCategory,
     deleteCategory,
     wastagePercentage,
@@ -45,6 +47,9 @@ export function SettingsTab() {
   const bankRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   const cashCategoryRef = useRef<HTMLInputElement>(null)
+  const bankCategoryRef = useRef<HTMLInputElement>(null)
+  const [bankCategoryDirection, setBankCategoryDirection] = useState<'deposit' | 'withdrawal' | undefined>();
+
   const wastageRef = useRef<HTMLInputElement>(null)
   
   const stockItemNameRef = useRef<HTMLInputElement>(null)
@@ -116,11 +121,22 @@ export function SettingsTab() {
   }
 
 
-  const handleAddCategory = (type: 'cash') => {
-    const category = cashCategoryRef.current?.value.trim();
-    if (category) {
-        addCategory('cash', category);
-        if(cashCategoryRef.current) cashCategoryRef.current.value = "";
+  const handleAddCategory = (type: 'cash' | 'bank') => {
+    if (type === 'cash') {
+        const category = cashCategoryRef.current?.value.trim();
+        if (category) {
+            addCategory('cash', category);
+            if(cashCategoryRef.current) cashCategoryRef.current.value = "";
+        }
+    } else {
+        const category = bankCategoryRef.current?.value.trim();
+        if (category && bankCategoryDirection) {
+            addCategory('bank', category, bankCategoryDirection);
+            if(bankCategoryRef.current) bankCategoryRef.current.value = "";
+            setBankCategoryDirection(undefined);
+        } else if (!bankCategoryDirection) {
+            toast({ variant: 'destructive', title: 'Direction Required', description: 'Please select a direction (deposit or withdrawal) for the new bank category.'})
+        }
     }
   }
 
@@ -147,6 +163,14 @@ export function SettingsTab() {
     { value: 'INR', label: 'INR (₹)' },
     { value: 'BDT', label: 'BDT (৳)' },
   ], []);
+
+  const fixedCategoryNames = useMemo(() => new Set([
+    'Stock Purchase', 'Stock Sale', 'A/R Settlement', 'A/P Settlement', 'Transfer', 'Initial Balance', 'Others'
+  ]), []);
+
+  const customBankCategories = useMemo(() => 
+    bankCategories.filter(c => !fixedCategoryNames.has(c.name))
+  , [bankCategories, fixedCategoryNames]);
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -241,7 +265,7 @@ export function SettingsTab() {
             <Card>
               <CardHeader>
                 <CardTitle>Category Management</CardTitle>
-                <CardDescription>Customize categories for your cash transactions.</CardDescription>
+                <CardDescription>Customize categories for your cash and bank transactions.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div>
@@ -259,6 +283,29 @@ export function SettingsTab() {
                         </button>
                       </Badge>
                     ))}
+                  </div>
+                </div>
+                 <Separator />
+                <div>
+                  <h3 className="font-semibold mb-2">Bank Categories</h3>
+                  <div className="flex flex-col sm:flex-row gap-2 mb-3">
+                    <Input placeholder="New bank category" ref={bankCategoryRef} className="flex-1"/>
+                     <RadioGroup onValueChange={(v) => setBankCategoryDirection(v as any)} value={bankCategoryDirection} className="flex items-center gap-4 pt-2 sm:pt-0">
+                        <Label className="flex items-center gap-2 cursor-pointer"><RadioGroupItem value="deposit" /> Deposit</Label>
+                        <Label className="flex items-center gap-2 cursor-pointer"><RadioGroupItem value="withdrawal" /> Withdrawal</Label>
+                    </RadioGroup>
+                    <Button size="icon" onClick={() => handleAddCategory('bank')}><Plus className="h-4 w-4" /></Button>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {customBankCategories.map(cat => (
+                      <Badge key={cat.name} variant="secondary" className="flex items-center gap-2">
+                        {cat.name}
+                        <button onClick={() => deleteCategory('bank', cat.name)} className="rounded-full hover:bg-muted-foreground/20">
+                          <Trash2 className="h-3 w-3" />
+                        </button>
+                      </Badge>
+                    ))}
+                    {customBankCategories.length === 0 && <p className="text-sm text-muted-foreground">No custom bank categories added yet.</p>}
                   </div>
                 </div>
               </CardContent>
@@ -337,3 +384,5 @@ export function SettingsTab() {
     </div>
   );
 }
+
+    

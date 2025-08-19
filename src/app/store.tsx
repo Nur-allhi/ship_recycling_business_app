@@ -64,8 +64,8 @@ interface AppContextType extends AppState {
   deleteLedgerTransaction: (tx: LedgerTransaction) => void;
   restoreTransaction: (txType: 'cash' | 'bank' | 'stock' | 'ap_ar', id: string) => void;
   transferFunds: (from: 'cash' | 'bank', amount: number, date?: string, bankId?: string) => Promise<void>;
-  addCategory: (type: 'cash', category: string) => void;
-  deleteCategory: (type: 'cash', category: string) => void;
+  addCategory: (type: 'cash' | 'bank', category: string, direction?: 'deposit' | 'withdrawal') => void;
+  deleteCategory: (type: 'cash' | 'bank', category: string) => void;
   setFontSize: (size: FontSize) => void;
   setWastagePercentage: (percentage: number) => void;
   setCurrency: (currency: string) => void;
@@ -86,14 +86,11 @@ interface AppContextType extends AppState {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 const fixedBankCategories: { name: string, type: 'deposit' | 'withdrawal' | 'prompt' }[] = [
-    { name: 'Deposit', type: 'deposit' },
-    { name: 'Withdrawal', type: 'withdrawal' },
     { name: 'Stock Purchase', type: 'withdrawal' },
     { name: 'Stock Sale', type: 'deposit' },
     { name: 'A/R Settlement', type: 'deposit' },
     { name: 'A/P Settlement', type: 'withdrawal' },
-    { name: 'Transfer', type: 'deposit' },
-    { name: 'Transfer', type: 'withdrawal' },
+    { name: 'Transfer', type: 'prompt' },
     { name: 'Initial Balance', type: 'deposit' },
     { name: 'Others', type: 'prompt' },
 ];
@@ -314,6 +311,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const { finalCashBalance, finalBankBalance, aggregatedStockItems } = calculateBalancesAndStock(cashTransactions, bankTransactions, stockTransactions, initialStockItems);
         
         const cashCategories = categoriesData?.filter((c: any) => c.type === 'cash').map((c: any) => c.name);
+        const customBankCategories = categoriesData?.filter((c: any) => c.type === 'bank').map((c: any) => ({ name: c.name, type: c.direction || 'prompt' }));
+        const combinedBankCategories = [...fixedBankCategories, ...customBankCategories];
         
         setState(prev => ({
             ...prev,
@@ -326,7 +325,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             bankBalance: finalBankBalance,
             needsInitialBalance,
             cashCategories: cashCategories?.length > 0 ? cashCategories : prev.cashCategories,
-            bankCategories: fixedBankCategories,
+            bankCategories: combinedBankCategories,
             initialBalanceSet: true,
             vendors: vendorsData || [],
             clients: clientsData || [],
@@ -349,27 +348,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const checkSessionAndLoadData = async () => {
-      setState(prev => ({ ...prev, isLoading: true }));
-      try {
         const session = await getSession();
         if (session) {
-          if (JSON.stringify(session) !== JSON.stringify(state.user)) {
-             setState(prev => ({...prev, user: session, initialBalanceSet: false }));
-          }
+            if (JSON.stringify(session) !== JSON.stringify(state.user)) {
+                setState(prev => ({ ...prev, user: session, initialBalanceSet: false, isLoading: true }));
+            }
         } else {
-          if (state.user !== null) {
-            setState(prev => ({ ...prev, user: null }));
-          }
+            if (state.user !== null || pathname !== '/login') {
+                 setState(prev => ({ ...prev, user: null, isLoading: pathname !== '/login' }));
+            }
         }
-      } catch (error) {
-        console.error("Failed to get session", error);
-      } finally {
-         setState(prev => ({ ...prev, isLoading: false }));
-      }
     };
     checkSessionAndLoadData();
-  }, [pathname, state.user]);
-  
+  }, [pathname]);
+
   useEffect(() => {
     if (state.user && !state.initialBalanceSet) {
       reloadData({ force: true });
@@ -811,13 +803,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         
         if(from === 'cash') {
             await addCashTransaction({ ...baseTx, type: 'expense' });
-            const bankCategory = state.bankCategories.find(c => c.name === 'Transfer' && c.type === 'deposit');
-            if(!bankCategory || bankCategory.type === 'prompt') throw new Error("Bank category for transfer not found.");
-            await addBankTransaction({ ...baseTx, type: bankCategory.type, bank_id: bankId! });
+            await addBankTransaction({ ...baseTx, type: 'deposit', bank_id: bankId! });
         } else {
-             const bankCategory = state.bankCategories.find(c => c.name === 'Transfer' && c.type === 'withdrawal');
-            if(!bankCategory || bankCategory.type === 'prompt') throw new Error("Bank category for transfer not found.");
-            await addBankTransaction({ ...baseTx, type: bankCategory.type, bank_id: bankId! });
+            await addBankTransaction({ ...baseTx, type: 'withdrawal', bank_id: bankId! });
             await addCashTransaction({ ...baseTx, type: 'income' });
         }
         reloadData({ force: true });
@@ -826,11 +814,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
      }
   };
 
-  const addCategory = async (type: 'cash', category: string) => {
+  const addCategory = async (type: 'cash' | 'bank', category: string, direction?: 'deposit' | 'withdrawal') => {
     if(!state.user || state.user.role !== 'admin') return;
     
     try {
-      const newCategory = await appendData({ tableName: 'categories', data: { name: category, type }, select: '*' });
+      const dataToSave: { name: string, type: string, direction?: string } = { name: category, type };
+      if (type === 'bank') {
+        dataToSave.direction = direction;
+      }
+      const newCategory = await appendData({ tableName: 'categories', data: dataToSave, select: '*' });
       if (newCategory) {
           reloadData({ force: true });
           toast({ title: "Success", description: "Category added." });
@@ -840,15 +832,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const deleteCategory = async (type: 'cash', category: string) => {
-    console.warn("Database deletion for categories is not implemented. Removing from local state only.");
-    setState(prev => {
-      if(type === 'cash') {
-          const newCategories = prev.cashCategories.filter(c => c !== category);
-          return { ...prev, cashCategories: newCategories };
-      }
-      return prev;
-    });
+  const deleteCategory = async (type: 'cash' | 'bank', category: string) => {
+    if(!state.user || state.user.role !== 'admin') return;
+    try {
+        const { error } = await supabase.from('categories').delete().eq('name', category).eq('type', type);
+        if(error) throw error;
+        reloadData({ force: true });
+        toast({ title: "Success", description: "Category deleted." });
+    } catch(error) {
+        handleApiError(error);
+    }
   };
 
   const setInitialBalances = async (cash: number, bankTotals: Record<string, number>) => {
@@ -1151,3 +1144,5 @@ export function useAppContext() {
   }
   return context;
 }
+
+    
