@@ -367,8 +367,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
             ledgerTransactions: allLedgerData.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
             dataLoaded: { 
                 ...prev.dataLoaded, 
-                // Mark as loaded if full, otherwise keep previous state
-                ...(options?.full && { cash: true, bank: true, stock: true, credit: true, settings: true })
+                cash: true, 
+                bank: true, 
+                stock: true,
+                ...(options?.full && { credit: true, settings: true })
             },
             stockItems: aggregatedStockItems,
             cashBalance: finalCashBalance,
@@ -1186,13 +1188,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     saveStateToLocalStorage(state);
   }, [state])
 
-  if (!isMounted) {
+  if (!isMounted || state.isLoading) {
     return <AppLoading />;
   }
 
-  if (state.isLoading && pathname !== '/login') {
-    return <AppLoading />;
-  }
 
   return (
     <AppContext.Provider value={{ 
