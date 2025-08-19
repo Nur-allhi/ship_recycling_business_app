@@ -1,7 +1,7 @@
 
 "use client"
 
-import { useRef, useState } from "react"
+import { useRef, useState, useMemo } from "react"
 import { useAppContext } from "@/app/store"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
@@ -12,7 +12,7 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { Badge } from "@/components/ui/badge"
 import { Plus, Trash2, Eye, EyeOff, Users, Settings, Palette, FileCog, Recycle, Landmark, Activity } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
-import { ResponsiveSelect, ResponsiveSelectItem } from "@/components/ui/responsive-select"
+import { ResponsiveSelect } from "@/components/ui/responsive-select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { RecycleBinTab } from "./recycle-bin-tab"
 import { ExportImportTab } from "./export-import-tab"
@@ -151,6 +151,15 @@ export function SettingsTab() {
     setCurrency(value);
     toast({ title: "Currency Updated", description: `Set to ${value}.` });
   }
+
+  const currencyItems = useMemo(() => [
+    { value: 'USD', label: 'USD ($)' },
+    { value: 'EUR', label: 'EUR (€)' },
+    { value: 'GBP', label: 'GBP (£)' },
+    { value: 'JPY', label: 'JPY (¥)' },
+    { value: 'INR', label: 'INR (₹)' },
+    { value: 'BDT', label: 'BDT (৳)' },
+  ], []);
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -330,14 +339,8 @@ export function SettingsTab() {
                     onValueChange={handleCurrencyChange}
                     title="Select currency"
                     className="mt-2"
-                >
-                    <ResponsiveSelectItem value="USD">USD ($)</ResponsiveSelectItem>
-                    <ResponsiveSelectItem value="EUR">EUR (€)</ResponsiveSelectItem>
-                    <ResponsiveSelectItem value="GBP">GBP (£)</ResponsiveSelectItem>
-                    <ResponsiveSelectItem value="JPY">JPY (¥)</ResponsiveSelectItem>
-                    <ResponsiveSelectItem value="INR">INR (₹)</ResponsiveSelectItem>
-                    <ResponsiveSelectItem value="BDT">BDT (৳)</ResponsiveSelectItem>
-                </ResponsiveSelect>
+                    items={currencyItems}
+                />
               </div>
               <Separator />
               <div>

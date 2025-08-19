@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ResponsiveSelect, ResponsiveSelectItem } from '@/components/ui/responsive-select';
+import { ResponsiveSelect } from '@/components/ui/responsive-select';
 import { Plus, Trash2, Loader2, RefreshCw } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { getUsers, addUser, deleteUser } from '@/app/actions';
@@ -85,6 +85,11 @@ export function UserManagementTab() {
     }
   };
 
+  const roleItems = useMemo(() => [
+    { value: 'user', label: 'User' },
+    { value: 'admin', label: 'Admin' }
+  ], []);
+
   return (
     <Card>
       <CardHeader>
@@ -117,10 +122,8 @@ export function UserManagementTab() {
                                     value={field.value}
                                     title="Select a role"
                                     placeholder="Select a role"
-                                >
-                                    <ResponsiveSelectItem value="user">User</ResponsiveSelectItem>
-                                    <ResponsiveSelectItem value="admin">Admin</ResponsiveSelectItem>
-                                </ResponsiveSelect>
+                                    items={roleItems}
+                                />
                             )}
                         />
                         {errors.role && <p className="text-sm text-destructive">{errors.role.message}</p>}
@@ -199,5 +202,3 @@ export function UserManagementTab() {
     </Card>
   );
 }
-
-    

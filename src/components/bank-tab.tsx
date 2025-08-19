@@ -30,7 +30,7 @@ import { EditTransactionSheet } from "./edit-transaction-sheet"
 import { DeleteConfirmationDialog } from "./delete-confirmation-dialog"
 import { Checkbox } from "./ui/checkbox"
 import { format, subMonths, addMonths } from "date-fns"
-import { ResponsiveSelect, ResponsiveSelectItem } from "@/components/ui/responsive-select"
+import { ResponsiveSelect } from "@/components/ui/responsive-select"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { Badge } from "./ui/badge"
 
@@ -185,6 +185,17 @@ export function BankTab() {
   };
   
   const selectedTxIds = useMemo(() => selectedTxs.map(tx => tx.id), [selectedTxs]);
+  
+  const bankAccountItems = useMemo(() => [
+      { value: 'all', label: 'All Banks'},
+      ...banks.map(bank => ({ value: bank.id, label: bank.name }))
+  ], [banks]);
+  
+  const itemsPerPageItems = useMemo(() => [
+      { value: '10', label: '10 / page' },
+      { value: '20', label: '20 / page' },
+      { value: '30', label: '30 / page' },
+  ], []);
 
   const renderDesktopView = () => (
     <div className="overflow-x-auto">
@@ -360,12 +371,8 @@ export function BankTab() {
                         title="Select a Bank Account"
                         placeholder="All Banks"
                         className="w-[150px]"
-                    >
-                        <ResponsiveSelectItem value="all">All Banks</ResponsiveSelectItem>
-                        {banks.map(bank => (
-                            <ResponsiveSelectItem key={bank.id} value={bank.id}>{bank.name}</ResponsiveSelectItem>
-                        ))}
-                    </ResponsiveSelect>
+                        items={bankAccountItems}
+                    />
                     <div className="flex items-center gap-1">
                         <Button variant="outline" size="icon" onClick={goToPreviousMonth} className="h-9 w-9">
                             <ChevronLeft className="h-4 w-4" />
@@ -411,11 +418,7 @@ export function BankTab() {
                                 </div>
                                 <div className="space-y-2">
                                     <Label htmlFor="bank_id">From Bank Account</Label>
-                                    <ResponsiveSelect name="bank_id" title="Select a Bank Account" required>
-                                        {banks.map(bank => (
-                                            <ResponsiveSelectItem key={bank.id} value={bank.id}>{bank.name}</ResponsiveSelectItem>
-                                        ))}
-                                    </ResponsiveSelect>
+                                    <ResponsiveSelect name="bank_id" title="Select a Bank Account" required items={banks.map(b => ({value: b.id, label: b.name}))} />
                                 </div>
                                 <Button type="submit" className="w-full">Transfer to Cash</Button>
                             </form>
@@ -442,11 +445,8 @@ export function BankTab() {
                 value={String(itemsPerPage)} 
                 onValueChange={(value) => { setItemsPerPage(Number(value)); setCurrentPage(1); }}
                 title="Records per page"
-               >
-                  <ResponsiveSelectItem value="10">10 / page</ResponsiveSelectItem>
-                  <ResponsiveSelectItem value="20">20 / page</ResponsiveSelectItem>
-                  <ResponsiveSelectItem value="30">30 / page</ResponsiveSelectItem>
-              </ResponsiveSelect>
+                items={itemsPerPageItems}
+               />
               <Button variant="outline" size="sm" onClick={() => setCurrentPage(prev => prev - 1)} disabled={currentPage === 1}>
                 Previous
               </Button>

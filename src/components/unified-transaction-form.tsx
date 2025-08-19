@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -9,7 +9,7 @@ import { useAppContext } from '@/app/store';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ResponsiveSelect, ResponsiveSelectItem } from '@/components/ui/responsive-select';
+import { ResponsiveSelect } from '@/components/ui/responsive-select';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useToast } from '@/hooks/use-toast';
 import { CalendarIcon, Plus, PlusCircle, Wallet, Landmark, Boxes, ArrowRightLeft, UserPlus, Loader2 } from 'lucide-react';
@@ -339,12 +339,13 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                     value={field.value}
                     title={`Select a ${stockCreditContactType}`}
                     placeholder={`Select a ${stockCreditContactType}`}
-                >
-                    {stockCreditContacts.map(c => <ResponsiveSelectItem key={c.id} value={c.id}>{c.name}</ResponsiveSelectItem>)}
-                    <ResponsiveSelectItem value="new">
-                      <span className="flex items-center gap-2"><Plus className="h-4 w-4"/>Add New</span>
-                    </ResponsiveSelectItem>
-                </ResponsiveSelect>
+                    items={
+                        [
+                            ...stockCreditContacts.map(c => ({ value: c.id, label: c.name })),
+                            { value: 'new', label: <span className="flex items-center gap-2"><Plus className="h-4 w-4"/>Add New</span>}
+                        ]
+                    }
+                />
             )}
         />
         {errors.contact_id && <p className="text-sm text-destructive">{errors.contact_id.message}</p>}
@@ -360,6 +361,21 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
         {errors.newContact && <p className="text-sm text-destructive">{errors.newContact.message}</p>}
     </div>
   )
+  
+  const cashCategoryItems = useMemo(() => cashCategories.map(c => ({ value: c, label: c })), [cashCategories]);
+  const bankCategoryItems = useMemo(() => bankCategories.map(c => ({ value: c.name, label: c.name })), [bankCategories]);
+  const bankAccountItems = useMemo(() => banks.map(b => ({ value: b.id, label: b.name })), [banks]);
+  const stockItemsForSale = useMemo(() => stockItems.filter(i => i.weight > 0).map(item => ({ value: item.name, label: item.name })), [stockItems]);
+  const stockItemsForPurchase = useMemo(() => stockItems.map(item => ({ value: item.name, label: item.name })), [stockItems]);
+  const vendorContactItems = useMemo(() => [
+      ...vendors.map(c => ({ value: c.id, label: c.name })), 
+      { value: 'new', label: <span className="flex items-center gap-2"><Plus className="h-4 w-4"/>Add New</span>}
+  ], [vendors]);
+  const clientContactItems = useMemo(() => [
+    ...clients.map(c => ({ value: c.id, label: c.name })), 
+    { value: 'new', label: <span className="flex items-center gap-2"><Plus className="h-4 w-4"/>Add New</span>}
+  ], [clients]);
+  const currentLedgerContactItems = ledgerType === 'payable' ? vendorContactItems : clientContactItems;
 
   return (
     <>
@@ -422,9 +438,8 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                                                 value={field.value}
                                                 title="Select a category"
                                                 placeholder="Select a category"
-                                            >
-                                                {cashCategories.map(c => <ResponsiveSelectItem key={c} value={c}>{c}</ResponsiveSelectItem>)}
-                                            </ResponsiveSelect>
+                                                items={cashCategoryItems}
+                                            />
                                         )}
                                     />
                                     {errors.category && <p className="text-sm text-destructive">{errors.category.message}</p>}
@@ -438,7 +453,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
 
                             <TabsContent value="bank" className="m-0 space-y-4 animate-fade-in">
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div>{dateField}</div>
+                                    <div className="md:col-span-2">{dateField}</div>
                                     <div className="space-y-2">
                                         <Label htmlFor="amount-bank">Amount</Label>
                                         <Input id="amount-bank" type="number" step="0.01" {...register('amount')} placeholder="0.00"/>
@@ -455,14 +470,13 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                                                     value={field.value}
                                                     title="Select a bank account"
                                                     placeholder="Select a bank account"
-                                                >
-                                                    {banks.map(b => <ResponsiveSelectItem key={b.id} value={b.id}>{b.name}</ResponsiveSelectItem>)}
-                                                </ResponsiveSelect>
+                                                    items={bankAccountItems}
+                                                />
                                             )}
                                         />
                                         {errors.bank_id && <p className="text-sm text-destructive">{errors.bank_id.message}</p>}
                                     </div>
-                                    <div className="space-y-2">
+                                    <div className="space-y-2 md:col-span-2">
                                         <Label>Category</Label>
                                         <Controller
                                             control={control}
@@ -473,9 +487,8 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                                                     value={field.value}
                                                     title="Select a category"
                                                     placeholder="Select a category"
-                                                >
-                                                    {bankCategories.map((c, index) => <ResponsiveSelectItem key={`${c.name}-${c.type}-${index}`} value={c.name}>{c.name}</ResponsiveSelectItem>)}
-                                                </ResponsiveSelect>
+                                                    items={bankCategoryItems}
+                                                />
                                             )}
                                         />
                                         {errors.category && <p className="text-sm text-destructive">{errors.category.message}</p>}
@@ -537,9 +550,8 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                                                             title="Select an item"
                                                             placeholder="Select existing item"
                                                             className="flex-1"
-                                                        >
-                                                            {stockItems.map(item => <ResponsiveSelectItem key={item.id} value={item.name}>{item.name}</ResponsiveSelectItem>)}
-                                                        </ResponsiveSelect>
+                                                            items={stockItemsForPurchase}
+                                                        />
                                                     )}
                                                 />
                                             )}
@@ -557,9 +569,8 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                                                     value={field.value}
                                                     title="Select an item"
                                                     placeholder="Select item to sell"
-                                                >
-                                                    {stockItems.filter(i => i.weight > 0).map(item => <ResponsiveSelectItem key={item.id} value={item.name}>{item.name}</ResponsiveSelectItem>)}
-                                                </ResponsiveSelect>
+                                                    items={stockItemsForSale}
+                                                />
                                             )}
                                         />
                                     )}
@@ -604,9 +615,8 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                                                 value={field.value}
                                                 title="Select a bank account"
                                                 placeholder="Select a bank account"
-                                            >
-                                                {banks.map(b => <ResponsiveSelectItem key={b.id} value={b.id}>{b.name}</ResponsiveSelectItem>)}
-                                            </ResponsiveSelect>
+                                                items={bankAccountItems}
+                                            />
                                         )}
                                     />
                                     {errors.bank_id && <p className="text-sm text-destructive">{errors.bank_id.message}</p>}
@@ -657,9 +667,8 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                                                     value={field.value}
                                                     title="Select destination bank"
                                                     placeholder="Select a bank account"
-                                                >
-                                                    {banks.map(b => <ResponsiveSelectItem key={b.id} value={b.id}>{b.name}</ResponsiveSelectItem>)}
-                                                </ResponsiveSelect>
+                                                    items={bankAccountItems}
+                                                />
                                             )}
                                         />
                                         {errors.transferToBankId && <p className="text-sm text-destructive">{errors.transferToBankId.message}</p>}
@@ -677,9 +686,8 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                                                     value={field.value}
                                                     title="Select source bank"
                                                     placeholder="Select a bank account"
-                                                >
-                                                    {banks.map(b => <ResponsiveSelectItem key={b.id} value={b.id}>{b.name}</ResponsiveSelectItem>)}
-                                                </ResponsiveSelect>
+                                                    items={bankAccountItems}
+                                                />
                                             )}
                                         />
                                         {errors.transferFromBankId && <p className="text-sm text-destructive">{errors.transferFromBankId.message}</p>}
@@ -725,12 +733,8 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                                                     value={field.value}
                                                     title={`Select a ${currentLedgerContactType}`}
                                                     placeholder={`Select a ${currentLedgerContactType}`}
-                                                >
-                                                    {currentLedgerContacts.map(c => <ResponsiveSelectItem key={c.id} value={c.id}>{c.name}</ResponsiveSelectItem>)}
-                                                    <ResponsiveSelectItem value="new">
-                                                      <span className="flex items-center gap-2"><Plus className="h-4 w-4"/>Add New</span>
-                                                    </ResponsiveSelectItem>
-                                                </ResponsiveSelect>
+                                                    items={currentLedgerContactItems}
+                                                />
                                             )}
                                         />
                                         {errors.contact_id && <p className="text-sm text-destructive">{errors.contact_id.message}</p>}

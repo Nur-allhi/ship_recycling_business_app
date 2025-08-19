@@ -23,7 +23,7 @@ import { EditTransactionSheet } from "./edit-transaction-sheet"
 import { DeleteConfirmationDialog } from "./delete-confirmation-dialog"
 import { Checkbox } from "./ui/checkbox"
 import { format, subMonths, addMonths } from "date-fns"
-import { ResponsiveSelect, ResponsiveSelectItem } from "@/components/ui/responsive-select"
+import { ResponsiveSelect } from "@/components/ui/responsive-select"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { Badge } from "./ui/badge"
 
@@ -166,6 +166,12 @@ export function CashTab() {
     if (sortKey !== key) return <ArrowUpDown className="ml-2 h-4 w-4 opacity-50" />;
     return sortDirection === 'desc' ? <ArrowDownCircle className="ml-2 h-4 w-4" /> : <ArrowUpCircle className="ml-2 h-4 w-4" />;
   };
+
+  const itemsPerPageItems = useMemo(() => [
+    { value: '10', label: '10 / page' },
+    { value: '20', label: '20 / page' },
+    { value: '30', label: '30 / page' },
+  ], []);
 
   const renderDesktopView = () => (
      <div className="overflow-x-auto">
@@ -401,11 +407,8 @@ export function CashTab() {
                 value={String(itemsPerPage)} 
                 onValueChange={(value) => { setItemsPerPage(Number(value)); setCurrentPage(1); }}
                 title="Records per page"
-               >
-                  <ResponsiveSelectItem value="10">10 / page</ResponsiveSelectItem>
-                  <ResponsiveSelectItem value="20">20 / page</ResponsiveSelectItem>
-                  <ResponsiveSelectItem value="30">30 / page</ResponsiveSelectItem>
-              </ResponsiveSelect>
+                items={itemsPerPageItems}
+               />
               <Button variant="outline" size="sm" onClick={() => setCurrentPage(prev => prev - 1)} disabled={currentPage === 1}>
                 Previous
               </Button>
@@ -433,5 +436,3 @@ export function CashTab() {
     </>
   )
 }
-
-    

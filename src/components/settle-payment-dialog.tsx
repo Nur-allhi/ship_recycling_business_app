@@ -23,7 +23,7 @@ import { cn } from '@/lib/utils';
 import { useAppContext } from '@/app/store';
 import { useToast } from '@/hooks/use-toast';
 import { Input } from './ui/input';
-import { ResponsiveSelect, ResponsiveSelectItem } from './ui/responsive-select';
+import { ResponsiveSelect } from './ui/responsive-select';
 
 interface AggregatedContact {
     contact_id: string;
@@ -92,6 +92,8 @@ export function SettlePaymentDialog({ isOpen, setIsOpen, contact }: SettlePaymen
             toast({ variant: 'destructive', title: 'Payment Failed', description: error.message });
         }
     };
+    
+    const bankAccountItems = banks.map(b => ({ value: b.id, label: b.name }));
 
     return (
         <Dialog open={isOpen} onOpenChange={setIsOpen}>
@@ -163,11 +165,8 @@ export function SettlePaymentDialog({ isOpen, setIsOpen, contact }: SettlePaymen
                                             value={field.value}
                                             title="Select a Bank Account"
                                             placeholder="Select a bank..."
-                                        >
-                                            {banks.map(bank => (
-                                                <ResponsiveSelectItem key={bank.id} value={bank.id}>{bank.name}</ResponsiveSelectItem>
-                                            ))}
-                                        </ResponsiveSelect>
+                                            items={bankAccountItems}
+                                        />
                                     )}
                                 />
                                 {errors.bank_id && <p className="text-sm text-destructive">{errors.bank_id.message}</p>}
