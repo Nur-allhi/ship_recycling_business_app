@@ -8,9 +8,10 @@ import { cn } from "@/lib/utils"
 
 interface DashboardTabProps {
   setActiveTab: (tab: string) => void;
+  loadDataForTab: (tab: 'cash' | 'bank' | 'stock' | 'credit' | 'settings') => Promise<void>;
 }
 
-export function DashboardTab({ setActiveTab }: DashboardTabProps) {
+export function DashboardTab({ setActiveTab, loadDataForTab }: DashboardTabProps) {
   const { cashBalance, bankBalance, stockItems, currency, initialBalanceSet } = useAppContext()
 
   const formatCurrency = (amount: number) => {
@@ -39,6 +40,11 @@ export function DashboardTab({ setActiveTab }: DashboardTabProps) {
     return <div className="text-xs text-muted-foreground animate-fade-in">{value}</div>;
   }
   
+  const handleCardClick = async (tab: 'cash' | 'bank' | 'stock') => {
+    await loadDataForTab(tab);
+    setActiveTab(tab);
+  }
+
   const StatCard = ({ title, value, subtext, icon: Icon, onClick }: { title: string, value: string | number, subtext: string, icon: React.ElementType, onClick?: () => void}) => (
       <Card onClick={onClick} className={cn(onClick && "cursor-pointer hover:bg-muted/50 transition-colors")}>
           <CardHeader>
@@ -58,9 +64,9 @@ export function DashboardTab({ setActiveTab }: DashboardTabProps) {
     <div className="space-y-6">
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <StatCard title="Total Balance" value={totalBalance} subtext="Cash + Bank combined" icon={LineChart} />
-        <StatCard title="Cash Balance" value={cashBalance} subtext="In-hand currency" icon={Wallet} onClick={() => setActiveTab('cash')} />
-        <StatCard title="Bank Balance" value={bankBalance} subtext="Managed by financial institutions" icon={Landmark} onClick={() => setActiveTab('bank')} />
-        <StatCard title="Stock Quantity" value={`${totalStockWeight.toFixed(2)} kg`} subtext={`Total Value: ${formatCurrency(totalStockValue)}`} icon={Boxes} onClick={() => setActiveTab('stock')} />
+        <StatCard title="Cash Balance" value={cashBalance} subtext="In-hand currency" icon={Wallet} onClick={() => handleCardClick('cash')} />
+        <StatCard title="Bank Balance" value={bankBalance} subtext="Managed by financial institutions" icon={Landmark} onClick={() => handleCardClick('bank')} />
+        <StatCard title="Stock Quantity" value={`${totalStockWeight.toFixed(2)} kg`} subtext={`Total Value: ${formatCurrency(totalStockValue)}`} icon={Boxes} onClick={() => handleCardClick('stock')} />
       </div>
     </div>
   )

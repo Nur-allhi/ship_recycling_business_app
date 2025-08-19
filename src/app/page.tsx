@@ -152,7 +152,7 @@ function ShipShapeLedger() {
                 </div>
              )}
             <TabsContent value="dashboard" className="mt-6 animate-slide-in-up">
-              <DashboardTab setActiveTab={setActiveTab} />
+              <DashboardTab setActiveTab={setActiveTab} loadDataForTab={loadDataForTab} />
             </TabsContent>
             <TabsContent value="cash" className="mt-6 animate-slide-in-up">
               <CashTab />
