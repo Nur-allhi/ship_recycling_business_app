@@ -18,7 +18,6 @@ import { RecycleBinTab } from "./recycle-bin-tab"
 import { ExportImportTab } from "./export-import-tab"
 import { ContactsTab } from "./contacts-tab"
 import { ActivityLogTab } from "./activity-log-tab"
-import { RadioGroup, RadioGroupItem } from "./ui/radio-group"
 
 export function SettingsTab() {
   const {
@@ -30,7 +29,6 @@ export function SettingsTab() {
     fontSize,
     setFontSize,
     cashCategories,
-    bankCategories,
     addCategory,
     deleteCategory,
     wastagePercentage,
@@ -47,8 +45,6 @@ export function SettingsTab() {
   const bankRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   const cashCategoryRef = useRef<HTMLInputElement>(null)
-  const bankCategoryRef = useRef<HTMLInputElement>(null)
-  const [bankCategoryDirection, setBankCategoryDirection] = useState<'deposit' | 'withdrawal'>('deposit');
   const wastageRef = useRef<HTMLInputElement>(null)
   
   const stockItemNameRef = useRef<HTMLInputElement>(null)
@@ -114,26 +110,17 @@ export function SettingsTab() {
     addInitialStockItem({ name, weight, pricePerKg: price });
     toast({ title: "Initial Stock Added", description: `${name} has been added to your inventory.` });
 
-    // Clear fields
     if(stockItemNameRef.current) stockItemNameRef.current.value = "";
     if(stockWeightRef.current) stockWeightRef.current.value = "";
     if(stockPriceRef.current) stockPriceRef.current.value = "";
   }
 
 
-  const handleAddCategory = (type: 'cash' | 'bank') => {
-    if (type === 'cash') {
-        const category = cashCategoryRef.current?.value.trim();
-        if (category) {
-            addCategory('cash', category);
-            if(cashCategoryRef.current) cashCategoryRef.current.value = "";
-        }
-    } else {
-        const category = bankCategoryRef.current?.value.trim();
-        if (category) {
-            addCategory('bank', category, bankCategoryDirection);
-            if(bankCategoryRef.current) bankCategoryRef.current.value = "";
-        }
+  const handleAddCategory = (type: 'cash') => {
+    const category = cashCategoryRef.current?.value.trim();
+    if (category) {
+        addCategory('cash', category);
+        if(cashCategoryRef.current) cashCategoryRef.current.value = "";
     }
   }
 
@@ -254,7 +241,7 @@ export function SettingsTab() {
             <Card>
               <CardHeader>
                 <CardTitle>Category Management</CardTitle>
-                <CardDescription>Customize categories for your transactions.</CardDescription>
+                <CardDescription>Customize categories for your cash transactions.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div>
@@ -270,31 +257,6 @@ export function SettingsTab() {
                         <button onClick={() => deleteCategory('cash', cat)} className="rounded-full hover:bg-muted-foreground/20">
                           <Trash2 className="h-3 w-3" />
                         </button>
-                      </Badge>
-                    ))}
-                  </div>
-                </div>
-                <Separator />
-                <div>
-                  <h3 className="font-semibold mb-2">Bank Categories</h3>
-                  <div className="space-y-3">
-                    <div className="flex gap-2">
-                      <Input placeholder="New bank category" ref={bankCategoryRef} />
-                      <Button size="icon" onClick={() => handleAddCategory('bank')}><Plus className="h-4 w-4" /></Button>
-                    </div>
-                    <RadioGroup 
-                      value={bankCategoryDirection} 
-                      onValueChange={(v) => setBankCategoryDirection(v as any)} 
-                      className="flex gap-4"
-                    >
-                        <Label className="flex items-center gap-2 cursor-pointer"><RadioGroupItem value="deposit"/>Deposit (In)</Label>
-                        <Label className="flex items-center gap-2 cursor-pointer"><RadioGroupItem value="withdrawal"/>Withdrawal (Out)</Label>
-                    </RadioGroup>
-                  </div>
-                   <div className="flex flex-wrap gap-2 mt-4">
-                    {bankCategories.filter(c => c.type !== 'prompt').map((cat, index) => (
-                      <Badge key={`${cat.name}-${cat.type}-${index}`} variant="secondary" className="flex items-center gap-2">
-                        <span>{cat.name} <span className="text-muted-foreground text-xs">({cat.type})</span></span>
                       </Badge>
                     ))}
                   </div>

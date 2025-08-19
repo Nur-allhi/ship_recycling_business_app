@@ -158,7 +158,6 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
   const bankCategory = watch('category');
   const [isNewStockItem, setIsNewStockItem] = useState(false);
   
-  // This is a workaround to make sure our complex validation has access to the latest state
   useEffect(() => {
     (window as any).__APP_STATE__ = { bankCategories };
   }, [bankCategories]);
@@ -400,7 +399,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                         <div className="space-y-4 pt-6">
                             <TabsContent value="cash" className="m-0 space-y-4 animate-fade-in">
                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
+                                <div className="md:col-span-2">
                                     {dateField}
                                 </div>
                                 <div className="space-y-2">
@@ -408,7 +407,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                                     <Input id="amount" type="number" step="0.01" {...register('amount')} placeholder="0.00"/>
                                     {errors.amount && <p className="text-sm text-destructive">{errors.amount.message}</p>}
                                 </div>
-                                <div className="space-y-2 md:col-span-2">
+                                <div className="space-y-2">
                                     <Label>Direction</Label>
                                     <Controller 
                                         control={control}
