@@ -224,34 +224,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
         });
     }
   }, [toast, logout]);
-
-  useEffect(() => {
-    const checkSessionAndLoadData = async () => {
-      try {
-        const session = await getSession();
-        if (session) {
-          // Only update user if it's different to prevent loops
-          if (session.id !== state.user?.id) {
-            setState(prev => ({...prev, user: session }));
-          }
-        } else {
-          setState(prev => ({ ...prev, isLoading: false, user: null }));
-        }
-      } catch (error) {
-        console.error("Failed to get session", error);
-        setState(prev => ({ ...prev, isLoading: false }));
-      }
-    };
-    checkSessionAndLoadData();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pathname]); // Check on path change
-
-  useEffect(() => {
-    if (state.user && !state.initialBalanceSet) {
-      reloadData({ force: true });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.user, state.initialBalanceSet]);
   
   const calculateBalancesAndStock = useCallback((
     cashTxs: CashTransaction[], 
@@ -391,6 +363,40 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setState(prev => ({...prev, isLoading: false}));
       }
   }, [state.initialBalanceSet, calculateBalancesAndStock, handleApiError]);
+
+  useEffect(() => {
+    const checkSessionAndLoadData = async () => {
+      setState(prev => ({ ...prev, isLoading: true }));
+      try {
+        const session = await getSession();
+        if (session) {
+          // Only update user if it's different to prevent loops
+          if (session.id !== state.user?.id) {
+            setState(prev => ({...prev, user: session, initialBalanceSet: false }));
+            // This triggers the data loading effect below
+          }
+        } else {
+          setState(prev => ({ ...prev, user: null }));
+        }
+      } catch (error) {
+        console.error("Failed to get session", error);
+      } finally {
+         setState(prev => ({ ...prev, isLoading: false }));
+      }
+    };
+    checkSessionAndLoadData();
+    // This effect should only run once on mount to check the initial session.
+    // Subsequent re-evaluation will be handled by the effect that watches `state.user`.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname]); // Also re-check session when navigating, e.g., from /login to /
+  
+  // This effect will run whenever the user state changes (e.g., after login)
+  // or if initial balances have not been set.
+  useEffect(() => {
+    if (state.user && !state.initialBalanceSet) {
+      reloadData({ force: true });
+    }
+  }, [state.user, state.initialBalanceSet, reloadData]);
   
   const loadRecycleBinData = useCallback(async () => {
     if(!state.user || state.user.role !== 'admin') return;
@@ -1196,3 +1202,5 @@ export function useAppContext() {
   }
   return context;
 }
+
+    
