@@ -21,10 +21,10 @@ import { cn } from '@/lib/utils';
 import { Separator } from './ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Alert, AlertTitle, AlertDescription } from './ui/alert';
-import { ScrollArea } from './ui/scroll-area';
+import { useIsMobile } from '@/hooks/use-mobile';
+
 
 const formSchema = z.object({
-  transactionType: z.enum(['cash', 'bank', 'stock', 'transfer', 'ap_ar']),
   amount: z.coerce.number().optional(),
   description: z.string().optional(),
   category: z.string().optional(),
@@ -55,60 +55,7 @@ const formSchema = z.object({
 
 
 }).superRefine((data, ctx) => {
-    if (data.transactionType === 'bank') {
-        if (!data.bank_id) ctx.addIssue({ code: 'custom', message: 'Please select a bank account.', path: ['bank_id'] });
-        if (!data.category) ctx.addIssue({ code: 'custom', message: 'Category is required.', path: ['category'] });
-        
-        if (data.category === 'A/R Settlement' || data.category === 'A/P Settlement') {
-             if (!data.contact_id) {
-                ctx.addIssue({ code: 'custom', message: `Please select a contact.`, path: ['contact_id'] });
-            }
-        } else {
-             if (!data.description) ctx.addIssue({ code: 'custom', message: 'Description is required.', path: ['description'] });
-        }
-    }
-    if (data.transactionType === 'stock') {
-        if (!data.stockType) ctx.addIssue({ code: 'custom', message: 'Please select purchase or sale.', path: ['stockType'] });
-        if (!data.stockItemName) ctx.addIssue({ code: 'custom', message: 'Stock item name is required.', path: ['stockItemName'] });
-        if (!data.weight || data.weight <= 0) ctx.addIssue({ code: 'custom', message: 'Weight must be positive.', path: ['weight'] });
-        if (data.pricePerKg === undefined || data.pricePerKg < 0) ctx.addIssue({ code: 'custom', message: 'Price must be non-negative.', path: ['pricePerKg'] });
-        if (!data.paymentMethod) ctx.addIssue({ code: 'custom', message: 'Payment method is required.', path: ['paymentMethod'] });
-        if (data.paymentMethod === 'bank' && !data.bank_id) ctx.addIssue({ code: 'custom', message: 'A bank account is required.', path: ['bank_id']});
-        
-        if (data.paymentMethod === 'credit') {
-            const contactType = data.stockType === 'purchase' ? 'Vendor' : 'Client';
-            if (data.contact_id === 'new' && !data.newContact) {
-                ctx.addIssue({ code: 'custom', message: `New ${contactType} name is required.`, path: ['newContact'] });
-            }
-            if (!data.contact_id) {
-                ctx.addIssue({ code: 'custom', message: `Please select a ${contactType}.`, path: ['contact_id'] });
-            }
-        }
-    }
-    if (['cash', 'bank', 'transfer', 'ap_ar'].includes(data.transactionType)) {
-        if(!data.amount || data.amount <=0) ctx.addIssue({ code: 'custom', message: 'Amount must be positive.', path: ['amount'] });
-    }
-    if(data.transactionType === 'cash') {
-        if (!data.category) ctx.addIssue({ code: 'custom', message: 'Category is required.', path: ['category'] });
-        if (!data.description) ctx.addIssue({ code: 'custom', message: 'Description is required.', path: ['description'] });
-    }
-    if(data.transactionType === 'transfer') {
-        if (!data.transferFrom) ctx.addIssue({ code: 'custom', message: 'Transfer source is required.', path: ['transferFrom'] });
-        if (data.transferFrom === 'cash' && !data.transferToBankId) ctx.addIssue({ code: 'custom', message: 'Destination bank is required.', path: ['transferToBankId']});
-        if (data.transferFrom === 'bank' && !data.transferFromBankId) ctx.addIssue({ code: 'custom', message: 'Source bank is required.', path: ['transferFromBankId']});
-    }
-    if(data.transactionType === 'ap_ar') {
-        const contactType = data.ledgerType === 'payable' ? 'Vendor' : 'Client';
-        if (!data.ledgerType) ctx.addIssue({ code: 'custom', message: 'Please select Payable or Receivable.', path: ['ledgerType'] });
-        if (!data.description) ctx.addIssue({ code: 'custom', message: 'Description is required.', path: ['description'] });
-        
-        if (data.contact_id === 'new' && !data.newContact) {
-            ctx.addIssue({ code: 'custom', message: `New ${contactType} name is required.`, path: ['newContact'] });
-        }
-        if (!data.contact_id) {
-            ctx.addIssue({ code: 'custom', message: `Please select a ${contactType}.`, path: ['contact_id'] });
-        }
-    }
+    // This superRefine is now less critical as we switch form schemas, but kept for safety.
 });
 
 
@@ -118,7 +65,100 @@ interface UnifiedTransactionFormProps {
   setDialogOpen: (open: boolean) => void;
 }
 
+const baseSchema = z.object({
+    date: z.date({ required_error: "Date is required." }),
+});
+
+const cashSchema = baseSchema.extend({
+    amount: z.coerce.number({ required_error: "Amount is required." }).positive("Amount must be positive."),
+    category: z.string({ required_error: "Category is required." }),
+    description: z.string().min(1, "Description is required."),
+});
+
+const bankSchema = baseSchema.extend({
+    amount: z.coerce.number({ required_error: "Amount is required." }).positive("Amount must be positive."),
+    bank_id: z.string({ required_error: "Bank account is required." }),
+    category: z.string({ required_error: "Category is required." }),
+    description: z.string().optional(), // Optional because it can be derived for settlements
+    contact_id: z.string().optional(),
+}).superRefine((data, ctx) => {
+    if (data.category === 'A/R Settlement' || data.category === 'A/P Settlement') {
+        if (!data.contact_id) {
+           ctx.addIssue({ code: 'custom', message: `A contact is required for settlements.`, path: ['contact_id'] });
+        }
+    } else {
+        if (!data.description || data.description.length === 0) {
+            ctx.addIssue({ code: 'custom', message: `Description is required for this category.`, path: ['description'] });
+        }
+    }
+});
+
+
+const stockSchema = baseSchema.extend({
+    stockType: z.enum(['purchase', 'sale'], { required_error: "Please select purchase or sale."}),
+    stockItemName: z.string({ required_error: "Item name is required." }),
+    weight: z.coerce.number().positive(),
+    pricePerKg: z.coerce.number().nonnegative(),
+    paymentMethod: z.enum(['cash', 'bank', 'credit'], { required_error: "Payment method is required." }),
+    description: z.string().optional(),
+    bank_id: z.string().optional(),
+    contact_id: z.string().optional(),
+    newContact: z.string().optional(),
+}).superRefine((data, ctx) => {
+    if (data.paymentMethod === 'bank' && !data.bank_id) {
+        ctx.addIssue({ code: 'custom', message: 'Bank account is required.', path: ['bank_id'] });
+    }
+    if (data.paymentMethod === 'credit') {
+        if (!data.contact_id) {
+            ctx.addIssue({ code: 'custom', message: 'A contact is required for credit transactions.', path: ['contact_id'] });
+        }
+        if (data.contact_id === 'new' && (!data.newContact || data.newContact.trim().length === 0)) {
+            ctx.addIssue({ code: 'custom', message: 'New contact name is required.', path: ['newContact'] });
+        }
+    }
+});
+
+const transferSchema = baseSchema.extend({
+    amount: z.coerce.number().positive(),
+    transferFrom: z.enum(['cash', 'bank'], { required_error: "Please select transfer source."}),
+    transferToBankId: z.string().optional(),
+    transferFromBankId: z.string().optional(),
+}).superRefine((data, ctx) => {
+    if (data.transferFrom === 'cash' && !data.transferToBankId) {
+        ctx.addIssue({ code: 'custom', message: 'Destination bank is required.', path: ['transferToBankId'] });
+    }
+    if (data.transferFrom === 'bank' && !data.transferFromBankId) {
+        ctx.addIssue({ code: 'custom', message: 'Source bank is required.', path: ['transferFromBankId'] });
+    }
+});
+
+const apArSchema = baseSchema.extend({
+    amount: z.coerce.number().positive(),
+    ledgerType: z.enum(['payable', 'receivable'], { required_error: "Please select payable or receivable." }),
+    contact_id: z.string({ required_error: "A contact is required." }),
+    newContact: z.string().optional(),
+    description: z.string().min(1, "Description is required."),
+}).superRefine((data, ctx) => {
+    if (data.contact_id === 'new' && (!data.newContact || data.newContact.trim().length === 0)) {
+        ctx.addIssue({ code: 'custom', message: 'New contact name is required.', path: ['newContact'] });
+    }
+});
+
+
+const formSchemas = {
+    cash: cashSchema,
+    bank: bankSchema,
+    stock: stockSchema,
+    transfer: transferSchema,
+    ap_ar: apArSchema,
+};
+
+type TransactionType = keyof typeof formSchemas;
+
 export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionFormProps) {
+  const [transactionType, setTransactionType] = useState<TransactionType>('cash');
+  const isMobile = useIsMobile();
+  
   const { 
     addCashTransaction, 
     addBankTransaction, 
@@ -137,18 +177,17 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
   } = useAppContext();
   
   const { toast } = useToast();
-  
-  const { register, handleSubmit, control, watch, reset, setValue, formState: { errors, isSubmitting } } = useForm<FormData>({
-    resolver: zodResolver(formSchema),
+
+  const currentSchema = formSchemas[transactionType];
+
+  const { register, handleSubmit, control, watch, reset, setValue, formState: { errors, isSubmitting } } = useForm({
+    resolver: zodResolver(currentSchema),
     defaultValues: {
-        transactionType: 'cash',
-        amount: undefined,
-        description: "",
         date: new Date(),
     }
   });
-
-  const transactionType = watch('transactionType');
+  
+  // Watch for changes in fields that affect other parts of the form
   const stockType = watch('stockType');
   const stockPaymentMethod = watch('paymentMethod');
   const ledgerType = watch('ledgerType');
@@ -160,9 +199,6 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
   useEffect(() => {
     reset({
         date: new Date(),
-        amount: undefined,
-        description: "",
-        transactionType: transactionType as any
     });
     setIsNewStockItem(false);
   }, [transactionType, reset]);
@@ -172,10 +208,10 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
     setValue('newContact', '');
   }, [stockType, ledgerType, bankCategoryName, setValue]);
 
-  const onSubmit = async (data: FormData) => {
+  const onSubmit = async (data: any) => {
     const transactionDate = data.date.toISOString();
     try {
-        switch(data.transactionType) {
+        switch(transactionType) {
             case 'cash': {
                 const category = cashCategories.find(c => c.name === data.category);
                 if (!category || !category.direction) throw new Error("Selected category is invalid.");
@@ -254,7 +290,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                 const contactList = data.ledgerType === 'payable' ? vendors : clients;
 
                 if (data.contact_id === 'new') {
-                    const newContact = await (data.ledgerType === 'payable' ? addVendor(data.newContact!) : addClient(data.newContact!));
+                    const newContact = await (data.ledgerType === 'payable' ? addVendor(data.newContact!) : await addClient(data.newContact!));
                     if (!newContact) throw new Error(`Failed to create new ${contactType}.`);
                     ledgerContactId = newContact.id;
                     ledgerContactName = newContact.name;
@@ -322,7 +358,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                 </Popover>
             )}
         />
-        {errors.date && <p className="text-sm text-destructive">{errors.date.message}</p>}
+        {errors.date && <p className="text-sm text-destructive">{(errors.date as any).message}</p>}
     </div>
   )
 
@@ -354,7 +390,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                 />
             )}
         />
-        {errors.contact_id && <p className="text-sm text-destructive">{errors.contact_id.message}</p>}
+        {errors.contact_id && <p className="text-sm text-destructive">{(errors.contact_id as any).message}</p>}
     
         {contact_id === 'new' && (
             <div className="flex items-end gap-2 pt-2 animate-fade-in">
@@ -364,12 +400,12 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                 </div>
             </div>
         )}
-        {errors.newContact && <p className="text-sm text-destructive">{errors.newContact.message}</p>}
+        {errors.newContact && <p className="text-sm text-destructive">{(errors.newContact as any).message}</p>}
     </div>
   )
   
-  const cashCategoryItems = useMemo(() => cashCategories.map(c => ({ value: c.name, label: `${c.name} (${c.direction})` })), [cashCategories]);
-  const bankCategoryItems = useMemo(() => bankCategories.map(c => ({ value: c.name, label: `${c.name} (${c.direction})` })), [bankCategories]);
+  const cashCategoryItems = useMemo(() => cashCategories.filter(c => c.direction).map(c => ({ value: c.name, label: `${c.name} (${c.direction})` })), [cashCategories]);
+  const bankCategoryItems = useMemo(() => bankCategories.map(c => ({ value: c.name, label: `${c.name} (${c.direction ? c.direction : 'Settlement'})` })), [bankCategories]);
   const bankAccountItems = useMemo(() => banks.map(b => ({ value: b.id, label: b.name })), [banks]);
   const stockItemsForSale = useMemo(() => stockItems.filter(i => i.weight > 0).map(item => ({ value: item.name, label: item.name })), [stockItems]);
   const stockItemsForPurchase = useMemo(() => stockItems.map(item => ({ value: item.name, label: item.name })), [stockItems]);
@@ -382,6 +418,14 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
     { value: 'new', label: <span className="flex items-center gap-2"><Plus className="h-4 w-4"/>Add New</span>}
   ], [clients]);
   const currentLedgerContactItems = ledgerType === 'payable' ? vendorContactItems : clientContactItems;
+  
+  const transactionTypeItems: {value: TransactionType, label: string, icon: React.ElementType}[] = [
+      { value: 'cash', label: 'Cash', icon: Wallet },
+      { value: 'bank', label: 'Bank', icon: Landmark },
+      { value: 'stock', label: 'Stock', icon: Boxes },
+      { value: 'transfer', label: 'Transfer', icon: ArrowRightLeft },
+      { value: 'ap_ar', label: 'A/R & A/P', icon: UserPlus },
+  ];
 
   return (
     <>
@@ -389,386 +433,396 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
         <DialogTitle className="flex items-center"><PlusCircle className="mr-2 h-6 w-6" /> Add a New Transaction</DialogTitle>
         <DialogDescription>Select a transaction type and fill in the details below.</DialogDescription>
       </DialogHeader>
-        <Controller
-            control={control}
-            name="transactionType"
-            rules={{ required: true }}
-            render={({ field }) => (
-                <Tabs value={field.value} onValueChange={field.onChange} className="w-full">
-                    <ScrollArea className="w-full whitespace-nowrap">
-                        <TabsList className="relative w-max sm:w-full sm:grid sm:grid-cols-5">
-                            <TabsTrigger value="cash"><Wallet className="mr-1 h-4 w-4" />Cash</TabsTrigger>
-                            <TabsTrigger value="bank"><Landmark className="mr-1 h-4 w-4" />Bank</TabsTrigger>
-                            <TabsTrigger value="stock"><Boxes className="mr-1 h-4 w-4" />Stock</TabsTrigger>
-                            <TabsTrigger value="transfer"><ArrowRightLeft className="mr-1 h-4 w-4" />Transfer</TabsTrigger>
-                            <TabsTrigger value="ap_ar"><UserPlus className="mr-1 h-4 w-4" />A/R &amp; A/P</TabsTrigger>
-                        </TabsList>
-                    </ScrollArea>
-                    <form onSubmit={handleSubmit(onSubmit)}>
-                        <div className="space-y-4 pt-6">
-                            <TabsContent value="cash" className="m-0 space-y-4 animate-fade-in">
-                               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div className="md:col-span-2">
-                                    {dateField}
-                                </div>
-                                <div className="space-y-2">
-                                    <Label htmlFor="amount">Amount</Label>
-                                    <Input id="amount" type="number" step="0.01" {...register('amount')} placeholder="0.00"/>
-                                    {errors.amount && <p className="text-sm text-destructive">{errors.amount.message}</p>}
-                                </div>
-                              </div>
-                               <div className="space-y-2">
-                                    <Label>Category</Label>
-                                    <Controller
-                                        control={control}
-                                        name="category"
-                                        render={({ field }) => (
-                                            <ResponsiveSelect 
-                                                onValueChange={field.onChange} 
-                                                value={field.value}
-                                                title="Select a category"
-                                                placeholder="Select a category"
-                                                items={cashCategoryItems}
-                                            />
-                                        )}
-                                    />
-                                    {errors.category && <p className="text-sm text-destructive">{errors.category.message}</p>}
-                                </div>
-                                 <div className="space-y-2">
-                                    <Label htmlFor="description-cash">Description</Label>
-                                    <Input id="description-cash" {...register('description')} placeholder="e.g., Weekly groceries" />
-                                    {errors.description && <p className="text-sm text-destructive">{errors.description.message}</p>}
-                                </div>
-                            </TabsContent>
+      
+      <div className="py-4">
+        {isMobile ? (
+             <ResponsiveSelect 
+                value={transactionType}
+                onValueChange={(value) => setTransactionType(value as TransactionType)}
+                title="Select Transaction Type"
+                items={transactionTypeItems.map(item => ({value: item.value, label: <span className="flex items-center gap-2"><item.icon className="h-4 w-4" />{item.label}</span>}))}
+            />
+        ) : (
+            <Tabs value={transactionType} onValueChange={(value) => setTransactionType(value as TransactionType)} className="w-full">
+                <TabsList className="w-full grid grid-cols-5">
+                     {transactionTypeItems.map(item => (
+                        <TabsTrigger key={item.value} value={item.value}><item.icon className="mr-1 h-4 w-4" />{item.label}</TabsTrigger>
+                     ))}
+                </TabsList>
+            </Tabs>
+        )}
+      </div>
 
-                            <TabsContent value="bank" className="m-0 space-y-4 animate-fade-in">
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
-                                    <div className="md:col-span-2">{dateField}</div>
-                                    <div className="space-y-2">
-                                        <Label htmlFor="amount-bank">Amount</Label>
-                                        <Input id="amount-bank" type="number" step="0.01" {...register('amount')} placeholder="0.00"/>
-                                        {errors.amount && <p className="text-sm text-destructive">{errors.amount.message}</p>}
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Label>Bank Account</Label>
-                                        <Controller
-                                            control={control}
-                                            name="bank_id"
-                                            render={({ field }) => (
-                                                <ResponsiveSelect 
-                                                    onValueChange={field.onChange} 
-                                                    value={field.value}
-                                                    title="Select a bank account"
-                                                    placeholder="Select a bank account"
-                                                    items={bankAccountItems}
-                                                />
-                                            )}
-                                        />
-                                        {errors.bank_id && <p className="text-sm text-destructive">{errors.bank_id.message}</p>}
-                                    </div>
-                                </div>
-                                 <div className="space-y-2">
-                                    <Label>Category</Label>
+      <form onSubmit={handleSubmit(onSubmit)}>
+          <div className="space-y-4">
+              {transactionType === 'cash' && (
+                  <div className="m-0 space-y-4 animate-fade-in">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="md:col-span-2">{dateField}</div>
+                        <div className="space-y-2">
+                            <Label htmlFor="amount">Amount</Label>
+                            <Input id="amount" type="number" step="0.01" {...register('amount')} placeholder="0.00"/>
+                            {errors.amount && <p className="text-sm text-destructive">{(errors.amount as any).message}</p>}
+                        </div>
+                    </div>
+                    <div className="space-y-2">
+                        <Label>Category</Label>
+                        <Controller
+                            control={control}
+                            name="category"
+                            render={({ field }) => (
+                                <ResponsiveSelect 
+                                    onValueChange={field.onChange} 
+                                    value={field.value}
+                                    title="Select a category"
+                                    placeholder="Select a category"
+                                    items={cashCategoryItems}
+                                />
+                            )}
+                        />
+                        {errors.category && <p className="text-sm text-destructive">{(errors.category as any).message}</p>}
+                    </div>
+                        <div className="space-y-2">
+                        <Label htmlFor="description-cash">Description</Label>
+                        <Input id="description-cash" {...register('description')} placeholder="e.g., Weekly groceries" />
+                        {errors.description && <p className="text-sm text-destructive">{(errors.description as any).message}</p>}
+                    </div>
+                  </div>
+              )}
+
+              {transactionType === 'bank' && (
+                  <div className="m-0 space-y-4 animate-fade-in">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
+                        <div className="md:col-span-2">{dateField}</div>
+                        <div className="space-y-2">
+                            <Label htmlFor="amount-bank">Amount</Label>
+                            <Input id="amount-bank" type="number" step="0.01" {...register('amount')} placeholder="0.00"/>
+                            {errors.amount && <p className="text-sm text-destructive">{(errors.amount as any).message}</p>}
+                        </div>
+                        <div className="space-y-2">
+                            <Label>Bank Account</Label>
+                            <Controller
+                                control={control}
+                                name="bank_id"
+                                render={({ field }) => (
+                                    <ResponsiveSelect 
+                                        onValueChange={field.onChange} 
+                                        value={field.value}
+                                        title="Select a bank account"
+                                        placeholder="Select a bank account"
+                                        items={bankAccountItems}
+                                    />
+                                )}
+                            />
+                            {errors.bank_id && <p className="text-sm text-destructive">{(errors.bank_id as any).message}</p>}
+                        </div>
+                    </div>
+                        <div className="space-y-2">
+                        <Label>Category</Label>
+                        <Controller
+                            control={control}
+                            name="category"
+                            render={({ field }) => (
+                                <ResponsiveSelect
+                                    onValueChange={field.onChange}
+                                    value={field.value}
+                                    title="Select a category"
+                                    placeholder="Select a category"
+                                    items={bankCategoryItems}
+                                />
+                            )}
+                        />
+                        {errors.category && <p className="text-sm text-destructive">{(errors.category as any).message}</p>}
+                    </div>
+                    {bankCategoryName === 'A/R Settlement' && (
+                            <div className="space-y-2 animate-fade-in">
+                            <Label>Client</Label>
+                            <Controller
+                                control={control}
+                                name="contact_id"
+                                render={({ field }) => (
+                                    <ResponsiveSelect onValueChange={field.onChange} value={field.value} title="Select a Client" placeholder="Select a client" items={clientContactItems.filter(c => c.value !== 'new')} />
+                                )}
+                            />
+                            {errors.contact_id && <p className="text-sm text-destructive">{(errors.contact_id as any).message}</p>}
+                        </div>
+                    )}
+                    {bankCategoryName === 'A/P Settlement' && (
+                            <div className="space-y-2 animate-fade-in">
+                            <Label>Vendor</Label>
+                            <Controller
+                                control={control}
+                                name="contact_id"
+                                render={({ field }) => (
+                                    <ResponsiveSelect onValueChange={field.onChange} value={field.value} title="Select a Vendor" placeholder="Select a vendor" items={vendorContactItems.filter(c => c.value !== 'new')} />
+                                )}
+                            />
+                            {errors.contact_id && <p className="text-sm text-destructive">{(errors.contact_id as any).message}</p>}
+                        </div>
+                    )}
+                    {(bankCategoryName !== 'A/R Settlement' && bankCategoryName !== 'A/P Settlement') && (
+                        <div className="space-y-2">
+                            <Label htmlFor="description-bank">Description</Label>
+                            <Input id="description-bank" {...register('description')} placeholder="e.g., Monthly salary" />
+                            {errors.description && <p className="text-sm text-destructive">{(errors.description as any).message}</p>}
+                        </div>
+                    )}
+                  </div>
+              )}
+              
+              {transactionType === 'stock' && (
+                  <div className="m-0 space-y-4 animate-fade-in">
+                    {dateField}
+                    <div className="space-y-2">
+                        <Label>Transaction Type</Label>
+                            <Controller 
+                            control={control}
+                            name="stockType"
+                            render={({ field }) => (
+                                <RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex pt-2 gap-4">
+                                    <Label htmlFor="purchase" className="flex items-center gap-2 cursor-pointer"><RadioGroupItem value="purchase" id="purchase" />Purchase</Label>
+                                    <Label htmlFor="sale" className="flex items-center gap-2 cursor-pointer"><RadioGroupItem value="sale" id="sale" />Sale</Label>
+                                </RadioGroup>
+                            )}
+                        />
+                        {errors.stockType && <p className="text-sm text-destructive">{(errors.stockType as any).message}</p>}
+                    </div>
+                    <div className="space-y-2">
+                        <Label>Item Name</Label>
+                        {stockType === 'purchase' ? (
+                            <div className="flex items-center gap-2">
+                                {isNewStockItem ? (
+                                    <Input {...register('stockItemName')} placeholder="e.g. Iron Rod"/>
+                                ) : (
                                     <Controller
                                         control={control}
-                                        name="category"
+                                        name="stockItemName"
                                         render={({ field }) => (
                                             <ResponsiveSelect
                                                 onValueChange={field.onChange}
                                                 value={field.value}
-                                                title="Select a category"
-                                                placeholder="Select a category"
-                                                items={bankCategoryItems}
+                                                title="Select an item"
+                                                placeholder="Select existing item"
+                                                className="flex-1"
+                                                items={stockItemsForPurchase}
                                             />
                                         )}
                                     />
-                                    {errors.category && <p className="text-sm text-destructive">{errors.category.message}</p>}
-                                </div>
-                                {bankCategoryName === 'A/R Settlement' && (
-                                     <div className="space-y-2 animate-fade-in">
-                                        <Label>Client</Label>
-                                        <Controller
-                                            control={control}
-                                            name="contact_id"
-                                            render={({ field }) => (
-                                                <ResponsiveSelect onValueChange={field.onChange} value={field.value} title="Select a Client" placeholder="Select a client" items={clientContactItems.filter(c => c.value !== 'new')} />
-                                            )}
-                                        />
-                                        {errors.contact_id && <p className="text-sm text-destructive">{errors.contact_id.message}</p>}
-                                    </div>
                                 )}
-                                {bankCategoryName === 'A/P Settlement' && (
-                                     <div className="space-y-2 animate-fade-in">
-                                        <Label>Vendor</Label>
-                                        <Controller
-                                            control={control}
-                                            name="contact_id"
-                                            render={({ field }) => (
-                                                <ResponsiveSelect onValueChange={field.onChange} value={field.value} title="Select a Vendor" placeholder="Select a vendor" items={vendorContactItems.filter(c => c.value !== 'new')} />
-                                            )}
-                                        />
-                                        {errors.contact_id && <p className="text-sm text-destructive">{errors.contact_id.message}</p>}
-                                    </div>
-                                )}
-                                {(bankCategoryName !== 'A/R Settlement' && bankCategoryName !== 'A/P Settlement') && (
-                                    <div className="space-y-2">
-                                        <Label htmlFor="description-bank">Description</Label>
-                                        <Input id="description-bank" {...register('description')} placeholder="e.g., Monthly salary" />
-                                        {errors.description && <p className="text-sm text-destructive">{errors.description.message}</p>}
-                                    </div>
-                                )}
-                            </TabsContent>
-                            
-                            <TabsContent value="stock" className="m-0 space-y-4 animate-fade-in">
-                                {dateField}
-                                <div className="space-y-2">
-                                    <Label>Transaction Type</Label>
-                                     <Controller 
-                                        control={control}
-                                        name="stockType"
-                                        render={({ field }) => (
-                                            <RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex pt-2 gap-4">
-                                                <Label htmlFor="purchase" className="flex items-center gap-2 cursor-pointer"><RadioGroupItem value="purchase" id="purchase" />Purchase</Label>
-                                                <Label htmlFor="sale" className="flex items-center gap-2 cursor-pointer"><RadioGroupItem value="sale" id="sale" />Sale</Label>
-                                            </RadioGroup>
-                                        )}
+                                <Button type="button" variant="outline" size="sm" onClick={() => setIsNewStockItem(prev => !prev)}>
+                                    {isNewStockItem ? 'Select Existing' : 'Add New'}
+                                </Button>
+                            </div>
+                        ) : (
+                            <Controller
+                                control={control}
+                                name="stockItemName"
+                                render={({ field }) => (
+                                    <ResponsiveSelect
+                                        onValueChange={field.onChange}
+                                        value={field.value}
+                                        title="Select an item"
+                                        placeholder="Select item to sell"
+                                        items={stockItemsForSale}
                                     />
-                                    {errors.stockType && <p className="text-sm text-destructive">{errors.stockType.message}</p>}
-                                </div>
-                                <div className="space-y-2">
-                                    <Label>Item Name</Label>
-                                    {stockType === 'purchase' ? (
-                                        <div className="flex items-center gap-2">
-                                            {isNewStockItem ? (
-                                                <Input {...register('stockItemName')} placeholder="e.g. Iron Rod"/>
-                                            ) : (
-                                                <Controller
-                                                    control={control}
-                                                    name="stockItemName"
-                                                    render={({ field }) => (
-                                                        <ResponsiveSelect
-                                                            onValueChange={field.onChange}
-                                                            value={field.value}
-                                                            title="Select an item"
-                                                            placeholder="Select existing item"
-                                                            className="flex-1"
-                                                            items={stockItemsForPurchase}
-                                                        />
-                                                    )}
-                                                />
-                                            )}
-                                            <Button type="button" variant="outline" size="sm" onClick={() => setIsNewStockItem(prev => !prev)}>
-                                                {isNewStockItem ? 'Select Existing' : 'Add New'}
-                                            </Button>
-                                        </div>
-                                    ) : (
-                                        <Controller
-                                            control={control}
-                                            name="stockItemName"
-                                            render={({ field }) => (
-                                                <ResponsiveSelect
-                                                    onValueChange={field.onChange}
-                                                    value={field.value}
-                                                    title="Select an item"
-                                                    placeholder="Select item to sell"
-                                                    items={stockItemsForSale}
-                                                />
-                                            )}
-                                        />
-                                    )}
-                                    {errors.stockItemName && <p className="text-sm text-destructive">{errors.stockItemName.message}</p>}
-                                </div>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div className="space-y-2">
-                                        <Label>Weight (kg)</Label>
-                                        <Input type="number" step="0.01" {...register('weight')} placeholder="0.00"/>
-                                        {errors.weight && <p className="text-sm text-destructive">{errors.weight.message}</p>}
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Label>Price per kg</Label>
-                                        <Input type="number" step="0.01" {...register('pricePerKg')} placeholder="0.00"/>
-                                        {errors.pricePerKg && <p className="text-sm text-destructive">{errors.pricePerKg.message}</p>}
-                                    </div>
-                                </div>
-                                <div className="space-y-2">
-                                    <Label>Payment Method</Label>
-                                    <Controller 
-                                        control={control}
-                                        name="paymentMethod"
-                                        render={({ field }) => (
-                                            <RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex pt-2 gap-4">
-                                                <Label htmlFor="cash-payment" className="flex items-center gap-2 cursor-pointer"><RadioGroupItem value="cash" id="cash-payment" /><span>Cash</span></Label>
-                                                <Label htmlFor="bank-payment" className="flex items-center gap-2 cursor-pointer"><RadioGroupItem value="bank" id="bank-payment" /><span>Bank</span></Label>
-                                                <Label htmlFor="credit-payment" className="flex items-center gap-2 cursor-pointer"><RadioGroupItem value="credit" id="credit-payment" /><span>Credit</span></Label>
-                                            </RadioGroup>
-                                        )}
-                                    />
-                                    {errors.paymentMethod && <p className="text-sm text-destructive">{errors.paymentMethod.message}</p>}
-                                </div>
-                                {stockPaymentMethod === 'bank' && (
-                                    <div className="space-y-2 animate-fade-in">
-                                    <Label>Bank Account</Label>
-                                    <Controller
-                                        control={control}
-                                        name="bank_id"
-                                        render={({ field }) => (
-                                            <ResponsiveSelect 
-                                                onValueChange={field.onChange} 
-                                                value={field.value}
-                                                title="Select a bank account"
-                                                placeholder="Select a bank account"
-                                                items={bankAccountItems}
-                                            />
-                                        )}
-                                    />
-                                    {errors.bank_id && <p className="text-sm text-destructive">{errors.bank_id.message}</p>}
-                                </div>
                                 )}
-                                {stockPaymentMethod === 'credit' && stockType && stockCreditFields}
-                                <div className="space-y-2">
-                                    <Label htmlFor="description-stock">Description</Label>
-                                    <Input id="description-stock" {...register('description')} placeholder="Optional notes (e.g., invoice #)" />
-                                    {errors.description && <p className="text-sm text-destructive">{errors.description.message}</p>}
-                                </div>
-                            </TabsContent>
-
-                            <TabsContent value="transfer" className="m-0 space-y-4 animate-fade-in">
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div>
-                                        {dateField}
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Label htmlFor="amount-transfer">Amount</Label>
-                                        <Input id="amount-transfer" type="number" step="0.01" {...register('amount')} placeholder="0.00"/>
-                                        {errors.amount && <p className="text-sm text-destructive">{errors.amount.message}</p>}
-                                    </div>
-                                </div>
-                                <div className="space-y-2">
-                                    <Label>Transfer Direction</Label>
-                                    <Controller 
-                                        control={control}
-                                        name="transferFrom"
-                                        render={({ field }) => (
-                                            <RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex flex-col sm:flex-row pt-2 gap-4">
-                                                <Label htmlFor="from_cash" className="flex items-center gap-2 cursor-pointer"><RadioGroupItem value="cash" id="from_cash" /><span>Cash to Bank</span></Label>
-                                                <Label htmlFor="from_bank" className="flex items-center gap-2 cursor-pointer"><RadioGroupItem value="bank" id="from_bank" /><span>Bank to Cash</span></Label>
-                                            </RadioGroup>
-                                        )}
-                                    />
-                                    {errors.transferFrom && <p className="text-sm text-destructive">{errors.transferFrom.message}</p>}
-                                </div>
-                                {transferFrom === 'cash' && (
-                                    <div className="space-y-2 animate-fade-in">
-                                        <Label>To Bank Account</Label>
-                                        <Controller
-                                            control={control}
-                                            name="transferToBankId"
-                                            render={({ field }) => (
-                                                <ResponsiveSelect 
-                                                    onValueChange={field.onChange} 
-                                                    value={field.value}
-                                                    title="Select destination bank"
-                                                    placeholder="Select a bank account"
-                                                    items={bankAccountItems}
-                                                />
-                                            )}
-                                        />
-                                        {errors.transferToBankId && <p className="text-sm text-destructive">{errors.transferToBankId.message}</p>}
-                                    </div>
-                                )}
-                                {transferFrom === 'bank' && (
-                                    <div className="space-y-2 animate-fade-in">
-                                        <Label>From Bank Account</Label>
-                                        <Controller
-                                            control={control}
-                                            name="transferFromBankId"
-                                            render={({ field }) => (
-                                                <ResponsiveSelect 
-                                                    onValueChange={field.onChange} 
-                                                    value={field.value}
-                                                    title="Select source bank"
-                                                    placeholder="Select a bank account"
-                                                    items={bankAccountItems}
-                                                />
-                                            )}
-                                        />
-                                        {errors.transferFromBankId && <p className="text-sm text-destructive">{errors.transferFromBankId.message}</p>}
-                                    </div>
-                                )}
-                            </TabsContent>
-
-                             <TabsContent value="ap_ar" className="m-0 space-y-4 animate-fade-in">
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div>
-                                        {dateField}
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Label htmlFor="amount-ledger">Amount</Label>
-                                        <Input id="amount-ledger" type="number" step="0.01" {...register('amount')} placeholder="0.00"/>
-                                        {errors.amount && <p className="text-sm text-destructive">{errors.amount.message}</p>}
-                                    </div>
-                                </div>
-                                <div className="space-y-2">
-                                    <Label>Type</Label>
-                                    <Controller 
-                                        control={control}
-                                        name="ledgerType"
-                                        render={({ field }) => (
-                                            <RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex pt-2 gap-4">
-                                                <Label className="flex items-center gap-2 cursor-pointer"><RadioGroupItem value="payable" />Payable (Expense on Credit)</Label>
-                                                <Label className="flex items-center gap-2 cursor-pointer"><RadioGroupItem value="receivable" />Receivable (Sale on Credit)</Label>
-                                            </RadioGroup>
-                                        )}
-                                    />
-                                    {errors.ledgerType && <p className="text-sm text-destructive">{errors.ledgerType.message}</p>}
-                                </div>
-
-                                {ledgerType && (
-                                    <div className="space-y-2 animate-fade-in">
-                                        <Label>{currentLedgerContactType}</Label>
-                                        <Controller
-                                            control={control}
-                                            name="contact_id"
-                                            render={({ field }) => (
-                                                <ResponsiveSelect
-                                                    onValueChange={field.onChange}
-                                                    value={field.value}
-                                                    title={`Select a ${currentLedgerContactType}`}
-                                                    placeholder={`Select a ${currentLedgerContactType}`}
-                                                    items={currentLedgerContactItems}
-                                                />
-                                            )}
-                                        />
-                                        {errors.contact_id && <p className="text-sm text-destructive">{errors.contact_id.message}</p>}
-                                    
-                                        {contact_id === 'new' && (
-                                            <div className="flex items-end gap-2 pt-2 animate-fade-in">
-                                                <div className="flex-grow space-y-1">
-                                                    <Label htmlFor="newContact">New {currentLedgerContactType} Name</Label>
-                                                    <Input {...register('newContact')} placeholder={`Enter new ${currentLedgerContactType.toLowerCase()} name`}/>
-                                                </div>
-                                            </div>
-                                        )}
-                                        {errors.newContact && <p className="text-sm text-destructive">{errors.newContact.message}</p>}
-                                    </div>
-                                )}
-                                 <div className="space-y-2">
-                                    <Label htmlFor="description-ap">Description</Label>
-                                    <Input id="description-ap" {...register('description')} placeholder="e.g., Raw materials from X vendor" />
-                                    {errors.description && <p className="text-sm text-destructive">{errors.description.message}</p>}
-                                </div>
-                            </TabsContent>
+                            />
+                        )}
+                        {errors.stockItemName && <p className="text-sm text-destructive">{(errors.stockItemName as any).message}</p>}
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <Label>Weight (kg)</Label>
+                            <Input type="number" step="0.01" {...register('weight')} placeholder="0.00"/>
+                            {errors.weight && <p className="text-sm text-destructive">{(errors.weight as any).message}</p>}
                         </div>
-                        <div className="flex justify-end pt-6">
-                            <Button type="submit" className="w-full sm:w-auto" disabled={isSubmitting || !transactionType}>
-                                {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <PlusCircle className="mr-2 h-4 w-4" />}
-                                Record Transaction
-                            </Button>
+                        <div className="space-y-2">
+                            <Label>Price per kg</Label>
+                            <Input type="number" step="0.01" {...register('pricePerKg')} placeholder="0.00"/>
+                            {errors.pricePerKg && <p className="text-sm text-destructive">{(errors.pricePerKg as any).message}</p>}
                         </div>
-                    </form>
-                </Tabs>
-            )}
-        />
+                    </div>
+                    <div className="space-y-2">
+                        <Label>Payment Method</Label>
+                        <Controller 
+                            control={control}
+                            name="paymentMethod"
+                            render={({ field }) => (
+                                <RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex pt-2 gap-4">
+                                    <Label htmlFor="cash-payment" className="flex items-center gap-2 cursor-pointer"><RadioGroupItem value="cash" id="cash-payment" /><span>Cash</span></Label>
+                                    <Label htmlFor="bank-payment" className="flex items-center gap-2 cursor-pointer"><RadioGroupItem value="bank" id="bank-payment" /><span>Bank</span></Label>
+                                    <Label htmlFor="credit-payment" className="flex items-center gap-2 cursor-pointer"><RadioGroupItem value="credit" id="credit-payment" /><span>Credit</span></Label>
+                                </RadioGroup>
+                            )}
+                        />
+                        {errors.paymentMethod && <p className="text-sm text-destructive">{(errors.paymentMethod as any).message}</p>}
+                    </div>
+                    {stockPaymentMethod === 'bank' && (
+                        <div className="space-y-2 animate-fade-in">
+                        <Label>Bank Account</Label>
+                        <Controller
+                            control={control}
+                            name="bank_id"
+                            render={({ field }) => (
+                                <ResponsiveSelect 
+                                    onValueChange={field.onChange} 
+                                    value={field.value}
+                                    title="Select a bank account"
+                                    placeholder="Select a bank account"
+                                    items={bankAccountItems}
+                                />
+                            )}
+                        />
+                        {errors.bank_id && <p className="text-sm text-destructive">{(errors.bank_id as any).message}</p>}
+                    </div>
+                    )}
+                    {stockPaymentMethod === 'credit' && stockType && stockCreditFields}
+                    <div className="space-y-2">
+                        <Label htmlFor="description-stock">Description</Label>
+                        <Input id="description-stock" {...register('description')} placeholder="Optional notes (e.g., invoice #)" />
+                        {errors.description && <p className="text-sm text-destructive">{(errors.description as any).message}</p>}
+                    </div>
+                  </div>
+              )}
+
+              {transactionType === 'transfer' && (
+                  <div className="m-0 space-y-4 animate-fade-in">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            {dateField}
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="amount-transfer">Amount</Label>
+                            <Input id="amount-transfer" type="number" step="0.01" {...register('amount')} placeholder="0.00"/>
+                            {errors.amount && <p className="text-sm text-destructive">{(errors.amount as any).message}</p>}
+                        </div>
+                    </div>
+                    <div className="space-y-2">
+                        <Label>Transfer Direction</Label>
+                        <Controller 
+                            control={control}
+                            name="transferFrom"
+                            render={({ field }) => (
+                                <RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex flex-col sm:flex-row pt-2 gap-4">
+                                    <Label htmlFor="from_cash" className="flex items-center gap-2 cursor-pointer"><RadioGroupItem value="cash" id="from_cash" /><span>Cash to Bank</span></Label>
+                                    <Label htmlFor="from_bank" className="flex items-center gap-2 cursor-pointer"><RadioGroupItem value="bank" id="from_bank" /><span>Bank to Cash</span></Label>
+                                </RadioGroup>
+                            )}
+                        />
+                        {errors.transferFrom && <p className="text-sm text-destructive">{(errors.transferFrom as any).message}</p>}
+                    </div>
+                    {transferFrom === 'cash' && (
+                        <div className="space-y-2 animate-fade-in">
+                            <Label>To Bank Account</Label>
+                            <Controller
+                                control={control}
+                                name="transferToBankId"
+                                render={({ field }) => (
+                                    <ResponsiveSelect 
+                                        onValueChange={field.onChange} 
+                                        value={field.value}
+                                        title="Select destination bank"
+                                        placeholder="Select a bank account"
+                                        items={bankAccountItems}
+                                    />
+                                )}
+                            />
+                            {errors.transferToBankId && <p className="text-sm text-destructive">{(errors.transferToBankId as any).message}</p>}
+                        </div>
+                    )}
+                    {transferFrom === 'bank' && (
+                        <div className="space-y-2 animate-fade-in">
+                            <Label>From Bank Account</Label>
+                            <Controller
+                                control={control}
+                                name="transferFromBankId"
+                                render={({ field }) => (
+                                    <ResponsiveSelect 
+                                        onValueChange={field.onChange} 
+                                        value={field.value}
+                                        title="Select source bank"
+                                        placeholder="Select a bank account"
+                                        items={bankAccountItems}
+                                    />
+                                )}
+                            />
+                            {errors.transferFromBankId && <p className="text-sm text-destructive">{(errors.transferFromBankId as any).message}</p>}
+                        </div>
+                    )}
+                  </div>
+              )}
+
+              {transactionType === 'ap_ar' && (
+                  <div className="m-0 space-y-4 animate-fade-in">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            {dateField}
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="amount-ledger">Amount</Label>
+                            <Input id="amount-ledger" type="number" step="0.01" {...register('amount')} placeholder="0.00"/>
+                            {errors.amount && <p className="text-sm text-destructive">{(errors.amount as any).message}</p>}
+                        </div>
+                    </div>
+                    <div className="space-y-2">
+                        <Label>Type</Label>
+                        <Controller 
+                            control={control}
+                            name="ledgerType"
+                            render={({ field }) => (
+                                <RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex pt-2 gap-4">
+                                    <Label className="flex items-center gap-2 cursor-pointer"><RadioGroupItem value="payable" />Payable (Expense on Credit)</Label>
+                                    <Label className="flex items-center gap-2 cursor-pointer"><RadioGroupItem value="receivable" />Receivable (Sale on Credit)</Label>
+                                </RadioGroup>
+                            )}
+                        />
+                        {errors.ledgerType && <p className="text-sm text-destructive">{(errors.ledgerType as any).message}</p>}
+                    </div>
+
+                    {ledgerType && (
+                        <div className="space-y-2 animate-fade-in">
+                            <Label>{currentLedgerContactType}</Label>
+                            <Controller
+                                control={control}
+                                name="contact_id"
+                                render={({ field }) => (
+                                    <ResponsiveSelect
+                                        onValueChange={field.onChange}
+                                        value={field.value}
+                                        title={`Select a ${currentLedgerContactType}`}
+                                        placeholder={`Select a ${currentLedgerContactType}`}
+                                        items={currentLedgerContactItems}
+                                    />
+                                )}
+                            />
+                            {errors.contact_id && <p className="text-sm text-destructive">{(errors.contact_id as any).message}</p>}
+                        
+                            {contact_id === 'new' && (
+                                <div className="flex items-end gap-2 pt-2 animate-fade-in">
+                                    <div className="flex-grow space-y-1">
+                                        <Label htmlFor="newContact">New {currentLedgerContactType} Name</Label>
+                                        <Input {...register('newContact')} placeholder={`Enter new ${currentLedgerContactType.toLowerCase()} name`}/>
+                                    </div>
+                                </div>
+                            )}
+                            {errors.newContact && <p className="text-sm text-destructive">{(errors.newContact as any).message}</p>}
+                        </div>
+                    )}
+                        <div className="space-y-2">
+                        <Label htmlFor="description-ap">Description</Label>
+                        <Input id="description-ap" {...register('description')} placeholder="e.g., Raw materials from X vendor" />
+                        {errors.description && <p className="text-sm text-destructive">{(errors.description as any).message}</p>}
+                    </div>
+                  </div>
+              )}
+          </div>
+          <div className="flex justify-end pt-6">
+              <Button type="submit" className="w-full sm:w-auto" disabled={isSubmitting}>
+                  {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <PlusCircle className="mr-2 h-4 w-4" />}
+                  Record Transaction
+              </Button>
+          </div>
+      </form>
     </>
   );
 }
