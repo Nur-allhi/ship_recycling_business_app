@@ -68,7 +68,7 @@ function ShipShapeLedger() {
                            <SheetTitle className="sr-only">Navigation Menu</SheetTitle>
                            <SheetDescription className="sr-only">Select a tab to view your financial data.</SheetDescription>
                         </SheetHeader>
-                         <div className="flex items-center gap-3 mb-6">
+                         <div onClick={() => handleTabChange('dashboard')} className="flex items-center gap-3 mb-6 cursor-pointer">
                             <Logo className="h-8 w-8 text-primary" />
                             <h1 className="text-xl font-bold text-primary font-headline">
                                 Ha-Mim Iron Mart
@@ -97,7 +97,7 @@ function ShipShapeLedger() {
                 </Sheet>
             )}
             <div className="flex-1">
-                <div className="flex items-center gap-3 mb-1">
+                <div onClick={() => handleTabChange('dashboard')} className="flex items-center gap-3 mb-1 cursor-pointer">
                   {!isMobile && <Logo className="h-10 w-10 text-primary" />}
                   <div>
                     <h1 className="text-2xl sm:text-3xl font-bold text-primary font-headline">
