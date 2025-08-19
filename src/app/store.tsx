@@ -56,7 +56,7 @@ interface AppState {
 }
 
 interface AppContextType extends AppState {
-  reloadData: (options?: { force?: boolean }) => Promise<void>;
+  reloadData: (options?: { force?: boolean; full?: boolean }) => Promise<void>;
   loadDataForTab: (tab: 'cash' | 'bank' | 'stock' | 'credit' | 'settings') => Promise<void>;
   loadRecycleBinData: () => Promise<void>;
   addCashTransaction: (tx: Omit<CashTransaction, 'id' | 'createdAt' | 'deletedAt'>) => Promise<void>;
@@ -294,79 +294,105 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return { finalCashBalance, finalBankBalance, aggregatedStockItems };
   }, []);
   
-  const reloadData = useCallback(async (options?: { force?: boolean }) => {
+  const reloadData = useCallback(async (options?: { force?: boolean, full?: boolean }) => {
     const session = await getSession();
     if (!session) return;
-    if (!options?.force && state.initialBalanceSet && state.user?.id === session.id) return;
 
+    if (!options?.force && state.initialBalanceSet && state.user?.id === session.id && !options?.full) {
+      return;
+    }
+    
     setState(prev => ({ ...prev, isLoading: true }));
     try {
+        // Initial fast load for dashboard.
         const [
             initialStockData,
             categoriesData,
             vendorsData,
             clientsData,
             banksData,
-            cashData, 
-            bankData,
-            stockTransactionsData,
-            ledgerData,
-            installmentsData,
         ] = await Promise.all([
             readData({ tableName: 'initial_stock' }),
             readData({ tableName: 'categories' }),
             readData({ tableName: 'vendors' }),
             readData({ tableName: 'clients' }),
             readData({ tableName: 'banks' }),
-            readData({ tableName: 'cash_transactions' }),
-            readData({ tableName: 'bank_transactions' }),
-            readData({ tableName: 'stock_transactions' }),
-            readData({ tableName: 'ap_ar_transactions' }),
-            readData({ tableName: 'payment_installments' }),
         ]);
 
-        const cashTransactions: CashTransaction[] = cashData || [];
-        const bankTransactions: BankTransaction[] = bankData || [];
-        const stockTransactions: StockTransaction[] = stockTransactionsData || [];
-        const initialStockItems: StockItem[] = initialStockData || [];
-        
-        const allLedgerData: LedgerTransaction[] = (ledgerData || []).map((tx: any) => ({
-            ...tx,
-            installments: (installmentsData || []).filter((ins: any) => ins.ap_ar_transaction_id === tx.id)
-        }));
-
-        const needsInitialBalance = cashTransactions.length === 0 && bankTransactions.length === 0 && initialStockItems.length === 0;
-        
-        const { finalCashBalance, finalBankBalance, aggregatedStockItems } = calculateBalancesAndStock(cashTransactions, bankTransactions, stockTransactions, initialStockItems);
-        
         const dbCashCategories: Category[] = (categoriesData || []).filter((c: any) => c.type === 'cash');
         const dbBankCategories: Category[] = (categoriesData || []).filter((c: any) => c.type === 'bank');
-        
+
+        // Always calculate needsInitialBalance, even on partial loads
+        const cashCheck = await readData({tableName: 'cash_transactions', select: 'id'});
+        const needsInitialBalance = (cashCheck?.length || 0) === 0;
+
         setState(prev => ({
             ...prev,
-            cashTransactions: cashTransactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
-            bankTransactions: bankTransactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
-            stockTransactions: stockTransactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
-            ledgerTransactions: allLedgerData.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
-            dataLoaded: { cash: true, bank: true, stock: true, credit: true, settings: false },
-
-            initialStockItems: initialStockItems,
-            stockItems: aggregatedStockItems,
-            cashBalance: finalCashBalance,
-            bankBalance: finalBankBalance,
-            needsInitialBalance,
+            initialStockItems: initialStockData || [],
             cashCategories: [...FIXED_CASH_CATEGORIES, ...dbCashCategories],
             bankCategories: [...FIXED_BANK_CATEGORIES, ...dbBankCategories],
-            initialBalanceSet: true,
             vendors: vendorsData || [],
             clients: clientsData || [],
-            totalPayables: allLedgerData.filter((tx: any) => tx.type === 'payable' && tx.status !== 'paid').reduce((acc: number, tx: any) => acc + (tx.amount - tx.paid_amount), 0),
-            totalReceivables: allLedgerData.filter((tx: any) => tx.type === 'receivable' && tx.status !== 'paid').reduce((acc: number, tx: any) => acc + (tx.amount - tx.paid_amount), 0),
             banks: banksData || [],
-            user: session
+            user: session,
+            needsInitialBalance,
         }));
+
+        if (options?.full) {
+            // Load all transactions for a full refresh
+            const [
+                cashData, 
+                bankData,
+                stockTransactionsData,
+                ledgerData,
+                installmentsData,
+            ] = await Promise.all([
+                readData({ tableName: 'cash_transactions' }),
+                readData({ tableName: 'bank_transactions' }),
+                readData({ tableName: 'stock_transactions' }),
+                readData({ tableName: 'ap_ar_transactions' }),
+                readData({ tableName: 'payment_installments' }),
+            ]);
+
+            const cashTransactions: CashTransaction[] = cashData || [];
+            const bankTransactions: BankTransaction[] = bankData || [];
+            const stockTransactions: StockTransaction[] = stockTransactionsData || [];
+            const initialStockItems: StockItem[] = initialStockData || [];
+            
+            const allLedgerData: LedgerTransaction[] = (ledgerData || []).map((tx: any) => ({
+                ...tx,
+                installments: (installmentsData || []).filter((ins: any) => ins.ap_ar_transaction_id === tx.id)
+            }));
+            
+            const { finalCashBalance, finalBankBalance, aggregatedStockItems } = calculateBalancesAndStock(cashTransactions, bankTransactions, stockTransactions, initialStockItems);
+            
+            setState(prev => ({
+                ...prev,
+                cashTransactions: cashTransactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+                bankTransactions: bankTransactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+                stockTransactions: stockTransactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+                ledgerTransactions: allLedgerData.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+                dataLoaded: { cash: true, bank: true, stock: true, credit: true, settings: true },
+                stockItems: aggregatedStockItems,
+                cashBalance: finalCashBalance,
+                bankBalance: finalBankBalance,
+                totalPayables: allLedgerData.filter((tx: any) => tx.type === 'payable' && tx.status !== 'paid').reduce((acc: number, tx: any) => acc + (tx.amount - tx.paid_amount), 0),
+                totalReceivables: allLedgerData.filter((tx: any) => tx.type === 'receivable' && tx.status !== 'paid').reduce((acc: number, tx: any) => acc + (tx.amount - tx.paid_amount), 0),
+                initialBalanceSet: true,
+            }));
+        } else {
+            // For a fast initial load, we fetch summaries but don't mark all data as loaded.
+            const { finalCashBalance, finalBankBalance, aggregatedStockItems } = calculateBalancesAndStock([], [], [], initialStockData);
+             setState(prev => ({
+                ...prev,
+                cashBalance: finalCashBalance,
+                bankBalance: finalBankBalance,
+                stockItems: aggregatedStockItems,
+                initialBalanceSet: true,
+            }));
+        }
       } catch (error: any) {
-        console.error("Failed to load data during promise resolution:", error);
+        console.error("Failed to load data:", error);
         handleApiError(error);
       } finally {
         setState(prev => ({...prev, isLoading: false}));
@@ -375,33 +401,59 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
 
   const loadDataForTab = useCallback(async (tab: 'cash' | 'bank' | 'stock' | 'credit' | 'settings') => {
-    // This function can be used for explicit reloads, but initial load is now handled by reloadData
     if (state.dataLoaded[tab]) return;
 
+    setState(prev => ({ ...prev, isLoading: true }));
     try {
-        let needsFullReload = false;
-        switch(tab) {
-            case 'cash':
-                if (!state.dataLoaded.cash) needsFullReload = true;
-                break;
-            case 'bank':
-                if (!state.dataLoaded.bank) needsFullReload = true;
-                break;
-            case 'stock':
-                 if (!state.dataLoaded.stock) needsFullReload = true;
-                break;
-             case 'credit':
-                if (!state.dataLoaded.credit) needsFullReload = true;
-                break;
-        }
+        let cashTransactions = state.cashTransactions;
+        let bankTransactions = state.bankTransactions;
+        let stockTransactions = state.stockTransactions;
+        let ledgerTransactions = state.ledgerTransactions;
 
-        if (needsFullReload) {
-            await reloadData({ force: true });
+        if (tab === 'cash' && !state.dataLoaded.cash) {
+            cashTransactions = await readData({ tableName: 'cash_transactions' }) || [];
         }
+        if (tab === 'bank' && !state.dataLoaded.bank) {
+            bankTransactions = await readData({ tableName: 'bank_transactions' }) || [];
+        }
+        if (tab === 'stock' && !state.dataLoaded.stock) {
+            stockTransactions = await readData({ tableName: 'stock_transactions' }) || [];
+        }
+        if (tab === 'credit' && !state.dataLoaded.credit) {
+            const [ledgerData, installmentsData] = await Promise.all([
+                readData({ tableName: 'ap_ar_transactions' }),
+                readData({ tableName: 'payment_installments' }),
+            ]);
+            ledgerTransactions = (ledgerData || []).map((tx: any) => ({
+                ...tx,
+                installments: (installmentsData || []).filter((ins: any) => ins.ap_ar_transaction_id === tx.id)
+            }));
+        }
+        
+        const { finalCashBalance, finalBankBalance, aggregatedStockItems } = calculateBalancesAndStock(cashTransactions, bankTransactions, stockTransactions, state.initialStockItems);
+        const totalPayables = ledgerTransactions.filter((tx: any) => tx.type === 'payable' && tx.status !== 'paid').reduce((acc: number, tx: any) => acc + (tx.amount - tx.paid_amount), 0);
+        const totalReceivables = ledgerTransactions.filter((tx: any) => tx.type === 'receivable' && tx.status !== 'paid').reduce((acc: number, tx: any) => acc + (tx.amount - tx.paid_amount), 0);
+        
+        setState(prev => ({
+            ...prev,
+            cashTransactions: cashTransactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+            bankTransactions: bankTransactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+            stockTransactions: stockTransactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+            ledgerTransactions: ledgerTransactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+            cashBalance: finalCashBalance,
+            bankBalance: finalBankBalance,
+            stockItems: aggregatedStockItems,
+            totalPayables,
+            totalReceivables,
+            dataLoaded: { ...prev.dataLoaded, [tab]: true },
+            isLoading: false
+        }));
+
     } catch(e) {
         handleApiError(e);
+        setState(prev => ({ ...prev, isLoading: false }));
     }
-  }, [state.dataLoaded, handleApiError, reloadData]);
+  }, [state.dataLoaded, handleApiError, state.initialStockItems, state.cashTransactions, state.bankTransactions, state.stockTransactions, state.ledgerTransactions, calculateBalancesAndStock]);
 
 
   useEffect(() => {
@@ -412,7 +464,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
                 router.replace('/');
             }
             if (state.user?.id !== session.id || !state.initialBalanceSet) {
-                 await reloadData({ force: true });
+                 await reloadData({ force: true, full: false }); // Fast initial load
             }
         } else {
             if (pathname !== '/login') {
@@ -427,7 +479,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (isMounted) {
       checkSessionAndLoadData();
     }
-  }, [pathname, isMounted, router, reloadData, state.user?.id, state.initialBalanceSet]);
+  }, [pathname, isMounted, router, state.user?.id, state.initialBalanceSet]);
   
   const loadRecycleBinData = useCallback(async () => {
     if(!state.user || state.user.role !== 'admin') return;
@@ -493,7 +545,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
                 contact_id: contactId,
                 contact_name: contactName,
             });
-            reloadData({ force: true });
+            reloadData({ force: true, full: true });
             return;
         }
 
@@ -620,7 +672,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
       
       toast.success("Success", { description: "Stock transaction recorded."});
-      reloadData({ force: true });
+      reloadData({ force: true, full: true });
     } catch (error: any) {
        setState(prev => {
             const newStockTxs = prev.stockTransactions.filter(t => t.id !== tempId);
@@ -647,7 +699,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       try {
         await updateData({ tableName: 'cash_transactions', id: originalTx.id, data: updatedTxData });
         toast.success("Success", { description: "Cash transaction updated." });
-        reloadData({ force: true });
+        reloadData({ force: true, full: true });
       } catch (error) {
             handleApiError(error);
             setState(prev => {
@@ -670,7 +722,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       try {
         await updateData({ tableName: 'bank_transactions', id: originalTx.id, data: updatedTxData });
         toast.success("Success", { description: "Bank transaction updated."});
-        reloadData({ force: true });
+        reloadData({ force: true, full: true });
       } catch(error) {
             handleApiError(error);
             setState(prev => {
@@ -709,7 +761,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
               description: "Stock transaction and linked financial entry updated.",
               duration: 5000,
           });
-          reloadData({ force: true });
+          reloadData({ force: true, full: true });
 
       } catch(error) {
           handleApiError(error);
@@ -737,7 +789,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         })
         .then(() => {
           toast.success("Success", { description: "Cash transaction moved to recycle bin."});
-          reloadData({ force: true });
+          reloadData({ force: true, full: true });
         })
         .catch((error) => {
             handleApiError(error);
@@ -761,7 +813,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         })
         .then(() => {
           toast.success("Success", { description: "Bank transaction moved to recycle bin."});
-          reloadData({ force: true });
+          reloadData({ force: true, full: true });
         })
         .catch(error => {
             handleApiError(error);
@@ -792,7 +844,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             }
 
             toast.success("Stock Transaction Deleted", { description: "The corresponding financial entry was also moved to the recycle bin."});
-            reloadData({ force: true });
+            reloadData({ force: true, full: true });
         })
         .catch(error => {
             handleApiError(error);
@@ -821,7 +873,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
         
         toast.success("Transaction Restored", { description: "The item and any linked transactions have been restored." });
-        reloadData({ force: true });
+        reloadData({ force: true, full: true });
         loadRecycleBinData();
     } catch (error: any) {
         handleApiError(error);
@@ -832,7 +884,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
      try {
         await Promise.all(txs.map(tx => deleteData({ tableName: "cash_transactions", id: tx.id })));
         toast.success("Success", { description: `${txs.length} cash transaction(s) deleted.`});
-        reloadData({ force: true });
+        reloadData({ force: true, full: true });
     } catch(error) {
         handleApiError(error);
     }
@@ -842,7 +894,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
         await Promise.all(txs.map(tx => deleteData({ tableName: "bank_transactions", id: tx.id })));
         toast.success("Success", { description: `${txs.length} bank transaction(s) deleted.`});
-        reloadData({ force: true });
+        reloadData({ force: true, full: true });
     } catch(error) {
         handleApiError(error);
     }
@@ -852,7 +904,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
         await Promise.all(txs.map(tx => deleteData({ tableName: "stock_transactions", id: tx.id })));
         toast.success("Success", { description: `${txs.length} stock transaction(s) deleted.`});
-        reloadData({ force: true });
+        reloadData({ force: true, full: true });
     } catch(error) {
         handleApiError(error);
     }
@@ -873,7 +925,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             await addBankTransaction({ date: transactionDate, amount, description, category: 'Transfer', type: 'withdrawal', bank_id: bankId! });
             await addCashTransaction({ date: transactionDate, amount, description, category: 'Transfer', type: 'income' });
         }
-        reloadData({ force: true });
+        reloadData({ force: true, full: true });
      } catch (error) {
         handleApiError(error);
      }
@@ -887,7 +939,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const newCategory = await appendData({ tableName: 'categories', data: dataToSave, select: '*' });
 
       if (newCategory) {
-          reloadData({ force: true });
+          reloadData({ force: true, full: true });
           toast.success("Success", { description: "Category added." });
       }
     } catch (error) {
@@ -900,7 +952,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
         const { error } = await supabase.from('categories').delete().eq('id', id).eq('is_deletable', true);
         if(error) throw error;
-        reloadData({ force: true });
+        reloadData({ force: true, full: true });
         toast.success("Success", { description: "Category deleted." });
     } catch(error) {
         handleApiError(error);
@@ -934,7 +986,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         
         toast.success("Initial balances set.");
         setState(prev => ({ ...prev, needsInitialBalance: false }));
-        reloadData({ force: true });
+        reloadData({ force: true, full: true });
 
     } catch (e) {
         handleApiError(e);
@@ -948,7 +1000,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const newItem = await appendData({ tableName: 'initial_stock', data: { name, weight, purchasePricePerKg: pricePerKg } });
         if(newItem) {
             toast.success("Initial stock item added.");
-            reloadData({ force: true });
+            reloadData({ force: true, full: true });
         }
       } catch (e) {
           handleApiError(e);
@@ -996,7 +1048,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
             await batchImportData(data);
             toast.success("Import Successful", { description: "Your data has been restored from backup." });
-            reloadData({ force: true });
+            reloadData({ force: true, full: true });
 
         } catch (error: any) {
             handleApiError(error);
@@ -1106,7 +1158,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     deleteData({ tableName: 'ap_ar_transactions', id: txToDelete.id })
       .then(() => {
         toast.success('Transaction moved to recycle bin.');
-        reloadData({ force: true });
+        reloadData({ force: true, full: true });
       })
       .catch(error => {
           handleApiError(error);
@@ -1134,7 +1186,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         });
 
         toast.success("Payment Recorded", { description: "The payment has been recorded and balances are updating."});
-        reloadData({ force: true });
+        reloadData({ force: true, full: true });
         
     } catch (error: any) {
          handleApiError(new Error(error.message || "An unexpected error occurred during payment recording."));
