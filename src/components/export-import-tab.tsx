@@ -80,7 +80,7 @@ export function ExportImportTab() {
         <CardHeader>
           <CardTitle>Export / Import Data</CardTitle>
           <CardDescription>
-            Export your ledger data or restore from a backup.
+            Export your ledger data to PDF or create a full backup. Admins can restore from a backup.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-8">
@@ -98,7 +98,7 @@ export function ExportImportTab() {
                }
             </div>
             <p className="text-sm text-muted-foreground">
-                Export a PDF for specific ledgers and date ranges. Admins can create a full backup for restoration.
+                Export specific ledgers to PDF. Admins can create a full data backup for restoration purposes.
             </p>
           </div>
 
@@ -132,7 +132,7 @@ export function ExportImportTab() {
                       <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
                       <AlertDialogDescription>
                         This will permanently delete all your current ledger data and replace it with the data from the selected backup file. This action cannot be undone.
-                      </AlertDialogDescription>
+                      </Aler tDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                       <AlertDialogCancel>Cancel</AlertDialogCancel>
