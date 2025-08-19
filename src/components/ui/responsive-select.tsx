@@ -20,7 +20,13 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover"
 import { useIsMobile } from "@/hooks/use-mobile"
-import { Drawer, DrawerContent, DrawerTrigger, DrawerHeader, DrawerTitle } from "./drawer"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "./dialog"
 
 
 interface SelectItem {
@@ -61,7 +67,7 @@ const ResponsiveSelect = React.forwardRef<
     }, [items, value])
 
     const handleSelect = (currentValue: string) => {
-        onValueChange(currentValue === value ? "" : currentValue)
+        onValueChange(currentValue)
         setOpen(false)
         if (onSelect) {
             onSelect(currentValue)
@@ -97,8 +103,8 @@ const ResponsiveSelect = React.forwardRef<
 
     if (isMobile) {
       return (
-        <Drawer open={open} onOpenChange={setOpen}>
-          <DrawerTrigger asChild>
+        <Dialog open={open} onOpenChange={setOpen}>
+          <DialogTrigger asChild>
             <Button
               variant="outline"
               role="combobox"
@@ -112,14 +118,14 @@ const ResponsiveSelect = React.forwardRef<
               </span>
               <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
             </Button>
-          </DrawerTrigger>
-          <DrawerContent>
-            <DrawerHeader className="text-left">
-              <DrawerTitle>{title || "Select an option"}</DrawerTitle>
-            </DrawerHeader>
-            <div className="mt-4 border-t">{content}</div>
-          </DrawerContent>
-        </Drawer>
+          </DialogTrigger>
+          <DialogContent className="p-0">
+             <DialogHeader className="p-4 pb-0">
+               <DialogTitle>{title || "Select an option"}</DialogTitle>
+             </DialogHeader>
+            <div className="mt-2 border-t">{content}</div>
+          </DialogContent>
+        </Dialog>
       )
     }
 
