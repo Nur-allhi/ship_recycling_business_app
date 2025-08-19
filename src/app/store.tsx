@@ -173,6 +173,28 @@ const saveStateToLocalStorage = (state: AppState) => {
     }
 }
 
+const FIXED_CASH_CATEGORIES = [
+    { name: 'Stock Purchase', direction: 'debit', is_deletable: false },
+    { name: 'Stock Sale', direction: 'credit', is_deletable: false },
+    { name: 'Utilities', direction: 'debit', is_deletable: false },
+    { name: 'Operational', direction: 'debit', is_deletable: false },
+    { name: 'A/P Settlement', direction: 'debit', is_deletable: false },
+    { name: 'A/R Settlement', direction: 'credit', is_deletable: false },
+    { name: 'Transfer', direction: null, is_deletable: false }, // Direction handled by logic
+    { name: 'Initial Balance', direction: 'credit', is_deletable: false },
+];
+
+const FIXED_BANK_CATEGORIES = [
+    { name: 'Deposit', direction: 'credit', is_deletable: false },
+    { name: 'Withdrawal', direction: 'debit', is_deletable: false },
+    { name: 'Stock Purchase', direction: 'debit', is_deletable: false },
+    { name: 'Stock Sale', direction: 'credit', is_deletable: false },
+    { name: 'A/P Settlement', direction: 'debit', is_deletable: false },
+    { name: 'A/R Settlement', direction: 'credit', is_deletable: false },
+    { name: 'Transfer', direction: null, is_deletable: false }, // Direction handled by logic
+    { name: 'Initial Balance', direction: 'credit', is_deletable: false },
+];
+
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AppState>(getInitialState());
@@ -300,8 +322,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         
         const { finalCashBalance, finalBankBalance, aggregatedStockItems } = calculateBalancesAndStock(cashTransactions, bankTransactions, stockTransactions, initialStockItems);
         
-        const cashCategories: Category[] = (categoriesData || []).filter((c: any) => c.type === 'cash');
-        const bankCategories: Category[] = (categoriesData || []).filter((c: any) => c.type === 'bank');
+        const dbCashCategories: Category[] = (categoriesData || []).filter((c: any) => c.type === 'cash');
+        const dbBankCategories: Category[] = (categoriesData || []).filter((c: any) => c.type === 'bank');
         
         setState(prev => ({
             ...prev,
@@ -313,8 +335,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
             cashBalance: finalCashBalance,
             bankBalance: finalBankBalance,
             needsInitialBalance,
-            cashCategories: cashCategories,
-            bankCategories: bankCategories,
+            cashCategories: [...FIXED_CASH_CATEGORIES.filter(c => c.direction), ...dbCashCategories],
+            bankCategories: [...FIXED_BANK_CATEGORIES.filter(c => c.direction), ...dbBankCategories],
             initialBalanceSet: true,
             vendors: vendorsData || [],
             clients: clientsData || [],
@@ -813,8 +835,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const addCategory = async (type: 'cash' | 'bank', category: string, direction: 'credit' | 'debit') => {
-    if(!state.user || state.user.role !== 'admin') return;
-    
+    if (!state.user || state.user.role !== 'admin') return;
     try {
       const dataToSave = { name: category, type, direction };
 
@@ -1141,3 +1162,5 @@ export function useAppContext() {
   }
   return context;
 }
+
+    
