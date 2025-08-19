@@ -378,7 +378,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (isMounted) {
       checkSessionAndLoadData();
     }
-  }, [pathname, isMounted, router, state.user?.id, state.initialBalanceSet, reloadData, state.isLoading]);
+  }, [pathname, isMounted, router, state.user?.id, state.initialBalanceSet, reloadData]);
   
   const loadRecycleBinData = useCallback(async () => {
     if(!state.user || state.user.role !== 'admin') return;
