@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAppContext } from './store';
 import { cn } from '@/lib/utils';
 import { Wallet, Landmark, Boxes, Settings, PlusCircle, LogOut, CreditCard, Users, LineChart } from 'lucide-react';
@@ -36,12 +36,20 @@ const navItems = [
 ]
 
 function ShipShapeLedger() {
-  const { fontSize, needsInitialBalance, user, logout } = useAppContext();
+  const { fontSize, needsInitialBalance, user, logout, loadDataForTab, dataLoaded } = useAppContext();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   const isMobile = useIsMobile();
   const isAdmin = user?.role === 'admin';
+
+  useEffect(() => {
+    // Lazy load data when a tab is activated
+    if (activeTab !== 'dashboard' && !dataLoaded[activeTab as keyof typeof dataLoaded]) {
+        loadDataForTab(activeTab as any);
+    }
+  }, [activeTab, dataLoaded, loadDataForTab]);
+
 
   const handleTabChange = (value: string) => {
     setActiveTab(value);
@@ -127,7 +135,7 @@ function ShipShapeLedger() {
           </div>
         </header>
         <main>
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
              {!isMobile && (
                 <div className="overflow-x-auto pb-2">
                     <TabsList className="grid w-full grid-cols-6 min-w-[700px]">
