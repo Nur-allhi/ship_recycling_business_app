@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
@@ -353,7 +352,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             if (pathname === '/login') {
                 router.replace('/');
             } else {
-                 await reloadData();
+                 await reloadData({ force: true });
             }
         } else {
             if (pathname !== '/login') {
@@ -362,9 +361,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
         setState(prev => ({ ...prev, isLoading: false }));
     };
-    checkSessionAndLoadData();
+    if (isMounted) {
+      checkSessionAndLoadData();
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pathname, router]);
+  }, [pathname, router, isMounted]);
 
   
   const loadRecycleBinData = useCallback(async () => {
@@ -833,7 +834,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if(!state.user || state.user.role !== 'admin') return;
     
     try {
-      const dataToSave: { name: string, type: string, direction?: string } = { name: category, type };
+      const dataToSave: { name: string; type: string; direction?: string } = { name: category, type };
       if (type === 'bank') {
         dataToSave.direction = direction;
       }
