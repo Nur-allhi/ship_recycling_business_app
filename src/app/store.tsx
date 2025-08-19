@@ -304,100 +304,88 @@ export function AppProvider({ children }: { children: ReactNode }) {
     
     setState(prev => ({ ...prev, isLoading: true }));
     try {
-        // Initial fast load for dashboard.
+        const fetchPromises = [
+            readData({ tableName: 'initial_stock' }),
+            readData({ tableName: 'categories' }),
+            readData({ tableName: 'vendors' }),
+            readData({ tableName: 'clients' }),
+            readData({ tableName: 'banks' }),
+            readData({ tableName: 'cash_transactions' }),
+            readData({ tableName: 'bank_transactions' }),
+            readData({ tableName: 'stock_transactions' }),
+        ];
+
+        if (options?.full) {
+             fetchPromises.push(readData({ tableName: 'ap_ar_transactions' }));
+             fetchPromises.push(readData({ tableName: 'payment_installments' }));
+        }
+
         const [
             initialStockData,
             categoriesData,
             vendorsData,
             clientsData,
             banksData,
-        ] = await Promise.all([
-            readData({ tableName: 'initial_stock' }),
-            readData({ tableName: 'categories' }),
-            readData({ tableName: 'vendors' }),
-            readData({ tableName: 'clients' }),
-            readData({ tableName: 'banks' }),
-        ]);
-
+            cashData, 
+            bankData,
+            stockTransactionsData,
+            ledgerData, // Will be undefined if not a full load
+            installmentsData, // Will be undefined if not a full load
+        ] = await Promise.all(fetchPromises);
+        
         const dbCashCategories: Category[] = (categoriesData || []).filter((c: any) => c.type === 'cash');
         const dbBankCategories: Category[] = (categoriesData || []).filter((c: any) => c.type === 'bank');
+        
+        const cashTransactions: CashTransaction[] = cashData || [];
+        const bankTransactions: BankTransaction[] = bankData || [];
+        const stockTransactions: StockTransaction[] = stockTransactionsData || [];
+        const initialStockItems: StockItem[] = initialStockData || [];
 
-        // Always calculate needsInitialBalance, even on partial loads
-        const cashCheck = await readData({tableName: 'cash_transactions', select: 'id'});
-        const needsInitialBalance = (cashCheck?.length || 0) === 0;
+        const { finalCashBalance, finalBankBalance, aggregatedStockItems } = calculateBalancesAndStock(cashTransactions, bankTransactions, stockTransactions, initialStockItems);
+
+        const allLedgerData: LedgerTransaction[] = options?.full && ledgerData ? (ledgerData || []).map((tx: any) => ({
+            ...tx,
+            installments: (installmentsData || []).filter((ins: any) => ins.ap_ar_transaction_id === tx.id)
+        })) : state.ledgerTransactions;
+
+        const needsInitialBalance = (cashData?.length || 0) === 0;
 
         setState(prev => ({
             ...prev,
-            initialStockItems: initialStockData || [],
+            user: session,
+            needsInitialBalance,
+            initialBalanceSet: true,
+            initialStockItems,
             cashCategories: [...FIXED_CASH_CATEGORIES, ...dbCashCategories],
             bankCategories: [...FIXED_BANK_CATEGORIES, ...dbBankCategories],
             vendors: vendorsData || [],
             clients: clientsData || [],
             banks: banksData || [],
-            user: session,
-            needsInitialBalance,
-        }));
-
-        if (options?.full) {
-            // Load all transactions for a full refresh
-            const [
-                cashData, 
-                bankData,
-                stockTransactionsData,
-                ledgerData,
-                installmentsData,
-            ] = await Promise.all([
-                readData({ tableName: 'cash_transactions' }),
-                readData({ tableName: 'bank_transactions' }),
-                readData({ tableName: 'stock_transactions' }),
-                readData({ tableName: 'ap_ar_transactions' }),
-                readData({ tableName: 'payment_installments' }),
-            ]);
-
-            const cashTransactions: CashTransaction[] = cashData || [];
-            const bankTransactions: BankTransaction[] = bankData || [];
-            const stockTransactions: StockTransaction[] = stockTransactionsData || [];
-            const initialStockItems: StockItem[] = initialStockData || [];
-            
-            const allLedgerData: LedgerTransaction[] = (ledgerData || []).map((tx: any) => ({
-                ...tx,
-                installments: (installmentsData || []).filter((ins: any) => ins.ap_ar_transaction_id === tx.id)
-            }));
-            
-            const { finalCashBalance, finalBankBalance, aggregatedStockItems } = calculateBalancesAndStock(cashTransactions, bankTransactions, stockTransactions, initialStockItems);
-            
-            setState(prev => ({
-                ...prev,
-                cashTransactions: cashTransactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
-                bankTransactions: bankTransactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
-                stockTransactions: stockTransactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
-                ledgerTransactions: allLedgerData.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
-                dataLoaded: { cash: true, bank: true, stock: true, credit: true, settings: true },
-                stockItems: aggregatedStockItems,
-                cashBalance: finalCashBalance,
-                bankBalance: finalBankBalance,
+            cashTransactions: cashTransactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+            bankTransactions: bankTransactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+            stockTransactions: stockTransactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+            ledgerTransactions: allLedgerData.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+            dataLoaded: { 
+                ...prev.dataLoaded, 
+                // Mark as loaded if full, otherwise keep previous state
+                ...(options?.full && { cash: true, bank: true, stock: true, credit: true, settings: true })
+            },
+            stockItems: aggregatedStockItems,
+            cashBalance: finalCashBalance,
+            bankBalance: finalBankBalance,
+            ...(options?.full && {
                 totalPayables: allLedgerData.filter((tx: any) => tx.type === 'payable' && tx.status !== 'paid').reduce((acc: number, tx: any) => acc + (tx.amount - tx.paid_amount), 0),
                 totalReceivables: allLedgerData.filter((tx: any) => tx.type === 'receivable' && tx.status !== 'paid').reduce((acc: number, tx: any) => acc + (tx.amount - tx.paid_amount), 0),
-                initialBalanceSet: true,
-            }));
-        } else {
-            // For a fast initial load, we fetch summaries but don't mark all data as loaded.
-            const { finalCashBalance, finalBankBalance, aggregatedStockItems } = calculateBalancesAndStock([], [], [], initialStockData);
-             setState(prev => ({
-                ...prev,
-                cashBalance: finalCashBalance,
-                bankBalance: finalBankBalance,
-                stockItems: aggregatedStockItems,
-                initialBalanceSet: true,
-            }));
-        }
-      } catch (error: any) {
+            })
+        }));
+        
+    } catch (error: any) {
         console.error("Failed to load data:", error);
         handleApiError(error);
-      } finally {
+    } finally {
         setState(prev => ({...prev, isLoading: false}));
-      }
-  }, [calculateBalancesAndStock, handleApiError, state.initialBalanceSet, state.user?.id]);
+    }
+  }, [calculateBalancesAndStock, handleApiError, state.initialBalanceSet, state.user?.id, state.ledgerTransactions]);
 
 
   const loadDataForTab = useCallback(async (tab: 'cash' | 'bank' | 'stock' | 'credit' | 'settings') => {
