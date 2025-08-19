@@ -21,6 +21,7 @@ import { cn } from '@/lib/utils';
 import { Separator } from './ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Alert, AlertTitle, AlertDescription } from './ui/alert';
+import { ScrollArea } from './ui/scroll-area';
 
 const formSchema = z.object({
   transactionType: z.enum(['cash', 'bank', 'stock', 'transfer', 'ap_ar']),
@@ -189,7 +190,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
             }
             case 'bank': {
                  const selectedCategory = bankCategories.find(c => c.name === data.category);
-                 if(!selectedCategory || !selectedCategory.direction) throw new Error("Could not find a valid direction for the selected category.");
+                 if(!selectedCategory) throw new Error("Could not find a valid direction for the selected category.");
 
                  let contactName: string | undefined;
                  if (data.category === 'A/R Settlement') {
@@ -200,9 +201,11 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                  const description = data.category === 'A/R Settlement' || data.category === 'A/P Settlement' 
                     ? `Settlement for ${contactName}` 
                     : data.description!;
+                 
+                 const type = selectedCategory.direction === 'credit' ? 'deposit' : 'withdrawal';
 
                  await addBankTransaction({
-                    type: selectedCategory.direction === 'credit' ? 'deposit' : 'withdrawal',
+                    type: type,
                     amount: data.amount!,
                     description: description,
                     category: data.category!,
@@ -392,7 +395,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
             rules={{ required: true }}
             render={({ field }) => (
                 <Tabs value={field.value} onValueChange={field.onChange} className="w-full">
-                    <div className="overflow-x-auto pb-2">
+                    <ScrollArea className="w-full whitespace-nowrap">
                         <TabsList className="relative w-max sm:w-full sm:grid sm:grid-cols-5">
                             <TabsTrigger value="cash"><Wallet className="mr-1 h-4 w-4" />Cash</TabsTrigger>
                             <TabsTrigger value="bank"><Landmark className="mr-1 h-4 w-4" />Bank</TabsTrigger>
@@ -400,7 +403,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                             <TabsTrigger value="transfer"><ArrowRightLeft className="mr-1 h-4 w-4" />Transfer</TabsTrigger>
                             <TabsTrigger value="ap_ar"><UserPlus className="mr-1 h-4 w-4" />A/R &amp; A/P</TabsTrigger>
                         </TabsList>
-                    </div>
+                    </ScrollArea>
                     <form onSubmit={handleSubmit(onSubmit)}>
                         <div className="space-y-4 pt-6">
                             <TabsContent value="cash" className="m-0 space-y-4 animate-fade-in">
