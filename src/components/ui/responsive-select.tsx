@@ -20,7 +20,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover"
 import { useIsMobile } from "@/hooks/use-mobile"
-import { Drawer, DrawerContent, DrawerTrigger } from "./drawer"
+import { Drawer, DrawerContent, DrawerTrigger, DrawerHeader, DrawerTitle } from "./drawer"
 
 
 interface SelectItem {
@@ -114,6 +114,9 @@ const ResponsiveSelect = React.forwardRef<
             </Button>
           </DrawerTrigger>
           <DrawerContent>
+            <DrawerHeader className="text-left">
+              <DrawerTitle>{title || "Select an option"}</DrawerTitle>
+            </DrawerHeader>
             <div className="mt-4 border-t">{content}</div>
           </DrawerContent>
         </Drawer>
