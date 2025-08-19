@@ -15,6 +15,7 @@ import { useRouter, usePathname } from 'next/navigation';
 type FontSize = 'sm' | 'base' | 'lg';
 
 interface DataStatus {
+    dashboard: boolean;
     cash: boolean;
     bank: boolean;
     stock: boolean;
@@ -55,7 +56,7 @@ interface AppState {
 
 interface AppContextType extends AppState {
   reloadData: (options?: { force?: boolean; full?: boolean }) => Promise<void>;
-  loadDataForTab: (tab: 'cash' | 'bank' | 'stock' | 'credit' | 'settings') => Promise<void>;
+  loadDataForTab: (tab: keyof Omit<DataStatus, 'dashboard'>) => Promise<void>;
   loadRecycleBinData: () => Promise<void>;
   addCashTransaction: (tx: Omit<CashTransaction, 'id' | 'createdAt' | 'deletedAt'>) => Promise<void>;
   addBankTransaction: (tx: Omit<BankTransaction, 'id' | 'createdAt' | 'deletedAt'>, contactId?: string, contactName?: string) => Promise<void>;
@@ -122,6 +123,7 @@ const initialAppState: AppState = {
   isLoading: true,
   banks: [],
   dataLoaded: {
+    dashboard: false,
     cash: false,
     bank: false,
     stock: false,
@@ -292,7 +294,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return { finalCashBalance, finalBankBalance, aggregatedStockItems };
   }, []);
   
-  const reloadData = useCallback(async () => {
+  const reloadData = useCallback(async (options?: { force?: boolean; full?: boolean }) => {
+    if (state.dataLoaded.dashboard && !options?.force) return;
+
     setState(prev => ({ ...prev, isLoading: true }));
     try {
         const [
@@ -301,36 +305,70 @@ export function AppProvider({ children }: { children: ReactNode }) {
             vendorsData,
             clientsData,
             banksData,
+            cashTxs,
+            bankTxs,
+            stockTxs,
+            ledgerTxs,
+            installmentsData,
         ] = await Promise.all([
             readData({ tableName: 'initial_stock' }),
             readData({ tableName: 'categories' }),
             readData({ tableName: 'vendors' }),
             readData({ tableName: 'clients' }),
             readData({ tableName: 'banks' }),
+            options?.full ? readData({ tableName: 'cash_transactions' }) : Promise.resolve(state.cashTransactions),
+            options?.full ? readData({ tableName: 'bank_transactions' }) : Promise.resolve(state.bankTransactions),
+            options?.full ? readData({ tableName: 'stock_transactions' }) : Promise.resolve(state.stockTransactions),
+            options?.full ? readData({ tableName: 'ap_ar_transactions' }) : Promise.resolve(state.ledgerTransactions),
+            options?.full ? readData({ tableName: 'payment_installments' }) : Promise.resolve([]), // Adjust as needed
         ]);
 
         const dbCashCategories: Category[] = (categoriesData || []).filter((c: any) => c.type === 'cash');
         const dbBankCategories: Category[] = (categoriesData || []).filter((c: any) => c.type === 'bank');
         const initialStockItems: StockItem[] = initialStockData || [];
 
-        // Check if initial balance is needed *before* fetching all transactions
         const { data: cashCheck } = await supabase.from('cash_transactions').select('id', { count: 'exact', head: true });
         const { data: bankCheck } = await supabase.from('bank_transactions').select('id', { count: 'exact', head: true });
         const needsInitialBalance = (cashCheck?.count || 0) === 0 && (bankCheck?.count || 0) === 0;
 
         const session = await getSession();
 
+        const { finalCashBalance, finalBankBalance, aggregatedStockItems } = calculateBalancesAndStock(cashTxs, bankTxs, stockTxs, initialStockItems);
+
+        const updatedLedgerTxs = (ledgerTxs || []).map((tx: any) => ({
+            ...tx,
+            installments: (installmentsData || []).filter((ins: any) => ins.ap_ar_transaction_id === tx.id)
+        }));
+
+        const totalPayables = updatedLedgerTxs.filter((tx: any) => tx.type === 'payable' && tx.status !== 'paid').reduce((acc: number, tx: any) => acc + (tx.amount - tx.paid_amount), 0);
+        const totalReceivables = updatedLedgerTxs.filter((tx: any) => tx.type === 'receivable' && tx.status !== 'paid').reduce((acc: number, tx: any) => acc + (tx.amount - tx.paid_amount), 0);
+
         setState(prev => ({
             ...prev,
             user: session,
             needsInitialBalance,
-            initialBalanceSet: true,
+            initialBalanceSet: !needsInitialBalance,
             initialStockItems,
             cashCategories: [...FIXED_CASH_CATEGORIES, ...dbCashCategories],
             bankCategories: [...FIXED_BANK_CATEGORIES, ...dbBankCategories],
             vendors: vendorsData || [],
             clients: clientsData || [],
             banks: banksData || [],
+            cashBalance: finalCashBalance,
+            bankBalance: finalBankBalance,
+            stockItems: aggregatedStockItems,
+            totalPayables,
+            totalReceivables,
+            dataLoaded: { ...prev.dataLoaded, dashboard: true },
+            ...(options?.full && {
+              cashTransactions: cashTxs,
+              bankTransactions: bankTxs,
+              stockTransactions: stockTxs,
+              ledgerTransactions: updatedLedgerTxs,
+              dataLoaded: {
+                dashboard: true, cash: true, bank: true, stock: true, credit: true, settings: true,
+              }
+            })
         }));
         
     } catch (error: any) {
@@ -339,10 +377,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } finally {
         setState(prev => ({...prev, isLoading: false}));
     }
-  }, [handleApiError, supabase]);
+  }, [handleApiError, state.dataLoaded, state.cashTransactions, state.bankTransactions, state.stockTransactions, state.ledgerTransactions, calculateBalancesAndStock]);
 
-  const loadDataForTab = useCallback(async (tab: 'cash' | 'bank' | 'stock' | 'credit' | 'settings') => {
-    if (state.dataLoaded[tab] && tab !== 'credit') return;
+  const loadDataForTab = useCallback(async (tab: keyof Omit<DataStatus, 'dashboard'>) => {
+    if (state.dataLoaded[tab]) return;
 
     setState(prev => ({ ...prev, isLoading: true }));
     try {
@@ -404,7 +442,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const session = await getSession();
       if (session) {
         // User is logged in, load initial shell data.
-        await reloadData();
+        await reloadData({full: true});
       } else {
         // No session, finish loading.
         setState(prev => ({ ...prev, isLoading: false }));
