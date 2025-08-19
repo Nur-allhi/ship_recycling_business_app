@@ -75,9 +75,9 @@ const ResponsiveSelect = React.forwardRef<
         <CommandList>
           <CommandEmpty>No results found.</CommandEmpty>
           <CommandGroup>
-            {items.map((item) => (
+            {items.map((item, index) => (
                 <CommandItem
-                    key={item.value}
+                    key={`${item.value}-${index}`}
                     value={item.value}
                     onSelect={handleSelect}
                     className="flex items-center justify-between"
