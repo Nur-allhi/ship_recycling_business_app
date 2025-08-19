@@ -1,4 +1,3 @@
-
 "use client"
 
 import * as React from "react"
@@ -172,5 +171,3 @@ const ResponsiveSelectItem = React.forwardRef<
 ResponsiveSelectItem.displayName = "ResponsiveSelectItem"
 
 export { ResponsiveSelect, ResponsiveSelectItem }
-
-    
