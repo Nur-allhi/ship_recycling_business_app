@@ -11,7 +11,7 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['Open Sans', 'sans-serif'],
+        sans: ['Roboto Slab', 'serif'],
         mono: ['Roboto Mono', 'monospace'],
       },
       colors: {
