@@ -1,7 +1,7 @@
 
 import type { Metadata } from 'next';
 import './globals.css';
-import { Toaster } from '@/components/ui/toaster';
+import { Toaster } from 'sonner';
 import { AppProvider } from '@/app/store';
 import { LayoutProvider } from '@/components/layout-provider';
 
@@ -26,7 +26,7 @@ export default function RootLayout({
         <AppProvider>
           <LayoutProvider>
             {children}
-            <Toaster />
+            <Toaster richColors />
           </LayoutProvider>
         </AppProvider>
       </body>
