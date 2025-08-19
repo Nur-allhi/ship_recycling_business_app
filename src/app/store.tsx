@@ -4,7 +4,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import type { CashTransaction, BankTransaction, StockItem, StockTransaction, User, Vendor, Client, LedgerTransaction, PaymentInstallment, Bank } from '@/lib/types';
 import { useToast } from "@/hooks/use-toast"
-import { readData, appendData, updateData, deleteData, readDeletedData, restoreData, exportAllData, batchImportData, deleteAllData, logout as serverLogout, recordPaymentAgainstTotal } from '@/app/actions';
+import { readData, appendData, updateData, deleteData, readDeletedData, restoreData, exportAllData, batchImportData, deleteAllData, logout as serverLogout, recordPaymentAgainstTotal, recordDirectPayment } from '@/app/actions';
 import { format } from 'date-fns';
 import { supabase } from '@/lib/supabase';
 import { saveAs } from 'file-saver';
@@ -50,7 +50,7 @@ interface AppContextType extends AppState {
   reloadData: (options?: { force?: boolean }) => Promise<void>;
   loadRecycleBinData: () => Promise<void>;
   addCashTransaction: (tx: Omit<CashTransaction, 'id' | 'createdAt' | 'deletedAt'>) => Promise<void>;
-  addBankTransaction: (tx: Omit<BankTransaction, 'id' | 'createdAt' | 'deletedAt'>) => Promise<void>;
+  addBankTransaction: (tx: Omit<BankTransaction, 'id' | 'createdAt' | 'deletedAt'>, contactId?: string, contactName?: string) => Promise<void>;
   addStockTransaction: (tx: Omit<StockTransaction, 'id' | 'createdAt' | 'deletedAt'> & { contact_id?: string, contact_name?: string }) => Promise<void>;
   editCashTransaction: (originalTx: CashTransaction, updatedTxData: Partial<Omit<CashTransaction, 'id' | 'date' | 'createdAt'>>) => Promise<void>;
   editBankTransaction: (originalTx: BankTransaction, updatedTxData: Partial<Omit<BankTransaction, 'id' | 'date' | 'createdAt'>>) => Promise<void>;
@@ -271,7 +271,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const reloadData = useCallback(async (options?: { force?: boolean }) => {
     const session = await getSession();
     if (!session) return;
-    if (!options?.force && state.initialBalanceSet) return;
+    if (!options?.force && state.initialBalanceSet && state.user?.id === session.id) return;
 
     setState(prev => ({ ...prev, isLoading: true }));
     try {
@@ -335,6 +335,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             totalPayables: (ledgerData || []).filter((tx: any) => tx.type === 'payable' && tx.status !== 'paid').reduce((acc: number, tx: any) => acc + (tx.amount - tx.paid_amount), 0),
             totalReceivables: (ledgerData || []).filter((tx: any) => tx.type === 'receivable' && tx.status !== 'paid').reduce((acc: number, tx: any) => acc + (tx.amount - tx.paid_amount), 0),
             banks: banksData || [],
+            user: session
         }));
       } catch (error: any) {
         console.error("Failed to load data during promise resolution:", error);
@@ -342,30 +343,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
       } finally {
         setState(prev => ({...prev, isLoading: false}));
       }
-  }, [state.initialBalanceSet, calculateBalancesAndStock, handleApiError]);
+  }, [state.initialBalanceSet, state.user, calculateBalancesAndStock, handleApiError]);
 
   useEffect(() => {
     const checkSessionAndLoadData = async () => {
+        setState(prev => ({ ...prev, isLoading: true }));
         const session = await getSession();
         if (session) {
-            if (JSON.stringify(session) !== JSON.stringify(state.user)) {
-                setState(prev => ({ ...prev, user: session, initialBalanceSet: false, isLoading: true }));
+            if (pathname === '/login') {
+                router.replace('/');
+            } else {
+                 await reloadData();
             }
         } else {
-            if (state.user !== null || pathname !== '/login') {
-                 setState(prev => ({ ...prev, user: null, isLoading: pathname !== '/login' }));
+            if (pathname !== '/login') {
+                router.replace('/login');
             }
         }
+        setState(prev => ({ ...prev, isLoading: false }));
     };
     checkSessionAndLoadData();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pathname]);
+  }, [pathname, router]);
 
-  useEffect(() => {
-    if (state.user && !state.initialBalanceSet) {
-      reloadData({ force: true });
-    }
-  }, [state.user, state.initialBalanceSet, reloadData]);
   
   const loadRecycleBinData = useCallback(async () => {
     if(!state.user || state.user.role !== 'admin') return;
@@ -419,7 +419,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
     };
 
-    const addBankTransaction = async (tx: Omit<BankTransaction, 'id' | 'createdAt' | 'deletedAt'>) => {
+    const addBankTransaction = async (tx: Omit<BankTransaction, 'id' | 'createdAt' | 'deletedAt'>, contactId?: string, contactName?: string) => {
+        // Handle direct settlement from bank form
+        if ((tx.category === 'A/R Settlement' || tx.category === 'A/P Settlement') && contactId && contactName) {
+            await recordDirectPayment({
+                payment_method: 'bank',
+                bank_id: tx.bank_id,
+                date: tx.date,
+                amount: tx.amount,
+                category: tx.category,
+                description: tx.description,
+                contact_id: contactId,
+                contact_name: contactName,
+            });
+            // reloadData will be called by the form, so we don't need to manually update state here
+            return;
+        }
+
         const tempId = `temp-${Date.now()}`;
         const newTxForUI: BankTransaction = { ...tx, id: tempId, createdAt: new Date().toISOString() };
 

@@ -479,6 +479,66 @@ export async function logout() {
 
 // --- Specific App Actions ---
 
+// This is a shared helper function for recording payments.
+async function applyPaymentToLedger(
+    supabase: ReturnType<typeof getAuthenticatedSupabaseClient>,
+    contactId: string,
+    paymentAmount: number,
+    paymentDate: string,
+    paymentMethod: 'cash' | 'bank'
+) {
+    // 1. Fetch all outstanding transactions for this contact, oldest first
+    const { data: outstandingTxs, error: fetchError } = await supabase
+        .from('ap_ar_transactions')
+        .select('*')
+        .eq('contact_id', contactId)
+        .in('status', ['unpaid', 'partially paid'])
+        .order('date', { ascending: true });
+
+    if (fetchError) throw fetchError;
+    if (!outstandingTxs || outstandingTxs.length === 0) {
+        throw new Error("No outstanding balance to settle for this contact.");
+    }
+    
+    const totalOutstanding = outstandingTxs.reduce((acc, tx) => acc + (tx.amount - tx.paid_amount), 0);
+    if (paymentAmount > totalOutstanding) {
+        throw new Error(`Payment amount (${paymentAmount}) exceeds the total outstanding balance (${totalOutstanding}).`);
+    }
+
+    let amountToSettle = paymentAmount;
+
+    for (const tx of outstandingTxs) {
+        if (amountToSettle <= 0) break;
+
+        const remainingBalance = tx.amount - tx.paid_amount;
+        const paymentForThisTx = Math.min(amountToSettle, remainingBalance);
+        
+        const newPaidAmount = tx.paid_amount + paymentForThisTx;
+        const newStatus = newPaidAmount >= tx.amount ? 'paid' : 'partially paid';
+
+        // 2. Update the ledger transaction
+        const { error: updateError } = await supabase
+            .from('ap_ar_transactions')
+            .update({ paid_amount: newPaidAmount, status: newStatus })
+            .eq('id', tx.id);
+        
+        if (updateError) throw updateError;
+        
+        // 3. Create an installment record for this part of the payment
+        const { error: installmentError } = await supabase.from('payment_installments').insert({
+            ap_ar_transaction_id: tx.id,
+            amount: paymentForThisTx,
+            date: paymentDate,
+            payment_method: paymentMethod,
+        });
+
+        if (installmentError) throw installmentError;
+
+        amountToSettle -= paymentForThisTx;
+    }
+}
+
+
 const RecordPaymentAgainstTotalInputSchema = z.object({
     contact_id: z.string(),
     contact_name: z.string(),
@@ -489,6 +549,7 @@ const RecordPaymentAgainstTotalInputSchema = z.object({
     bank_id: z.string().optional(),
 });
 
+
 export async function recordPaymentAgainstTotal(input: z.infer<typeof RecordPaymentAgainstTotalInputSchema>) {
     const session = await getSession();
     if (!session || session.role !== 'admin') throw new Error("Only admins can record payments.");
@@ -496,49 +557,10 @@ export async function recordPaymentAgainstTotal(input: z.infer<typeof RecordPaym
     const supabase = await getAuthenticatedSupabaseClient();
     
     try {
-        // 1. Fetch all outstanding transactions for this contact, oldest first
-        const { data: outstandingTxs, error: fetchError } = await supabase
-            .from('ap_ar_transactions')
-            .select('*')
-            .eq('contact_id', input.contact_id)
-            .in('status', ['unpaid', 'partially paid'])
-            .order('date', { ascending: true });
-
-        if (fetchError) throw fetchError;
-
-        let amountToSettle = input.payment_amount;
-
-        for (const tx of outstandingTxs) {
-            if (amountToSettle <= 0) break;
-
-            const remainingBalance = tx.amount - tx.paid_amount;
-            const paymentForThisTx = Math.min(amountToSettle, remainingBalance);
-            
-            const newPaidAmount = tx.paid_amount + paymentForThisTx;
-            const newStatus = newPaidAmount >= tx.amount ? 'paid' : 'partially paid';
-
-            // 2. Update the ledger transaction
-            const { error: updateError } = await supabase
-                .from('ap_ar_transactions')
-                .update({ paid_amount: newPaidAmount, status: newStatus })
-                .eq('id', tx.id);
-            
-            if (updateError) throw updateError;
-            
-            // 3. Create an installment record for this part of the payment
-            const { error: installmentError } = await supabase.from('payment_installments').insert({
-                ap_ar_transaction_id: tx.id,
-                amount: paymentForThisTx,
-                date: input.payment_date,
-                payment_method: input.payment_method,
-            });
-
-            if (installmentError) throw installmentError;
-
-            amountToSettle -= paymentForThisTx;
-        }
-
-        // 4. Create a single financial transaction for the total payment
+        // Shared logic to apply payment to A/P or A/R ledger
+        await applyPaymentToLedger(supabase, input.contact_id, input.payment_amount, input.payment_date, input.payment_method);
+        
+        // Create a single financial transaction for the total payment
         const financialTxData = {
             date: input.payment_date,
             amount: input.payment_amount,
@@ -567,6 +589,62 @@ export async function recordPaymentAgainstTotal(input: z.infer<typeof RecordPaym
 
     } catch (error: any) {
         console.error("Error recording payment:", error);
+        return handleApiError(error);
+    }
+}
+
+
+const RecordDirectPaymentInputSchema = z.object({
+  payment_method: z.enum(['cash', 'bank']),
+  bank_id: z.string().optional(),
+  date: z.string(),
+  amount: z.number(),
+  category: z.enum(['A/R Settlement', 'A/P Settlement']),
+  description: z.string(),
+  contact_id: z.string(),
+  contact_name: z.string(),
+});
+
+export async function recordDirectPayment(input: z.infer<typeof RecordDirectPaymentInputSchema>) {
+    const session = await getSession();
+    if (!session || session.role !== 'admin') throw new Error("Only admins can record payments.");
+
+    const supabase = await getAuthenticatedSupabaseClient();
+
+    try {
+        // Determine ledger type from category
+        const ledgerType = input.category === 'A/P Settlement' ? 'payable' : 'receivable';
+
+        // Apply payment to the ledger
+        await applyPaymentToLedger(supabase, input.contact_id, input.amount, input.date, input.payment_method);
+        
+        // Log the corresponding financial transaction
+        const financialTxData = {
+            date: input.date,
+            amount: input.amount,
+            description: input.description,
+            category: input.category,
+        };
+
+        if (input.payment_method === 'cash') {
+            await supabase.from('cash_transactions').insert({
+                ...financialTxData,
+                type: ledgerType === 'payable' ? 'expense' : 'income',
+            });
+        } else { // bank
+            if (!input.bank_id) throw new Error("Bank ID is required for bank payments.");
+            await supabase.from('bank_transactions').insert({
+                ...financialTxData,
+                type: ledgerType === 'payable' ? 'withdrawal' : 'deposit',
+                bank_id: input.bank_id,
+            });
+        }
+
+        await logActivity(`Recorded ${input.category} of ${input.amount} for ${input.contact_name}`);
+        return { success: true };
+
+    } catch (error: any) {
+        console.error("Error in direct payment recording:", error);
         return handleApiError(error);
     }
 }

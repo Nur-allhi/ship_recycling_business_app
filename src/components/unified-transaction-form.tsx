@@ -47,7 +47,7 @@ const formSchema = z.object({
   transferFromBankId: z.string().optional(),
 
 
-  // A/R A/P or Stock-on-credit specific
+  // A/R A/P or Stock-on-credit or Bank-settlement specific
   contact_id: z.string().optional(),
   newContact: z.string().optional(),
 
@@ -59,13 +59,20 @@ const formSchema = z.object({
     if (data.transactionType === 'bank') {
         if (!data.bank_id) ctx.addIssue({ code: 'custom', message: 'Please select a bank account.', path: ['bank_id'] });
         if (!data.category) ctx.addIssue({ code: 'custom', message: 'Category is required.', path: ['category'] });
-        if (!data.description) ctx.addIssue({ code: 'custom', message: 'Description is required.', path: ['description'] });
         
         const bankCategories = (window as any).__APP_STATE__?.bankCategories || [];
         const selectedCategory = bankCategories.find((c: any) => c.name === data.category);
 
         if (selectedCategory?.type === 'prompt' && !data.bank_inOutType) {
             ctx.addIssue({ code: 'custom', message: 'Please select a direction for this category.', path: ['bank_inOutType'] });
+        }
+        
+        if (data.category === 'A/R Settlement' || data.category === 'A/P Settlement') {
+             if (!data.contact_id) {
+                ctx.addIssue({ code: 'custom', message: `Please select a contact.`, path: ['contact_id'] });
+            }
+        } else {
+             if (!data.description) ctx.addIssue({ code: 'custom', message: 'Description is required.', path: ['description'] });
         }
     }
     if (data.transactionType === 'stock') {
@@ -135,6 +142,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
     vendors,
     clients,
     banks,
+    reloadData,
   } = useAppContext();
   
   const { toast } = useToast();
@@ -175,7 +183,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
   useEffect(() => {
     setValue('contact_id', undefined);
     setValue('newContact', '');
-  }, [stockType, ledgerType, setValue]);
+  }, [stockType, ledgerType, bankCategory, setValue]);
 
   const onSubmit = async (data: FormData) => {
     const transactionDate = data.date.toISOString();
@@ -190,24 +198,34 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                     date: transactionDate,
                 });
                 break;
-            case 'bank':
+            case 'bank': {
                  const selectedCategory = bankCategories.find(c => c.name === data.category);
                  if(!selectedCategory) throw new Error("Could not find the selected category.");
 
                  const directionFromCategory = bankCategories.find(c => c.name === data.category)?.type;
                  const transactionDirection = directionFromCategory === 'prompt' ? data.bank_inOutType : directionFromCategory;
-
                  if(!transactionDirection) throw new Error("Transaction direction is required for this category.");
+
+                 let contactName: string | undefined;
+                 if (data.category === 'A/R Settlement') {
+                     contactName = clients.find(c => c.id === data.contact_id)?.name;
+                 } else if (data.category === 'A/P Settlement') {
+                     contactName = vendors.find(v => v.id === data.contact_id)?.name;
+                 }
+                 const description = data.category === 'A/R Settlement' || data.category === 'A/P Settlement' 
+                    ? `Settlement for ${contactName}` 
+                    : data.description!;
 
                  await addBankTransaction({
                     type: transactionDirection,
                     amount: data.amount!,
-                    description: data.description!,
+                    description: description,
                     category: data.category!,
                     date: transactionDate,
                     bank_id: data.bank_id!,
-                });
+                }, data.contact_id, contactName);
                 break;
+            }
             case 'stock':
                 let stockContactId: string | undefined;
                 let stockContactName: string | undefined;
@@ -272,7 +290,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                 break;
         }
         toast({ title: "Transaction Added", description: "Your transaction has been successfully recorded." });
-        reset();
+        reloadData({ force: true });
         setDialogOpen(false);
     } catch(error: any) {
          toast({ variant: "destructive", title: "Operation Failed", description: error.message || "An unexpected error occurred." });
@@ -305,7 +323,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                         {field.value ? format(field.value, "dd-MM-yyyy") : <span>Pick a date</span>}
                     </Button>
                     </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0">
+                    <PopoverContent className="w-auto p-0" align="start">
                         <Calendar
                             mode="single"
                             selected={field.value}
@@ -390,7 +408,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
             render={({ field }) => (
                 <Tabs value={field.value} onValueChange={field.onChange} className="w-full">
                     <div className="overflow-x-auto pb-2">
-                        <TabsList className="flex-nowrap w-max sm:w-full sm:grid sm:grid-cols-5">
+                        <TabsList className="relative w-max sm:w-full sm:grid sm:grid-cols-5">
                             <TabsTrigger value="cash"><Wallet className="mr-1 h-4 w-4" />Cash</TabsTrigger>
                             <TabsTrigger value="bank"><Landmark className="mr-1 h-4 w-4" />Bank</TabsTrigger>
                             <TabsTrigger value="stock"><Boxes className="mr-1 h-4 w-4" />Stock</TabsTrigger>
@@ -478,23 +496,23 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                                         />
                                         {errors.bank_id && <p className="text-sm text-destructive">{errors.bank_id.message}</p>}
                                     </div>
-                                    <div className="space-y-2 md:col-span-2">
-                                        <Label>Category</Label>
-                                        <Controller
-                                            control={control}
-                                            name="category"
-                                            render={({ field }) => (
-                                                <ResponsiveSelect
-                                                    onValueChange={field.onChange}
-                                                    value={field.value}
-                                                    title="Select a category"
-                                                    placeholder="Select a category"
-                                                    items={bankCategoryItems}
-                                                />
-                                            )}
-                                        />
-                                        {errors.category && <p className="text-sm text-destructive">{errors.category.message}</p>}
-                                    </div>
+                                </div>
+                                 <div className="space-y-2">
+                                    <Label>Category</Label>
+                                    <Controller
+                                        control={control}
+                                        name="category"
+                                        render={({ field }) => (
+                                            <ResponsiveSelect
+                                                onValueChange={field.onChange}
+                                                value={field.value}
+                                                title="Select a category"
+                                                placeholder="Select a category"
+                                                items={bankCategoryItems}
+                                            />
+                                        )}
+                                    />
+                                    {errors.category && <p className="text-sm text-destructive">{errors.category.message}</p>}
                                 </div>
                                 {(bankCategory && bankCategories.find(c => c.name === bankCategory)?.type === 'prompt') && (
                                      <div className="space-y-2 animate-fade-in">
@@ -512,11 +530,39 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                                         {errors.bank_inOutType && <p className="text-sm text-destructive">{errors.bank_inOutType.message}</p>}
                                     </div>
                                 )}
-                                <div className="space-y-2">
-                                    <Label htmlFor="description-bank">Description</Label>
-                                    <Input id="description-bank" {...register('description')} placeholder="e.g., Monthly salary" />
-                                    {errors.description && <p className="text-sm text-destructive">{errors.description.message}</p>}
-                                </div>
+                                {bankCategory === 'A/R Settlement' && (
+                                     <div className="space-y-2 animate-fade-in">
+                                        <Label>Client</Label>
+                                        <Controller
+                                            control={control}
+                                            name="contact_id"
+                                            render={({ field }) => (
+                                                <ResponsiveSelect onValueChange={field.onChange} value={field.value} title="Select a Client" placeholder="Select a client" items={clientContactItems.filter(c => c.value !== 'new')} />
+                                            )}
+                                        />
+                                        {errors.contact_id && <p className="text-sm text-destructive">{errors.contact_id.message}</p>}
+                                    </div>
+                                )}
+                                {bankCategory === 'A/P Settlement' && (
+                                     <div className="space-y-2 animate-fade-in">
+                                        <Label>Vendor</Label>
+                                        <Controller
+                                            control={control}
+                                            name="contact_id"
+                                            render={({ field }) => (
+                                                <ResponsiveSelect onValueChange={field.onChange} value={field.value} title="Select a Vendor" placeholder="Select a vendor" items={vendorContactItems.filter(c => c.value !== 'new')} />
+                                            )}
+                                        />
+                                        {errors.contact_id && <p className="text-sm text-destructive">{errors.contact_id.message}</p>}
+                                    </div>
+                                )}
+                                {(bankCategory !== 'A/R Settlement' && bankCategory !== 'A/P Settlement') && (
+                                    <div className="space-y-2">
+                                        <Label htmlFor="description-bank">Description</Label>
+                                        <Input id="description-bank" {...register('description')} placeholder="e.g., Monthly salary" />
+                                        {errors.description && <p className="text-sm text-destructive">{errors.description.message}</p>}
+                                    </div>
+                                )}
                             </TabsContent>
                             
                             <TabsContent value="stock" className="m-0 space-y-4 animate-fade-in">
