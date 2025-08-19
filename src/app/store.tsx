@@ -295,9 +295,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
   
   const reloadData = useCallback(async (options?: { force?: boolean, full?: boolean }) => {
-    const session = await getSession();
-    if (!session) return;
-    
     setState(prev => ({ ...prev, isLoading: true }));
     try {
         const [
@@ -331,6 +328,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const { finalCashBalance, finalBankBalance, aggregatedStockItems } = calculateBalancesAndStock(cashTransactions, bankTransactions, stockTransactions, initialStockItems);
 
         const needsInitialBalance = (cashData?.length || 0) === 0 && (bankData?.length || 0) === 0;
+        
+        const session = await getSession();
 
         setState(prev => ({
             ...prev,
@@ -408,28 +407,32 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const checkSessionAndLoadData = async () => {
-        const session = await getSession();
-        if (session) {
-            if (pathname === '/login') {
-                router.replace('/');
-                return;
-            }
-            if (state.user?.id !== session.id || !state.initialBalanceSet) {
-                 await reloadData({ force: true });
-            }
-            setState(prev => ({ ...prev, isLoading: false, user: session }));
-        } else {
-            if (pathname !== '/login') {
-                router.replace('/login');
-            }
-            setState(prev => ({ ...prev, isLoading: false }));
-        }
+      const session = await getSession();
+      if (session) {
+        // User is logged in, load initial data.
+        await reloadData();
+      } else {
+        // No session, finish loading.
+        setState(prev => ({ ...prev, isLoading: false }));
+      }
     };
-
     if (isMounted) {
       checkSessionAndLoadData();
     }
-  }, [pathname, isMounted, router, state.user?.id, state.initialBalanceSet, reloadData]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isMounted]);
+
+  useEffect(() => {
+    // This effect handles redirection based on auth state.
+    if (!state.isLoading) {
+      if (state.user && pathname === '/login') {
+        router.replace('/');
+      }
+      if (!state.user && pathname !== '/login') {
+        router.replace('/login');
+      }
+    }
+  }, [pathname, state.user, state.isLoading, router]);
   
   const loadRecycleBinData = useCallback(async () => {
     if(!state.user || state.user.role !== 'admin') return;
@@ -542,8 +545,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         });
 
         try {
-            const savedTxData = { ...tx, status: 'unpaid', paid_amount: 0 };
-            const savedTx = await appendData({ tableName: 'ap_ar_transactions', data: savedTxData, select: '*, installments:payment_installments(*)' });
+            const dataToSave = { ...tx, status: 'unpaid', paid_amount: 0 };
+            const savedTx = await appendData({ tableName: 'ap_ar_transactions', data: dataToSave, select: '*, installments:payment_installments(*)' });
             
             if (savedTx && !savedTx.installments) {
                 savedTx.installments = [];
