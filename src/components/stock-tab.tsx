@@ -478,21 +478,17 @@ export function StockTab() {
                     <CardContent>
                     {filteredByMonth.length > 0 && (
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 p-4 border rounded-lg bg-muted/50 text-center">
-                            <div>
+                            <div className="md:border-r md:border-border md:pr-4">
                                 <h4 className="font-semibold text-destructive">Monthly Purchases</h4>
                                 <p className="font-mono">{totalPurchaseWeight.toFixed(2)} kg</p>
                                 <p className="font-bold font-mono">{formatCurrency(totalPurchaseValue)}</p>
                             </div>
-                            <div className="border-r border-border hidden md:block"></div>
-                            <div className="border-b border-border md:hidden"></div>
-                            <div>
+                            <div className="border-t border-border md:border-t-0 md:border-r md:border-border md:px-4 pt-4 md:pt-0">
                                 <h4 className="font-semibold text-primary">Current Stock Balance</h4>
                                 <p className="font-mono">{totalStockWeight.toFixed(2)} kg</p>
                                 <p className="font-bold font-mono">{formatCurrency(totalStockValue)}</p>
                             </div>
-                            <div className="border-r border-border hidden md:block"></div>
-                            <div className="border-b border-border md:hidden"></div>
-                            <div>
+                            <div className="border-t border-border md:border-t-0 md:pl-4 pt-4 md:pt-0">
                                 <h4 className="font-semibold text-accent">Monthly Sales</h4>
                                 <p className="font-mono">{totalSaleWeight.toFixed(2)} kg</p>
                                 <p className="font-bold font-mono">{formatCurrency(totalSaleValue)}</p>
