@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
@@ -346,12 +347,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const checkSessionAndLoadData = async () => {
-        setState(prev => ({ ...prev, isLoading: true }));
         const session = await getSession();
         if (session) {
             if (pathname === '/login') {
                 router.replace('/');
-            } else {
+            } else if (!state.initialBalanceSet) { // Only load if data isn't already there
                  await reloadData({ force: true });
             }
         } else {
@@ -365,7 +365,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       checkSessionAndLoadData();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pathname, router, isMounted]);
+  }, [pathname, isMounted, state.initialBalanceSet]);
 
   
   const loadRecycleBinData = useCallback(async () => {
@@ -834,11 +834,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if(!state.user || state.user.role !== 'admin') return;
     
     try {
-      const dataToSave: { name: string; type: string; direction?: string } = { name: category, type };
-      if (type === 'bank') {
-        dataToSave.direction = direction;
-      }
+        let dataToSave: { name: string; type: string; direction?: string };
+        
+        if (type === 'bank') {
+            dataToSave = { name: category, type, direction };
+        } else {
+            dataToSave = { name: category, type };
+        }
+
       const newCategory = await appendData({ tableName: 'categories', data: dataToSave, select: '*' });
+
       if (newCategory) {
           reloadData({ force: true });
           toast({ title: "Success", description: "Category added." });
