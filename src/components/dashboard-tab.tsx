@@ -4,6 +4,7 @@
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { useAppContext } from "@/app/store"
 import { Wallet, Landmark, Boxes, LineChart } from "lucide-react"
+import { cn } from "@/lib/utils"
 
 interface DashboardTabProps {
   setActiveTab: (tab: string) => void;
