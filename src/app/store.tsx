@@ -230,12 +230,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       try {
         const session = await getSession();
         if (session) {
-          setState(prev => ({...prev, user: session }));
-          if (!state.initialBalanceSet) {
-             await reloadData({force: true});
+          // Only update user if it's different to prevent loops
+          if (session.id !== state.user?.id) {
+            setState(prev => ({...prev, user: session }));
           }
         } else {
-          setState(prev => ({ ...prev, isLoading: false }));
+          setState(prev => ({ ...prev, isLoading: false, user: null }));
         }
       } catch (error) {
         console.error("Failed to get session", error);
@@ -244,7 +244,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     };
     checkSessionAndLoadData();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.initialBalanceSet]);
+  }, [pathname]); // Check on path change
+
+  useEffect(() => {
+    if (state.user && !state.initialBalanceSet) {
+      reloadData({ force: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.user, state.initialBalanceSet]);
   
   const calculateBalancesAndStock = useCallback((
     cashTxs: CashTransaction[], 
