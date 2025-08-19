@@ -84,7 +84,6 @@ export function ExportImportTab() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-8">
-          {/* Export Section */}
           <div className="space-y-4">
             <h3 className="font-semibold text-lg flex items-center"><Download className="mr-2 h-5 w-5" /> Export Data</h3>
             <div className="flex flex-col sm:flex-row gap-4">
@@ -106,7 +105,6 @@ export function ExportImportTab() {
             <>
               <Separator />
 
-              {/* Import Section */}
               <div className="space-y-4">
                 <h3 className="font-semibold text-lg flex items-center"><Upload className="mr-2 h-5 w-5" /> Restore from Backup</h3>
                 <Alert variant="destructive">
@@ -132,7 +130,7 @@ export function ExportImportTab() {
                       <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
                       <AlertDialogDescription>
                         This will permanently delete all your current ledger data and replace it with the data from the selected backup file. This action cannot be undone.
-                      </Aler tDialogDescription>
+                      </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                       <AlertDialogCancel>Cancel</AlertDialogCancel>
@@ -144,7 +142,6 @@ export function ExportImportTab() {
               
               <Separator />
 
-              {/* Reset Section */}
               <div className="space-y-4">
                 <h3 className="font-semibold text-lg flex items-center"><UserX className="mr-2 h-5 w-5" /> Reset & Delete</h3>
                 <Alert variant="destructive">
