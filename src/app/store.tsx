@@ -4,7 +4,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import type { CashTransaction, BankTransaction, StockItem, StockTransaction, User, Vendor, Client, LedgerTransaction, PaymentInstallment, Bank, Category } from '@/lib/types';
 import { toast } from 'sonner';
-import { readData, appendData, updateData, deleteData, readDeletedData, restoreData, exportAllData, batchImportData, deleteAllData, logout as serverLogout, recordPaymentAgainstTotal, recordDirectPayment } from '@/app/actions';
+import { readData, appendData, updateData, deleteData, readDeletedData, restoreData, exportAllData, batchImportData, deleteAllData, logout as serverLogout, recordPaymentAgainstTotal, recordDirectPayment, hasInitialData } from '@/app/actions';
 import { format } from 'date-fns';
 import { supabase } from '@/lib/supabase';
 import { saveAs } from 'file-saver';
@@ -310,26 +310,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
             stockTxs,
             ledgerTxs,
             installmentsData,
+            initialDataExists,
         ] = await Promise.all([
             readData({ tableName: 'initial_stock' }),
             readData({ tableName: 'categories' }),
             readData({ tableName: 'vendors' }),
             readData({ tableName: 'clients' }),
             readData({ tableName: 'banks' }),
-            options?.full ? readData({ tableName: 'cash_transactions' }) : Promise.resolve(state.cashTransactions),
-            options?.full ? readData({ tableName: 'bank_transactions' }) : Promise.resolve(state.bankTransactions),
-            options?.full ? readData({ tableName: 'stock_transactions' }) : Promise.resolve(state.stockTransactions),
-            options?.full ? readData({ tableName: 'ap_ar_transactions' }) : Promise.resolve(state.ledgerTransactions),
-            options?.full ? readData({ tableName: 'payment_installments' }) : Promise.resolve([]), // Adjust as needed
+            readData({ tableName: 'cash_transactions' }),
+            readData({ tableName: 'bank_transactions' }),
+            readData({ tableName: 'stock_transactions' }),
+            readData({ tableName: 'ap_ar_transactions' }),
+            readData({ tableName: 'payment_installments' }),
+            hasInitialData(),
         ]);
 
         const dbCashCategories: Category[] = (categoriesData || []).filter((c: any) => c.type === 'cash');
         const dbBankCategories: Category[] = (categoriesData || []).filter((c: any) => c.type === 'bank');
         const initialStockItems: StockItem[] = initialStockData || [];
 
-        const { data: cashCheck } = await supabase.from('cash_transactions').select('id', { count: 'exact', head: true });
-        const { data: bankCheck } = await supabase.from('bank_transactions').select('id', { count: 'exact', head: true });
-        const needsInitialBalance = (cashCheck?.count || 0) === 0 && (bankCheck?.count || 0) === 0;
+        const needsInitialBalance = !initialDataExists;
 
         const session = await getSession();
 
@@ -359,16 +359,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
             stockItems: aggregatedStockItems,
             totalPayables,
             totalReceivables,
-            dataLoaded: { ...prev.dataLoaded, dashboard: true },
-            ...(options?.full && {
-              cashTransactions: cashTxs,
-              bankTransactions: bankTxs,
-              stockTransactions: stockTxs,
-              ledgerTransactions: updatedLedgerTxs,
-              dataLoaded: {
-                dashboard: true, cash: true, bank: true, stock: true, credit: true, settings: true,
-              }
-            })
+            cashTransactions: cashTxs,
+            bankTransactions: bankTxs,
+            stockTransactions: stockTxs,
+            ledgerTransactions: updatedLedgerTxs,
+            dataLoaded: {
+              dashboard: true, cash: true, bank: true, stock: true, credit: true, settings: true,
+            }
         }));
         
     } catch (error: any) {
@@ -377,7 +374,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } finally {
         setState(prev => ({...prev, isLoading: false}));
     }
-  }, [handleApiError, state.dataLoaded, state.cashTransactions, state.bankTransactions, state.stockTransactions, state.ledgerTransactions, calculateBalancesAndStock]);
+  }, [handleApiError, calculateBalancesAndStock]);
 
   const loadDataForTab = useCallback(async (tab: keyof Omit<DataStatus, 'dashboard'>) => {
     if (state.dataLoaded[tab]) return;

@@ -366,6 +366,29 @@ export async function hasUsers() {
     return data.users.length > 0;
 }
 
+export async function hasInitialData(): Promise<boolean> {
+    try {
+        const supabase = await getAuthenticatedSupabaseClient();
+        const { data: cashCheck, error: cashError } = await supabase.from('cash_transactions').select('id', { count: 'exact', head: true });
+        if (cashError && cashError.code !== '42P01') throw cashError;
+
+        const { data: bankCheck, error: bankError } = await supabase.from('bank_transactions').select('id', { count: 'exact', head: true });
+        if (bankError && bankError.code !== '42P01') throw bankError;
+
+        return (cashCheck?.count ?? 0) > 0 || (bankCheck?.count ?? 0) > 0;
+    } catch (error: any) {
+        // If an auth error occurs, it means the session is invalid.
+        // Returning true prevents the dialog from showing during the logout process.
+        const isAuthError = error.message.includes('JWT') || error.message.includes('Unauthorized') || error.message.includes("SESSION_EXPIRED");
+        if (isAuthError) {
+            return true;
+        }
+        console.error("Error checking for initial data:", error);
+        // Default to true to prevent showing the dialog on unexpected errors.
+        return true; 
+    }
+}
+
 
 const LoginInputSchema = z.object({
     username: z.string().email("Username must be a valid email address."),
@@ -655,5 +678,3 @@ export async function recordDirectPayment(input: z.infer<typeof RecordDirectPaym
         return handleApiError(error);
     }
 }
-
-    
