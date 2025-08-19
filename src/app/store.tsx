@@ -90,6 +90,8 @@ const fixedBankCategories: { name: string, type: 'deposit' | 'withdrawal' | 'pro
     { name: 'Stock Sale', type: 'deposit' },
     { name: 'A/R Settlement', type: 'deposit' },
     { name: 'A/P Settlement', type: 'withdrawal' },
+    { name: 'Deposit', type: 'deposit'},
+    { name: 'Withdrawal', type: 'withdrawal'},
     { name: 'Others', type: 'prompt' },
 ];
 
@@ -343,15 +345,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
       } finally {
         setState(prev => ({...prev, isLoading: false}));
       }
-  }, [state.initialBalanceSet, state.user, calculateBalancesAndStock, handleApiError]);
+  }, [state.initialBalanceSet, state.user?.id, calculateBalancesAndStock, handleApiError]);
 
   useEffect(() => {
     const checkSessionAndLoadData = async () => {
         const session = await getSession();
         if (session) {
+            setState(prev => ({ ...prev, user: session }));
             if (pathname === '/login') {
                 router.replace('/');
-            } else if (!state.initialBalanceSet) { // Only load if data isn't already there
+            } else {
                  await reloadData({ force: true });
             }
         } else {
@@ -359,14 +362,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
                 router.replace('/login');
             }
         }
-        setState(prev => ({ ...prev, isLoading: false }));
+        if (state.isLoading) {
+            setState(prev => ({ ...prev, isLoading: false }));
+        }
     };
+
     if (isMounted) {
       checkSessionAndLoadData();
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pathname, isMounted, state.initialBalanceSet]);
-
+  }, [pathname, isMounted, router]); // Dependency on router
   
   const loadRecycleBinData = useCallback(async () => {
     if(!state.user || state.user.role !== 'admin') return;
@@ -834,12 +838,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if(!state.user || state.user.role !== 'admin') return;
     
     try {
-        let dataToSave: { name: string; type: string; direction?: string };
-        
+        const dataToSave: { name: string; type: string; direction?: string } = { name: category, type };
         if (type === 'bank') {
-            dataToSave = { name: category, type, direction };
-        } else {
-            dataToSave = { name: category, type };
+            dataToSave.direction = direction;
         }
 
       const newCategory = await appendData({ tableName: 'categories', data: dataToSave, select: '*' });

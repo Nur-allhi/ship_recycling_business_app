@@ -132,15 +132,24 @@ const AppendDataInputSchema = z.object({
 export async function appendData(input: z.infer<typeof AppendDataInputSchema>) {
     try {
         const session = await getSession();
-        // The UI should prevent non-admins from triggering this.
-        // This is a server-side check for security.
         if (session?.role !== 'admin') throw new Error("Permission denied. Only admins can add data.");
         
         const supabase = await getAuthenticatedSupabaseClient();
+        
+        let dataToInsert = input.data;
+
+        // Server-side data cleaning for categories to prevent schema mismatch errors.
+        if (input.tableName === 'categories' && !Array.isArray(dataToInsert)) {
+            const categoryData = { ...dataToInsert }; // Create a copy to mutate
+            if (categoryData.type === 'cash' && 'direction' in categoryData) {
+                delete categoryData.direction;
+            }
+            dataToInsert = categoryData;
+        }
 
         const { data, error } = await supabase
             .from(input.tableName)
-            .insert(input.data)
+            .insert(dataToInsert)
             .select(input.select || '*');
             
         if (error) {
@@ -154,7 +163,6 @@ export async function appendData(input: z.infer<typeof AppendDataInputSchema>) {
             await logActivity(input.logDescription);
         }
 
-        // If the original data was not an array, return the single object, otherwise return the array
         return Array.isArray(input.data) ? data : data?.[0];
 
     } catch (error) {
