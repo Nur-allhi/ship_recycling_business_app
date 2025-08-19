@@ -43,20 +43,17 @@ function ShipShapeLedger() {
   const isMobile = useIsMobile();
   const isAdmin = user?.role === 'admin';
 
-  useEffect(() => {
-    // Lazy load data when a tab is activated
-    if (activeTab !== 'dashboard' && !dataLoaded[activeTab as keyof typeof dataLoaded]) {
-        loadDataForTab(activeTab as any);
-    }
-  }, [activeTab, dataLoaded, loadDataForTab]);
-
-
-  const handleTabChange = (value: string) => {
+  const handleTabChange = async (value: string) => {
     setActiveTab(value);
-    if(isMobile) {
-        setIsSheetOpen(false);
+    const tabKey = value as keyof typeof dataLoaded;
+    if (tabKey !== 'dashboard' && !dataLoaded[tabKey]) {
+      await loadDataForTab(tabKey);
     }
-  }
+    if (isMobile) {
+      setIsSheetOpen(false);
+    }
+  };
+
 
   const roleDisplayName = user?.role ? user.role.charAt(0).toUpperCase() + user.role.slice(1) : '';
 
@@ -152,7 +149,7 @@ function ShipShapeLedger() {
                 </div>
              )}
             <TabsContent value="dashboard" className="mt-6 animate-slide-in-up">
-              <DashboardTab setActiveTab={setActiveTab} loadDataForTab={loadDataForTab} />
+              <DashboardTab setActiveTab={handleTabChange} />
             </TabsContent>
             <TabsContent value="cash" className="mt-6 animate-slide-in-up">
               <CashTab />
