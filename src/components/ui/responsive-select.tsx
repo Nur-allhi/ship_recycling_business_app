@@ -19,11 +19,9 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover"
-import {
-  ResponsiveDialog,
-  ResponsiveDialogTrigger,
-} from "@/components/ui/responsive-dialog"
 import { useIsMobile } from "@/hooks/use-mobile"
+import { Drawer, DrawerContent, DrawerTrigger } from "./drawer"
+
 
 interface SelectItem {
   value: string;
@@ -56,6 +54,7 @@ const ResponsiveSelect = React.forwardRef<
   ) => {
     const isMobile = useIsMobile()
     const [open, setOpen] = React.useState(false)
+    const showSearch = items.length > 8;
 
     const selectedItem = React.useMemo(() => {
       return items.find((item) => item.value === value)
@@ -71,7 +70,7 @@ const ResponsiveSelect = React.forwardRef<
 
     const content = (
       <Command>
-        <CommandInput placeholder="Search..." />
+        {showSearch && <CommandInput placeholder="Search..." />}
         <CommandList>
           <CommandEmpty>No results found.</CommandEmpty>
           <CommandGroup>
@@ -98,8 +97,8 @@ const ResponsiveSelect = React.forwardRef<
 
     if (isMobile) {
       return (
-        <ResponsiveDialog open={open} onOpenChange={setOpen} title={title}>
-          <ResponsiveDialogTrigger asChild>
+        <Drawer open={open} onOpenChange={setOpen}>
+          <DrawerTrigger asChild>
             <Button
               variant="outline"
               role="combobox"
@@ -113,9 +112,11 @@ const ResponsiveSelect = React.forwardRef<
               </span>
               <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
             </Button>
-          </ResponsiveDialogTrigger>
-          {content}
-        </ResponsiveDialog>
+          </DrawerTrigger>
+          <DrawerContent>
+            <div className="mt-4 border-t">{content}</div>
+          </DrawerContent>
+        </Drawer>
       )
     }
 
@@ -126,7 +127,7 @@ const ResponsiveSelect = React.forwardRef<
             variant="outline"
             role="combobox"
             aria-expanded={open}
-            className={cn("w-[200px] justify-between", className)}
+            className={cn("w-full justify-between", className)}
             ref={ref}
             {...props}
           >
@@ -136,7 +137,7 @@ const ResponsiveSelect = React.forwardRef<
             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
+        <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
           {content}
         </PopoverContent>
       </Popover>
@@ -145,28 +146,4 @@ const ResponsiveSelect = React.forwardRef<
 )
 ResponsiveSelect.displayName = "ResponsiveSelect"
 
-// Keeping ResponsiveSelectItem for any potential legacy usage, but it is not needed with the new `items` prop structure.
-const ResponsiveSelectItem = React.forwardRef<
-  React.ElementRef<typeof CommandItem>,
-  React.ComponentProps<typeof CommandItem>
->(({ className, children, ...props }, ref) => {
-  return (
-    <CommandItem
-      ref={ref}
-      className={cn("flex items-center justify-between", className)}
-      {...props}
-    >
-      <span className="truncate">{children}</span>
-      <Check
-        className={cn(
-          "h-4 w-4",
-          "opacity-0"
-        )}
-      />
-    </CommandItem>
-  )
-})
-ResponsiveSelectItem.displayName = "ResponsiveSelectItem"
-
-
-export { ResponsiveSelect, ResponsiveSelectItem }
+export { ResponsiveSelect }

@@ -238,6 +238,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                 break;
             case 'transfer':
                 const bankId = data.transferFrom === 'cash' ? data.transferToBankId : data.transferFromBankId;
+                if (!bankId) throw new Error("A bank account must be selected for the transfer.");
                 await transferFunds(data.transferFrom!, data.amount!, transactionDate, bankId);
                 break;
             case 'ap_ar':
@@ -388,13 +389,15 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
             rules={{ required: true }}
             render={({ field }) => (
                 <Tabs value={field.value} onValueChange={field.onChange} className="w-full">
-                    <TabsList className="grid w-full grid-cols-3 sm:grid-cols-5 h-auto flex-wrap">
-                        <TabsTrigger value="cash"><Wallet className="mr-1 h-4 w-4" />Cash</TabsTrigger>
-                        <TabsTrigger value="bank"><Landmark className="mr-1 h-4 w-4" />Bank</TabsTrigger>
-                        <TabsTrigger value="stock"><Boxes className="mr-1 h-4 w-4" />Stock</TabsTrigger>
-                        <TabsTrigger value="transfer"><ArrowRightLeft className="mr-1 h-4 w-4" />Transfer</TabsTrigger>
-                        <TabsTrigger value="ap_ar"><UserPlus className="mr-1 h-4 w-4" />A/R &amp; A/P</TabsTrigger>
-                    </TabsList>
+                    <div className="overflow-x-auto pb-2">
+                        <TabsList className="flex-nowrap w-max sm:w-full sm:grid sm:grid-cols-5">
+                            <TabsTrigger value="cash"><Wallet className="mr-1 h-4 w-4" />Cash</TabsTrigger>
+                            <TabsTrigger value="bank"><Landmark className="mr-1 h-4 w-4" />Bank</TabsTrigger>
+                            <TabsTrigger value="stock"><Boxes className="mr-1 h-4 w-4" />Stock</TabsTrigger>
+                            <TabsTrigger value="transfer"><ArrowRightLeft className="mr-1 h-4 w-4" />Transfer</TabsTrigger>
+                            <TabsTrigger value="ap_ar"><UserPlus className="mr-1 h-4 w-4" />A/R &amp; A/P</TabsTrigger>
+                        </TabsList>
+                    </div>
                     <form onSubmit={handleSubmit(onSubmit)}>
                         <div className="space-y-4 pt-6">
                             <TabsContent value="cash" className="m-0 space-y-4 animate-fade-in">
@@ -451,7 +454,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                             </TabsContent>
 
                             <TabsContent value="bank" className="m-0 space-y-4 animate-fade-in">
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
                                     <div className="md:col-span-2">{dateField}</div>
                                     <div className="space-y-2">
                                         <Label htmlFor="amount-bank">Amount</Label>
