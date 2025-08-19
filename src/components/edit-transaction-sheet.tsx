@@ -16,7 +16,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { useToast } from '@/hooks/use-toast';
+import { toast } from 'sonner';
 import { Pencil } from 'lucide-react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from './ui/sheet';
 import type { CashTransaction, BankTransaction, StockTransaction } from '@/lib/types';
@@ -72,8 +72,7 @@ export function EditTransactionSheet({ isOpen, setIsOpen, transaction, transacti
     stockItems
   } = useAppContext();
   
-  const { toast } = useToast();
-
+  
   const isCash = transactionType === 'cash';
   const isBank = transactionType === 'bank';
   const isStock = transactionType === 'stock';
@@ -143,7 +142,7 @@ export function EditTransactionSheet({ isOpen, setIsOpen, transaction, transacti
         });
     }
 
-    toast({ title: "Transaction Update Requested", description: "Updating your transaction." });
+    toast.success("Transaction Update Requested", { description: "Updating your transaction." });
     setIsOpen(false);
   };
   

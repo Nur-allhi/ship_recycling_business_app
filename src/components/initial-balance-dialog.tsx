@@ -14,7 +14,7 @@ import {
 } from './ui/dialog';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
-import { useToast } from '@/hooks/use-toast';
+import { toast } from 'sonner';
 import { Landmark, Wallet } from 'lucide-react';
 import { Separator } from './ui/separator';
 
@@ -24,18 +24,16 @@ interface InitialBalanceDialogProps {
 
 export function InitialBalanceDialog({ isOpen }: InitialBalanceDialogProps) {
   const { setInitialBalances, banks } = useAppContext();
-  const { toast } = useToast();
   const cashRef = useRef<HTMLInputElement>(null);
   const bankRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   const handleSave = () => {
     const cash = parseFloat(cashRef.current?.value || '0');
     if (isNaN(cash) || cash < 0) {
-      toast({
-        variant: 'destructive',
-        title: 'Invalid Input',
-        description: 'Please enter a valid, non-negative number for the cash balance.',
-      });
+      toast.error(
+        'Invalid Input',
+        {description: 'Please enter a valid, non-negative number for the cash balance.',}
+      );
       return;
     }
     
@@ -43,11 +41,10 @@ export function InitialBalanceDialog({ isOpen }: InitialBalanceDialogProps) {
     for (const bank of banks) {
       const value = parseFloat(bankRefs.current[bank.id]?.value || '0');
       if (isNaN(value) || value < 0) {
-        toast({
-            variant: 'destructive',
-            title: 'Invalid Input',
-            description: `Please enter a valid, non-negative number for ${bank.name}.`,
-        });
+        toast.error(
+            'Invalid Input',
+            {description: `Please enter a valid, non-negative number for ${bank.name}.`,}
+        );
         return;
       }
       bankTotals[bank.id] = value;

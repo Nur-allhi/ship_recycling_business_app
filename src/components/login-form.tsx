@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { useToast } from '@/hooks/use-toast';
+import { toast } from 'sonner';
 import { login, hasUsers } from '@/app/actions';
 import { Loader2 } from 'lucide-react';
 import Logo from './logo';
@@ -25,7 +25,6 @@ const formSchema = z.object({
 type FormData = z.infer<typeof formSchema>;
 
 export function LoginForm() {
-  const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
   const [doesAnyUserExist, setDoesAnyUserExist] = useState(true);
 
@@ -71,16 +70,15 @@ export function LoginForm() {
           localStorage.removeItem('rememberedUsername');
       }
 
-      toast({ title: "Login Successful", description: "Welcome!" });
+      toast.success("Login Successful", { description: "Welcome!" });
       // Clear cache for the new user then force a hard reload
       localStorage.removeItem('ha-mim-iron-mart-cache');
       window.location.href = '/'; 
-    } catch (error: any) {
-      toast({
-        variant: 'destructive',
-        title: 'Login Failed',
-        description: error.message,
-      });
+    } catch (error: any) => {
+      toast.error(
+        'Login Failed',
+        {description: error.message,}
+      );
       setIsLoading(false);
     }
   };

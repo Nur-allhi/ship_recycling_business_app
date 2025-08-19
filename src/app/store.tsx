@@ -3,7 +3,7 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import type { CashTransaction, BankTransaction, StockItem, StockTransaction, User, Vendor, Client, LedgerTransaction, PaymentInstallment, Bank, Category } from '@/lib/types';
-import { useToast } from "@/hooks/use-toast"
+import { toast } from 'sonner';
 import { readData, appendData, updateData, deleteData, readDeletedData, restoreData, exportAllData, batchImportData, deleteAllData, logout as serverLogout, recordPaymentAgainstTotal, recordDirectPayment } from '@/app/actions';
 import { format } from 'date-fns';
 import { supabase } from '@/lib/supabase';
@@ -214,7 +214,6 @@ const FIXED_BANK_CATEGORIES = [
 export function AppProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AppState>(getInitialState());
   const [isMounted, setIsMounted] = useState(false);
-  const { toast } = useToast();
   const router = useRouter();
   const pathname = usePathname();
 
@@ -235,17 +234,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const handleApiError = useCallback((error: any) => {
     const isAuthError = error.message.includes('JWT') || error.message.includes('Unauthorized') || error.message.includes("SESSION_EXPIRED");
     if (isAuthError) {
-        toast({
-            variant: 'destructive',
-            title: 'Session Expired',
+        toast.error('Session Expired', {
             description: 'Your session has expired. Please log in again.',
         });
         logout();
     } else {
         console.error("API Error:", error);
-        toast({
-            variant: 'destructive',
-            title: 'An Error Occurred',
+        toast.error('An Error Occurred', {
             description: error.message || 'An unknown error occurred. Please try again.',
         });
     }
@@ -480,7 +475,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
                 return { ...prev, cashTransactions: newTxs };
             });
         } catch (error) {
-            toast({ variant: 'destructive', title: 'Failed to save cash transaction.' });
+            toast.error('Failed to save cash transaction.');
             setState(prev => ({ ...prev, cashTransactions: prev.cashTransactions.filter(t => t.id !== tempId)}));
             handleApiError(error);
         }
@@ -522,7 +517,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
                  return { ...prev, bankTransactions: newTxs };
             });
         } catch (error) {
-            toast({ variant: 'destructive', title: 'Failed to save bank transaction.' });
+            toast.error('Failed to save bank transaction.');
             setState(prev => ({...prev, bankTransactions: prev.bankTransactions.filter(t => t.id !== tempId)}));
             handleApiError(error);
         }
@@ -557,7 +552,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
                 return { ...prev, ledgerTransactions: newLedgerTxs };
             });
         } catch (error) {
-            toast({ variant: 'destructive', title: 'Failed to save ledger transaction.' });
+            toast.error('Failed to save ledger transaction.');
             setState(prev => ({...prev, ledgerTransactions: prev.ledgerTransactions.filter(t => t.id !== tempId)}));
             handleApiError(error);
         }
@@ -624,7 +619,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           }
       }
       
-      toast({ title: "Success", description: "Stock transaction recorded."});
+      toast.success("Success", { description: "Stock transaction recorded."});
       reloadData({ force: true });
     } catch (error: any) {
        setState(prev => {
@@ -651,7 +646,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       
       try {
         await updateData({ tableName: 'cash_transactions', id: originalTx.id, data: updatedTxData });
-        toast({ title: "Success", description: "Cash transaction updated." });
+        toast.success("Success", { description: "Cash transaction updated." });
         reloadData({ force: true });
       } catch (error) {
             handleApiError(error);
@@ -674,7 +669,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
       try {
         await updateData({ tableName: 'bank_transactions', id: originalTx.id, data: updatedTxData });
-        toast({ title: "Success", description: "Bank transaction updated."});
+        toast.success("Success", { description: "Bank transaction updated."});
         reloadData({ force: true });
       } catch(error) {
             handleApiError(error);
@@ -710,8 +705,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
               }
           }
           
-          toast({ 
-              title: "Success", 
+          toast.success("Success", { 
               description: "Stock transaction and linked financial entry updated.",
               duration: 5000,
           });
@@ -742,7 +736,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             }
         })
         .then(() => {
-          toast({ title: "Success", description: "Cash transaction moved to recycle bin."});
+          toast.success("Success", { description: "Cash transaction moved to recycle bin."});
           reloadData({ force: true });
         })
         .catch((error) => {
@@ -766,7 +760,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             }
         })
         .then(() => {
-          toast({ title: "Success", description: "Bank transaction moved to recycle bin."});
+          toast.success("Success", { description: "Bank transaction moved to recycle bin."});
           reloadData({ force: true });
         })
         .catch(error => {
@@ -797,7 +791,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
                 await deleteData({ tableName: "bank_transactions", id: activeBankTx.id });
             }
 
-            toast({ title: "Stock Transaction Deleted", description: "The corresponding financial entry was also moved to the recycle bin."});
+            toast.success("Stock Transaction Deleted", { description: "The corresponding financial entry was also moved to the recycle bin."});
             reloadData({ force: true });
         })
         .catch(error => {
@@ -826,7 +820,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             if (bankTx) await restoreData({ tableName: 'bank_transactions', id: bankTx.id });
         }
         
-        toast({ title: "Transaction Restored", description: "The item and any linked transactions have been restored." });
+        toast.success("Transaction Restored", { description: "The item and any linked transactions have been restored." });
         reloadData({ force: true });
         loadRecycleBinData();
     } catch (error: any) {
@@ -837,7 +831,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const deleteMultipleCashTransactions = async (txs: CashTransaction[]) => {
      try {
         await Promise.all(txs.map(tx => deleteData({ tableName: "cash_transactions", id: tx.id })));
-        toast({ title: "Success", description: `${txs.length} cash transaction(s) deleted.`});
+        toast.success("Success", { description: `${txs.length} cash transaction(s) deleted.`});
         reloadData({ force: true });
     } catch(error) {
         handleApiError(error);
@@ -847,7 +841,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const deleteMultipleBankTransactions = async (txs: BankTransaction[]) => {
     try {
         await Promise.all(txs.map(tx => deleteData({ tableName: "bank_transactions", id: tx.id })));
-        toast({ title: "Success", description: `${txs.length} bank transaction(s) deleted.`});
+        toast.success("Success", { description: `${txs.length} bank transaction(s) deleted.`});
         reloadData({ force: true });
     } catch(error) {
         handleApiError(error);
@@ -857,7 +851,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const deleteMultipleStockTransactions = async (txs: StockTransaction[]) => {
     try {
         await Promise.all(txs.map(tx => deleteData({ tableName: "stock_transactions", id: tx.id })));
-        toast({ title: "Success", description: `${txs.length} stock transaction(s) deleted.`});
+        toast.success("Success", { description: `${txs.length} stock transaction(s) deleted.`});
         reloadData({ force: true });
     } catch(error) {
         handleApiError(error);
@@ -894,7 +888,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
       if (newCategory) {
           reloadData({ force: true });
-          toast({ title: "Success", description: "Category added." });
+          toast.success("Success", { description: "Category added." });
       }
     } catch (error) {
       handleApiError(error);
@@ -907,7 +901,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const { error } = await supabase.from('categories').delete().eq('id', id).eq('is_deletable', true);
         if(error) throw error;
         reloadData({ force: true });
-        toast({ title: "Success", description: "Category deleted." });
+        toast.success("Success", { description: "Category deleted." });
     } catch(error) {
         handleApiError(error);
     }
@@ -938,7 +932,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         
         await Promise.all(promises);
         
-        toast({ title: "Initial balances set." });
+        toast.success("Initial balances set.");
         setState(prev => ({ ...prev, needsInitialBalance: false }));
         reloadData({ force: true });
 
@@ -953,7 +947,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const { name, weight, pricePerKg } = item;
         const newItem = await appendData({ tableName: 'initial_stock', data: { name, weight, purchasePricePerKg: pricePerKg } });
         if(newItem) {
-            toast({ title: "Initial stock item added." });
+            toast.success("Initial stock item added.");
             reloadData({ force: true });
         }
       } catch (e) {
@@ -968,7 +962,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       zip.file("ha-mim-iron-mart-backup.json", JSON.stringify(data, null, 2));
       const blob = await zip.generateAsync({ type: "blob" });
       saveAs(blob, `ha-mim-iron-mart-backup-${format(new Date(), 'yyyy-MM-dd')}.zip`);
-      toast({ title: "Export Successful", description: "Your data has been exported." });
+      toast.success("Export Successful", { description: "Your data has been exported." });
     } catch (error: any) {
       handleApiError(error);
     }
@@ -976,7 +970,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const handleImport = async (file: File) => {
     if(state.user?.role !== 'admin') {
-      toast({variant: 'destructive', title: 'Permission Denied'});
+      toast.error('Permission Denied');
       return;
     }
     const reader = new FileReader();
@@ -1001,7 +995,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             }
 
             await batchImportData(data);
-            toast({ title: "Import Successful", description: "Your data has been restored from backup." });
+            toast.success("Import Successful", { description: "Your data has been restored from backup." });
             reloadData({ force: true });
 
         } catch (error: any) {
@@ -1013,12 +1007,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   
   const handleDeleteAllData = async () => {
      if(state.user?.role !== 'admin') {
-      toast({variant: 'destructive', title: 'Permission Denied'});
+      toast.error('Permission Denied');
       return;
     }
     try {
         await deleteAllData();
-        toast({ title: 'All Data Deleted', description: 'Your account and all associated data have been permanently removed.' });
+        toast.success('All Data Deleted', { description: 'Your account and all associated data have been permanently removed.' });
         logout();
     } catch (error: any) {
         handleApiError(error);
@@ -1027,17 +1021,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const addVendor = async (name: string) => {
     if (!state.user || state.user.role !== 'admin') {
-        toast({ variant: 'destructive', title: 'Permission Denied' });
+        toast.error('Permission Denied');
         return null;
     }
     try {
       const newVendor = await appendData({ tableName: 'vendors', data: { name }, select: '*' });
       if (!newVendor) {
-        toast({ variant: 'destructive', title: 'Setup Incomplete', description: "Could not save to the 'vendors' table. Please ensure it exists in your database." });
+        toast.error('Setup Incomplete', { description: "Could not save to the 'vendors' table. Please ensure it exists in your database." });
         return null;
       }
       setState(prev => ({...prev, vendors: [...prev.vendors, newVendor]}));
-      toast({ title: 'Vendor Added' });
+      toast.success('Vendor Added');
       return newVendor;
     } catch (error: any) {
       handleApiError(error);
@@ -1047,7 +1041,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const addClient = async (name: string) => {
     if (!state.user || state.user.role !== 'admin') {
-        toast({ variant: 'destructive', title: 'Permission Denied' });
+        toast.error('Permission Denied');
         return null;
     }
     try {
@@ -1057,16 +1051,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
         select: '*'
       });
       if (!newClient) {
-        toast({
-          variant: 'destructive',
-          title: 'Setup Incomplete',
-          description:
-            "Could not save to the 'clients' table. Please ensure it exists.",
-        });
+        toast.error(
+          'Setup Incomplete',
+          {description: "Could not save to the 'clients' table. Please ensure it exists.",}
+        );
         return null;
       }
       setState(prev => ({...prev, clients: [...prev.clients, newClient]}));
-      toast({ title: 'Client Added' });
+      toast.success('Client Added');
       return newClient;
     } catch (error: any) {
       handleApiError(error);
@@ -1076,7 +1068,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const addBank = async (name: string) => {
     if (!state.user || state.user.role !== 'admin') {
-      toast({ variant: 'destructive', title: 'Permission Denied' });
+      toast.error('Permission Denied');
       return;
     }
     try {
@@ -1086,15 +1078,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
             select: '*'
         });
         if (!newBank) {
-            toast({
-                variant: 'destructive',
-                title: 'Setup Incomplete',
-                description: 'Could not save to the "banks" table. Please ensure it exists.'
-            });
+            toast.error(
+                'Setup Incomplete',
+                {description: 'Could not save to the "banks" table. Please ensure it exists.'}
+            );
             return;
         }
         setState(prev => ({ ...prev, banks: [...prev.banks, newBank] }));
-        toast({ title: 'Bank Added' });
+        toast.success('Bank Added');
     } catch (error: any) {
         handleApiError(error);
     }
@@ -1102,7 +1093,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const deleteLedgerTransaction = (txToDelete: LedgerTransaction) => {
     if (!state.user || state.user.role !== 'admin') {
-        toast({ variant: 'destructive', title: 'Permission Denied', description: 'Only admins can delete transactions.' });
+        toast.error('Permission Denied', { description: 'Only admins can delete transactions.' });
         return;
     }
 
@@ -1114,7 +1105,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     deleteData({ tableName: 'ap_ar_transactions', id: txToDelete.id })
       .then(() => {
-        toast({ title: 'Transaction moved to recycle bin.' });
+        toast.success('Transaction moved to recycle bin.');
         reloadData({ force: true });
       })
       .catch(error => {
@@ -1125,7 +1116,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   
   const recordPayment = async (contactId: string, contactName: string, paymentAmount: number, paymentMethod: 'cash' | 'bank', paymentDate: Date, ledgerType: 'payable' | 'receivable', bankId?: string) => {
     if (state.user?.role !== 'admin') {
-      toast({variant: 'destructive', title: 'Permission Denied'});
+      toast.error('Permission Denied');
       return;
     }
     try {
@@ -1142,7 +1133,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             bank_id: bankId,
         });
 
-        toast({title: "Payment Recorded", description: "The payment has been recorded and balances are updating."});
+        toast.success("Payment Recorded", { description: "The payment has been recorded and balances are updating."});
         reloadData({ force: true });
         
     } catch (error: any) {
