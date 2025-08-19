@@ -292,7 +292,7 @@ export function BankTab() {
             ))
             ) : (
             <TableRow>
-                <TableCell colSpan={isSelectionMode ? (showActions ? 7 : 6) : (showActions ? 6 : 5)} className="text-center h-24">No bank transactions for {format(currentMonth, "MMMM yyyy")}.</TableCell>
+                <TableCell colSpan={isSelectionMode ? (showActions ? 8 : 7) : (showActions ? 7 : 6)} className="text-center h-24">No bank transactions for {format(currentMonth, "MMMM yyyy")}.</TableCell>
             </TableRow>
             )}
         </TableBody>
@@ -370,32 +370,32 @@ export function BankTab() {
   return (
     <>
       <Card>
-        <CardHeader>
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                <div className="flex-1">
+        <CardHeader className="space-y-4">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-2">
+                <div className="text-center sm:text-left">
                     <CardTitle>Bank Ledger</CardTitle>
                     <CardDescription>
                     Current Balance: <span className="font-bold text-primary font-mono">{formatCurrency(currentBankBalance)}</span>
                     </CardDescription>
                 </div>
-                <div className="flex flex-wrap items-center gap-2">
-                     <ResponsiveSelect
-                        value={selectedBankId}
-                        onValueChange={(value) => setSelectedBankId(value)}
-                        title="Select a Bank Account"
-                        placeholder="All Banks"
-                        className="w-[150px]"
-                        items={bankAccountItems}
-                    />
-                    <div className="flex items-center gap-1">
-                        <Button variant="outline" size="icon" onClick={goToPreviousMonth} className="h-9 w-9">
-                            <ChevronLeft className="h-4 w-4" />
-                        </Button>
-                        <span className="text-sm font-medium w-24 text-center">{format(currentMonth, "MMMM yyyy")}</span>
-                        <Button variant="outline" size="icon" onClick={goToNextMonth} className="h-9 w-9">
-                            <ChevronRight className="h-4 w-4" />
-                        </Button>
-                    </div>
+            </div>
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-2">
+                <ResponsiveSelect
+                    value={selectedBankId}
+                    onValueChange={(value) => setSelectedBankId(value)}
+                    title="Select a Bank Account"
+                    placeholder="All Banks"
+                    className="w-[180px]"
+                    items={bankAccountItems}
+                />
+                <div className="flex items-center gap-1">
+                    <Button variant="outline" size="icon" onClick={goToPreviousMonth} className="h-9 w-9">
+                        <ChevronLeft className="h-4 w-4" />
+                    </Button>
+                    <span className="text-sm font-medium w-24 text-center">{format(currentMonth, "MMMM yyyy")}</span>
+                    <Button variant="outline" size="icon" onClick={goToNextMonth} className="h-9 w-9">
+                        <ChevronRight className="h-4 w-4" />
+                    </Button>
                 </div>
             </div>
              {isAdmin && <div className="flex flex-col items-center justify-center gap-2 pt-4">
