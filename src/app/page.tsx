@@ -4,7 +4,7 @@
 import { useState, useEffect } from 'react';
 import { useAppContext } from './store';
 import { cn } from '@/lib/utils';
-import { Wallet, Landmark, Boxes, Settings, PlusCircle, LogOut, CreditCard, Users, LineChart } from 'lucide-react';
+import { Wallet, Landmark, Boxes, Settings, PlusCircle, LogOut, CreditCard, Users, LineChart, Loader2 } from 'lucide-react';
 import { DashboardTab } from '@/components/dashboard-tab';
 import { CashTab } from '@/components/cash-tab';
 import { BankTab } from '@/components/bank-tab';
@@ -36,7 +36,7 @@ const navItems = [
 ]
 
 function ShipShapeLedger() {
-  const { fontSize, needsInitialBalance, user, logout, loadDataForTab, dataLoaded } = useAppContext();
+  const { fontSize, needsInitialBalance, user, logout, loadDataForTab, dataLoaded, isLoading } = useAppContext();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isSheetOpen, setIsSheetOpen] = useState(false);
@@ -46,7 +46,7 @@ function ShipShapeLedger() {
   const handleTabChange = async (value: string) => {
     setActiveTab(value);
     const tabKey = value as keyof typeof dataLoaded;
-    if (tabKey !== 'dashboard' && !dataLoaded[tabKey]) {
+    if (!dataLoaded[tabKey]) {
       await loadDataForTab(tabKey);
     }
     if (isMobile) {
@@ -54,8 +54,27 @@ function ShipShapeLedger() {
     }
   };
 
-
   const roleDisplayName = user?.role ? user.role.charAt(0).toUpperCase() + user.role.slice(1) : '';
+  
+  const renderTabContent = (tabKey: keyof typeof dataLoaded, component: React.ReactNode) => {
+    if (activeTab === tabKey) {
+        if (!dataLoaded[tabKey] || isLoading) {
+            return <div className="flex justify-center items-center h-64"><Loader2 className="h-8 w-8 animate-spin" /></div>
+        }
+        return <div className="mt-6 animate-slide-in-up">{component}</div>;
+    }
+    return null;
+  }
+
+  if (!user) {
+    return <div className="flex items-center justify-center min-h-screen bg-background">
+        <div className="flex flex-col items-center gap-4">
+            <div className="loader"></div>
+            <p className="text-muted-foreground">Authenticating...</p>
+        </div>
+    </div>;
+  }
+
 
   return (
     <div className={cn('min-h-screen bg-background text-foreground animate-fade-in', fontClasses[fontSize] || 'text-base')}>
@@ -148,23 +167,23 @@ function ShipShapeLedger() {
                     </TabsList>
                 </div>
              )}
-            <TabsContent value="dashboard" className="mt-6 animate-slide-in-up">
-              <DashboardTab setActiveTab={handleTabChange} />
+            <TabsContent value="dashboard">
+                {renderTabContent('dashboard', <DashboardTab setActiveTab={handleTabChange} />)}
             </TabsContent>
-            <TabsContent value="cash" className="mt-6 animate-slide-in-up">
-              <CashTab />
+             <TabsContent value="cash">
+                {renderTabContent('cash', <CashTab />)}
             </TabsContent>
-            <TabsContent value="bank" className="mt-6 animate-slide-in-up">
-              <BankTab />
+            <TabsContent value="bank">
+                {renderTabContent('bank', <BankTab />)}
             </TabsContent>
-            <TabsContent value="credit" className="mt-6 animate-slide-in-up">
-              <CreditTab />
+            <TabsContent value="credit">
+                {renderTabContent('credit', <CreditTab />)}
             </TabsContent>
-            <TabsContent value="stock" className="mt-6 animate-slide-in-up">
-              <StockTab />
+            <TabsContent value="stock">
+                {renderTabContent('stock', <StockTab />)}
             </TabsContent>
-            <TabsContent value="settings" className="mt-6 animate-slide-in-up">
-              <SettingsTab />
+            <TabsContent value="settings">
+                {renderTabContent('settings', <SettingsTab />)}
             </TabsContent>
           </Tabs>
         </main>

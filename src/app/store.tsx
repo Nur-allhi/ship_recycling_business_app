@@ -11,8 +11,6 @@ import { saveAs } from 'file-saver';
 import JSZip from 'jszip';
 import { getSession } from '@/lib/auth';
 import { useRouter, usePathname } from 'next/navigation';
-import { AppLoading } from '@/components/app-loading';
-
 
 type FontSize = 'sm' | 'base' | 'lg';
 
@@ -247,13 +245,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [logout]);
   
   const calculateBalancesAndStock = useCallback((
-    cashTxs: CashTransaction[], 
-    bankTxs: BankTransaction[],
-    stockTxs: StockTransaction[],
+    cashTxs: CashTransaction[] | undefined, 
+    bankTxs: BankTransaction[] | undefined,
+    stockTxs: StockTransaction[] | undefined,
     initialStock: StockItem[],
   ) => {
-      const finalCashBalance = cashTxs.reduce((acc, tx) => acc + (tx.type === 'income' ? tx.amount : -tx.amount), 0);
-      const finalBankBalance = bankTxs.reduce((acc, tx) => acc + (tx.type === 'deposit' ? tx.amount : -tx.amount), 0);
+      const finalCashBalance = (cashTxs || []).reduce((acc, tx) => acc + (tx.type === 'income' ? tx.amount : -tx.amount), 0);
+      const finalBankBalance = (bankTxs || []).reduce((acc, tx) => acc + (tx.type === 'deposit' ? tx.amount : -tx.amount), 0);
         
       const stockPortfolio: Record<string, { weight: number, totalValue: number }> = {};
 
@@ -265,7 +263,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           stockPortfolio[item.name].totalValue += item.weight * item.purchasePricePerKg;
       });
 
-      const sortedStockTransactions = [...stockTxs].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+      const sortedStockTransactions = [...(stockTxs || [])].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
       
       sortedStockTransactions.forEach(tx => {
           if (!stockPortfolio[tx.stockItemName]) {
@@ -294,41 +292,32 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return { finalCashBalance, finalBankBalance, aggregatedStockItems };
   }, []);
   
-  const reloadData = useCallback(async (options?: { force?: boolean, full?: boolean }) => {
+  const reloadData = useCallback(async () => {
     setState(prev => ({ ...prev, isLoading: true }));
     try {
         const [
             initialStockData,
-            cashData, 
-            bankData,
-            stockTransactionsData,
             categoriesData,
             vendorsData,
             clientsData,
             banksData,
         ] = await Promise.all([
             readData({ tableName: 'initial_stock' }),
-            readData({ tableName: 'cash_transactions' }),
-            readData({ tableName: 'bank_transactions' }),
-            readData({ tableName: 'stock_transactions' }),
             readData({ tableName: 'categories' }),
             readData({ tableName: 'vendors' }),
             readData({ tableName: 'clients' }),
             readData({ tableName: 'banks' }),
         ]);
-        
+
         const dbCashCategories: Category[] = (categoriesData || []).filter((c: any) => c.type === 'cash');
         const dbBankCategories: Category[] = (categoriesData || []).filter((c: any) => c.type === 'bank');
-        
-        const cashTransactions: CashTransaction[] = cashData || [];
-        const bankTransactions: BankTransaction[] = bankData || [];
-        const stockTransactions: StockTransaction[] = stockTransactionsData || [];
         const initialStockItems: StockItem[] = initialStockData || [];
 
-        const { finalCashBalance, finalBankBalance, aggregatedStockItems } = calculateBalancesAndStock(cashTransactions, bankTransactions, stockTransactions, initialStockItems);
+        // Check if initial balance is needed *before* fetching all transactions
+        const { data: cashCheck } = await supabase.from('cash_transactions').select('id', { count: 'exact', head: true });
+        const { data: bankCheck } = await supabase.from('bank_transactions').select('id', { count: 'exact', head: true });
+        const needsInitialBalance = (cashCheck?.count || 0) === 0 && (bankCheck?.count || 0) === 0;
 
-        const needsInitialBalance = (cashData?.length || 0) === 0 && (bankData?.length || 0) === 0;
-        
         const session = await getSession();
 
         setState(prev => ({
@@ -342,18 +331,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
             vendors: vendorsData || [],
             clients: clientsData || [],
             banks: banksData || [],
-            cashTransactions: cashTransactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
-            bankTransactions: bankTransactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
-            stockTransactions: stockTransactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
-            dataLoaded: { 
-                ...prev.dataLoaded, 
-                cash: true, 
-                bank: true, 
-                stock: true,
-            },
-            stockItems: aggregatedStockItems,
-            cashBalance: finalCashBalance,
-            bankBalance: finalBankBalance,
         }));
         
     } catch (error: any) {
@@ -362,36 +339,51 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } finally {
         setState(prev => ({...prev, isLoading: false}));
     }
-  }, [calculateBalancesAndStock, handleApiError]);
-
+  }, [handleApiError, supabase]);
 
   const loadDataForTab = useCallback(async (tab: 'cash' | 'bank' | 'stock' | 'credit' | 'settings') => {
-    if (state.dataLoaded[tab]) return;
+    if (state.dataLoaded[tab] && tab !== 'credit') return;
 
     setState(prev => ({ ...prev, isLoading: true }));
     try {
-        let ledgerTransactions = state.ledgerTransactions;
+        let cashTxs = state.cashTransactions;
+        let bankTxs = state.bankTransactions;
+        let stockTxs = state.stockTransactions;
+        let ledgerTxs = state.ledgerTransactions;
 
-        if ((tab === 'cash' || tab === 'bank' || tab === 'stock') && !state.dataLoaded[tab]) {
-            // Data is already fetched on initial load, just mark as loaded.
+        if (tab === 'cash' && !state.dataLoaded.cash) {
+            cashTxs = await readData({ tableName: 'cash_transactions' }) || [];
+        }
+        if (tab === 'bank' && !state.dataLoaded.bank) {
+            bankTxs = await readData({ tableName: 'bank_transactions' }) || [];
+        }
+        if (tab === 'stock' && !state.dataLoaded.stock) {
+            stockTxs = await readData({ tableName: 'stock_transactions' }) || [];
         }
         if (tab === 'credit' && !state.dataLoaded.credit) {
             const [ledgerData, installmentsData] = await Promise.all([
                 readData({ tableName: 'ap_ar_transactions' }),
                 readData({ tableName: 'payment_installments' }),
             ]);
-            ledgerTransactions = (ledgerData || []).map((tx: any) => ({
+            ledgerTxs = (ledgerData || []).map((tx: any) => ({
                 ...tx,
                 installments: (installmentsData || []).filter((ins: any) => ins.ap_ar_transaction_id === tx.id)
             }));
         }
         
-        const totalPayables = ledgerTransactions.filter((tx: any) => tx.type === 'payable' && tx.status !== 'paid').reduce((acc: number, tx: any) => acc + (tx.amount - tx.paid_amount), 0);
-        const totalReceivables = ledgerTransactions.filter((tx: any) => tx.type === 'receivable' && tx.status !== 'paid').reduce((acc: number, tx: any) => acc + (tx.amount - tx.paid_amount), 0);
+        const { finalCashBalance, finalBankBalance, aggregatedStockItems } = calculateBalancesAndStock(cashTxs, bankTxs, stockTxs, state.initialStockItems);
+        const totalPayables = ledgerTxs.filter((tx: any) => tx.type === 'payable' && tx.status !== 'paid').reduce((acc: number, tx: any) => acc + (tx.amount - tx.paid_amount), 0);
+        const totalReceivables = ledgerTxs.filter((tx: any) => tx.type === 'receivable' && tx.status !== 'paid').reduce((acc: number, tx: any) => acc + (tx.amount - tx.paid_amount), 0);
         
         setState(prev => ({
             ...prev,
-            ledgerTransactions: ledgerTransactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+            cashTransactions: cashTxs.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+            bankTransactions: bankTxs.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+            stockTransactions: stockTxs.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+            ledgerTransactions: ledgerTxs.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+            cashBalance: finalCashBalance,
+            bankBalance: finalBankBalance,
+            stockItems: aggregatedStockItems,
             totalPayables,
             totalReceivables,
             dataLoaded: { ...prev.dataLoaded, [tab]: true },
@@ -402,23 +394,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } finally {
         setState(prev => ({ ...prev, isLoading: false }));
     }
-  }, [state.dataLoaded, handleApiError, state.ledgerTransactions]);
+  }, [state.dataLoaded, state.initialStockItems, state.cashTransactions, state.bankTransactions, state.stockTransactions, state.ledgerTransactions, handleApiError, calculateBalancesAndStock]);
 
 
   useEffect(() => {
+    if (!isMounted) return;
+
     const checkSessionAndLoadData = async () => {
       const session = await getSession();
       if (session) {
-        // User is logged in, load initial data.
+        // User is logged in, load initial shell data.
         await reloadData();
       } else {
         // No session, finish loading.
         setState(prev => ({ ...prev, isLoading: false }));
       }
     };
-    if (isMounted) {
-      checkSessionAndLoadData();
-    }
+    checkSessionAndLoadData();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isMounted]);
 
@@ -1151,8 +1143,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     saveStateToLocalStorage(state);
   }, [state])
 
-  if (state.isLoading) {
-    return <AppLoading />;
+  if (state.isLoading && !isMounted) {
+    return null;
   }
 
 
