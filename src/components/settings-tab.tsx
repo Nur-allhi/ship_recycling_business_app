@@ -402,7 +402,7 @@ export function SettingsTab() {
                 ))}
             </nav>
         </aside>
-        <main className="md:col-span-3">
+        <main key={activePage} className="md:col-span-3 animate-fade-in">
            {activeComponent}
         </main>
     </div>
