@@ -11,7 +11,7 @@ import { Separator } from "@/components/ui/separator"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { Badge } from "@/components/ui/badge"
 import { Plus, Trash2, Eye, EyeOff, Users, Settings, Palette, FileCog, Recycle, Landmark, Activity, ArrowUpCircle, ArrowDownCircle, User, Contact } from "lucide-react"
-import { useToast } from "@/hooks/use-toast"
+import { toast } from "sonner"
 import { ResponsiveSelect } from "@/components/ui/responsive-select"
 import { RecycleBinTab } from "./recycle-bin-tab"
 import { ExportImportTab } from "./export-import-tab"
@@ -99,8 +99,6 @@ function GeneralSettings() {
     setWastagePercentage,
   } = useAppContext();
 
-  const { toast } = useToast()
-  
   const cashBalanceRef = useRef<HTMLInputElement>(null)
   const bankRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
@@ -131,9 +129,7 @@ function GeneralSettings() {
     for(const bank of banks) {
         const bankVal = parseFloat(bankRefs.current[bank.id]?.value || '0');
         if (isNaN(bankVal) || bankVal < 0) {
-            toast({
-                variant: "destructive",
-                title: "Invalid Input",
+            toast.error("Invalid Input", {
                 description: `Please enter a valid, non-negative number for ${bank.name}.`,
             });
             return;
@@ -142,16 +138,14 @@ function GeneralSettings() {
     }
 
     if (isNaN(cash) || cash < 0) {
-        toast({
-            variant: "destructive",
-            title: "Invalid Input",
+        toast.error("Invalid Input", {
             description: "Please enter a valid, non-negative number for cash balance.",
         });
         return;
     }
 
     setInitialBalances(cash, bankTotals);
-    toast({ title: "Balances Updated", description: "Initial cash and bank balances have been set." });
+    toast.success("Balances Updated", { description: "Initial cash and bank balances have been set." });
   }
 
   const handleInitialStockSave = () => {
@@ -160,16 +154,14 @@ function GeneralSettings() {
     const price = parseFloat(stockPriceRef.current?.value || '');
 
     if (!name || isNaN(weight) || isNaN(price) || weight <= 0 || price < 0) {
-        toast({
-            variant: "destructive",
-            title: "Invalid Stock Input",
+        toast.error("Invalid Stock Input", {
             description: "Please fill all stock fields with valid values.",
         });
         return;
     }
 
     addInitialStockItem({ name, weight, pricePerKg: price });
-    toast({ title: "Initial Stock Added", description: `${name} has been added to your inventory.` });
+    toast.success("Initial Stock Added", { description: `${name} has been added to your inventory.` });
 
     if(stockItemNameRef.current) stockItemNameRef.current.value = "";
     if(stockWeightRef.current) stockWeightRef.current.value = "";
@@ -180,11 +172,11 @@ function GeneralSettings() {
   const handleAddCategory = () => {
     const name = newCategoryNameRef.current?.value.trim();
     if (!name) {
-        toast({variant: 'destructive', title: 'Category name required'});
+        toast.error('Category name required');
         return;
     }
     if (!newCategoryDirection) {
-        toast({variant: 'destructive', title: 'Category direction required'});
+        toast.error('Category direction required');
         return;
     }
     addCategory(newCategoryType, name, newCategoryDirection);
@@ -196,9 +188,9 @@ function GeneralSettings() {
     const percentage = parseFloat(wastageRef.current?.value || '0');
     if (percentage >= 0 && percentage <= 100) {
       setWastagePercentage(percentage);
-      toast({ title: "Wastage Percentage Updated", description: `Set to ${percentage}%.` });
+      toast.success("Wastage Percentage Updated", { description: `Set to ${percentage}%.` });
     } else {
-      toast({ variant: "destructive", title: "Invalid Percentage", description: "Wastage must be between 0 and 100." });
+      toast.error("Invalid Percentage", { description: "Wastage must be between 0 and 100." });
     }
   }
 
