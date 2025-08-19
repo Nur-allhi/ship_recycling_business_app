@@ -220,6 +220,11 @@ export function BankTab() {
             <TableHead className="text-center">
                 <Button variant="ghost" onClick={() => handleSort('category')}>Category {renderSortArrow('category')}</Button>
             </TableHead>
+            {selectedBankId === 'all' && (
+                <TableHead className="text-center">
+                    <Button variant="ghost" onClick={() => handleSort('bank_id')}>Bank {renderSortArrow('bank_id')}</Button>
+                </TableHead>
+            )}
             <TableHead className="text-center">
                  <Button variant="ghost" onClick={() => handleSort('amount')}>Amount {renderSortArrow('amount')}</Button>
             </TableHead>
@@ -258,6 +263,11 @@ export function BankTab() {
                 </TableCell>
                 <TableCell className="font-medium text-left">{tx.description}</TableCell>
                 <TableCell className="text-center">{tx.category}</TableCell>
+                {selectedBankId === 'all' && (
+                    <TableCell className="text-center">
+                        {banks.find(b => b.id === tx.bank_id)?.name || 'N/A'}
+                    </TableCell>
+                )}
                 <TableCell className={`text-center font-semibold font-mono ${tx.type === 'deposit' ? 'text-accent' : 'text-destructive'}`}>
                     <div className="flex items-center justify-center gap-2">
                     {tx.type === 'deposit' ? <ArrowUpCircle /> : <ArrowDownCircle />}
@@ -282,7 +292,7 @@ export function BankTab() {
             ))
             ) : (
             <TableRow>
-                <TableCell colSpan={isSelectionMode ? (showActions ? 6 : 5) : (showActions ? 5 : 4)} className="text-center h-24">No bank transactions for {format(currentMonth, "MMMM yyyy")}.</TableCell>
+                <TableCell colSpan={isSelectionMode ? (showActions ? 7 : 6) : (showActions ? 6 : 5)} className="text-center h-24">No bank transactions for {format(currentMonth, "MMMM yyyy")}.</TableCell>
             </TableRow>
             )}
         </TableBody>
@@ -314,7 +324,11 @@ export function BankTab() {
                 </div>
                 <div className="font-medium text-base">{tx.description}</div>
                 <div className="text-sm text-muted-foreground">{tx.category}</div>
-
+                 {selectedBankId === 'all' && (
+                    <div className="text-sm text-muted-foreground font-semibold">
+                        {banks.find(b => b.id === tx.bank_id)?.name || 'N/A'}
+                    </div>
+                )}
                 <div className="flex justify-between items-center pt-2">
                     <div className="text-xs text-muted-foreground flex items-center gap-1 font-mono">
                         {format(new Date(tx.date), 'dd-MM-yyyy')}
