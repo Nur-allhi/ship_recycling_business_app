@@ -132,11 +132,12 @@ const initialAppState: AppState = {
   },
 };
 
-const getCacheKey = () => `ha-mim-iron-mart-cache`;
+const getCacheKey = (userId: string | null) => `ha-mim-iron-mart-cache-${userId || 'guest'}`;
 
 const getInitialState = (): AppState => {
     let state = { ...initialAppState, initialBalanceSet: false, isLoading: true };
     if (typeof window === 'undefined') return state;
+    
     try {
         const storedSettings = localStorage.getItem('ha-mim-iron-mart-settings');
         if (storedSettings) {
@@ -144,25 +145,9 @@ const getInitialState = (): AppState => {
             state = { ...state, ...settings };
         }
         
-        const appCache = localStorage.getItem(getCacheKey());
-        if (appCache) {
-            const cachedData = JSON.parse(appCache);
-            // Only load essential data, let lazy loading handle the rest
-            const essentialData = {
-                cashBalance: cachedData.cashBalance,
-                bankBalance: cachedData.bankBalance,
-                initialStockItems: cachedData.initialStockItems,
-                stockItems: cachedData.stockItems,
-                vendors: cachedData.vendors,
-                clients: cachedData.clients,
-                totalPayables: cachedData.totalPayables,
-                totalReceivables: cachedData.totalReceivables,
-                banks: cachedData.banks,
-                cashCategories: cachedData.cashCategories,
-                bankCategories: cachedData.bankCategories,
-            };
-            state = { ...state, ...essentialData, initialBalanceSet: true, isLoading: false };
-        }
+        // At this point on startup, we don't have a user session yet, so we can't load user-specific cache.
+        // We will rely on reloadData to fetch and cache user-specific data after login.
+        
     } catch (e) {
         console.error("Could not parse data from local storage", e);
     }
@@ -170,7 +155,7 @@ const getInitialState = (): AppState => {
 }
 
 const saveStateToLocalStorage = (state: AppState) => {
-    if (typeof window === 'undefined') return;
+    if (typeof window === 'undefined' || !state.user) return;
     try {
         const settingsToSave = {
             fontSize: state.fontSize,
@@ -203,7 +188,7 @@ const saveStateToLocalStorage = (state: AppState) => {
             deletedStockTransactions: state.deletedStockTransactions,
             deletedLedgerTransactions: state.deletedLedgerTransactions,
         };
-        localStorage.setItem(getCacheKey(), JSON.stringify(appStateToCache));
+        localStorage.setItem(getCacheKey(state.user.id), JSON.stringify(appStateToCache));
 
     } catch (e) {
         console.error("Could not save state to local storage", e);
@@ -243,12 +228,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const logout = useCallback(async () => {
-    localStorage.removeItem(getCacheKey());
+    if (state.user) {
+        localStorage.removeItem(getCacheKey(state.user.id));
+    }
     await serverLogout();
     localStorage.removeItem('ha-mim-iron-mart-settings');
     setState({...initialAppState, user: null, isLoading: false});
     window.location.href = '/login';
-  }, []);
+  }, [state.user]);
 
   const handleApiError = useCallback((error: any) => {
     const isAuthError = error.message.includes('JWT') || error.message.includes('Unauthorized') || error.message.includes("SESSION_EXPIRED");
@@ -390,7 +377,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       } finally {
         setState(prev => ({...prev, isLoading: false}));
       }
-  }, [calculateBalancesAndStock, handleApiError]);
+  }, [calculateBalancesAndStock, handleApiError, state.initialBalanceSet, state.user?.id]);
 
 
   const loadDataForTab = useCallback(async (tab: 'cash' | 'bank' | 'stock' | 'credit' | 'settings') => {
