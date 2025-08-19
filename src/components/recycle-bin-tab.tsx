@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useAppContext } from "@/app/store";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -9,6 +9,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Undo2 } from "lucide-react";
 import { format } from "date-fns";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { ResponsiveSelect } from "./ui/responsive-select";
 
 export function RecycleBinTab() {
     const { 
@@ -21,6 +23,8 @@ export function RecycleBinTab() {
         currency,
         user
     } = useAppContext();
+    const [activeTab, setActiveTab] = useState('cash');
+    const isMobile = useIsMobile();
 
     useEffect(() => {
         if(user?.role === 'admin') {
@@ -34,6 +38,13 @@ export function RecycleBinTab() {
         }
         return new Intl.NumberFormat('en-US', { style: 'currency', currency: currency, currencyDisplay: 'symbol' }).format(amount)
     }
+    
+    const tabItems = [
+        { value: 'cash', label: `Cash (${deletedCashTransactions.length})` },
+        { value: 'bank', label: `Bank (${deletedBankTransactions.length})` },
+        { value: 'stock', label: `Stock (${deletedStockTransactions.length})` },
+        { value: 'ap_ar', label: `A/R & A/P (${deletedLedgerTransactions.length})` },
+    ];
 
     if(user?.role !== 'admin') {
         return (
@@ -57,13 +68,22 @@ export function RecycleBinTab() {
                 </CardDescription>
             </CardHeader>
             <CardContent>
-                <Tabs defaultValue="cash" className="w-full">
-                    <TabsList className="grid w-full grid-cols-4">
-                        <TabsTrigger value="cash">Cash ({deletedCashTransactions.length})</TabsTrigger>
-                        <TabsTrigger value="bank">Bank ({deletedBankTransactions.length})</TabsTrigger>
-                        <TabsTrigger value="stock">Stock ({deletedStockTransactions.length})</TabsTrigger>
-                        <TabsTrigger value="ap_ar">A/R & A/P ({deletedLedgerTransactions.length})</TabsTrigger>
-                    </TabsList>
+                <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+                    {isMobile ? (
+                        <ResponsiveSelect
+                            value={activeTab}
+                            onValueChange={setActiveTab}
+                            items={tabItems}
+                            title="Select a category"
+                            className="mb-4"
+                        />
+                    ) : (
+                        <TabsList className="grid w-full grid-cols-4">
+                            {tabItems.map(item => (
+                                <TabsTrigger key={item.value} value={item.value}>{item.label}</TabsTrigger>
+                            ))}
+                        </TabsList>
+                    )}
                     <TabsContent value="cash" className="mt-4">
                         <div className="overflow-x-auto">
                             <Table>
