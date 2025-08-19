@@ -24,6 +24,7 @@ import { useAppContext } from '@/app/store';
 import { useToast } from '@/hooks/use-toast';
 import { Input } from './ui/input';
 import { ResponsiveSelect } from './ui/responsive-select';
+import { useState } from 'react';
 
 interface AggregatedContact {
     contact_id: string;
@@ -59,6 +60,7 @@ interface SettlePaymentDialogProps {
 export function SettlePaymentDialog({ isOpen, setIsOpen, contact }: SettlePaymentDialogProps) {
     const { recordPayment, currency, banks } = useAppContext();
     const { toast } = useToast();
+    const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
     
     const remainingBalance = contact.total_amount - contact.total_paid;
 
@@ -118,7 +120,7 @@ export function SettlePaymentDialog({ isOpen, setIsOpen, contact }: SettlePaymen
                                     control={control}
                                     name="paymentDate"
                                     render={({ field }) => (
-                                        <Popover>
+                                        <Popover open={isDatePickerOpen} onOpenChange={setIsDatePickerOpen}>
                                             <PopoverTrigger asChild>
                                                 <Button
                                                     variant={"outline"}
@@ -129,7 +131,15 @@ export function SettlePaymentDialog({ isOpen, setIsOpen, contact }: SettlePaymen
                                                 </Button>
                                             </PopoverTrigger>
                                             <PopoverContent className="w-auto p-0">
-                                                <Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus />
+                                                <Calendar 
+                                                  mode="single" 
+                                                  selected={field.value} 
+                                                  onSelect={(date) => {
+                                                    field.onChange(date);
+                                                    setIsDatePickerOpen(false);
+                                                  }} 
+                                                  initialFocus 
+                                                />
                                             </PopoverContent>
                                         </Popover>
                                     )}

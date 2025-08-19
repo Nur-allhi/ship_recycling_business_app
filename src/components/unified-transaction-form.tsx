@@ -158,6 +158,7 @@ type TransactionType = keyof typeof formSchemas;
 export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionFormProps) {
   const [transactionType, setTransactionType] = useState<TransactionType>('cash');
   const isMobile = useIsMobile();
+  const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
   
   const { 
     addCashTransaction, 
@@ -334,7 +335,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
             control={control}
             name="date"
             render={({ field }) => (
-                <Popover>
+                <Popover open={isDatePickerOpen} onOpenChange={setIsDatePickerOpen}>
                     <PopoverTrigger asChild>
                     <Button
                         variant={"outline"}
@@ -351,7 +352,10 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                         <Calendar
                             mode="single"
                             selected={field.value}
-                            onSelect={field.onChange}
+                            onSelect={(date) => {
+                                field.onChange(date);
+                                setIsDatePickerOpen(false);
+                            }}
                             initialFocus
                         />
                     </PopoverContent>
