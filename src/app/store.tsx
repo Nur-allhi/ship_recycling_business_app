@@ -4,8 +4,8 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import type { CashTransaction, BankTransaction, StockItem, StockTransaction, User, Vendor, Client, LedgerTransaction, PaymentInstallment, Bank, Category } from '@/lib/types';
 import { toast } from 'sonner';
-import { readData, appendData, updateData, deleteData, readDeletedData, restoreData, exportAllData, batchImportData, deleteAllData, logout as serverLogout, recordPaymentAgainstTotal, recordDirectPayment, hasUsers } from '@/app/actions';
-import { format } from 'date-fns';
+import { readData, appendData, updateData, deleteData, readDeletedData, restoreData, exportAllData, batchImportData, deleteAllData, logout as serverLogout, recordPaymentAgainstTotal, recordDirectPayment, hasUsers, hasInitialData } from '@/app/actions';
+import { format, subDays, startOfMonth, endOfMonth } from 'date-fns';
 import { supabase } from '@/lib/supabase';
 import { saveAs } from 'file-saver';
 import JSZip from 'jszip';
@@ -41,11 +41,13 @@ interface AppState {
   totalReceivables: number;
   isLoading: boolean;
   banks: Bank[];
+  loadedMonths: Record<string, boolean>; // YYYY-MM format
 }
 
 interface AppContextType extends AppState {
   reloadData: (options?: { force?: boolean }) => Promise<void>;
   loadRecycleBinData: () => Promise<void>;
+  loadDataForMonth: (month: Date) => Promise<void>;
   addCashTransaction: (tx: Omit<CashTransaction, 'id' | 'createdAt' | 'deletedAt'>) => Promise<void>;
   addBankTransaction: (tx: Omit<BankTransaction, 'id' | 'createdAt' | 'deletedAt'>, contactId?: string, contactName?: string) => Promise<void>;
   addStockTransaction: (tx: Omit<StockTransaction, 'id' | 'createdAt' | 'deletedAt'> & { contact_id?: string, contact_name?: string }) => Promise<void>;
@@ -109,6 +111,7 @@ const initialAppState: AppState = {
   totalReceivables: 0,
   isLoading: true,
   banks: [],
+  loadedMonths: {},
 };
 
 const getCacheKey = (userId: string | null) => `ha-mim-iron-mart-cache-${userId || 'guest'}`;
@@ -146,6 +149,8 @@ const saveStateToLocalStorage = (state: AppState) => {
         };
         localStorage.setItem('ha-mim-iron-mart-settings', JSON.stringify(settingsToSave));
 
+        // For simplicity, we'll cache all loaded transactions.
+        // A more advanced strategy might prune this cache.
         const dataToCache = {
             cashTransactions: state.cashTransactions,
             bankTransactions: state.bankTransactions,
@@ -155,8 +160,9 @@ const saveStateToLocalStorage = (state: AppState) => {
             cashCategories: state.cashCategories,
             bankCategories: state.bankCategories,
             vendors: state.vendors,
-clients: state.clients,
+            clients: state.clients,
             banks: state.banks,
+            loadedMonths: state.loadedMonths,
         };
         localStorage.setItem(getCacheKey(state.user.id), JSON.stringify(dataToCache));
 
@@ -217,11 +223,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [logout]);
   
   const calculateBalancesAndStock = useCallback((
-    cashTxs: CashTransaction[] | undefined, 
-    bankTxs: BankTransaction[] | undefined,
-    stockTxs: StockTransaction[] | undefined,
+    cashTxs: CashTransaction[], 
+    bankTxs: BankTransaction[],
+    stockTxs: StockTransaction[],
     initialStock: StockItem[],
-    ledgerTxs: LedgerTransaction[] | undefined,
+    ledgerTxs: LedgerTransaction[],
   ) => {
       const finalCashBalance = (cashTxs || []).reduce((acc, tx) => acc + (tx.type === 'income' ? tx.amount : -tx.amount), 0);
       const finalBankBalance = (bankTxs || []).reduce((acc, tx) => acc + (tx.type === 'deposit' ? tx.amount : -tx.amount), 0);
@@ -270,20 +276,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const reloadData = useCallback(async (options?: { force?: boolean }) => {
     setState(prev => ({ ...prev, isLoading: true }));
     try {
+        const today = new Date();
+        const thirtyDaysAgo = subDays(today, 30);
+        const monthKey = format(today, 'yyyy-MM');
+
+        // Fetch static data and initial 30 days of transactions
         const [
-            cashTxs, bankTxs, stockTxs, ledgerData, installmentsData,
-            initialStockData, categoriesData, vendorsData, clientsData, banksData
+            initialStockData, categoriesData, vendorsData, clientsData, banksData,
+            cashTxs, bankTxs, stockTxs, ledgerData, installmentsData
         ] = await Promise.all([
-            readData({ tableName: 'cash_transactions' }),
-            readData({ tableName: 'bank_transactions' }),
-            readData({ tableName: 'stock_transactions' }),
-            readData({ tableName: 'ap_ar_transactions' }),
-            readData({ tableName: 'payment_installments' }),
             readData({ tableName: 'initial_stock' }),
             readData({ tableName: 'categories' }),
             readData({ tableName: 'vendors' }),
             readData({ tableName: 'clients' }),
             readData({ tableName: 'banks' }),
+            readData({ tableName: 'cash_transactions', startDate: thirtyDaysAgo.toISOString() }),
+            readData({ tableName: 'bank_transactions', startDate: thirtyDaysAgo.toISOString() }),
+            readData({ tableName: 'stock_transactions', startDate: thirtyDaysAgo.toISOString() }),
+            readData({ tableName: 'ap_ar_transactions', startDate: thirtyDaysAgo.toISOString() }),
+            readData({ tableName: 'payment_installments', startDate: thirtyDaysAgo.toISOString() }),
         ]);
 
         const ledgerTxs = (ledgerData || []).map((tx: any) => ({
@@ -296,6 +307,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const cashCategories = [...FIXED_CASH_CATEGORIES, ...dbCashCategories];
         const bankCategories = [...FIXED_BANK_CATEGORIES, ...dbBankCategories];
         
+        // This is a temporary calculation for the dashboard based on recent data.
+        // A full calculation will happen when all data is available.
         const { finalCashBalance, finalBankBalance, aggregatedStockItems, totalPayables, totalReceivables } = calculateBalancesAndStock(
             cashTxs, bankTxs, stockTxs, initialStockData || [], ledgerTxs
         );
@@ -317,6 +330,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             stockItems: aggregatedStockItems,
             totalPayables,
             totalReceivables,
+            loadedMonths: { [monthKey]: true }
         }));
         
     } catch (error: any) {
@@ -331,17 +345,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const session = await getSession();
         if (session) {
             const cachedState = getInitialState(session.id);
-            const initialDataExists = (cachedState.cashTransactions.length > 0 || cachedState.bankTransactions.length > 0);
+            setState(prev => ({ ...prev, ...cachedState, user: session, isLoading: true }));
             
-            setState({ ...cachedState, user: session, needsInitialBalance: !initialDataExists });
-            
-            // Fetch latest data in the background
-            reloadData({ force: true });
+            const dataExists = await hasInitialData();
+            if (!dataExists) {
+                setState(prev => ({ ...prev, needsInitialBalance: true, isLoading: false }));
+            } else {
+                reloadData({ force: true });
+            }
+
         } else {
             setState(prev => ({ ...prev, isLoading: false, user: null }));
         }
     };
-    checkSessionAndLoad();
+    
+    // Only run this logic once on initial mount
+    if (state.user === null && !state.isLoading) {
+       checkSessionAndLoad();
+    }
   }, []);
 
   useEffect(() => {
@@ -382,6 +403,66 @@ export function AppProvider({ children }: { children: ReactNode }) {
         handleApiError(error);
     }
   }, [state.user, handleApiError]);
+
+  const loadDataForMonth = useCallback(async (month: Date) => {
+    const monthKey = format(month, 'yyyy-MM');
+    if (state.loadedMonths[monthKey]) {
+        return; // Data for this month is already loaded
+    }
+
+    toast.info(`Loading data for ${format(month, 'MMMM yyyy')}...`);
+
+    try {
+        const startDate = startOfMonth(month).toISOString();
+        const endDate = endOfMonth(month).toISOString();
+
+        const [cashTxs, bankTxs, stockTxs, ledgerData, installmentsData] = await Promise.all([
+            readData({ tableName: 'cash_transactions', startDate, endDate }),
+            readData({ tableName: 'bank_transactions', startDate, endDate }),
+            readData({ tableName: 'stock_transactions', startDate, endDate }),
+            readData({ tableName: 'ap_ar_transactions', startDate, endDate }),
+            readData({ tableName: 'payment_installments', startDate, endDate }),
+        ]);
+
+        // Merge new data with existing data, avoiding duplicates
+        const mergeTransactions = (existing: any[], newTxs: any[]) => {
+            const existingIds = new Set(existing.map(tx => tx.id));
+            const uniqueNewTxs = newTxs.filter(tx => !existingIds.has(tx.id));
+            return [...existing, ...uniqueNewTxs];
+        };
+        
+        const allCashTxs = mergeTransactions(state.cashTransactions, cashTxs);
+        const allBankTxs = mergeTransactions(state.bankTransactions, bankTxs);
+        const allStockTxs = mergeTransactions(state.stockTransactions, stockTxs);
+
+        const newLedgerTxs = (ledgerData || []).map((tx: any) => ({
+            ...tx,
+            installments: (installmentsData || []).filter((ins: any) => ins.ap_ar_transaction_id === tx.id)
+        }));
+        const allLedgerTxs = mergeTransactions(state.ledgerTransactions, newLedgerTxs);
+
+        const { finalCashBalance, finalBankBalance, aggregatedStockItems, totalPayables, totalReceivables } = calculateBalancesAndStock(
+            allCashTxs, allBankTxs, allStockTxs, state.initialStockItems, allLedgerTxs
+        );
+
+        setState(prev => ({
+            ...prev,
+            cashTransactions: allCashTxs.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+            bankTransactions: allBankTxs.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+            stockTransactions: allStockTxs.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+            ledgerTransactions: allLedgerTxs.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+            cashBalance: finalCashBalance,
+            bankBalance: finalBankBalance,
+            stockItems: aggregatedStockItems,
+            totalPayables,
+            totalReceivables,
+            loadedMonths: { ...prev.loadedMonths, [monthKey]: true },
+        }));
+
+    } catch (error) {
+        handleApiError(error);
+    }
+  }, [state.loadedMonths, state.cashTransactions, state.bankTransactions, state.stockTransactions, state.ledgerTransactions, state.initialStockItems, calculateBalancesAndStock, handleApiError]);
   
     const addCashTransaction = async (tx: Omit<CashTransaction, 'id' | 'createdAt' | 'deletedAt'>) => {
         const tempId = `temp-${Date.now()}`;
@@ -1047,6 +1128,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         ...state, 
         reloadData,
         loadRecycleBinData,
+        loadDataForMonth,
         addCashTransaction, 
         addBankTransaction,
         addStockTransaction,
@@ -1092,3 +1174,5 @@ export function useAppContext() {
   }
   return context;
 }
+
+    

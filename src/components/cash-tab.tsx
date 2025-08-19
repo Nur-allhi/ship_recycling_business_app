@@ -1,7 +1,7 @@
 
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import { useAppContext } from "@/app/store"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card"
@@ -16,7 +16,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { ArrowUpCircle, ArrowDownCircle, ArrowRightLeft, Pencil, History, Trash2, CheckSquare, ChevronLeft, ChevronRight, Eye, EyeOff, ArrowUpDown } from "lucide-react"
+import { ArrowUpCircle, ArrowDownCircle, ArrowRightLeft, Pencil, History, Trash2, CheckSquare, ChevronLeft, ChevronRight, Eye, EyeOff, ArrowUpDown, Loader2 } from "lucide-react"
 import type { CashTransaction } from "@/lib/types"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetTrigger } from "@/components/ui/sheet"
 import { EditTransactionSheet } from "./edit-transaction-sheet"
@@ -31,7 +31,7 @@ type SortKey = keyof CashTransaction | null;
 type SortDirection = 'asc' | 'desc';
 
 export function CashTab() {
-  const { cashBalance, cashTransactions, transferFunds, deleteCashTransaction, deleteMultipleCashTransactions, currency, user } = useAppContext()
+  const { cashBalance, cashTransactions, transferFunds, deleteCashTransaction, deleteMultipleCashTransactions, currency, user, loadDataForMonth, loadedMonths } = useAppContext()
   const [isTransferSheetOpen, setIsTransferSheetOpen] = useState(false)
   const [editSheetState, setEditSheetState] = useState<{isOpen: boolean, transaction: CashTransaction | null}>({ isOpen: false, transaction: null});
   const [deleteDialogState, setDeleteDialogState] = useState<{isOpen: boolean, txToDelete: CashTransaction | null, txsToDelete: CashTransaction[] | null}>({ isOpen: false, txToDelete: null, txsToDelete: null });
@@ -43,8 +43,21 @@ export function CashTab() {
   const [showActions, setShowActions] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey>('date');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+  const [isMonthLoading, setIsMonthLoading] = useState(false);
   const isMobile = useIsMobile();
   const isAdmin = user?.role === 'admin';
+  
+  const monthKey = format(currentMonth, 'yyyy-MM');
+  useEffect(() => {
+    const fetchMonthData = async () => {
+      if (!loadedMonths[monthKey]) {
+        setIsMonthLoading(true);
+        await loadDataForMonth(currentMonth);
+        setIsMonthLoading(false);
+      }
+    };
+    fetchMonthData();
+  }, [currentMonth, loadedMonths, loadDataForMonth, monthKey]);
 
   const handleSort = (key: SortKey) => {
     if (sortKey === key) {
@@ -203,7 +216,9 @@ export function CashTab() {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {paginatedTransactions.length > 0 ? (
+          {isMonthLoading ? (
+            <TableRow><TableCell colSpan={isSelectionMode ? 6 : 5} className="h-24 text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin" /></TableCell></TableRow>
+          ) : paginatedTransactions.length > 0 ? (
             paginatedTransactions.map((tx: CashTransaction) => (
               <TableRow key={tx.id} data-state={selectedTxIds.includes(tx.id) && "selected"}>
                 {isSelectionMode && (
@@ -268,7 +283,9 @@ export function CashTab() {
 
   const renderMobileView = () => (
     <div className="space-y-4">
-      {paginatedTransactions.length > 0 ? (
+      {isMonthLoading ? (
+        <div className="flex justify-center items-center h-24"><Loader2 className="h-6 w-6 animate-spin" /></div>
+      ) : paginatedTransactions.length > 0 ? (
         paginatedTransactions.map((tx: CashTransaction) => (
           <Card key={tx.id} className="relative animate-fade-in">
              {isSelectionMode && (

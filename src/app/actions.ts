@@ -62,6 +62,8 @@ const logActivity = async (description: string) => {
 const ReadDataInputSchema = z.object({
   tableName: z.string(),
   select: z.string().optional().default('*'),
+  startDate: z.string().optional(),
+  endDate: z.string().optional(),
 });
 
 
@@ -79,6 +81,13 @@ export async function readData(input: z.infer<typeof ReadDataInputSchema>) {
       query = query.is('deletedAt', null);
     }
     
+    if (input.startDate) {
+        query = query.gte('date', input.startDate);
+    }
+    if (input.endDate) {
+        query = query.lte('date', input.endDate);
+    }
+
     const { data, error } = await query;
 
     if (error) {
@@ -372,12 +381,13 @@ const LoginInputSchema = z.object({
     rememberMe: z.boolean().optional(),
 });
 
-async function checkInitialData(client: ReturnType<typeof createClient>) {
+export async function hasInitialData() {
+    const supabase = await getAuthenticatedSupabaseClient();
     try {
-        const { data: cashCheck, error: cashError } = await client.from('cash_transactions').select('id', { count: 'exact', head: true });
+        const { data: cashCheck, error: cashError } = await supabase.from('cash_transactions').select('id', { count: 'exact', head: true }).limit(1);
         if (cashError && cashError.code !== '42P01') throw cashError;
 
-        const { data: bankCheck, error: bankError } = await client.from('bank_transactions').select('id', { count: 'exact', head: true });
+        const { data: bankCheck, error: bankError } = await supabase.from('bank_transactions').select('id', { count: 'exact', head: true }).limit(1);
         if (bankError && bankError.code !== '42P01') throw bankError;
 
         return (cashCheck?.count ?? 0) > 0 || (bankCheck?.count ?? 0) > 0;
@@ -434,8 +444,18 @@ export async function login(input: z.infer<typeof LoginInputSchema>) {
     
     await createSession(sessionPayload, input.rememberMe);
 
-    // After session is created, we can check for initial data using the user's token.
-    const hasData = await checkInitialData(supabase);
+    let needsData = false;
+    if (!isFirstUser) {
+        // Create an authenticated client to check data
+        const tempAuthedSupabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
+            global: { headers: { Authorization: `Bearer ${data.session.access_token}` } }
+        });
+        const { data: cashCheck, error: cashError } = await tempAuthedSupabase.from('cash_transactions').select('id', { count: 'exact', head: true }).limit(1);
+        if (cashError && cashError.code !== '42P01') throw cashError;
+        const { data: bankCheck, error: bankError } = await tempAuthedSupabase.from('bank_transactions').select('id', { count: 'exact', head: true }).limit(1);
+        if (bankError && bankError.code !== '42P01') throw bankError;
+        needsData = (cashCheck?.count ?? 0) === 0 && (bankCheck?.count ?? 0) === 0;
+    }
     
     if (isFirstUser) {
         await logActivity("Created the first admin user and logged in.");
@@ -443,7 +463,7 @@ export async function login(input: z.infer<typeof LoginInputSchema>) {
         await logActivity("User logged in.");
     }
 
-    return { success: true, needsInitialBalance: !hasData };
+    return { success: true, needsInitialBalance: isFirstUser || needsData };
 }
 
 export async function getUsers() {
@@ -668,3 +688,5 @@ export async function recordDirectPayment(input: z.infer<typeof RecordDirectPaym
         return handleApiError(error);
     }
 }
+
+    
