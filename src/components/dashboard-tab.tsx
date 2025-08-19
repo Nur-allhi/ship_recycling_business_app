@@ -29,7 +29,7 @@ export function DashboardTab({ setActiveTab }: DashboardTabProps) {
       return <div className="h-8 bg-muted rounded animate-pulse w-3/4" />;
     }
     const formattedValue = isCurrency ? formatCurrency(value as number) : value;
-    return <div className="text-2xl font-bold font-mono animate-fade-in">{formattedValue}</div>;
+    return <div className="text-3xl font-bold font-mono animate-fade-in">{formattedValue}</div>;
   };
 
   const renderSubtext = (value: string) => {
@@ -65,5 +65,3 @@ export function DashboardTab({ setActiveTab }: DashboardTabProps) {
     </div>
   )
 }
-
-    
