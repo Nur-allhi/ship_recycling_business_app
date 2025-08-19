@@ -298,40 +298,34 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const session = await getSession();
     if (!session) return;
 
-    if (!options?.force && state.initialBalanceSet && state.user?.id === session.id && !options?.full) {
-      return;
+    // This check prevents re-fetching if data is already present.
+    // Full reload is now handled by loadDataForTab or specific actions.
+    if (!options?.force && state.initialBalanceSet && state.user?.id === session.id) {
+        return;
     }
     
     setState(prev => ({ ...prev, isLoading: true }));
     try {
-        const fetchPromises = [
-            readData({ tableName: 'initial_stock' }),
-            readData({ tableName: 'categories' }),
-            readData({ tableName: 'vendors' }),
-            readData({ tableName: 'clients' }),
-            readData({ tableName: 'banks' }),
-            readData({ tableName: 'cash_transactions' }),
-            readData({ tableName: 'bank_transactions' }),
-            readData({ tableName: 'stock_transactions' }),
-        ];
-
-        if (options?.full) {
-             fetchPromises.push(readData({ tableName: 'ap_ar_transactions' }));
-             fetchPromises.push(readData({ tableName: 'payment_installments' }));
-        }
-
+        // Initial load only fetches data required for dashboard calculations.
         const [
             initialStockData,
+            cashData, 
+            bankData,
+            stockTransactionsData,
             categoriesData,
             vendorsData,
             clientsData,
             banksData,
-            cashData, 
-            bankData,
-            stockTransactionsData,
-            ledgerData, // Will be undefined if not a full load
-            installmentsData, // Will be undefined if not a full load
-        ] = await Promise.all(fetchPromises);
+        ] = await Promise.all([
+            readData({ tableName: 'initial_stock' }),
+            readData({ tableName: 'cash_transactions' }),
+            readData({ tableName: 'bank_transactions' }),
+            readData({ tableName: 'stock_transactions' }),
+            readData({ tableName: 'categories' }),
+            readData({ tableName: 'vendors' }),
+            readData({ tableName: 'clients' }),
+            readData({ tableName: 'banks' }),
+        ]);
         
         const dbCashCategories: Category[] = (categoriesData || []).filter((c: any) => c.type === 'cash');
         const dbBankCategories: Category[] = (categoriesData || []).filter((c: any) => c.type === 'bank');
@@ -343,12 +337,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
         const { finalCashBalance, finalBankBalance, aggregatedStockItems } = calculateBalancesAndStock(cashTransactions, bankTransactions, stockTransactions, initialStockItems);
 
-        const allLedgerData: LedgerTransaction[] = options?.full && ledgerData ? (ledgerData || []).map((tx: any) => ({
-            ...tx,
-            installments: (installmentsData || []).filter((ins: any) => ins.ap_ar_transaction_id === tx.id)
-        })) : state.ledgerTransactions;
-
-        const needsInitialBalance = (cashData?.length || 0) === 0;
+        const needsInitialBalance = (cashData?.length || 0) === 0 && (bankData?.length || 0) === 0;
 
         setState(prev => ({
             ...prev,
@@ -364,21 +353,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
             cashTransactions: cashTransactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
             bankTransactions: bankTransactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
             stockTransactions: stockTransactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
-            ledgerTransactions: allLedgerData.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
             dataLoaded: { 
                 ...prev.dataLoaded, 
                 cash: true, 
                 bank: true, 
                 stock: true,
-                ...(options?.full && { credit: true, settings: true })
             },
             stockItems: aggregatedStockItems,
             cashBalance: finalCashBalance,
             bankBalance: finalBankBalance,
-            ...(options?.full && {
-                totalPayables: allLedgerData.filter((tx: any) => tx.type === 'payable' && tx.status !== 'paid').reduce((acc: number, tx: any) => acc + (tx.amount - tx.paid_amount), 0),
-                totalReceivables: allLedgerData.filter((tx: any) => tx.type === 'receivable' && tx.status !== 'paid').reduce((acc: number, tx: any) => acc + (tx.amount - tx.paid_amount), 0),
-            })
         }));
         
     } catch (error: any) {
@@ -387,7 +370,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } finally {
         setState(prev => ({...prev, isLoading: false}));
     }
-  }, [calculateBalancesAndStock, handleApiError, state.initialBalanceSet, state.user?.id, state.ledgerTransactions]);
+  }, [calculateBalancesAndStock, handleApiError, state.initialBalanceSet, state.user?.id]);
 
 
   const loadDataForTab = useCallback(async (tab: 'cash' | 'bank' | 'stock' | 'credit' | 'settings') => {
@@ -395,19 +378,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     setState(prev => ({ ...prev, isLoading: true }));
     try {
-        let cashTransactions = state.cashTransactions;
-        let bankTransactions = state.bankTransactions;
-        let stockTransactions = state.stockTransactions;
         let ledgerTransactions = state.ledgerTransactions;
 
-        if (tab === 'cash' && !state.dataLoaded.cash) {
-            cashTransactions = await readData({ tableName: 'cash_transactions' }) || [];
-        }
-        if (tab === 'bank' && !state.dataLoaded.bank) {
-            bankTransactions = await readData({ tableName: 'bank_transactions' }) || [];
-        }
-        if (tab === 'stock' && !state.dataLoaded.stock) {
-            stockTransactions = await readData({ tableName: 'stock_transactions' }) || [];
+        if ((tab === 'cash' || tab === 'bank' || tab === 'stock') && !state.dataLoaded[tab]) {
+            // Data is already fetched on initial load, just mark as loaded.
+            // This can be extended to re-fetch if needed.
         }
         if (tab === 'credit' && !state.dataLoaded.credit) {
             const [ledgerData, installmentsData] = await Promise.all([
@@ -420,30 +395,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
             }));
         }
         
-        const { finalCashBalance, finalBankBalance, aggregatedStockItems } = calculateBalancesAndStock(cashTransactions, bankTransactions, stockTransactions, state.initialStockItems);
         const totalPayables = ledgerTransactions.filter((tx: any) => tx.type === 'payable' && tx.status !== 'paid').reduce((acc: number, tx: any) => acc + (tx.amount - tx.paid_amount), 0);
         const totalReceivables = ledgerTransactions.filter((tx: any) => tx.type === 'receivable' && tx.status !== 'paid').reduce((acc: number, tx: any) => acc + (tx.amount - tx.paid_amount), 0);
         
         setState(prev => ({
             ...prev,
-            cashTransactions: cashTransactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
-            bankTransactions: bankTransactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
-            stockTransactions: stockTransactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
             ledgerTransactions: ledgerTransactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
-            cashBalance: finalCashBalance,
-            bankBalance: finalBankBalance,
-            stockItems: aggregatedStockItems,
             totalPayables,
             totalReceivables,
             dataLoaded: { ...prev.dataLoaded, [tab]: true },
-            isLoading: false
         }));
 
     } catch(e) {
         handleApiError(e);
+    } finally {
         setState(prev => ({ ...prev, isLoading: false }));
     }
-  }, [state.dataLoaded, handleApiError, state.initialStockItems, state.cashTransactions, state.bankTransactions, state.stockTransactions, state.ledgerTransactions, calculateBalancesAndStock]);
+  }, [state.dataLoaded, handleApiError, state.ledgerTransactions]);
 
 
   useEffect(() => {
@@ -452,16 +420,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (session) {
             if (pathname === '/login') {
                 router.replace('/');
+                return;
             }
             if (state.user?.id !== session.id || !state.initialBalanceSet) {
-                 await reloadData({ force: true, full: false }); // Fast initial load
+                 await reloadData({ force: true });
             }
+            setState(prev => ({ ...prev, isLoading: false, user: session }));
         } else {
             if (pathname !== '/login') {
                 router.replace('/login');
             }
-        }
-        if (state.isLoading) {
             setState(prev => ({ ...prev, isLoading: false }));
         }
     };
@@ -469,7 +437,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (isMounted) {
       checkSessionAndLoadData();
     }
-  }, [pathname, isMounted, router, state.user?.id, state.initialBalanceSet]);
+  }, [pathname, isMounted, router, state.user?.id, state.initialBalanceSet, reloadData]);
   
   const loadRecycleBinData = useCallback(async () => {
     if(!state.user || state.user.role !== 'admin') return;
@@ -1188,7 +1156,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     saveStateToLocalStorage(state);
   }, [state])
 
-  if (!isMounted || state.isLoading) {
+  if (state.isLoading && !state.initialBalanceSet) {
     return <AppLoading />;
   }
 
