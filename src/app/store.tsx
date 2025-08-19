@@ -145,9 +145,6 @@ const getInitialState = (): AppState => {
             state = { ...state, ...settings };
         }
         
-        // At this point on startup, we don't have a user session yet, so we can't load user-specific cache.
-        // We will rely on reloadData to fetch and cache user-specific data after login.
-        
     } catch (e) {
         console.error("Could not parse data from local storage", e);
     }
@@ -177,12 +174,10 @@ const saveStateToLocalStorage = (state: AppState) => {
             totalPayables: state.totalPayables,
             totalReceivables: state.totalReceivables,
             banks: state.banks,
-            // Cache detailed transaction lists
             cashTransactions: state.dataLoaded.cash ? state.cashTransactions : [],
             bankTransactions: state.dataLoaded.bank ? state.bankTransactions : [],
             stockTransactions: state.dataLoaded.stock ? state.stockTransactions : [],
             ledgerTransactions: state.dataLoaded.credit ? state.ledgerTransactions : [],
-            // Cache recycle bin
             deletedCashTransactions: state.deletedCashTransactions,
             deletedBankTransactions: state.deletedBankTransactions,
             deletedStockTransactions: state.deletedStockTransactions,
@@ -311,18 +306,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     setState(prev => ({ ...prev, isLoading: true }));
     try {
-        // Fetch only essential data for initial load
         const [
             initialStockData,
             categoriesData,
             vendorsData,
             clientsData,
             banksData,
-            // Fetch transactions to calculate balances, but don't store them all yet
             cashData, 
             bankData,
             stockTransactionsData,
             ledgerData,
+            installmentsData,
         ] = await Promise.all([
             readData({ tableName: 'initial_stock' }),
             readData({ tableName: 'categories' }),
@@ -333,12 +327,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
             readData({ tableName: 'bank_transactions' }),
             readData({ tableName: 'stock_transactions' }),
             readData({ tableName: 'ap_ar_transactions' }),
+            readData({ tableName: 'payment_installments' }),
         ]);
 
         const cashTransactions: CashTransaction[] = cashData || [];
         const bankTransactions: BankTransaction[] = bankData || [];
         const stockTransactions: StockTransaction[] = stockTransactionsData || [];
         const initialStockItems: StockItem[] = initialStockData || [];
+        
+        const allLedgerData: LedgerTransaction[] = (ledgerData || []).map((tx: any) => ({
+            ...tx,
+            installments: (installmentsData || []).filter((ins: any) => ins.ap_ar_transaction_id === tx.id)
+        }));
 
         const needsInitialBalance = cashTransactions.length === 0 && bankTransactions.length === 0 && initialStockItems.length === 0;
         
@@ -349,12 +349,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
         
         setState(prev => ({
             ...prev,
-            // Don't store full transaction lists here, they will be lazy-loaded
-            cashTransactions: [],
-            bankTransactions: [],
-            stockTransactions: [],
-            ledgerTransactions: [],
-            dataLoaded: initialAppState.dataLoaded,
+            cashTransactions: cashTransactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+            bankTransactions: bankTransactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+            stockTransactions: stockTransactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+            ledgerTransactions: allLedgerData.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+            dataLoaded: { cash: true, bank: true, stock: true, credit: true, settings: false },
 
             initialStockItems: initialStockItems,
             stockItems: aggregatedStockItems,
@@ -366,8 +365,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
             initialBalanceSet: true,
             vendors: vendorsData || [],
             clients: clientsData || [],
-            totalPayables: (ledgerData || []).filter((tx: any) => tx.type === 'payable' && tx.status !== 'paid').reduce((acc: number, tx: any) => acc + (tx.amount - tx.paid_amount), 0),
-            totalReceivables: (ledgerData || []).filter((tx: any) => tx.type === 'receivable' && tx.status !== 'paid').reduce((acc: number, tx: any) => acc + (tx.amount - tx.paid_amount), 0),
+            totalPayables: allLedgerData.filter((tx: any) => tx.type === 'payable' && tx.status !== 'paid').reduce((acc: number, tx: any) => acc + (tx.amount - tx.paid_amount), 0),
+            totalReceivables: allLedgerData.filter((tx: any) => tx.type === 'receivable' && tx.status !== 'paid').reduce((acc: number, tx: any) => acc + (tx.amount - tx.paid_amount), 0),
             banks: banksData || [],
             user: session
         }));
@@ -381,58 +380,33 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
 
   const loadDataForTab = useCallback(async (tab: 'cash' | 'bank' | 'stock' | 'credit' | 'settings') => {
+    // This function can be used for explicit reloads, but initial load is now handled by reloadData
     if (state.dataLoaded[tab]) return;
-    
+
     try {
+        let needsFullReload = false;
         switch(tab) {
-            case 'cash': {
-                const cashData = await readData({ tableName: 'cash_transactions' });
-                setState(prev => ({
-                    ...prev,
-                    cashTransactions: (cashData || []).sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime()),
-                    dataLoaded: { ...prev.dataLoaded, cash: true }
-                }));
+            case 'cash':
+                if (!state.dataLoaded.cash) needsFullReload = true;
                 break;
-            }
-            case 'bank': {
-                const bankData = await readData({ tableName: 'bank_transactions' });
-                setState(prev => ({
-                    ...prev,
-                    bankTransactions: (bankData || []).sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime()),
-                    dataLoaded: { ...prev.dataLoaded, bank: true }
-                }));
+            case 'bank':
+                if (!state.dataLoaded.bank) needsFullReload = true;
                 break;
-            }
-            case 'stock': {
-                const stockData = await readData({ tableName: 'stock_transactions' });
-                setState(prev => ({
-                    ...prev,
-                    stockTransactions: (stockData || []).sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime()),
-                    dataLoaded: { ...prev.dataLoaded, stock: true }
-                }));
+            case 'stock':
+                 if (!state.dataLoaded.stock) needsFullReload = true;
                 break;
-            }
-             case 'credit': {
-                const [ledgerData, installmentsData] = await Promise.all([
-                    readData({ tableName: 'ap_ar_transactions', select: '*, installments:payment_installments(*)' }),
-                    readData({ tableName: 'payment_installments' })
-                ]);
-                setState(prev => ({
-                    ...prev,
-                    ledgerTransactions: (ledgerData || []).map((tx: any) => ({
-                        ...tx, 
-                        date: new Date(tx.date).toISOString(),
-                        installments: (installmentsData || []).filter((ins: any) => ins.ap_ar_transaction_id === tx.id)
-                    })).sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime()),
-                    dataLoaded: { ...prev.dataLoaded, credit: true }
-                }));
+             case 'credit':
+                if (!state.dataLoaded.credit) needsFullReload = true;
                 break;
-            }
+        }
+
+        if (needsFullReload) {
+            await reloadData({ force: true });
         }
     } catch(e) {
         handleApiError(e);
     }
-  }, [state.dataLoaded, handleApiError]);
+  }, [state.dataLoaded, handleApiError, reloadData]);
 
 
   useEffect(() => {
@@ -442,7 +416,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
             if (pathname === '/login') {
                 router.replace('/');
             }
-            // Only do a full reload if user changes or cache is empty
             if (state.user?.id !== session.id || !state.initialBalanceSet) {
                  await reloadData({ force: true });
             }
@@ -514,7 +487,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     };
 
     const addBankTransaction = async (tx: Omit<BankTransaction, 'id' | 'createdAt' | 'deletedAt'>, contactId?: string, contactName?: string) => {
-        // Handle direct settlement from bank form
         if ((tx.category === 'A/R Settlement' || tx.category === 'A/P Settlement') && contactId && contactName) {
             await recordDirectPayment({
                 payment_method: 'bank',
@@ -526,7 +498,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
                 contact_id: contactId,
                 contact_name: contactName,
             });
-            // Calling reloadData directly as this flow is more complex than a simple insertion
             reloadData({ force: true });
             return;
         }
