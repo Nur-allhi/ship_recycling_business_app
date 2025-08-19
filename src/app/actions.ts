@@ -67,9 +67,6 @@ const ReadDataInputSchema = z.object({
 
 export async function readData(input: z.infer<typeof ReadDataInputSchema>) {
   try {
-    // Reading data is allowed for any authenticated user, so we don't need a service role client here.
-    // RLS policies (or lack thereof) will determine what they can see.
-    // For a shared app model, this is fine as all data is public to authenticated users.
     const supabase = await getAuthenticatedSupabaseClient();
     
     let query = supabase
@@ -658,3 +655,5 @@ export async function recordDirectPayment(input: z.infer<typeof RecordDirectPaym
         return handleApiError(error);
     }
 }
+
+    
