@@ -19,6 +19,7 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { InitialBalanceDialog } from '@/components/initial-balance-dialog';
 import Logo from '@/components/logo';
+import { AppLoading } from '@/components/app-loading';
 
 const fontClasses = {
   sm: 'text-sm',
@@ -36,19 +37,15 @@ const navItems = [
 ]
 
 function ShipShapeLedger() {
-  const { fontSize, needsInitialBalance, user, logout, loadDataForTab, dataLoaded, isLoading } = useAppContext();
+  const { fontSize, needsInitialBalance, user, logout, isLoading } = useAppContext();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   const isMobile = useIsMobile();
   const isAdmin = user?.role === 'admin';
 
-  const handleTabChange = async (value: string) => {
+  const handleTabChange = (value: string) => {
     setActiveTab(value);
-    const tabKey = value as keyof typeof dataLoaded;
-    if (!dataLoaded[tabKey]) {
-      await loadDataForTab(tabKey);
-    }
     if (isMobile) {
       setIsSheetOpen(false);
     }
@@ -56,23 +53,12 @@ function ShipShapeLedger() {
 
   const roleDisplayName = user?.role ? user.role.charAt(0).toUpperCase() + user.role.slice(1) : '';
   
-  const renderTabContent = (tabKey: keyof typeof dataLoaded, component: React.ReactNode) => {
-    if (activeTab === tabKey) {
-        if (!dataLoaded[tabKey] || isLoading) {
-            return <div className="flex justify-center items-center h-64"><Loader2 className="h-8 w-8 animate-spin" /></div>
-        }
-        return <div className="mt-6 animate-slide-in-up">{component}</div>;
-    }
-    return null;
+  if (isLoading) {
+    return <AppLoading />;
   }
-
+  
   if (!user) {
-    return <div className="flex items-center justify-center min-h-screen bg-background">
-        <div className="flex flex-col items-center gap-4">
-            <div className="loader"></div>
-            <p className="text-muted-foreground">Authenticating...</p>
-        </div>
-    </div>;
+    return <AppLoading />;
   }
 
 
@@ -167,23 +153,23 @@ function ShipShapeLedger() {
                     </TabsList>
                 </div>
              )}
-            <TabsContent value="dashboard">
-                {renderTabContent('dashboard', <DashboardTab setActiveTab={handleTabChange} />)}
+            <TabsContent value="dashboard" className="mt-6 animate-slide-in-up">
+                <DashboardTab setActiveTab={setActiveTab} />
             </TabsContent>
-             <TabsContent value="cash">
-                {renderTabContent('cash', <CashTab />)}
+             <TabsContent value="cash" className="mt-6 animate-slide-in-up">
+                <CashTab />
             </TabsContent>
-            <TabsContent value="bank">
-                {renderTabContent('bank', <BankTab />)}
+            <TabsContent value="bank" className="mt-6 animate-slide-in-up">
+                <BankTab />
             </TabsContent>
-            <TabsContent value="credit">
-                {renderTabContent('credit', <CreditTab />)}
+            <TabsContent value="credit" className="mt-6 animate-slide-in-up">
+                <CreditTab />
             </TabsContent>
-            <TabsContent value="stock">
-                {renderTabContent('stock', <StockTab />)}
+            <TabsContent value="stock" className="mt-6 animate-slide-in-up">
+                <StockTab />
             </TabsContent>
-            <TabsContent value="settings">
-                {renderTabContent('settings', <SettingsTab />)}
+            <TabsContent value="settings" className="mt-6 animate-slide-in-up">
+                <SettingsTab />
             </TabsContent>
           </Tabs>
         </main>
