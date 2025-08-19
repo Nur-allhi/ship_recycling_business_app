@@ -3,7 +3,7 @@
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { useAppContext } from "@/app/store"
-import { Wallet, Landmark, Boxes, LineChart } from "lucide-react"
+import { Wallet, Landmark, Boxes, LineChart, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 interface DashboardTabProps {
@@ -11,7 +11,7 @@ interface DashboardTabProps {
 }
 
 export function DashboardTab({ setActiveTab }: DashboardTabProps) {
-  const { cashBalance, bankBalance, stockItems, currency, initialBalanceSet } = useAppContext()
+  const { cashBalance, bankBalance, stockItems, currency, isLoading } = useAppContext()
 
   const formatCurrency = (amount: number) => {
     if (currency === 'BDT') {
@@ -25,7 +25,7 @@ export function DashboardTab({ setActiveTab }: DashboardTabProps) {
   const totalBalance = cashBalance + bankBalance
 
   const renderValue = (value: string | number, isCurrency = true) => {
-    if (!initialBalanceSet) {
+    if (isLoading) {
       return <div className="h-8 bg-muted rounded animate-pulse w-3/4" />;
     }
     const formattedValue = isCurrency ? formatCurrency(value as number) : value;
@@ -33,7 +33,7 @@ export function DashboardTab({ setActiveTab }: DashboardTabProps) {
   };
 
   const renderSubtext = (value: string) => {
-    if (!initialBalanceSet) {
+    if (isLoading) {
       return <div className="h-4 bg-muted rounded animate-pulse w-2/3 mt-1" />;
     }
     return <div className="text-xs text-muted-foreground animate-fade-in">{value}</div>;
