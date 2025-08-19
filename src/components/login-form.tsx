@@ -74,7 +74,7 @@ export function LoginForm() {
       // Clear cache for the new user then force a hard reload
       localStorage.removeItem('ha-mim-iron-mart-cache');
       window.location.href = '/'; 
-    } catch (error: any) => {
+    } catch (error: any) {
       toast.error(
         'Login Failed',
         {description: error.message,}

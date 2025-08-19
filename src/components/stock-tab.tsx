@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useState, useMemo } from "react"
@@ -478,16 +477,25 @@ export function StockTab() {
                     </CardHeader>
                     <CardContent>
                     {filteredByMonth.length > 0 && (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 p-4 border rounded-lg bg-muted/50">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 p-4 border rounded-lg bg-muted/50 text-center">
                             <div>
-                            <h4 className="font-semibold text-destructive">Monthly Purchases</h4>
-                            <p className="font-mono">{totalPurchaseWeight.toFixed(2)} kg</p>
-                            <p className="font-bold font-mono">{formatCurrency(totalPurchaseValue)}</p>
+                                <h4 className="font-semibold text-destructive">Monthly Purchases</h4>
+                                <p className="font-mono">{totalPurchaseWeight.toFixed(2)} kg</p>
+                                <p className="font-bold font-mono">{formatCurrency(totalPurchaseValue)}</p>
                             </div>
+                            <div className="border-r border-border hidden md:block"></div>
+                            <div className="border-b border-border md:hidden"></div>
                             <div>
-                            <h4 className="font-semibold text-accent">Monthly Sales</h4>
-                            <p className="font-mono">{totalSaleWeight.toFixed(2)} kg</p>
-                            <p className="font-bold font-mono">{formatCurrency(totalSaleValue)}</p>
+                                <h4 className="font-semibold text-primary">Current Stock Balance</h4>
+                                <p className="font-mono">{totalStockWeight.toFixed(2)} kg</p>
+                                <p className="font-bold font-mono">{formatCurrency(totalStockValue)}</p>
+                            </div>
+                            <div className="border-r border-border hidden md:block"></div>
+                            <div className="border-b border-border md:hidden"></div>
+                            <div>
+                                <h4 className="font-semibold text-accent">Monthly Sales</h4>
+                                <p className="font-mono">{totalSaleWeight.toFixed(2)} kg</p>
+                                <p className="font-bold font-mono">{formatCurrency(totalSaleValue)}</p>
                             </div>
                         </div>
                     )}
@@ -546,5 +554,3 @@ export function StockTab() {
     </>
   )
 }
-
-    
