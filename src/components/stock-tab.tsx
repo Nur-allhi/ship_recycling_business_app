@@ -163,10 +163,10 @@ export function StockTab() {
     return filteredByMonth.reduce((acc, tx) => {
         if (tx.type === 'purchase') {
             acc.totalPurchaseWeight += tx.weight;
-            acc.totalPurchaseValue += tx.weight * tx.pricePerKg;
+            acc.totalPurchaseValue += tx.actual_amount;
         } else {
             acc.totalSaleWeight += tx.weight;
-            acc.totalSaleValue += tx.weight * tx.pricePerKg;
+            acc.totalSaleValue += tx.actual_amount;
         }
         return acc;
     }, { totalPurchaseWeight: 0, totalSaleWeight: 0, totalPurchaseValue: 0, totalSaleValue: 0 });
@@ -258,7 +258,7 @@ export function StockTab() {
                   </span>
                 </TableCell>
                 <TableCell className="text-center font-mono">{formatCurrency(tx.pricePerKg)}</TableCell>
-                {showStockValue && <TableCell className={`text-center font-semibold font-mono ${tx.type === 'purchase' ? 'text-destructive' : 'text-accent'}`}>{formatCurrency(tx.weight * tx.pricePerKg)}</TableCell>}
+                {showStockValue && <TableCell className={`text-center font-semibold font-mono ${tx.type === 'purchase' ? 'text-destructive' : 'text-accent'}`}>{formatCurrency(tx.actual_amount)}</TableCell>}
                 {showActions && (
                   <TableCell className="text-center">
                     <div className="flex items-center justify-center gap-2">
@@ -301,7 +301,7 @@ export function StockTab() {
                 <CardContent className="p-4 space-y-2">
                     <div className="flex justify-between items-start">
                         <div className={`font-semibold text-lg font-mono ${tx.type === 'sale' ? 'text-accent' : 'text-destructive'}`}>
-                            {formatCurrency(tx.weight * tx.pricePerKg)}
+                            {formatCurrency(tx.actual_amount)}
                         </div>
                         <Badge variant={tx.type === 'sale' ? 'default' : 'destructive'} className="capitalize bg-opacity-20 text-opacity-100">
                           {tx.type}

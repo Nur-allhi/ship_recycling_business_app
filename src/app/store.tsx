@@ -49,7 +49,9 @@ interface AppContextType extends AppState {
   clients: Client[];
   banks: Bank[];
   syncQueueCount: number;
+  loadedMonths: Record<string, boolean>;
   
+  loadDataForMonth: (month: Date) => Promise<void>;
   reloadData: (options?: { force?: boolean; needsInitialBalance?: boolean }) => Promise<void>;
   loadRecycleBinData: () => Promise<void>;
   addCashTransaction: (tx: Omit<CashTransaction, 'id' | 'createdAt' | 'deletedAt'>) => Promise<void>;
@@ -104,6 +106,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     isSyncing: false,
     isOnline: typeof navigator !== 'undefined' ? navigator.onLine : true,
   });
+  
+  const [loadedMonths, setLoadedMonths] = useState<Record<string, boolean>>({});
 
   const router = useRouter();
   const pathname = usePathname();
@@ -269,6 +273,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
                 await bulkPut('stockTransactions', stockTxs); await bulkPut('ledgerTransactions', ledgerTxsWithInstallments);
                 await db.appState.update(1, { lastSync: new Date().toISOString() });
             });
+             setLoadedMonths({ [format(new Date(), 'yyyy-MM')]: true });
              setState(prev => ({
                 ...prev, cashBalance: balances.cashBalance, bankBalance: balances.bankBalance,
                 stockItems: balances.stockItems, totalPayables: balances.totalPayables, totalReceivables: balances.totalReceivables,
@@ -464,7 +469,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }
 
   const transferFunds = async (from: 'cash' | 'bank', amount: number, date?: string, bankId?: string, description?: string) => {
-    await reloadData();
+      await reloadData();
   };
 
   const setInitialBalances = async (cash: number, bankTotals: Record<string, number>, date: Date) => {
@@ -488,6 +493,31 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const openInitialBalanceDialog = () => setState(prev => ({...prev, isInitialBalanceDialogOpen: true}));
   const closeInitialBalanceDialog = () => setState(prev => ({...prev, isInitialBalanceDialogOpen: false}));
 
+  const loadDataForMonth = useCallback(async (month: Date) => {
+    const monthKey = format(month, 'yyyy-MM');
+    if (loadedMonths[monthKey]) return;
+
+    try {
+        const startDate = startOfMonth(month).toISOString();
+        const endDate = endOfMonth(month).toISOString();
+        const [cashTxs, bankTxs, stockTxs] = await Promise.all([
+            readData({ tableName: 'cash_transactions', startDate, endDate }),
+            readData({ tableName: 'bank_transactions', startDate, endDate }),
+            readData({ tableName: 'stock_transactions', startDate, endDate }),
+        ]);
+
+        await db.transaction('rw', db.cashTransactions, db.bankTransactions, db.stockTransactions, async () => {
+            if (cashTxs) await bulkPut('cashTransactions', cashTxs);
+            if (bankTxs) await bulkPut('bankTransactions', bankTxs);
+            if (stockTxs) await bulkPut('stockTransactions', stockTxs);
+        });
+
+        setLoadedMonths(prev => ({ ...prev, [monthKey]: true }));
+    } catch (e) {
+        handleApiError(e);
+    }
+  }, [loadedMonths, handleApiError]);
+
   return (
     <AppContext.Provider value={{ 
         ...state,
@@ -510,6 +540,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         clients: clients || [],
         banks: banks || [],
         syncQueueCount,
+        loadedMonths,
+        loadDataForMonth,
         reloadData,
         loadRecycleBinData: async () => {}, // Placeholder
         addCashTransaction,
