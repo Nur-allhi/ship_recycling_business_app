@@ -105,14 +105,23 @@ export function BankTab() {
 
   const runningBalances = useMemo(() => {
     const balances: { [key: string]: number } = {};
-    let balance = 0;
-    // Calculate balances in reverse order (from newest to oldest) to get the correct running balance
-    [...filteredByMonth].reverse().forEach(tx => {
-        balances[tx.id] = balance + (tx.type === 'deposit' ? tx.actual_amount : -tx.actual_amount);
-        balance = balances[tx.id];
+    if (paginatedTransactions.length === 0 || !bankTransactions) return balances;
+
+    const sortedForBalance = [...paginatedTransactions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    
+    const allRelevantTxs = bankTransactions.filter(tx => selectedBankId === 'all' || tx.bank_id === selectedBankId);
+    const allTxsUpToLatest = allRelevantTxs.filter(tx => new Date(tx.date) <= new Date(sortedForBalance[0].date));
+    
+    let currentBalance = allTxsUpToLatest.reduce((acc, tx) => acc + (tx.type === 'deposit' ? tx.actual_amount : -tx.actual_amount), 0);
+
+    sortedForBalance.forEach(tx => {
+        balances[tx.id] = currentBalance;
+        currentBalance -= (tx.type === 'deposit' ? tx.actual_amount : -tx.actual_amount);
     });
+
     return balances;
-  }, [filteredByMonth]);
+  }, [paginatedTransactions, bankTransactions, selectedBankId]);
+
 
   const handleEditClick = (tx: BankTransaction) => {
     setEditSheetState({ isOpen: true, transaction: tx });

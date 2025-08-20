@@ -91,14 +91,27 @@ export function CashTab() {
 
   const runningBalances = useMemo(() => {
     const balances: { [key: string]: number } = {};
-    let balance = 0;
-    // Calculate balances in reverse order (from newest to oldest) to get the correct running balance
-    [...filteredByMonth].reverse().forEach(tx => {
-        balances[tx.id] = balance + (tx.type === 'income' ? tx.actual_amount : -tx.actual_amount);
-        balance = balances[tx.id];
+    if (paginatedTransactions.length === 0) return balances;
+
+    // Correctly sort transactions from newest to oldest for running balance calculation
+    const sortedForBalance = [...paginatedTransactions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    
+    // Find the latest transaction's full-history balance
+    // This requires a one-time calculation over all transactions up to the newest one in the current view
+    const latestTxId = sortedForBalance[0].id;
+    const allTxsUpToLatest = (cashTransactions || []).filter(tx => new Date(tx.date) <= new Date(sortedForBalance[0].date));
+    let currentBalance = allTxsUpToLatest.reduce((acc, tx) => acc + (tx.type === 'income' ? tx.actual_amount : -tx.actual_amount), 0);
+    
+    // Calculate running balance for the visible page
+    sortedForBalance.forEach(tx => {
+        balances[tx.id] = currentBalance;
+        // Adjust balance for the next older transaction
+        currentBalance -= (tx.type === 'income' ? tx.actual_amount : -tx.actual_amount);
     });
+
     return balances;
-  }, [filteredByMonth]);
+  }, [paginatedTransactions, cashTransactions]);
+
 
   const handleEditClick = (tx: CashTransaction) => {
     setEditSheetState({ isOpen: true, transaction: tx });
