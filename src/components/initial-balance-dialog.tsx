@@ -34,7 +34,7 @@ interface StockItemEntry {
 }
 
 export function InitialBalanceDialog({ isOpen }: InitialBalanceDialogProps) {
-  const { setInitialBalances, addInitialStockItem, banks } = useAppContext();
+  const { setInitialBalances, addInitialStockItem, banks, closeInitialBalanceDialog } = useAppContext();
   const cashRef = useRef<HTMLInputElement>(null);
   const bankRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const [stockItems, setStockItems] = useState<StockItemEntry[]>([]);
@@ -43,7 +43,7 @@ export function InitialBalanceDialog({ isOpen }: InitialBalanceDialogProps) {
 
 
   const handleAddStockItem = () => {
-      setStockItems([...stockItems, { id: Date.now(), name: '', weight: 0, pricePerKg: 0 }]);
+      setStockItems([...stockItems, { id: Date.now(), name: '', weight: '', pricePerKg: '' }]);
   }
   
   const handleRemoveStockItem = (id: number) => {
@@ -55,9 +55,9 @@ export function InitialBalanceDialog({ isOpen }: InitialBalanceDialogProps) {
     if (field === 'weight' || field === 'pricePerKg') {
       // Allow empty string for user input, otherwise parse to float.
       finalValue = value === '' ? '' : parseFloat(value);
-      // If parsing results in NaN (e.g., from invalid characters), default to 0.
+      // If parsing results in NaN (e.g., from invalid characters), default to empty string.
       if (isNaN(finalValue as number)) {
-        finalValue = 0;
+        finalValue = '';
       }
     }
     setStockItems(stockItems.map(item => item.id === id ? { ...item, [field]: finalValue } : item));
@@ -88,8 +88,8 @@ export function InitialBalanceDialog({ isOpen }: InitialBalanceDialogProps) {
 
     for (const item of stockItems) {
         // Treat empty string as 0 for validation and saving.
-        const weight = item.weight === '' ? 0 : item.weight;
-        const pricePerKg = item.pricePerKg === '' ? 0 : item.pricePerKg;
+        const weight = item.weight === '' ? 0 : Number(item.weight);
+        const pricePerKg = item.pricePerKg === '' ? 0 : Number(item.pricePerKg);
 
         if (!item.name || isNaN(weight) || weight <= 0 || isNaN(pricePerKg) || pricePerKg < 0) {
             toast.error('Invalid Stock Item', {
@@ -113,12 +113,12 @@ export function InitialBalanceDialog({ isOpen }: InitialBalanceDialogProps) {
   };
 
   return (
-    <Dialog open={isOpen}>
-      <DialogContent className="sm:max-w-lg" onInteractOutside={(e) => e.preventDefault()}>
+    <Dialog open={isOpen} onOpenChange={closeInitialBalanceDialog}>
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Set Initial Balances</DialogTitle>
           <DialogDescription>
-            To get started, please set your initial financial and stock balances for a specific date.
+            To get started, please set your initial financial and stock balances for a specific date. You can change this later from Settings.
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-6 py-4 max-h-[70vh] overflow-y-auto pr-2">
@@ -223,6 +223,7 @@ export function InitialBalanceDialog({ isOpen }: InitialBalanceDialogProps) {
             </div>
         </div>
         <DialogFooter>
+          <Button variant="outline" onClick={closeInitialBalanceDialog}>Set Balances Later</Button>
           <Button onClick={handleSave}>Save and Continue</Button>
         </DialogFooter>
       </DialogContent>

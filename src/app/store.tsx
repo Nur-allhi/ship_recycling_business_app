@@ -11,6 +11,7 @@ import { saveAs } from 'file-saver';
 import JSZip from 'jszip';
 import { getSession } from '@/lib/auth';
 import { useRouter, usePathname } from 'next/navigation';
+import { Button } from '@/components/ui/button';
 
 type FontSize = 'sm' | 'base' | 'lg';
 
@@ -29,7 +30,6 @@ interface AppState {
   cashCategories: Category[];
   bankCategories: Category[];
   fontSize: FontSize;
-  needsInitialBalance: boolean;
   isInitialBalanceDialogOpen: boolean;
   wastagePercentage: number;
   currency: string;
@@ -72,6 +72,7 @@ interface AppContextType extends AppState {
   setShowStockValue: (show: boolean) => void;
   setInitialBalances: (cash: number, bankTotals: Record<string, number>, date: Date) => void;
   openInitialBalanceDialog: () => void;
+  closeInitialBalanceDialog: () => void;
   addInitialStockItem: (item: { name: string; weight: number; pricePerKg: number }) => void;
   handleExport: () => void;
   handleImport: (file: File) => void;
@@ -102,7 +103,6 @@ const initialAppState: AppState = {
   cashCategories: [],
   bankCategories: [],
   fontSize: 'base',
-  needsInitialBalance: false,
   isInitialBalanceDialogOpen: false,
   wastagePercentage: 0,
   currency: 'BDT',
@@ -126,6 +126,8 @@ const FIXED_CASH_CATEGORIES = [
     { name: 'Operational', direction: 'debit', is_deletable: false },
     { name: 'Transfer', direction: null, is_deletable: false },
     { name: 'Initial Balance', direction: 'credit', is_deletable: false },
+    { name: 'A/P Settlement', direction: 'debit', is_deletable: false },
+    { name: 'A/R Settlement', direction: 'credit', is_deletable: false },
 ];
 
 const FIXED_BANK_CATEGORIES = [
@@ -144,6 +146,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AppState>(initialAppState);
   const router = useRouter();
   const pathname = usePathname();
+
+  const openInitialBalanceDialog = () => {
+    if(state.user?.role === 'admin') {
+      setState(prev => ({ ...prev, isInitialBalanceDialogOpen: true }));
+    } else {
+      toast.error("Permission Denied.");
+    }
+  }
+
+  const closeInitialBalanceDialog = () => {
+    setState(prev => ({ ...prev, isInitialBalanceDialogOpen: false }));
+  }
 
   const logout = useCallback(async () => {
     await serverLogout();
@@ -178,9 +192,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
             setState(prev => ({ ...prev, user: session }));
         }
 
-        if(options?.needsInitialBalance) {
-             setState(prev => ({ ...prev, needsInitialBalance: true, isLoading: false }));
-             return;
+        if(options?.needsInitialBalance && session.role === 'admin') {
+            toast.info("Welcome! Let's set up your starting balance.", {
+                description: "Click here to set your initial financial and stock balances.",
+                duration: 10000,
+                action: {
+                    label: "Set Balances",
+                    onClick: () => openInitialBalanceDialog(),
+                }
+            })
         }
         
         const today = new Date();
@@ -244,7 +264,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } catch (error: any) {
         handleApiError(error);
     } finally {
-        setState(prev => ({...prev, isLoading: false, needsInitialBalance: false}));
+        setState(prev => ({...prev, isLoading: false}));
     }
   }, [handleApiError, state.user]);
 
@@ -727,22 +747,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const deleteCategory = async (id: string) => {
     if (!state.user || state.user.role !== 'admin') return;
     try {
-        const { error } = await supabase
-            .from('categories')
-            .delete()
-            .match({ id: id, is_deletable: true });
+      const { error } = await supabase
+        .from('categories')
+        .delete()
+        .eq('id', id)
+        .eq('is_deletable', true);
             
-        if (error) throw error;
-        
-        setState(prev => ({
-            ...prev,
-            cashCategories: prev.cashCategories.filter(c => c.id !== id),
-            bankCategories: prev.bankCategories.filter(c => c.id !== id),
-        }));
+      if (error) throw error;
 
-        toast.success("Success", { description: "Category deleted." });
+      setState(prev => ({
+          ...prev,
+          cashCategories: prev.cashCategories.filter(c => c.id !== id),
+          bankCategories: prev.bankCategories.filter(c => c.id !== id),
+      }));
+
+      toast.success("Success", { description: "Category deleted." });
     } catch (error) {
-        handleApiError(error);
+      handleApiError(error);
     }
   };
 
@@ -772,19 +793,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
         await Promise.all(promises);
         
         toast.success("Initial balances set.");
-        setState(prev => ({ ...prev, needsInitialBalance: false, isInitialBalanceDialogOpen: false }));
+        closeInitialBalanceDialog();
         await reloadData();
 
     } catch (e) {
         handleApiError(e);
-    }
-  }
-
-  const openInitialBalanceDialog = () => {
-    if(state.user?.role === 'admin') {
-      setState(prev => ({ ...prev, isInitialBalanceDialogOpen: true }));
-    } else {
-      toast.error("Permission Denied.");
     }
   }
 
@@ -1013,6 +1026,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setShowStockValue: (s) => setState(prev => ({ ...prev, showStockValue: s })),
         setInitialBalances,
         openInitialBalanceDialog,
+        closeInitialBalanceDialog,
         addInitialStockItem,
         handleExport,
         handleImport,
