@@ -294,9 +294,9 @@ export async function batchImportData(dataToImport: z.infer<typeof ImportDataSch
     
     try {
         for (const table of tables) {
-             const { error: deleteError } = await supabase.from(table).delete().gt('id', '0');
+             const { error: deleteError } = await supabase.from(table).delete().gt('id', 0); // Using gt(id, 0) for tables with numeric-like IDs
              if (deleteError && deleteError.code !== '42P01') {
-                 // Try a different approach for tables that might not have a numeric-like ID
+                 // Try a different approach for tables that might not have a numeric-like ID (e.g. UUID)
                  const { error: fallbackError } = await supabase.from(table).delete().neq('id', 'a-non-existent-value');
                  if (fallbackError && fallbackError.code !== '42P01') {
                     console.error(`Failed to clear ${table}: ${fallbackError.message}`);
@@ -340,7 +340,8 @@ export async function deleteAllData() {
         
         const tables = ['payment_installments', 'ap_ar_transactions', 'cash_transactions', 'bank_transactions', 'stock_transactions', 'initial_stock', 'categories', 'vendors', 'clients', 'banks', 'activity_log', 'monthly_snapshots'];
         for (const tableName of tables) {
-            const { error } = await supabase.from(tableName).delete().neq('id', '00000000-0000-0000-0000-000000000000');
+            // Unconditional delete to safely clear the table regardless of column types.
+            const { error } = await supabase.from(tableName).delete().or('id.gt.0,id.neq.00000000-0000-0000-0000-000000000000');
             if (error && error.code !== '42P01') {
                 console.error(`Error deleting from ${tableName}:`, error);
                 throw new Error(`Failed to delete data from ${tableName}.`);
@@ -773,6 +774,8 @@ export async function recordDirectPayment(input: z.infer<typeof RecordDirectPaym
     }
 }
     
+    
+
     
 
     
