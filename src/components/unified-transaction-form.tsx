@@ -678,8 +678,8 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                     )}
                     {stockPaymentMethod === 'credit' && stockType && stockCreditFields}
                     <div className="space-y-2">
-                        <Label htmlFor="description-stock">Description</Label>
-                        <Input id="description-stock" {...register('description')} placeholder="Optional notes (e.g., invoice #)" />
+                        <Label htmlFor="description-stock">Description (Optional)</Label>
+                        <Input id="description-stock" {...register('description')} placeholder="e.g., invoice #, delivery details" />
                         {errors.description && <p className="text-sm text-destructive">{(errors.description as any).message}</p>}
                     </div>
                   </div>
