@@ -725,13 +725,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const deleteCategory = async (id: string) => {
-    if(!state.user || state.user.role !== 'admin') return;
+    if (!state.user || state.user.role !== 'admin') return;
     try {
-        const { error } = await supabase.from('categories').delete().eq('id', id).eq('is_deletable', true);
-        if(error) throw error;
-        reloadData();
+        const { error } = await supabase
+            .from('categories')
+            .delete()
+            .eq('id', id)
+            .eq('is_deletable', true);
+            
+        if (error) throw error;
+
+        await reloadData();
         toast.success("Success", { description: "Category deleted." });
-    } catch(error) {
+    } catch (error) {
         handleApiError(error);
     }
   };
