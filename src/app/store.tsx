@@ -124,6 +124,7 @@ const getInitialState = (): AppState => {
     const savedCurrency = localStorage.getItem('currency');
     const savedShowStockValue = localStorage.getItem('showStockValue');
     const savedWastagePercentage = localStorage.getItem('wastagePercentage');
+    const savedRememberedUsername = localStorage.getItem('rememberedUsername');
 
     if (savedFontSize) baseState.fontSize = savedFontSize;
     if (savedCurrency) baseState.currency = savedCurrency;
@@ -136,12 +137,10 @@ const getInitialState = (): AppState => {
 
 
 const FIXED_CASH_CATEGORIES = [
-    { name: 'Stock Purchase', direction: 'debit', is_deletable: false },
-    { name: 'Stock Sale', direction: 'credit', is_deletable: false },
+    { name: 'Cash In', direction: 'credit', is_deletable: false },
+    { name: 'Cash Out', direction: 'debit', is_deletable: false },
     { name: 'Utilities', direction: 'debit', is_deletable: false },
     { name: 'Operational', direction: 'debit', is_deletable: false },
-    { name: 'Transfer', direction: null, is_deletable: false },
-    { name: 'Initial Balance', direction: 'credit', is_deletable: false },
     { name: 'A/P Settlement', direction: 'debit', is_deletable: false },
     { name: 'A/R Settlement', direction: 'credit', is_deletable: false },
 ];
@@ -149,12 +148,8 @@ const FIXED_CASH_CATEGORIES = [
 const FIXED_BANK_CATEGORIES = [
     { name: 'Deposit', direction: 'credit', is_deletable: false },
     { name: 'Withdrawal', direction: 'debit', is_deletable: false },
-    { name: 'Stock Purchase', direction: 'debit', is_deletable: false },
-    { name: 'Stock Sale', direction: 'credit', is_deletable: false },
     { name: 'A/P Settlement', direction: 'debit', is_deletable: false },
     { name: 'A/R Settlement', direction: 'credit', is_deletable: false },
-    { name: 'Transfer', direction: null, is_deletable: false },
-    { name: 'Initial Balance', direction: 'credit', is_deletable: false },
 ];
 
 
@@ -518,7 +513,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           const description = tx.description || `${tx.type === 'purchase' ? 'Purchase' : 'Sale'} of ${tx.weight}kg of ${tx.stockItemName}`;
           
           if (tx.paymentMethod === 'cash') {
-              const category = tx.type === 'purchase' ? 'Stock Purchase' : 'Stock Sale';
+              const category = tx.type === 'purchase' ? 'Cash Out' : 'Cash In';
               const newCashTx = { date: tx.date, amount: totalValue, description, category, type: tx.type === 'purchase' ? 'expense' : 'income', linkedStockTxId: newStockTx.id };
               const savedCashTx = await appendData({ tableName: 'cash_transactions', data: newCashTx, select: '*' });
               if (savedCashTx) {
@@ -530,7 +525,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
           } else if (tx.paymentMethod === 'bank') { 
               if (!bank_id) throw new Error("Bank ID is required for bank payment.");
-              const category = tx.type === 'purchase' ? 'Stock Purchase' : 'Stock Sale';
+              const category = tx.type === 'purchase' ? 'Withdrawal' : 'Deposit';
               const newBankTx = { date: tx.date, amount: totalValue, description, category, type: tx.type === 'purchase' ? 'withdrawal' : 'deposit', bank_id: bank_id, linkedStockTxId: newStockTx.id };
               const savedBankTx = await appendData({ tableName: 'bank_transactions', data: newBankTx, select: '*' });
               if (savedBankTx) {
@@ -716,8 +711,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if(from === 'cash') {
             if(!bankId) throw new Error("A destination bank account is required.");
             const description = 'Transfer to Bank';
-            const cashTx = await appendData({ tableName: 'cash_transactions', data: { date: transactionDate, amount, description, category: 'Transfer', type: 'expense' }, select: '*' });
-            const bankTx = await appendData({ tableName: 'bank_transactions', data: { date: transactionDate, amount, description, category: 'Transfer', type: 'deposit', bank_id: bankId! }, select: '*' });
+            const cashTx = await appendData({ tableName: 'cash_transactions', data: { date: transactionDate, amount, description, category: 'Cash Out', type: 'expense' }, select: '*' });
+            const bankTx = await appendData({ tableName: 'bank_transactions', data: { date: transactionDate, amount, description, category: 'Deposit', type: 'deposit', bank_id: bankId! }, select: '*' });
             setState(prev => ({
               ...prev,
               cashTransactions: [cashTx, ...prev.cashTransactions].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
@@ -727,8 +722,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         } else { // from bank
             if(!bankId) throw new Error("A source bank account is required.");
             const description = 'Transfer from Bank';
-            const bankTx = await appendData({ tableName: 'bank_transactions', data: { date: transactionDate, amount, description, category: 'Transfer', type: 'withdrawal', bank_id: bankId! }, select: '*' });
-            const cashTx = await appendData({ tableName: 'cash_transactions', data: { date: transactionDate, amount, description, category: 'Transfer', type: 'income' }, select: '*' });
+            const bankTx = await appendData({ tableName: 'bank_transactions', data: { date: transactionDate, amount, description, category: 'Withdrawal', type: 'withdrawal', bank_id: bankId! }, select: '*' });
+            const cashTx = await appendData({ tableName: 'cash_transactions', data: { date: transactionDate, amount, description, category: 'Cash In', type: 'income' }, select: '*' });
             setState(prev => ({
               ...prev,
               cashTransactions: [cashTx, ...prev.cashTransactions].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
@@ -764,13 +759,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const deleteCategory = async (id: string) => {
     if (!state.user || state.user.role !== 'admin') return;
     try {
-      const { error } = await supabase
-        .from('categories')
-        .delete()
-        .eq('id', id)
-        .eq('is_deletable', true);
-            
-      if (error) throw error;
+        await supabase
+            .from('categories')
+            .delete()
+            .eq('id', id)
+            .eq('is_deletable', true);
 
       setState(prev => ({
           ...prev,
@@ -788,14 +781,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (state.user?.role !== 'admin') return;
     try {
         const transactionDate = date.toISOString();
-        const cashData = { date: transactionDate, type: 'income' as const, amount: cash, description: 'Initial Balance', category: 'Initial Balance' };
+        const cashData = { date: transactionDate, type: 'income' as const, amount: cash, description: 'Initial Balance', category: 'Cash In' };
         
         const bankData = Object.entries(bankTotals).filter(([, amount]) => amount > 0).map(([bankId, amount]) => ({
             date: transactionDate,
             type: 'deposit' as const,
             amount,
             description: 'Initial Balance',
-            category: 'Initial Balance',
+            category: 'Deposit',
             bank_id: bankId,
         }));
         
