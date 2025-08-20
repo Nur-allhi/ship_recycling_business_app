@@ -367,22 +367,6 @@ const LoginInputSchema = z.object({
     rememberMe: z.boolean().optional(),
 });
 
-export async function hasInitialData() {
-    const supabase = await getAuthenticatedSupabaseClient();
-    try {
-        const { data: cashCheck, error: cashError } = await supabase.from('cash_transactions').select('id', { count: 'exact', head: true }).limit(1);
-        if (cashError && cashError.code !== '42P01') throw cashError;
-
-        const { data: bankCheck, error: bankError } = await supabase.from('bank_transactions').select('id', { count: 'exact', head: true }).limit(1);
-        if (bankError && bankError.code !== '42P01') throw bankError;
-
-        return (cashCheck?.count ?? 0) > 0 || (bankCheck?.count ?? 0) > 0;
-    } catch (error) {
-        console.error("Error checking for initial data:", error);
-        return true; 
-    }
-}
-
 export async function login(input: z.infer<typeof LoginInputSchema>) {
     const supabase = createSupabaseClient();
     let isFirstUser = false;
@@ -433,14 +417,12 @@ export async function login(input: z.infer<typeof LoginInputSchema>) {
     let needsData = false;
     if (!isFirstUser) {
         // Temporarily create a new authenticated client just for this check
-        const tempAuthedSupabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
-            global: { headers: { Authorization: `Bearer ${data.session.access_token}` } }
-        });
-        const { data: cashCheck, error: cashError } = await tempAuthedSupabase.from('cash_transactions').select('id', { count: 'exact', head: true }).limit(1);
+        const tempAuthedSupabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+        const { count: cashCount, error: cashError } = await tempAuthedSupabase.from('cash_transactions').select('id', { count: 'exact', head: true });
         if (cashError && cashError.code !== '42P01') throw cashError;
-        const { data: bankCheck, error: bankError } = await tempAuthedSupabase.from('bank_transactions').select('id', { count: 'exact', head: true }).limit(1);
+        const { count: bankCount, error: bankError } = await tempAuthedSupabase.from('bank_transactions').select('id', { count: 'exact', head: true });
         if (bankError && bankError.code !== '42P01') throw bankError;
-        needsData = (cashCheck?.count ?? 0) === 0 && (bankCheck?.count ?? 0) === 0;
+        needsData = (cashCount ?? 0) === 0 && (bankCount ?? 0) === 0;
     }
     
     if (isFirstUser) {
@@ -785,3 +767,5 @@ export async function recordDirectPayment(input: z.infer<typeof RecordDirectPaym
         return handleApiError(error);
     }
 }
+
+    

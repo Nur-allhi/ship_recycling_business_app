@@ -4,7 +4,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import type { CashTransaction, BankTransaction, StockItem, StockTransaction, User, Vendor, Client, LedgerTransaction, PaymentInstallment, Bank, Category } from '@/lib/types';
 import { toast } from 'sonner';
-import { readData, appendData, updateData, deleteData, readDeletedData, restoreData, exportAllData, batchImportData, deleteAllData, logout as serverLogout, recordPaymentAgainstTotal, recordDirectPayment, hasUsers, hasInitialData, getBalances } from '@/app/actions';
+import { readData, appendData, updateData, deleteData, readDeletedData, restoreData, exportAllData, batchImportData, deleteAllData, logout as serverLogout, recordPaymentAgainstTotal, recordDirectPayment, getBalances } from '@/app/actions';
 import { format, subDays, startOfMonth, endOfMonth } from 'date-fns';
 import { supabase } from '@/lib/supabase';
 import { saveAs } from 'file-saver';
@@ -45,7 +45,7 @@ interface AppState {
 }
 
 interface AppContextType extends AppState {
-  reloadData: (options?: { force?: boolean }) => Promise<void>;
+  reloadData: (options?: { force?: boolean; needsInitialBalance?: boolean }) => Promise<void>;
   loadRecycleBinData: () => Promise<void>;
   loadDataForMonth: (month: Date) => Promise<void>;
   addCashTransaction: (tx: Omit<CashTransaction, 'id' | 'createdAt' | 'deletedAt'>) => Promise<void>;
@@ -229,12 +229,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
              setState(prev => ({ ...prev, needsInitialBalance: true, isLoading: false }));
              return;
         }
-
-        const dataExists = await hasInitialData();
-        if (!dataExists) {
-            setState(prev => ({ ...prev, needsInitialBalance: true, isLoading: false }));
-            return;
-        }
         
         const today = new Date();
         const thirtyDaysAgo = subDays(today, 30);
@@ -242,9 +236,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
         // Fetch static data and balances first
         const [
-            initialStockData, categoriesData, vendorsData, clientsData, banksData, balances
+            categoriesData, vendorsData, clientsData, banksData, balances
         ] = await Promise.all([
-            readData({ tableName: 'initial_stock' }),
             readData({ tableName: 'categories' }),
             readData({ tableName: 'vendors' }),
             readData({ tableName: 'clients' }),
@@ -279,7 +272,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
             bankTransactions: (bankTxs || []).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
             stockTransactions: (stockTxs || []).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
             ledgerTransactions: (ledgerTxs || []).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
-            initialStockItems: initialStockData || [],
             cashCategories,
             bankCategories,
             vendors: vendorsData || [],
@@ -296,7 +288,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } catch (error: any) {
         handleApiError(error);
     } finally {
-        setState(prev => ({...prev, isLoading: false}));
+        setState(prev => ({...prev, isLoading: false, needsInitialBalance: false}));
     }
   }, [handleApiError]);
 
@@ -306,7 +298,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (session) {
             const cachedState = getInitialState(session.id);
             setState(prev => ({ ...prev, ...cachedState, user: session, isLoading: true }));
-            reloadData({ force: true }); // Always force a reload on login
+            // reloadData is called from the login form to pass the needsInitialBalance flag
         } else {
             setState(prev => ({ ...prev, isLoading: false, user: null }));
         }
@@ -991,3 +983,5 @@ export function useAppContext() {
   }
   return context;
 }
+
+    
