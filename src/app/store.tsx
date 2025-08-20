@@ -70,7 +70,7 @@ interface AppContextType extends AppState {
   setWastagePercentage: (percentage: number) => void;
   setCurrency: (currency: string) => void;
   setShowStockValue: (show: boolean) => void;
-  setInitialBalances: (cash: number, bankTotals: Record<string, number>) => void;
+  setInitialBalances: (cash: number, bankTotals: Record<string, number>, date: Date) => void;
   openInitialBalanceDialog: () => void;
   addInitialStockItem: (item: { name: string; weight: number; pricePerKg: number }) => void;
   handleExport: () => void;
@@ -736,14 +736,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const setInitialBalances = async (cash: number, bankTotals: Record<string, number>) => {
+  const setInitialBalances = async (cash: number, bankTotals: Record<string, number>, date: Date) => {
     if (state.user?.role !== 'admin') return;
     try {
-        const date = new Date().toISOString();
-        const cashData = { date, type: 'income' as const, amount: cash, description: 'Initial Balance', category: 'Initial Balance' };
+        const transactionDate = date.toISOString();
+        const cashData = { date: transactionDate, type: 'income' as const, amount: cash, description: 'Initial Balance', category: 'Initial Balance' };
         
         const bankData = Object.entries(bankTotals).filter(([, amount]) => amount > 0).map(([bankId, amount]) => ({
-            date,
+            date: transactionDate,
             type: 'deposit' as const,
             amount,
             description: 'Initial Balance',

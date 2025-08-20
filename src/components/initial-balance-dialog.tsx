@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useRef, useState } from 'react';
+import { useRef, useState }from 'react';
 import { useAppContext } from '@/app/store';
 import { Button } from './ui/button';
 import {
@@ -15,8 +15,12 @@ import {
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { toast } from 'sonner';
-import { Landmark, Wallet, Boxes, PlusCircle, Trash2 } from 'lucide-react';
+import { Landmark, Wallet, Boxes, PlusCircle, Trash2, CalendarIcon } from 'lucide-react';
 import { Separator } from './ui/separator';
+import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
+import { Calendar } from './ui/calendar';
+import { format } from 'date-fns';
+import { cn } from '@/lib/utils';
 
 interface InitialBalanceDialogProps {
   isOpen: boolean;
@@ -34,6 +38,9 @@ export function InitialBalanceDialog({ isOpen }: InitialBalanceDialogProps) {
   const cashRef = useRef<HTMLInputElement>(null);
   const bankRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const [stockItems, setStockItems] = useState<StockItemEntry[]>([]);
+  const [date, setDate] = useState<Date>(new Date());
+  const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
+
 
   const handleAddStockItem = () => {
       setStockItems([...stockItems, { id: Date.now(), name: '', weight: 0, pricePerKg: 0 }]);
@@ -79,11 +86,13 @@ export function InitialBalanceDialog({ isOpen }: InitialBalanceDialogProps) {
         }
     }
     
-    // This will close the dialog and trigger a reload.
-    setInitialBalances(cash, bankTotals);
+    // Pass the selected date to the context function
+    setInitialBalances(cash, bankTotals, date);
 
-    // Now, add the stock items one by one.
+    // Now, add the stock items one by one. The context should also handle the date for these.
     for (const item of stockItems) {
+        // NOTE: The `addInitialStockItem` action doesn't currently take a date. 
+        // This might need to be updated in a future step if stock needs a specific start date.
         await addInitialStockItem({ name: item.name, weight: item.weight, pricePerKg: item.pricePerKg });
     }
   };
@@ -94,10 +103,38 @@ export function InitialBalanceDialog({ isOpen }: InitialBalanceDialogProps) {
         <DialogHeader>
           <DialogTitle>Set Initial Balances</DialogTitle>
           <DialogDescription>
-            To get started, please set your initial financial and stock balances.
+            To get started, please set your initial financial and stock balances for a specific date.
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-6 py-4 max-h-[70vh] overflow-y-auto pr-2">
+            <div className="space-y-2">
+                <Label htmlFor="start-date">Balance Start Date</Label>
+                <Popover open={isDatePickerOpen} onOpenChange={setIsDatePickerOpen}>
+                    <PopoverTrigger asChild>
+                    <Button
+                        variant={"outline"}
+                        className={cn(
+                        "w-full justify-start text-left font-normal",
+                        !date && "text-muted-foreground"
+                        )}
+                    >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {date ? format(date, "PPP") : <span>Pick a date</span>}
+                    </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0">
+                        <Calendar
+                            mode="single"
+                            selected={date}
+                            onSelect={(d) => {
+                                if(d) setDate(d);
+                                setIsDatePickerOpen(false);
+                            }}
+                            initialFocus
+                        />
+                    </PopoverContent>
+                </Popover>
+            </div>
             <div>
                 <h3 className="font-semibold text-lg mb-2 flex items-center"><Wallet className="mr-2 h-5 w-5" />Financial Balances</h3>
                  <div className="grid gap-4">
