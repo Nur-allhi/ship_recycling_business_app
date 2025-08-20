@@ -273,9 +273,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return { finalCashBalance, finalBankBalance, aggregatedStockItems, totalPayables, totalReceivables };
   }, []);
   
-  const reloadData = useCallback(async (options?: { force?: boolean }) => {
+  const reloadData = useCallback(async (options?: { force?: boolean, needsInitialBalance?: boolean }) => {
     setState(prev => ({ ...prev, isLoading: true }));
     try {
+        if(options?.needsInitialBalance) {
+             setState(prev => ({ ...prev, needsInitialBalance: true, isLoading: false }));
+             return;
+        }
+
+        const dataExists = await hasInitialData();
+        if (!dataExists) {
+            setState(prev => ({ ...prev, needsInitialBalance: true, isLoading: false }));
+            return;
+        }
+
         const today = new Date();
         const thirtyDaysAgo = subDays(today, 30);
         const monthKey = format(today, 'yyyy-MM');
@@ -346,35 +357,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (session) {
             const cachedState = getInitialState(session.id);
             setState(prev => ({ ...prev, ...cachedState, user: session, isLoading: true }));
-            
-            const dataExists = await hasInitialData();
-            if (!dataExists) {
-                setState(prev => ({ ...prev, needsInitialBalance: true, isLoading: false }));
-            } else {
-                reloadData({ force: true });
-            }
-
+            reloadData();
         } else {
             setState(prev => ({ ...prev, isLoading: false, user: null }));
         }
     };
     
-    // Only run this logic once on initial mount
-    if (state.user === null && !state.isLoading) {
-       checkSessionAndLoad();
-    }
+    checkSessionAndLoad();
+    // This effect should only run once on mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
+    if (state.isLoading) return; // Don't redirect while loading
     if (pathname === '/login') {
         if(state.user) router.replace('/');
     } else {
-        if(!state.user && !state.isLoading) router.replace('/login');
+        if(!state.user) router.replace('/login');
     }
   }, [pathname, state.user, state.isLoading, router]);
   
   useEffect(() => {
-    if(state.user) {
+    if(state.user && !state.isLoading) {
         saveStateToLocalStorage(state);
     }
   }, [state]);
@@ -1174,5 +1178,3 @@ export function useAppContext() {
   }
   return context;
 }
-
-    
