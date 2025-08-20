@@ -1,13 +1,12 @@
-
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useAppContext } from "@/app/store";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Undo2, Trash2 } from "lucide-react";
+import { Undo2, Trash2, Loader2, RefreshCw } from "lucide-react";
 import { format } from "date-fns";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { ResponsiveSelect } from "./ui/responsive-select";
@@ -29,13 +28,20 @@ export function RecycleBinTab() {
     } = useAppContext();
     const [activeTab, setActiveTab] = useState('cash');
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+    const [isLoading, setIsLoading] = useState(true);
     const isMobile = useIsMobile();
 
-    useEffect(() => {
-        if(user?.role === 'admin') {
-            loadRecycleBinData();
+    const fetchData = useCallback(async () => {
+        setIsLoading(true);
+        if (user?.role === 'admin') {
+            await loadRecycleBinData();
         }
-    }, [loadRecycleBinData, user]);
+        setIsLoading(false);
+    }, [loadRecycleBinData, user?.role]);
+
+    useEffect(() => {
+        fetchData();
+    }, [fetchData]);
 
     const formatCurrency = (amount: number) => {
         if (currency === 'BDT') {
@@ -80,6 +86,36 @@ export function RecycleBinTab() {
         )
     }
 
+    const renderTable = (items: any[], columns: { key: string, header: string, render?: (item: any) => React.ReactNode }[], txType: 'cash' | 'bank' | 'stock' | 'ap_ar') => (
+        <div className="overflow-x-auto">
+            <Table>
+                <TableHeader>
+                    <TableRow>
+                        {columns.map(col => <TableHead key={col.key}>{col.header}</TableHead>)}
+                        <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                </TableHeader>
+                <TableBody>
+                    {isLoading ? (
+                        <TableRow><TableCell colSpan={columns.length + 1} className="text-center h-24"><Loader2 className="mx-auto h-6 w-6 animate-spin" /></TableCell></TableRow>
+                    ) : items.length > 0 ? items.map(item => (
+                        <TableRow key={item.id}>
+                            {columns.map(col => (
+                                <TableCell key={col.key}>{col.render ? col.render(item) : item[col.key]}</TableCell>
+                            ))}
+                            <TableCell className="text-right">
+                                <Button variant="ghost" size="icon" onClick={() => restoreTransaction(txType, item.id)}>
+                                    <Undo2 className="h-4 w-4"/>
+                                </Button>
+                            </TableCell>
+                        </TableRow>
+                    )) : <TableRow><TableCell colSpan={columns.length + 1} className="text-center h-24">No deleted items in this category.</TableCell></TableRow>}
+                </TableBody>
+            </Table>
+        </div>
+    );
+    
+
     return (
         <>
             <Card>
@@ -91,12 +127,17 @@ export function RecycleBinTab() {
                                 Deleted items are kept here. You can restore them or empty the bin permanently.
                             </CardDescription>
                         </div>
-                         {hasDeletedItems && (
-                            <Button variant="destructive" size="sm" onClick={() => setIsDeleteDialogOpen(true)}>
-                                <Trash2 className="mr-2 h-4 w-4" />
-                                Empty Recycle Bin
+                        <div className="flex items-center gap-2">
+                             <Button variant="ghost" size="icon" onClick={fetchData} disabled={isLoading}>
+                                {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
                             </Button>
-                        )}
+                             {hasDeletedItems && (
+                                <Button variant="destructive" size="sm" onClick={() => setIsDeleteDialogOpen(true)}>
+                                    <Trash2 className="mr-2 h-4 w-4" />
+                                    Empty Recycle Bin
+                                </Button>
+                            )}
+                        </div>
                     </div>
                 </CardHeader>
                 <CardContent>
@@ -117,118 +158,33 @@ export function RecycleBinTab() {
                             </TabsList>
                         )}
                         <TabsContent value="cash" className="mt-4">
-                            <div className="overflow-x-auto">
-                                <Table>
-                                    <TableHeader>
-                                        <TableRow>
-                                            <TableHead>Deleted On</TableHead>
-                                            <TableHead>Description</TableHead>
-                                            <TableHead>Amount</TableHead>
-                                            <TableHead className="text-right">Actions</TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {deletedCashTransactions.length > 0 ? deletedCashTransactions.map(tx => (
-                                            <TableRow key={tx.id}>
-                                                <TableCell>{tx.deletedAt ? format(new Date(tx.deletedAt), "dd-MM-yyyy") : 'N/A'}</TableCell>
-                                                <TableCell>{tx.description}</TableCell>
-                                                <TableCell className={tx.type === 'income' ? 'text-accent' : 'text-destructive'}>{formatCurrency(tx.actual_amount)}</TableCell>
-                                                <TableCell className="text-right">
-                                                    <Button variant="ghost" size="icon" onClick={() => restoreTransaction('cash', tx.id)}>
-                                                        <Undo2 className="h-4 w-4"/>
-                                                    </Button>
-                                                </TableCell>
-                                            </TableRow>
-                                        )) : <TableRow><TableCell colSpan={4} className="text-center h-24">No deleted cash transactions.</TableCell></TableRow>}
-                                    </TableBody>
-                                </Table>
-                            </div>
+                            {renderTable(deletedCashTransactions, [
+                                { key: 'deletedAt', header: 'Deleted On', render: (tx) => tx.deletedAt ? format(new Date(tx.deletedAt), "dd-MM-yyyy") : 'N/A' },
+                                { key: 'description', header: 'Description' },
+                                { key: 'actual_amount', header: 'Amount', render: (tx) => <span className={tx.type === 'income' ? 'text-accent' : 'text-destructive'}>{formatCurrency(tx.actual_amount)}</span> },
+                            ], 'cash')}
                         </TabsContent>
                         <TabsContent value="bank" className="mt-4">
-                            <div className="overflow-x-auto">
-                                <Table>
-                                    <TableHeader>
-                                        <TableRow>
-                                            <TableHead>Deleted On</TableHead>
-                                            <TableHead>Description</TableHead>
-                                            <TableHead>Amount</TableHead>
-                                            <TableHead className="text-right">Actions</TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {deletedBankTransactions.length > 0 ? deletedBankTransactions.map(tx => (
-                                            <TableRow key={tx.id}>
-                                                <TableCell>{tx.deletedAt ? format(new Date(tx.deletedAt), "dd-MM-yyyy") : 'N/A'}</TableCell>
-                                                <TableCell>{tx.description}</TableCell>
-                                                <TableCell className={tx.type === 'deposit' ? 'text-accent' : 'text-destructive'}>{formatCurrency(tx.actual_amount)}</TableCell>
-                                                <TableCell className="text-right">
-                                                    <Button variant="ghost" size="icon" onClick={() => restoreTransaction('bank', tx.id)}>
-                                                        <Undo2 className="h-4 w-4"/>
-                                                    </Button>
-                                                </TableCell>
-                                            </TableRow>
-                                        )) : <TableRow><TableCell colSpan={4} className="text-center h-24">No deleted bank transactions.</TableCell></TableRow>}
-                                    </TableBody>
-                                </Table>
-                            </div>
+                             {renderTable(deletedBankTransactions, [
+                                { key: 'deletedAt', header: 'Deleted On', render: (tx) => tx.deletedAt ? format(new Date(tx.deletedAt), "dd-MM-yyyy") : 'N/A' },
+                                { key: 'description', header: 'Description' },
+                                { key: 'actual_amount', header: 'Amount', render: (tx) => <span className={tx.type === 'deposit' ? 'text-accent' : 'text-destructive'}>{formatCurrency(tx.actual_amount)}</span> },
+                            ], 'bank')}
                         </TabsContent>
                         <TabsContent value="stock" className="mt-4">
-                            <div className="overflow-x-auto">
-                                <Table>
-                                    <TableHeader>
-                                        <TableRow>
-                                            <TableHead>Deleted On</TableHead>
-                                            <TableHead>Item</TableHead>
-                                            <TableHead>Weight</TableHead>
-                                            <TableHead>Value</TableHead>
-                                            <TableHead className="text-right">Actions</TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {deletedStockTransactions.length > 0 ? deletedStockTransactions.map(tx => (
-                                            <TableRow key={tx.id}>
-                                                <TableCell>{tx.deletedAt ? format(new Date(tx.deletedAt), "dd-MM-yyyy") : 'N/A'}</TableCell>
-                                                <TableCell>{tx.stockItemName}</TableCell>
-                                                <TableCell>{tx.weight} kg</TableCell>
-                                                <TableCell>{formatCurrency(tx.actual_amount)}</TableCell>
-                                                <TableCell className="text-right">
-                                                    <Button variant="ghost" size="icon" onClick={() => restoreTransaction('stock', tx.id)}>
-                                                        <Undo2 className="h-4 w-4"/>
-                                                    </Button>
-                                                </TableCell>
-                                            </TableRow>
-                                        )) : <TableRow><TableCell colSpan={5} className="text-center h-24">No deleted stock transactions.</TableCell></TableRow>}
-                                    </TableBody>
-                                </Table>
-                            </div>
+                            {renderTable(deletedStockTransactions, [
+                                { key: 'deletedAt', header: 'Deleted On', render: (tx) => tx.deletedAt ? format(new Date(tx.deletedAt), "dd-MM-yyyy") : 'N/A' },
+                                { key: 'stockItemName', header: 'Item' },
+                                { key: 'weight', header: 'Weight', render: (tx) => `${tx.weight} kg` },
+                                { key: 'actual_amount', header: 'Value', render: (tx) => formatCurrency(tx.actual_amount) },
+                            ], 'stock')}
                         </TabsContent>
                         <TabsContent value="ap_ar" className="mt-4">
-                            <div className="overflow-x-auto">
-                                <Table>
-                                    <TableHeader>
-                                        <TableRow>
-                                            <TableHead>Deleted On</TableHead>
-                                            <TableHead>Description</TableHead>
-                                            <TableHead>Amount</TableHead>
-                                            <TableHead className="text-right">Actions</TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {deletedLedgerTransactions.length > 0 ? deletedLedgerTransactions.map(tx => (
-                                            <TableRow key={tx.id}>
-                                                <TableCell>{tx.deletedAt ? format(new Date(tx.deletedAt), "dd-MM-yyyy") : 'N/A'}</TableCell>
-                                                <TableCell>{tx.description}</TableCell>
-                                                <TableCell>{formatCurrency(tx.amount)}</TableCell>
-                                                <TableCell className="text-right">
-                                                    <Button variant="ghost" size="icon" onClick={() => restoreTransaction('ap_ar', tx.id)}>
-                                                        <Undo2 className="h-4 w-4"/>
-                                                    </Button>
-                                                </TableCell>
-                                            </TableRow>
-                                        )) : <TableRow><TableCell colSpan={4} className="text-center h-24">No deleted A/R or A/P transactions.</TableCell></TableRow>}
-                                    </TableBody>
-                                </Table>
-                            </div>
+                           {renderTable(deletedLedgerTransactions, [
+                                { key: 'deletedAt', header: 'Deleted On', render: (tx) => tx.deletedAt ? format(new Date(tx.deletedAt), "dd-MM-yyyy") : 'N/A' },
+                                { key: 'description', header: 'Description' },
+                                { key: 'amount', header: 'Amount', render: (tx) => formatCurrency(tx.amount) },
+                            ], 'ap_ar')}
                         </TabsContent>
                     </Tabs>
                 </CardContent>
@@ -243,6 +199,3 @@ export function RecycleBinTab() {
         </>
     )
 }
-    
-
-    

@@ -1,10 +1,10 @@
-
 "use client"
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { useAppContext } from "@/app/store"
-import { Wallet, Landmark, Boxes, LineChart, Loader2 } from "lucide-react"
+import { Wallet, Landmark, Boxes, LineChart } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface DashboardTabProps {
   setActiveTab: (tab: string) => void;
@@ -26,7 +26,7 @@ export function DashboardTab({ setActiveTab }: DashboardTabProps) {
 
   const renderValue = (value: string | number, isCurrency = true) => {
     if (isLoading) {
-      return <div className="h-8 bg-muted rounded animate-pulse w-3/4" />;
+      return <Skeleton className="h-8 w-3/4" />;
     }
     const formattedValue = isCurrency ? formatCurrency(value as number) : `${value}`;
     return <div className="text-3xl font-bold font-mono animate-fade-in">{formattedValue}</div>;
@@ -34,7 +34,7 @@ export function DashboardTab({ setActiveTab }: DashboardTabProps) {
 
   const renderSubtext = (value: string) => {
     if (isLoading) {
-      return <div className="h-4 bg-muted rounded animate-pulse w-2/3 mt-1" />;
+      return <Skeleton className="h-4 w-2/3 mt-1" />;
     }
     return <div className="text-xs text-muted-foreground animate-fade-in">{value}</div>;
   }
