@@ -63,7 +63,7 @@ interface AppContextType extends AppState {
   deleteMultipleStockTransactions: (txs: StockTransaction[]) => void;
   deleteLedgerTransaction: (tx: LedgerTransaction) => void;
   restoreTransaction: (txType: 'cash' | 'bank' | 'stock' | 'ap_ar', id: string) => void;
-  transferFunds: (from: 'cash' | 'bank', amount: number, date?: string, bankId?: string) => Promise<void>;
+  transferFunds: (from: 'cash' | 'bank', amount: number, date?: string, bankId?: string, description?: string) => Promise<void>;
   addCategory: (type: 'cash' | 'bank', category: string, direction: 'credit' | 'debit') => void;
   deleteCategory: (id: string) => void;
   setFontSize: (size: FontSize) => void;
@@ -716,15 +716,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const transferFunds = async (from: 'cash' | 'bank', amount: number, date?: string, bankId?: string) => {
+  const transferFunds = async (from: 'cash' | 'bank', amount: number, date?: string, bankId?: string, description?: string) => {
      const transactionDate = date || new Date().toISOString();
      
      try {
         if(from === 'cash') {
             if(!bankId) throw new Error("A destination bank account is required.");
-            const description = 'Transfer to Bank';
-            const cashTx = await appendData({ tableName: 'cash_transactions', data: { date: transactionDate, amount, description, category: 'Cash Out', type: 'expense' }, select: '*' });
-            const bankTx = await appendData({ tableName: 'bank_transactions', data: { date: transactionDate, amount, description, category: 'Deposit', type: 'deposit', bank_id: bankId! }, select: '*' });
+            const txDescription = description || 'Transfer to Bank';
+            const cashTx = await appendData({ tableName: 'cash_transactions', data: { date: transactionDate, amount, description: txDescription, category: 'Cash Out', type: 'expense' }, select: '*' });
+            const bankTx = await appendData({ tableName: 'bank_transactions', data: { date: transactionDate, amount, description: txDescription, category: 'Deposit', type: 'deposit', bank_id: bankId! }, select: '*' });
             setState(prev => ({
               ...prev,
               cashTransactions: [cashTx, ...prev.cashTransactions].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
@@ -733,9 +733,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
         } else { // from bank
             if(!bankId) throw new Error("A source bank account is required.");
-            const description = 'Transfer from Bank';
-            const bankTx = await appendData({ tableName: 'bank_transactions', data: { date: transactionDate, amount, description, category: 'Withdrawal', type: 'withdrawal', bank_id: bankId! }, select: '*' });
-            const cashTx = await appendData({ tableName: 'cash_transactions', data: { date: transactionDate, amount, description, category: 'Cash In', type: 'income' }, select: '*' });
+            const txDescription = description || 'Transfer from Bank';
+            const bankTx = await appendData({ tableName: 'bank_transactions', data: { date: transactionDate, amount, description: txDescription, category: 'Withdrawal', type: 'withdrawal', bank_id: bankId! }, select: '*' });
+            const cashTx = await appendData({ tableName: 'cash_transactions', data: { date: transactionDate, amount, description: txDescription, category: 'Cash In', type: 'income' }, select: '*' });
             setState(prev => ({
               ...prev,
               cashTransactions: [cashTx, ...prev.cashTransactions].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
@@ -1093,5 +1093,3 @@ export function useAppContext() {
   }
   return context;
 }
-
-    

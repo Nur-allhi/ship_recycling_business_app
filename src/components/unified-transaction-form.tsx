@@ -126,6 +126,7 @@ const transferSchema = baseSchema.extend({
     transferFrom: z.enum(['cash', 'bank'], { required_error: "Please select transfer source."}),
     transferToBankId: z.string().optional(),
     transferFromBankId: z.string().optional(),
+    description: z.string().optional(),
 }).superRefine((data, ctx) => {
     if (data.transferFrom === 'cash' && !data.transferToBankId) {
         ctx.addIssue({ code: 'custom', message: 'Destination bank is required.', path: ['transferToBankId'] });
@@ -311,7 +312,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
             case 'transfer':
                 const bankId = data.transferFrom === 'cash' ? data.transferToBankId : data.transferFromBankId;
                 if (!bankId) throw new Error("A bank account must be selected for the transfer.");
-                await transferFunds(data.transferFrom!, data.amount!, transactionDate, bankId);
+                await transferFunds(data.transferFrom!, data.amount!, transactionDate, bankId, data.description);
                 break;
             case 'ap_ar':
                 let ledgerContactId: string | undefined;
@@ -749,6 +750,11 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                             {errors.amount && <p className="text-sm text-destructive">{(errors.amount as any).message}</p>}
                         </div>
                     </div>
+                     <div className="space-y-2">
+                        <Label htmlFor="description-transfer">Description (Optional)</Label>
+                        <Input id="description-transfer" {...register('description')} placeholder="e.g., Owner's drawing" />
+                        {errors.description && <p className="text-sm text-destructive">{(errors.description as any).message}</p>}
+                    </div>
                     <div className="space-y-2">
                         <Label>Transfer Direction</Label>
                         <Controller 
@@ -878,5 +884,3 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
     </>
   );
 }
-
-    
