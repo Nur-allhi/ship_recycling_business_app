@@ -28,7 +28,7 @@ const formSchema = z.object({
   description: z.string().optional(),
   
   // Cash & Bank
-  amount: z.coerce.number().positive().optional(),
+  actual_amount: z.coerce.number().positive().optional(),
   category: z.string().optional(),
   inOutType: z.enum(['in', 'out']).optional(),
   
@@ -45,7 +45,7 @@ const formSchema = z.object({
       if (!data.weight) ctx.addIssue({ code: 'custom', message: 'Weight must be positive.', path: ['weight'] });
       if (!data.pricePerKg) ctx.addIssue({ code: 'custom', message: 'Price must be positive.', path: ['pricePerKg'] });
     } else { // It's a cash/bank transaction
-      if (!data.amount) ctx.addIssue({ code: 'custom', message: 'Amount must be positive.', path: ['amount'] });
+      if (!data.actual_amount) ctx.addIssue({ code: 'custom', message: 'Amount must be positive.', path: ['actual_amount'] });
       if (!data.description) ctx.addIssue({ code: 'custom', message: 'Description is required.', path: ['description'] });
       if (!data.category) ctx.addIssue({ code: 'custom', message: 'Category is required.', path: ['category'] });
       if (!data.inOutType) ctx.addIssue({ code: 'custom', message: 'Direction is required.', path: ['inOutType'] });
@@ -82,7 +82,7 @@ export function EditTransactionSheet({ isOpen, setIsOpen, transaction, transacti
     const tx = transaction as any;
     if (isCash || isBank) {
       return {
-        amount: tx.amount,
+        actual_amount: tx.actual_amount,
         description: tx.description,
         category: tx.category,
         inOutType: tx.type === 'income' || tx.type === 'deposit' ? 'in' : 'out',
@@ -120,7 +120,7 @@ export function EditTransactionSheet({ isOpen, setIsOpen, transaction, transacti
         if (isCash && 'id' in transaction) {
             await editCashTransaction(transaction as CashTransaction, {
                 type: data.inOutType === 'in' ? 'income' : 'expense',
-                amount: data.amount!,
+                actual_amount: data.actual_amount!,
                 description: data.description!,
                 category: data.category!,
                 lastEdited: new Date().toISOString()
@@ -128,7 +128,7 @@ export function EditTransactionSheet({ isOpen, setIsOpen, transaction, transacti
         } else if (isBank && 'id' in transaction) {
             await editBankTransaction(transaction as BankTransaction, {
                 type: data.inOutType === 'in' ? 'deposit' : 'withdrawal',
-                amount: data.amount!,
+                actual_amount: data.actual_amount!,
                 description: data.description!,
                 category: data.category!,
                 lastEdited: new Date().toISOString()
@@ -184,9 +184,9 @@ export function EditTransactionSheet({ isOpen, setIsOpen, transaction, transacti
                     <>
                         <fieldset disabled={isStockDerivedTx} className="space-y-6">
                             <div className="space-y-2">
-                                <Label htmlFor="amount">Amount</Label>
-                                <Input id="amount" type="number" step="0.01" {...register('amount')} />
-                                {errors.amount && <p className="text-sm text-destructive">{errors.amount.message}</p>}
+                                <Label htmlFor="actual_amount">Amount</Label>
+                                <Input id="actual_amount" type="number" step="0.01" {...register('actual_amount')} />
+                                {errors.actual_amount && <p className="text-sm text-destructive">{errors.actual_amount.message}</p>}
                             </div>
                             
                             <div className="space-y-2">

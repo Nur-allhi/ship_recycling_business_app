@@ -210,7 +210,7 @@ export function CashTab() {
                 <Button variant="ghost" onClick={() => handleSort('category')}>Category {renderSortArrow('category')}</Button>
             </TableHead>
             <TableHead className="text-center">
-                 <Button variant="ghost" onClick={() => handleSort('amount')}>Amount {renderSortArrow('amount')}</Button>
+                 <Button variant="ghost" onClick={() => handleSort('actual_amount')}>Amount {renderSortArrow('actual_amount')}</Button>
             </TableHead>
             {showActions && <TableHead className="text-center">Actions</TableHead>}
           </TableRow>
@@ -252,7 +252,7 @@ export function CashTab() {
                 <TableCell className={`text-center font-semibold font-mono ${tx.type === 'income' ? 'text-accent' : 'text-destructive'}`}>
                   <div className="flex items-center justify-center gap-2">
                     {tx.type === 'income' ? <ArrowUpCircle /> : <ArrowDownCircle />}
-                    {formatCurrency(tx.amount)}
+                    {formatCurrency(tx.actual_amount)}
                   </div>
                 </TableCell>
                 {showActions && (
@@ -299,7 +299,7 @@ export function CashTab() {
             <CardContent className="p-4 space-y-2">
                 <div className="flex justify-between items-start">
                     <div className={`font-semibold text-lg font-mono ${tx.type === 'income' ? 'text-accent' : 'text-destructive'}`}>
-                        {formatCurrency(tx.amount)}
+                        {formatCurrency(tx.actual_amount)}
                     </div>
                     <Badge variant={tx.type === 'income' ? 'default' : 'destructive'} className="capitalize bg-opacity-20 text-opacity-100">
                         {tx.type}

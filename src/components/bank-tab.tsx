@@ -117,7 +117,7 @@ export function BankTab() {
 
   const currentBankBalance = useMemo(() => {
     if (selectedBankId === 'all') return bankBalance;
-    return filteredByBank.reduce((acc, tx) => acc + (tx.type === 'deposit' ? tx.amount : -tx.amount), 0);
+    return filteredByBank.reduce((acc, tx) => acc + (tx.type === 'deposit' ? tx.actual_amount : -tx.actual_amount), 0);
   }, [filteredByBank, bankBalance, selectedBankId]);
 
   const handleEditClick = (tx: BankTransaction) => {
@@ -239,7 +239,7 @@ export function BankTab() {
                 </TableHead>
             )}
             <TableHead className="text-center">
-                 <Button variant="ghost" onClick={() => handleSort('amount')}>Amount {renderSortArrow('amount')}</Button>
+                 <Button variant="ghost" onClick={() => handleSort('actual_amount')}>Amount {renderSortArrow('actual_amount')}</Button>
             </TableHead>
             {showActions && <TableHead className="text-center">Actions</TableHead>}
             </TableRow>
@@ -286,7 +286,7 @@ export function BankTab() {
                 <TableCell className={`text-center font-semibold font-mono ${tx.type === 'deposit' ? 'text-accent' : 'text-destructive'}`}>
                     <div className="flex items-center justify-center gap-2">
                     {tx.type === 'deposit' ? <ArrowUpCircle /> : <ArrowDownCircle />}
-                    {formatCurrency(tx.amount)}
+                    {formatCurrency(tx.actual_amount)}
                     </div>
                 </TableCell>
                 {showActions && (
@@ -333,7 +333,7 @@ export function BankTab() {
             <CardContent className="p-4 space-y-2">
                 <div className="flex justify-between items-start">
                     <div className={`font-semibold text-lg font-mono ${tx.type === 'deposit' ? 'text-accent' : 'text-destructive'}`}>
-                        {formatCurrency(tx.amount)}
+                        {formatCurrency(tx.actual_amount)}
                     </div>
                      <Badge variant={tx.type === 'deposit' ? 'default' : 'destructive'} className="capitalize bg-opacity-20 text-opacity-100">
                         {tx.type}
