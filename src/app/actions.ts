@@ -517,6 +517,7 @@ export async function getBalances() {
 
         const startDate = latestSnapshot ? latestSnapshot.snapshot_date : '1970-01-01';
 
+        // Initialize balances from snapshot or zero
         let cashBalance = latestSnapshot?.cash_balance || 0;
         let bankBalances: Record<string, number> = latestSnapshot?.bank_balances || {};
         let stockPortfolio: Record<string, { weight: number; totalValue: number }> = {};
@@ -528,6 +529,8 @@ export async function getBalances() {
         let totalPayables = latestSnapshot?.total_payables || 0;
         let totalReceivables = latestSnapshot?.total_receivables || 0;
 
+        // Fetch all transactions since the snapshot date
+        // If there's no snapshot, startDate is 1970, so all transactions will be fetched.
         const [
             cashData, bankData, stockData, initialStockData, ledgerData
         ] = await Promise.all([
@@ -538,12 +541,16 @@ export async function getBalances() {
             readData({ tableName: 'ap_ar_transactions', startDate }),
         ]);
 
-        // If no snapshot, calculate from beginning of time
+        // If no snapshot, calculate initial state from the beginning of time
         if (!latestSnapshot) {
             cashBalance = (cashData || []).reduce((acc, tx) => acc + (tx.type === 'income' ? tx.amount : -tx.amount), 0);
+            
+            bankBalances = {};
             (bankData || []).forEach(tx => {
                 bankBalances[tx.bank_id] = (bankBalances[tx.bank_id] || 0) + (tx.type === 'deposit' ? tx.amount : -tx.amount);
             });
+
+            stockPortfolio = {};
             (initialStockData || []).forEach(item => {
                 if (!stockPortfolio[item.name]) {
                     stockPortfolio[item.name] = { weight: 0, totalValue: 0 };
@@ -551,22 +558,28 @@ export async function getBalances() {
                 stockPortfolio[item.name].weight += item.weight;
                 stockPortfolio[item.name].totalValue += item.weight * item.purchasePricePerKg;
             });
+
             totalPayables = (ledgerData || []).filter(tx => tx.type === 'payable').reduce((acc, tx) => acc + (tx.amount - tx.paid_amount), 0);
             totalReceivables = (ledgerData || []).filter(tx => tx.type === 'receivable').reduce((acc, tx) => acc + (tx.amount - tx.paid_amount), 0);
+
         } else {
-             // Apply transactions since snapshot
+            // Apply transactions that happened *after* the snapshot was taken
             (cashData || []).forEach(tx => cashBalance += (tx.type === 'income' ? tx.amount : -tx.amount));
+            
             (bankData || []).forEach(tx => {
                 bankBalances[tx.bank_id] = (bankBalances[tx.bank_id] || 0) + (tx.type === 'deposit' ? tx.amount : -tx.amount);
             });
-             (ledgerData || []).forEach(tx => {
-                if(tx.type === 'payable') totalPayables += (tx.amount - tx.paid_amount);
-                if(tx.type === 'receivable') totalReceivables += (tx.amount - tx.paid_amount);
+             
+            (ledgerData || []).forEach(tx => {
+                const remaining = tx.amount - tx.paid_amount;
+                if(tx.type === 'payable') totalPayables += remaining;
+                if(tx.type === 'receivable') totalReceivables += remaining;
              });
         }
         
         const totalBankBalance = Object.values(bankBalances).reduce((acc, bal) => acc + bal, 0);
         
+        // Always process all stock transactions since the snapshot date (or all time if no snapshot)
         const sortedStockTransactions = [...(stockData || [])].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
         sortedStockTransactions.forEach(tx => {
             if (!stockPortfolio[tx.stockItemName]) {
@@ -575,11 +588,13 @@ export async function getBalances() {
             const item = stockPortfolio[tx.stockItemName];
             const currentAvgPrice = item.weight > 0 ? item.totalValue / item.weight : 0;
             if (tx.type === 'purchase') {
-                item.weight += tx.weight;
-                item.totalValue += tx.weight * tx.pricePerKg;
+                const newTotalValue = item.totalValue + (tx.weight * tx.pricePerKg);
+                const newTotalWeight = item.weight + tx.weight;
+                item.totalValue = newTotalValue;
+                item.weight = newTotalWeight;
             } else { // sale
-                item.weight -= tx.weight;
                 item.totalValue -= tx.weight * currentAvgPrice;
+                item.weight -= tx.weight;
             }
         });
         
@@ -770,5 +785,3 @@ export async function recordDirectPayment(input: z.infer<typeof RecordDirectPaym
         return handleApiError(error);
     }
 }
-
-    
