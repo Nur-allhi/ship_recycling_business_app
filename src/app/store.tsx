@@ -88,34 +88,50 @@ interface AppContextType extends AppState {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-const initialAppState: AppState = {
-  cashBalance: 0,
-  cashTransactions: [],
-  bankBalance: 0,
-  bankTransactions: [],
-  initialStockItems: [],
-  stockItems: [],
-  stockTransactions: [],
-  deletedCashTransactions: [],
-  deletedBankTransactions: [],
-  deletedStockTransactions: [],
-  deletedLedgerTransactions: [],
-  cashCategories: [],
-  bankCategories: [],
-  fontSize: 'base',
-  isInitialBalanceDialogOpen: false,
-  wastagePercentage: 0,
-  currency: 'BDT',
-  showStockValue: false,
-  user: null,
-  vendors: [],
-  clients: [],
-  ledgerTransactions: [],
-  totalPayables: 0,
-  totalReceivables: 0,
-  isLoading: true,
-  banks: [],
-  loadedMonths: {},
+const getInitialState = (): AppState => {
+  const baseState: AppState = {
+    cashBalance: 0,
+    cashTransactions: [],
+    bankBalance: 0,
+    bankTransactions: [],
+    initialStockItems: [],
+    stockItems: [],
+    stockTransactions: [],
+    deletedCashTransactions: [],
+    deletedBankTransactions: [],
+    deletedStockTransactions: [],
+    deletedLedgerTransactions: [],
+    cashCategories: [],
+    bankCategories: [],
+    fontSize: 'base',
+    isInitialBalanceDialogOpen: false,
+    wastagePercentage: 0,
+    currency: 'BDT',
+    showStockValue: false,
+    user: null,
+    vendors: [],
+    clients: [],
+    ledgerTransactions: [],
+    totalPayables: 0,
+    totalReceivables: 0,
+    isLoading: true,
+    banks: [],
+    loadedMonths: {},
+  };
+
+  if (typeof window !== 'undefined') {
+    const savedFontSize = localStorage.getItem('fontSize') as FontSize;
+    const savedCurrency = localStorage.getItem('currency');
+    const savedShowStockValue = localStorage.getItem('showStockValue');
+    const savedWastagePercentage = localStorage.getItem('wastagePercentage');
+
+    if (savedFontSize) baseState.fontSize = savedFontSize;
+    if (savedCurrency) baseState.currency = savedCurrency;
+    if (savedShowStockValue) baseState.showStockValue = JSON.parse(savedShowStockValue);
+    if (savedWastagePercentage) baseState.wastagePercentage = parseFloat(savedWastagePercentage);
+  }
+
+  return baseState;
 };
 
 
@@ -143,7 +159,7 @@ const FIXED_BANK_CATEGORIES = [
 
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<AppState>(initialAppState);
+  const [state, setState] = useState<AppState>(getInitialState());
   const router = useRouter();
   const pathname = usePathname();
 
@@ -161,7 +177,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(async () => {
     await serverLogout();
-    setState({...initialAppState, user: null, isLoading: false});
+    setState({...getInitialState(), user: null, isLoading: false});
     window.location.href = '/login';
   }, []);
 
@@ -194,13 +210,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
         if(options?.needsInitialBalance && session.role === 'admin') {
             toast.info("Welcome! Let's set up your starting balance.", {
-                description: "Click here to set your initial financial and stock balances.",
+                description: "You can close this and set it later from the Settings menu.",
                 duration: 10000,
                 action: {
                     label: "Set Balances",
                     onClick: () => openInitialBalanceDialog(),
                 }
             })
+             setState(prev => ({...prev, isInitialBalanceDialogOpen: true }));
         }
         
         const today = new Date();
@@ -996,6 +1013,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
          throw error;
     }
   }
+
+  const setFontSize = (size: FontSize) => {
+    localStorage.setItem('fontSize', size);
+    setState(prev => ({ ...prev, fontSize: size }));
+  };
+
+  const setWastagePercentage = (percentage: number) => {
+    localStorage.setItem('wastagePercentage', String(percentage));
+    setState(prev => ({ ...prev, wastagePercentage: percentage }));
+  };
+
+  const setCurrency = (currency: string) => {
+    localStorage.setItem('currency', currency);
+    setState(prev => ({ ...prev, currency }));
+  };
+
+  const setShowStockValue = (show: boolean) => {
+    localStorage.setItem('showStockValue', JSON.stringify(show));
+    setState(prev => ({ ...prev, showStockValue: show }));
+  };
   
   return (
     <AppContext.Provider value={{ 
@@ -1020,10 +1057,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         transferFunds,
         addCategory,
         deleteCategory,
-        setFontSize: (size) => setState(prev => ({ ...prev, fontSize: size })),
-        setWastagePercentage: (p) => setState(prev => ({ ...prev, wastagePercentage: p })),
-        setCurrency: (c) => setState(prev => ({ ...prev, currency: c })),
-        setShowStockValue: (s) => setState(prev => ({ ...prev, showStockValue: s })),
+        setFontSize,
+        setWastagePercentage,
+        setCurrency,
+        setShowStockValue,
         setInitialBalances,
         openInitialBalanceDialog,
         closeInitialBalanceDialog,
