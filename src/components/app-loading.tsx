@@ -16,7 +16,9 @@ export function AppLoading() {
                     <h1 className="text-2xl font-bold text-primary">Ha-Mim Iron Mart</h1>
                 </div>
                 <Progress value={loadingProgress} className="w-full h-2" />
-                <p className="text-muted-foreground animate-pulse">Loading your ledger...</p>
+                <p className="text-muted-foreground animate-pulse">
+                    Loading your ledger... {loadingProgress > 0 && `${Math.round(loadingProgress)}%`}
+                </p>
             </div>
         </div>
     );

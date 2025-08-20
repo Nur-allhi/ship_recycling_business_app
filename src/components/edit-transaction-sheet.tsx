@@ -145,7 +145,6 @@ export function EditTransactionSheet({ isOpen, setIsOpen, transaction, transacti
         }
         toast.success("Transaction Updated", { description: "The transaction has been successfully updated." });
         setIsOpen(false);
-        await reloadData(); // Refresh data to reflect widespread changes from edits
     } catch(e) {
         toast.error("Update failed", { description: "Could not save the transaction changes." });
     }

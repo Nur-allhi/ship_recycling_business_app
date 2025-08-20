@@ -76,11 +76,6 @@ interface AppContextType extends AppState {
   handleImport: (file: File) => void;
   handleDeleteAllData: () => void;
   logout: () => void;
-  addVendor: (name: string) => Promise<any>;
-  addClient: (name: string) => Promise<any>;
-  addBank: (name: string) => Promise<void>;
-  addLedgerTransaction: (tx: Omit<LedgerTransaction, 'id' | 'createdAt' | 'deletedAt' | 'status' | 'paid_amount' | 'installments'>) => Promise<void>;
-  recordPayment: (contactId: string, contactName: string, paymentAmount: number, paymentMethod: 'cash' | 'bank', paymentDate: Date, ledgerType: 'payable' | 'receivable', bankId?: string) => Promise<void>;
   login: (credentials: Parameters<typeof serverLogin>[0]) => Promise<any>;
 }
 
@@ -517,6 +512,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         await updateData({ tableName: 'cash_transactions', id: originalTx.id, data: updatedTxData });
         toast.success("Success", { description: "Cash transaction updated." });
         await updateBalances();
+        await reloadData();
       } catch (error) {
             handleApiError(error);
       }
@@ -527,6 +523,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         await updateData({ tableName: 'bank_transactions', id: originalTx.id, data: updatedTxData });
         toast.success("Success", { description: "Bank transaction updated."});
         await updateBalances();
+        await reloadData();
       } catch(error) {
             handleApiError(error);
       }
@@ -553,6 +550,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
               duration: 5000,
           });
           await updateBalances();
+          await reloadData();
 
       } catch(error) {
           handleApiError(error);
@@ -1016,5 +1014,3 @@ export function useAppContext() {
   }
   return context;
 }
-
-    
