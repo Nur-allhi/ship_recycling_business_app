@@ -294,10 +294,14 @@ export async function batchImportData(dataToImport: z.infer<typeof ImportDataSch
     
     try {
         for (const table of tables) {
-             const { error: deleteError } = await supabase.from(table).delete().neq('id', '00000000-0000-0000-0000-000000000000'); // Delete all
+             const { error: deleteError } = await supabase.from(table).delete().gt('id', 0); // Universal way to delete all rows assuming 'id' is a number or can be cast
              if (deleteError && deleteError.code !== '42P01') {
-                console.error(`Failed to clear ${table}: ${deleteError.message}`);
-                throw new Error(`Failed to clear ${table}: ${deleteError.message}`);
+                // Fallback for non-numeric or non-existent IDs
+                const { error: fallbackError } = await supabase.from(table).delete().neq('id', 'a-non-existent-value');
+                 if (fallbackError && fallbackError.code !== '42P01') {
+                    console.error(`Failed to clear ${table}: ${fallbackError.message}`);
+                    throw new Error(`Failed to clear ${table}: ${fallbackError.message}`);
+                 }
             }
         }
 
@@ -767,5 +771,4 @@ export async function recordDirectPayment(input: z.infer<typeof RecordDirectPaym
         return handleApiError(error);
     }
 }
-
     
