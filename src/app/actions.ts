@@ -294,12 +294,14 @@ export async function batchImportData(dataToImport: z.infer<typeof ImportDataSch
     
     try {
         for (const table of tables) {
-             // This is the simplest and most reliable way to clear a table.
-             // It deletes all rows without any complex conditions.
-             const { error: deleteError } = await supabase.from(table).delete().neq('id', 'this-is-a-placeholder-that-will-never-match');
+             const { error: deleteError } = await supabase.from(table).delete().gt('id', '0');
              if (deleteError && deleteError.code !== '42P01') {
-                console.error(`Failed to clear ${table}: ${deleteError.message}`);
-                throw new Error(`Failed to clear ${table}: ${deleteError.message}`);
+                 // Try a different approach for tables that might not have a numeric-like ID
+                 const { error: fallbackError } = await supabase.from(table).delete().neq('id', 'a-non-existent-value');
+                 if (fallbackError && fallbackError.code !== '42P01') {
+                    console.error(`Failed to clear ${table}: ${fallbackError.message}`);
+                    throw new Error(`Failed to clear ${table}: ${fallbackError.message}`);
+                 }
             }
         }
 
@@ -771,6 +773,8 @@ export async function recordDirectPayment(input: z.infer<typeof RecordDirectPaym
     }
 }
     
+    
+
     
 
     
