@@ -69,7 +69,8 @@ export function EditTransactionSheet({ isOpen, setIsOpen, transaction, transacti
     editStockTransaction,
     cashCategories,
     bankCategories,
-    stockItems
+    stockItems,
+    reloadData,
   } = useAppContext();
   
   
@@ -112,38 +113,42 @@ export function EditTransactionSheet({ isOpen, setIsOpen, transaction, transacti
       })
   }, [defaultValues, setValue]);
 
-  const onSubmit = (data: FormData) => {
+  const onSubmit = async (data: FormData) => {
     if (!transaction) return;
 
-    if (isCash && 'id' in transaction) {
-      editCashTransaction(transaction as CashTransaction, {
-        type: data.inOutType === 'in' ? 'income' : 'expense',
-        amount: data.amount!,
-        description: data.description!,
-        category: data.category!,
-        lastEdited: new Date().toISOString()
-      });
-    } else if (isBank && 'id' in transaction) {
-      editBankTransaction(transaction as BankTransaction, {
-        type: data.inOutType === 'in' ? 'deposit' : 'withdrawal',
-        amount: data.amount!,
-        description: data.description!,
-        category: data.category!,
-        lastEdited: new Date().toISOString()
-      });
-    } else if (isStock && 'id' in transaction) {
-        editStockTransaction(transaction as StockTransaction, {
-            type: data.type!,
-            stockItemName: data.stockItemName!,
-            weight: data.weight!,
-            pricePerKg: data.pricePerKg!,
-            description: data.description,
-            lastEdited: new Date().toISOString()
-        });
+    try {
+        if (isCash && 'id' in transaction) {
+            await editCashTransaction(transaction as CashTransaction, {
+                type: data.inOutType === 'in' ? 'income' : 'expense',
+                amount: data.amount!,
+                description: data.description!,
+                category: data.category!,
+                lastEdited: new Date().toISOString()
+            });
+        } else if (isBank && 'id' in transaction) {
+            await editBankTransaction(transaction as BankTransaction, {
+                type: data.inOutType === 'in' ? 'deposit' : 'withdrawal',
+                amount: data.amount!,
+                description: data.description!,
+                category: data.category!,
+                lastEdited: new Date().toISOString()
+            });
+        } else if (isStock && 'id' in transaction) {
+            await editStockTransaction(transaction as StockTransaction, {
+                type: data.type!,
+                stockItemName: data.stockItemName!,
+                weight: data.weight!,
+                pricePerKg: data.pricePerKg!,
+                description: data.description,
+                lastEdited: new Date().toISOString()
+            });
+        }
+        toast.success("Transaction Updated", { description: "The transaction has been successfully updated." });
+        setIsOpen(false);
+        await reloadData(); // Refresh data to reflect widespread changes from edits
+    } catch(e) {
+        toast.error("Update failed", { description: "Could not save the transaction changes." });
     }
-
-    toast.success("Transaction Update Requested", { description: "Updating your transaction." });
-    setIsOpen(false);
   };
   
   const currentCategories = isCash ? cashCategories : bankCategories;
@@ -170,7 +175,7 @@ export function EditTransactionSheet({ isOpen, setIsOpen, transaction, transacti
                 <Alert variant="default" className="mt-4 bg-yellow-50 border-yellow-200 text-yellow-800">
                   <AlertTitle>Editing Caution</AlertTitle>
                   <AlertDescription>
-                    Editing this stock transaction will not automatically update the linked cash or bank entry. Please edit the financial entry separately if amounts change.
+                    Editing this stock transaction will automatically update the linked cash or bank entry if amounts change.
                   </AlertDescription>
                 </Alert>
               )}

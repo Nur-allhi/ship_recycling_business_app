@@ -174,6 +174,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const reloadData = useCallback(async (options?: { force?: boolean, needsInitialBalance?: boolean }) => {
     setState(prev => ({ ...prev, isLoading: true }));
     try {
+        const session = await getSession();
+        if (!session) {
+            setState(prev => ({...prev, isLoading: false, user: null }));
+            return;
+        }
+        if (!state.user) {
+            setState(prev => ({ ...prev, user: session }));
+        }
+
         if(options?.needsInitialBalance) {
              setState(prev => ({ ...prev, needsInitialBalance: true, isLoading: false }));
              return;
@@ -239,7 +248,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } finally {
         setState(prev => ({...prev, isLoading: false, needsInitialBalance: false}));
     }
-  }, [handleApiError]);
+  }, [handleApiError, state.user]);
 
   const updateBalances = useCallback(async () => {
     try {
@@ -462,10 +471,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
           
           if (tx.paymentMethod === 'cash') {
               const category = tx.type === 'purchase' ? 'Stock Purchase' : 'Stock Sale';
-              await addCashTransaction({ date: tx.date, amount: totalValue, description, category, type: tx.type === 'purchase' ? 'expense' : 'income', linkedStockTxId: newStockTx.id });
+              const newCashTx = { date: tx.date, amount: totalValue, description, category, type: tx.type === 'purchase' ? 'expense' : 'income', linkedStockTxId: newStockTx.id };
+              const savedCashTx = await appendData({ tableName: 'cash_transactions', data: newCashTx, select: '*' });
+              if (savedCashTx) {
+                  setState(prev => ({
+                      ...prev,
+                      cashTransactions: [savedCashTx, ...prev.cashTransactions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+                  }));
+              }
+
           } else if (tx.paymentMethod === 'bank') { 
               const category = tx.type === 'purchase' ? 'Stock Purchase' : 'Stock Sale';
-              await addBankTransaction({ date: tx.date, amount: totalValue, description, category, type: tx.type === 'purchase' ? 'withdrawal' : 'deposit', bank_id: tx.bank_id!, linkedStockTxId: newStockTx.id });
+              const newBankTx = { date: tx.date, amount: totalValue, description, category, type: tx.type === 'purchase' ? 'withdrawal' : 'deposit', bank_id: tx.bank_id!, linkedStockTxId: newStockTx.id };
+              const savedBankTx = await appendData({ tableName: 'bank_transactions', data: newBankTx, select: '*' });
+              if (savedBankTx) {
+                  setState(prev => ({
+                      ...prev,
+                      bankTransactions: [savedBankTx, ...prev.bankTransactions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+                  }));
+              }
           }
       }
       
@@ -503,7 +527,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           
           if (originalTx.paymentMethod === 'cash' || originalTx.paymentMethod === 'bank') {
               const tableName = `${originalTx.paymentMethod}_transactions`;
-              const { data: linkedTxs } = await readData({ tableName, select: `id, linkedStockTxId`});
+              const { data: linkedTxs } = await supabase.from(tableName).select('id, linkedStockTxId').eq('linkedStockTxId', originalTx.id);
               const activeLinkedTx = (linkedTxs as any[])?.find(tx => tx.linkedStockTxId === originalTx.id);
 
               if (activeLinkedTx) {
@@ -641,17 +665,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
      const transactionDate = date || new Date().toISOString();
      
      try {
-        let newCashTx, newBankTx;
         if(from === 'cash') {
             if(!bankId) throw new Error("A destination bank account is required.");
             const description = 'Transfer to Bank';
-            newCashTx = await addCashTransaction({ date: transactionDate, amount, description, category: 'Transfer', type: 'expense' });
-            newBankTx = await addBankTransaction({ date: transactionDate, amount, description, category: 'Transfer', type: 'deposit', bank_id: bankId! });
+            const cashTx = await appendData({ tableName: 'cash_transactions', data: { date: transactionDate, amount, description, category: 'Transfer', type: 'expense' }, select: '*' });
+            const bankTx = await appendData({ tableName: 'bank_transactions', data: { date: transactionDate, amount, description, category: 'Transfer', type: 'deposit', bank_id: bankId! }, select: '*' });
+            setState(prev => ({
+              ...prev,
+              cashTransactions: [cashTx, ...prev.cashTransactions].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+              bankTransactions: [bankTx, ...prev.bankTransactions].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+            }))
+
         } else { // from bank
             if(!bankId) throw new Error("A source bank account is required.");
             const description = 'Transfer from Bank';
-            newBankTx = await addBankTransaction({ date: transactionDate, amount, description, category: 'Transfer', type: 'withdrawal', bank_id: bankId! });
-            newCashTx = await addCashTransaction({ date: transactionDate, amount, description, category: 'Transfer', type: 'income' });
+            const bankTx = await appendData({ tableName: 'bank_transactions', data: { date: transactionDate, amount, description, category: 'Transfer', type: 'withdrawal', bank_id: bankId! }, select: '*' });
+            const cashTx = await appendData({ tableName: 'cash_transactions', data: { date: transactionDate, amount, description, category: 'Transfer', type: 'income' }, select: '*' });
+            setState(prev => ({
+              ...prev,
+              cashTransactions: [cashTx, ...prev.cashTransactions].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+              bankTransactions: [bankTx, ...prev.bankTransactions].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+            }))
         }
         await updateBalances();
      } catch (error) {

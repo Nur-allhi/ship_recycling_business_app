@@ -568,5 +568,3 @@ export function StockTab() {
     </>
   )
 }
-
-    
