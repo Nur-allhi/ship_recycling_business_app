@@ -29,8 +29,8 @@ interface InitialBalanceDialogProps {
 interface StockItemEntry {
     id: number;
     name: string;
-    weight: number;
-    pricePerKg: number;
+    weight: number | '';
+    pricePerKg: number | '';
 }
 
 export function InitialBalanceDialog({ isOpen }: InitialBalanceDialogProps) {
@@ -50,11 +50,15 @@ export function InitialBalanceDialog({ isOpen }: InitialBalanceDialogProps) {
       setStockItems(stockItems.filter(item => item.id !== id));
   }
   
-  const handleStockItemChange = (id: number, field: keyof Omit<StockItemEntry, 'id'>, value: string | number) => {
-    let finalValue = value;
+  const handleStockItemChange = (id: number, field: keyof Omit<StockItemEntry, 'id'>, value: string) => {
+    let finalValue: string | number = value;
     if (field === 'weight' || field === 'pricePerKg') {
-      // Ensure empty strings become 0 to avoid NaN errors
-      finalValue = value === '' ? 0 : parseFloat(value as string);
+      // Allow empty string for user input, otherwise parse to float.
+      finalValue = value === '' ? '' : parseFloat(value);
+      // If parsing results in NaN (e.g., from invalid characters), default to 0.
+      if (isNaN(finalValue as number)) {
+        finalValue = 0;
+      }
     }
     setStockItems(stockItems.map(item => item.id === id ? { ...item, [field]: finalValue } : item));
   }
@@ -83,7 +87,11 @@ export function InitialBalanceDialog({ isOpen }: InitialBalanceDialogProps) {
     }
 
     for (const item of stockItems) {
-        if (!item.name || isNaN(item.weight) || item.weight <= 0 || isNaN(item.pricePerKg) || item.pricePerKg < 0) {
+        // Treat empty string as 0 for validation and saving.
+        const weight = item.weight === '' ? 0 : item.weight;
+        const pricePerKg = item.pricePerKg === '' ? 0 : item.pricePerKg;
+
+        if (!item.name || isNaN(weight) || weight <= 0 || isNaN(pricePerKg) || pricePerKg < 0) {
             toast.error('Invalid Stock Item', {
                 description: `Please ensure all fields for "${item.name || 'new item'}" are filled correctly.`
             });
@@ -94,11 +102,13 @@ export function InitialBalanceDialog({ isOpen }: InitialBalanceDialogProps) {
     // Pass the selected date to the context function
     setInitialBalances(cash, bankTotals, date);
 
-    // Now, add the stock items one by one. The context should also handle the date for these.
+    // Now, add the stock items one by one.
     for (const item of stockItems) {
-        // NOTE: The `addInitialStockItem` action doesn't currently take a date. 
-        // This might need to be updated in a future step if stock needs a specific start date.
-        await addInitialStockItem({ name: item.name, weight: item.weight, pricePerKg: item.pricePerKg });
+        await addInitialStockItem({ 
+            name: item.name, 
+            weight: Number(item.weight), 
+            pricePerKg: Number(item.pricePerKg) 
+        });
     }
   };
 
