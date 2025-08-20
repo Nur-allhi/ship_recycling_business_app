@@ -38,7 +38,7 @@ type SortKey = keyof BankTransaction | null;
 type SortDirection = 'asc' | 'desc';
 
 export function BankTab() {
-  const { bankBalance, bankTransactions, transferFunds, deleteBankTransaction, deleteMultipleBankTransactions, currency, user, banks, isLoading } = useAppContext()
+  const { bankTransactions, transferFunds, deleteBankTransaction, deleteMultipleBankTransactions, currency, user, banks, isLoading } = useAppContext()
   const [isTransferSheetOpen, setIsTransferSheetOpen] = useState(false)
   const [editSheetState, setEditSheetState] = useState<{isOpen: boolean, transaction: BankTransaction | null}>({ isOpen: false, transaction: null});
   const [deleteDialogState, setDeleteDialogState] = useState<{isOpen: boolean, txToDelete: BankTransaction | null, txsToDelete: BankTransaction[] | null}>({ isOpen: false, txToDelete: null, txsToDelete: null });
@@ -103,10 +103,16 @@ export function BankTab() {
 
   const totalPages = Math.ceil(filteredByMonth.length / itemsPerPage);
 
-  const currentBankBalance = useMemo(() => {
-    if (selectedBankId === 'all') return bankBalance;
-    return filteredByBank.reduce((acc, tx) => acc + (tx.type === 'deposit' ? tx.actual_amount : -tx.actual_amount), 0);
-  }, [filteredByBank, bankBalance, selectedBankId]);
+  const runningBalances = useMemo(() => {
+    const balances: { [key: string]: number } = {};
+    let balance = 0;
+    // Calculate balances in reverse order (from newest to oldest) to get the correct running balance
+    [...filteredByMonth].reverse().forEach(tx => {
+        balances[tx.id] = balance + (tx.type === 'deposit' ? tx.actual_amount : -tx.actual_amount);
+        balance = balances[tx.id];
+    });
+    return balances;
+  }, [filteredByMonth]);
 
   const handleEditClick = (tx: BankTransaction) => {
     setEditSheetState({ isOpen: true, transaction: tx });
@@ -230,6 +236,7 @@ export function BankTab() {
             <TableHead className="text-center">
                  <Button variant="ghost" onClick={() => handleSort('actual_amount')}>Amount {renderSortArrow('actual_amount')}</Button>
             </TableHead>
+            <TableHead className="text-center">Balance</TableHead>
             {showActions && <TableHead className="text-center">Actions</TableHead>}
             </TableRow>
         </TableHeader>
@@ -278,6 +285,7 @@ export function BankTab() {
                     {formatCurrency(tx.actual_amount)}
                     </div>
                 </TableCell>
+                <TableCell className="text-center font-mono">{formatCurrency(runningBalances[tx.id] || 0)}</TableCell>
                 {showActions && (
                   <TableCell className="text-center">
                       <div className="flex items-center justify-center gap-2">
@@ -296,7 +304,7 @@ export function BankTab() {
             ))
             ) : (
             <TableRow>
-                <TableCell colSpan={isSelectionMode ? (showActions ? 8 : 7) : (showActions ? 7 : 6)} className="text-center h-24">No bank transactions found for {format(currentMonth, 'MMMM yyyy')}.</TableCell>
+                <TableCell colSpan={isSelectionMode ? (showActions ? 9 : 8) : (showActions ? 8 : 7)} className="text-center h-24">No bank transactions found for {format(currentMonth, 'MMMM yyyy')}.</TableCell>
             </TableRow>
             )}
         </TableBody>
@@ -381,7 +389,7 @@ export function BankTab() {
                 <div className="flex-1">
                     <CardTitle>Bank Ledger</CardTitle>
                     <CardDescription>
-                    Current Balance: <span className="font-bold text-primary font-mono">{formatCurrency(currentBankBalance)}</span>
+                        View your bank account transactions.
                     </CardDescription>
                 </div>
                 <div className="flex items-center flex-wrap gap-2 justify-center self-stretch sm:self-center">

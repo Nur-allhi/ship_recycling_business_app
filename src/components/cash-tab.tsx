@@ -31,7 +31,7 @@ type SortKey = keyof CashTransaction | null;
 type SortDirection = 'asc' | 'desc';
 
 export function CashTab() {
-  const { cashBalance, cashTransactions, transferFunds, deleteCashTransaction, deleteMultipleCashTransactions, currency, user, banks, isLoading } = useAppContext()
+  const { cashTransactions, transferFunds, deleteCashTransaction, deleteMultipleCashTransactions, currency, user, banks, isLoading } = useAppContext()
   const [isTransferSheetOpen, setIsTransferSheetOpen] = useState(false)
   const [editSheetState, setEditSheetState] = useState<{isOpen: boolean, transaction: CashTransaction | null}>({ isOpen: false, transaction: null});
   const [deleteDialogState, setDeleteDialogState] = useState<{isOpen: boolean, txToDelete: CashTransaction | null, txsToDelete: CashTransaction[] | null}>({ isOpen: false, txToDelete: null, txsToDelete: null });
@@ -88,6 +88,17 @@ export function CashTab() {
   }, [filteredByMonth, currentPage, itemsPerPage]);
 
   const totalPages = Math.ceil(filteredByMonth.length / itemsPerPage);
+
+  const runningBalances = useMemo(() => {
+    const balances: { [key: string]: number } = {};
+    let balance = 0;
+    // Calculate balances in reverse order (from newest to oldest) to get the correct running balance
+    [...filteredByMonth].reverse().forEach(tx => {
+        balances[tx.id] = balance + (tx.type === 'income' ? tx.actual_amount : -tx.actual_amount);
+        balance = balances[tx.id];
+    });
+    return balances;
+  }, [filteredByMonth]);
 
   const handleEditClick = (tx: CashTransaction) => {
     setEditSheetState({ isOpen: true, transaction: tx });
@@ -201,12 +212,13 @@ export function CashTab() {
             <TableHead className="text-center">
                  <Button variant="ghost" onClick={() => handleSort('actual_amount')}>Amount {renderSortArrow('actual_amount')}</Button>
             </TableHead>
+            <TableHead className="text-center">Balance</TableHead>
             {showActions && <TableHead className="text-center">Actions</TableHead>}
           </TableRow>
         </TableHeader>
         <TableBody>
           {isLoading ? (
-            <TableRow><TableCell colSpan={isSelectionMode ? 6 : 5} className="h-24 text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin" /></TableCell></TableRow>
+            <TableRow><TableCell colSpan={isSelectionMode ? 7 : 6} className="h-24 text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin" /></TableCell></TableRow>
           ) : paginatedTransactions.length > 0 ? (
             paginatedTransactions.map((tx: CashTransaction) => (
               <TableRow key={tx.id} data-state={selectedTxIds.includes(tx.id) && "selected"}>
@@ -244,6 +256,7 @@ export function CashTab() {
                     {formatCurrency(tx.actual_amount)}
                   </div>
                 </TableCell>
+                <TableCell className="text-center font-mono">{formatCurrency(runningBalances[tx.id] || 0)}</TableCell>
                 {showActions && (
                   <TableCell className="text-center">
                     <div className="flex items-center justify-center gap-2">
@@ -262,7 +275,7 @@ export function CashTab() {
             ))
           ) : (
             <TableRow>
-              <TableCell colSpan={isSelectionMode ? (showActions ? 6 : 5) : (showActions ? 5 : 4)} className="text-center h-24">No cash transactions found for {format(currentMonth, 'MMMM yyyy')}.</TableCell>
+              <TableCell colSpan={isSelectionMode ? (showActions ? 7 : 6) : (showActions ? 6 : 5)} className="text-center h-24">No cash transactions found for {format(currentMonth, 'MMMM yyyy')}.</TableCell>
             </TableRow>
           )}
         </TableBody>
@@ -343,7 +356,7 @@ export function CashTab() {
             <div className="flex-1">
               <CardTitle>Cash Ledger</CardTitle>
               <CardDescription>
-                Current Balance: <span className="font-bold text-primary font-mono">{formatCurrency(cashBalance)}</span>
+                View your cash-in-hand transactions.
               </CardDescription>
             </div>
             <div className="flex items-center gap-2 self-center sm:self-auto">
