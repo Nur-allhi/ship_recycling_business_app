@@ -395,10 +395,79 @@ export function AppProvider({ children }: { children: ReactNode }) {
       } catch (error) { handleApiError(error); }
   }
 
-  const addStockTransaction = async (tx: Omit<StockTransaction, 'id' | 'createdAt' | 'deletedAt'> & { contact_id?: string, contact_name?: string }, bank_id?: string) => {
-      // Complex logic, better to just reload after this action to ensure consistency.
-      await reloadData();
-  };
+  const addStockTransaction = async (tx: Omit<StockTransaction, 'id' | 'createdAt' | 'deletedAt'> & { contact_id?: string; contact_name?: string }, bank_id?: string) => {
+    const stockTempId = `temp_stock_${Date.now()}`;
+    const stockTxToSave = { ...tx };
+    
+    // 1. Optimistically update local DB
+    await db.stockTransactions.add({ ...stockTxToSave, id: stockTempId, createdAt: new Date().toISOString() });
+    
+    const savedStockTxPromise = queueOrSync({ action: 'appendData', payload: { tableName: 'stock_transactions', data: stockTxToSave, select: '*' }});
+
+    if (tx.paymentMethod === 'cash' || tx.paymentMethod === 'bank') {
+        const financialTxData = {
+            date: tx.date,
+            expected_amount: tx.expected_amount,
+            actual_amount: tx.actual_amount,
+            difference: tx.difference,
+            difference_reason: tx.difference_reason,
+            description: tx.description || `${tx.type} of ${tx.weight}kg of ${tx.stockItemName}`,
+            category: tx.type === 'purchase' ? 'Stock Purchase' : 'Stock Sale',
+            linkedStockTxId: stockTempId,
+        };
+
+        if (tx.paymentMethod === 'cash') {
+            const cashTempId = `temp_cash_${Date.now()}`;
+            await db.cashTransactions.add({ ...financialTxData, type: tx.type === 'purchase' ? 'expense' : 'income', id: cashTempId, createdAt: new Date().toISOString() });
+            
+            savedStockTxPromise.then(async (savedStockTx) => {
+                if (savedStockTx) {
+                    await db.stockTransactions.where({ id: stockTempId }).modify(savedStockTx); // Update with real ID
+                    const finalFinancialData = { ...financialTxData, type: tx.type === 'purchase' ? 'expense' : 'income', linkedStockTxId: savedStockTx.id };
+                    const savedFinancialTx = await queueOrSync({ action: 'appendData', payload: { tableName: 'cash_transactions', data: finalFinancialData, select: '*' } });
+                    if(savedFinancialTx) await db.cashTransactions.where({ id: cashTempId }).modify(savedFinancialTx);
+                }
+            });
+
+        } else { // bank
+            const bankTempId = `temp_bank_${Date.now()}`;
+            await db.bankTransactions.add({ ...financialTxData, type: tx.type === 'purchase' ? 'withdrawal' : 'deposit', bank_id: bank_id!, id: bankTempId, createdAt: new Date().toISOString() });
+           
+            savedStockTxPromise.then(async (savedStockTx) => {
+                if (savedStockTx) {
+                    await db.stockTransactions.where({ id: stockTempId }).modify(savedStockTx);
+                    const finalFinancialData = { ...financialTxData, type: tx.type === 'purchase' ? 'withdrawal' : 'deposit', bank_id: bank_id!, linkedStockTxId: savedStockTx.id };
+                    const savedFinancialTx = await queueOrSync({ action: 'appendData', payload: { tableName: 'bank_transactions', data: finalFinancialData, select: '*' } });
+                    if(savedFinancialTx) await db.bankTransactions.where({ id: bankTempId }).modify(savedFinancialTx);
+                }
+            });
+        }
+    } else if (tx.paymentMethod === 'credit') {
+        const ledgerTempId = `temp_ledger_${Date.now()}`;
+        const ledgerData = {
+            type: tx.type === 'purchase' ? 'payable' : 'receivable',
+            description: tx.description || `${tx.stockItemName} (${tx.weight}kg)`,
+            amount: tx.actual_amount,
+            date: tx.date,
+            contact_id: tx.contact_id!,
+            contact_name: tx.contact_name!,
+        };
+        const ledgerToSave = { ...ledgerData, status: 'unpaid', paid_amount: 0, installments: [] };
+        await db.ledgerTransactions.add({ ...ledgerToSave, id: ledgerTempId, createdAt: new Date().toISOString() });
+        
+        savedStockTxPromise.then(async (savedStockTx) => {
+            if (savedStockTx) await db.stockTransactions.where({ id: stockTempId }).modify(savedStockTx);
+        });
+
+        const { installments, ...dataToSync } = ledgerToSave;
+        const savedLedgerTx = await queueOrSync({ action: 'appendData', payload: { tableName: 'ap_ar_transactions', data: dataToSync, select: '*' } });
+        if (savedLedgerTx) {
+            await db.ledgerTransactions.where({ id: ledgerTempId }).modify({ ...savedLedgerTx, installments: [] });
+        }
+    }
+    
+    await updateBalances();
+};
 
   const editCashTransaction = async (originalTx: CashTransaction, updatedTxData: Partial<Omit<CashTransaction, 'id' | 'date' | 'createdAt'>>) => {
     await db.cashTransactions.update(originalTx.id, updatedTxData);
