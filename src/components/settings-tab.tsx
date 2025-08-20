@@ -89,8 +89,6 @@ function GeneralSettings() {
   const {
     banks,
     addBank,
-    setInitialBalances,
-    addInitialStockItem,
     cashCategories,
     bankCategories,
     addCategory,
@@ -99,18 +97,11 @@ function GeneralSettings() {
     setWastagePercentage,
   } = useAppContext();
 
-  const cashBalanceRef = useRef<HTMLInputElement>(null)
-  const bankRefs = useRef<Record<string, HTMLInputElement | null>>({});
-
   const newCategoryNameRef = useRef<HTMLInputElement>(null)
   const [newCategoryType, setNewCategoryType] = useState<'cash' | 'bank'>('cash');
   const [newCategoryDirection, setNewCategoryDirection] = useState<'credit' | 'debit' | undefined>();
 
   const wastageRef = useRef<HTMLInputElement>(null)
-  
-  const stockItemNameRef = useRef<HTMLInputElement>(null)
-  const stockWeightRef = useRef<HTMLInputElement>(null)
-  const stockPriceRef = useRef<HTMLInputElement>(null)
 
   const newBankNameRef = useRef<HTMLInputElement>(null)
 
@@ -121,53 +112,6 @@ function GeneralSettings() {
       if (newBankNameRef.current) newBankNameRef.current.value = "";
     }
   }
-
-  const handleBalanceSave = () => {
-    const cash = parseFloat(cashBalanceRef.current?.value || '0');
-    const bankTotals: Record<string, number> = {};
-
-    for(const bank of banks) {
-        const bankVal = parseFloat(bankRefs.current[bank.id]?.value || '0');
-        if (isNaN(bankVal) || bankVal < 0) {
-            toast.error("Invalid Input", {
-                description: `Please enter a valid, non-negative number for ${bank.name}.`,
-            });
-            return;
-        }
-        bankTotals[bank.id] = bankVal;
-    }
-
-    if (isNaN(cash) || cash < 0) {
-        toast.error("Invalid Input", {
-            description: "Please enter a valid, non-negative number for cash balance.",
-        });
-        return;
-    }
-
-    setInitialBalances(cash, bankTotals);
-    toast.success("Balances Updated", { description: "Initial cash and bank balances have been set." });
-  }
-
-  const handleInitialStockSave = () => {
-    const name = stockItemNameRef.current?.value.trim();
-    const weight = parseFloat(stockWeightRef.current?.value || '');
-    const price = parseFloat(stockPriceRef.current?.value || '');
-
-    if (!name || isNaN(weight) || isNaN(price) || weight <= 0 || price < 0) {
-        toast.error("Invalid Stock Input", {
-            description: "Please fill all stock fields with valid values.",
-        });
-        return;
-    }
-
-    addInitialStockItem({ name, weight, pricePerKg: price });
-    toast.success("Initial Stock Added", { description: `${name} has been added to your inventory.` });
-
-    if(stockItemNameRef.current) stockItemNameRef.current.value = "";
-    if(stockWeightRef.current) stockWeightRef.current.value = "";
-    if(stockPriceRef.current) stockPriceRef.current.value = "";
-  }
-
 
   const handleAddCategory = () => {
     const name = newCategoryNameRef.current?.value.trim();
@@ -199,56 +143,6 @@ function GeneralSettings() {
 
   return (
      <div className="space-y-6">
-        <Card>
-            <CardHeader>
-            <CardTitle>Initial Balances</CardTitle>
-            <CardDescription>Set your starting cash, bank, and stock balances. This should be done once.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-                <div>
-                <h3 className="font-semibold mb-2">Financial Balances</h3>
-                <div className="space-y-4">
-                    <div className="space-y-2">
-                        <Label htmlFor="cash-balance">Initial Cash Balance</Label>
-                        <Input id="cash-balance" type="number" ref={cashBalanceRef} placeholder="0.00" />
-                    </div>
-                    {banks.map(bank => (
-                        <div key={bank.id} className="space-y-2">
-                            <Label htmlFor={`bank-balance-${bank.id}`}>Initial Balance for {bank.name}</Label>
-                            <Input 
-                                id={`bank-balance-${bank.id}`} 
-                                type="number" 
-                                ref={el => bankRefs.current[bank.id] = el} 
-                                placeholder="0.00"
-                            />
-                        </div>
-                    ))}
-                    <Button onClick={handleBalanceSave}>Save Financial Balances</Button>
-                </div>
-                </div>
-                <Separator />
-                <div>
-                <h3 className="font-semibold mb-2">Initial Stock Inventory</h3>
-                <div className="space-y-4">
-                    <div className="space-y-2">
-                        <Label htmlFor="stock-item-name">Item Name</Label>
-                        <Input id="stock-item-name" type="text" ref={stockItemNameRef} placeholder="e.g. Rice"/>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                            <Label htmlFor="stock-weight">Total Stock Weight (kg)</Label>
-                            <Input id="stock-weight" type="number" ref={stockWeightRef} placeholder="e.g. 1000"/>
-                        </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="stock-price">Average Purchase Price/kg</Label>
-                            <Input id="stock-price" type="number" ref={stockPriceRef} placeholder="e.g. 50.00"/>
-                        </div>
-                    </div>
-                    <Button onClick={handleInitialStockSave}>Add Initial Stock Item</Button>
-                </div>
-                </div>
-            </CardContent>
-        </Card>
         <Card>
             <CardHeader>
                 <CardTitle>Bank Accounts</CardTitle>
