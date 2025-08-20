@@ -89,12 +89,19 @@ export function BankTab() {
     });
   }, [filteredByBank, sortKey, sortDirection]);
 
+  const filteredByMonth = useMemo(() => {
+    return sortedTransactions.filter(tx => {
+        const txDate = new Date(tx.date);
+        return txDate.getFullYear() === currentMonth.getFullYear() && txDate.getMonth() === currentMonth.getMonth();
+    })
+  }, [sortedTransactions, currentMonth]);
+
   const paginatedTransactions = useMemo(() => {
     const startIndex = (currentPage - 1) * itemsPerPage;
-    return sortedTransactions.slice(startIndex, startIndex + itemsPerPage);
-  }, [sortedTransactions, currentPage, itemsPerPage]);
+    return filteredByMonth.slice(startIndex, startIndex + itemsPerPage);
+  }, [filteredByMonth, currentPage, itemsPerPage]);
 
-  const totalPages = Math.ceil(filteredByBank.length / itemsPerPage);
+  const totalPages = Math.ceil(filteredByMonth.length / itemsPerPage);
 
   const currentBankBalance = useMemo(() => {
     if (selectedBankId === 'all') return bankBalance;
@@ -289,7 +296,7 @@ export function BankTab() {
             ))
             ) : (
             <TableRow>
-                <TableCell colSpan={isSelectionMode ? (showActions ? 8 : 7) : (showActions ? 7 : 6)} className="text-center h-24">No bank transactions found.</TableCell>
+                <TableCell colSpan={isSelectionMode ? (showActions ? 8 : 7) : (showActions ? 7 : 6)} className="text-center h-24">No bank transactions found for {format(currentMonth, 'MMMM yyyy')}.</TableCell>
             </TableRow>
             )}
         </TableBody>
@@ -360,7 +367,7 @@ export function BankTab() {
         ))
       ) : (
         <div className="text-center text-muted-foreground py-12">
-            No bank transactions found.
+            No bank transactions found for {format(currentMonth, 'MMMM yyyy')}.
         </div>
       )}
     </div>

@@ -75,12 +75,19 @@ export function CashTab() {
     });
   }, [cashTransactions, sortKey, sortDirection]);
 
+  const filteredByMonth = useMemo(() => {
+    return sortedTransactions.filter(tx => {
+        const txDate = new Date(tx.date);
+        return txDate.getFullYear() === currentMonth.getFullYear() && txDate.getMonth() === currentMonth.getMonth();
+    })
+  }, [sortedTransactions, currentMonth]);
+
   const paginatedTransactions = useMemo(() => {
     const startIndex = (currentPage - 1) * itemsPerPage;
-    return sortedTransactions.slice(startIndex, startIndex + itemsPerPage);
-  }, [sortedTransactions, currentPage, itemsPerPage]);
+    return filteredByMonth.slice(startIndex, startIndex + itemsPerPage);
+  }, [filteredByMonth, currentPage, itemsPerPage]);
 
-  const totalPages = Math.ceil((cashTransactions?.length || 0) / itemsPerPage);
+  const totalPages = Math.ceil(filteredByMonth.length / itemsPerPage);
 
   const handleEditClick = (tx: CashTransaction) => {
     setEditSheetState({ isOpen: true, transaction: tx });
@@ -255,7 +262,7 @@ export function CashTab() {
             ))
           ) : (
             <TableRow>
-              <TableCell colSpan={isSelectionMode ? (showActions ? 6 : 5) : (showActions ? 5 : 4)} className="text-center h-24">No cash transactions found.</TableCell>
+              <TableCell colSpan={isSelectionMode ? (showActions ? 6 : 5) : (showActions ? 5 : 4)} className="text-center h-24">No cash transactions found for {format(currentMonth, 'MMMM yyyy')}.</TableCell>
             </TableRow>
           )}
         </TableBody>
@@ -322,7 +329,7 @@ export function CashTab() {
         ))
       ) : (
         <div className="text-center text-muted-foreground py-12">
-            No cash transactions found.
+            No cash transactions found for {format(currentMonth, 'MMMM yyyy')}.
         </div>
       )}
     </div>
@@ -339,7 +346,7 @@ export function CashTab() {
                 Current Balance: <span className="font-bold text-primary font-mono">{formatCurrency(cashBalance)}</span>
               </CardDescription>
             </div>
-            <div className="flex items-center gap-2 self-center">
+            <div className="flex items-center gap-2 self-center sm:self-auto">
               <Button variant="outline" size="icon" onClick={goToPreviousMonth} className="h-9 w-9">
                   <ChevronLeft className="h-4 w-4" />
               </Button>
