@@ -30,6 +30,7 @@ interface AppState {
   bankCategories: Category[];
   fontSize: FontSize;
   needsInitialBalance: boolean;
+  isInitialBalanceDialogOpen: boolean;
   wastagePercentage: number;
   currency: string;
   showStockValue: boolean;
@@ -70,6 +71,7 @@ interface AppContextType extends AppState {
   setCurrency: (currency: string) => void;
   setShowStockValue: (show: boolean) => void;
   setInitialBalances: (cash: number, bankTotals: Record<string, number>) => void;
+  openInitialBalanceDialog: () => void;
   addInitialStockItem: (item: { name: string; weight: number; pricePerKg: number }) => void;
   handleExport: () => void;
   handleImport: (file: File) => void;
@@ -101,6 +103,7 @@ const initialAppState: AppState = {
   bankCategories: [],
   fontSize: 'base',
   needsInitialBalance: false,
+  isInitialBalanceDialogOpen: false,
   wastagePercentage: 0,
   currency: 'BDT',
   showStockValue: false,
@@ -756,13 +759,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
         await Promise.all(promises);
         
         toast.success("Initial balances set.");
-        setState(prev => ({ ...prev, needsInitialBalance: false }));
+        setState(prev => ({ ...prev, needsInitialBalance: false, isInitialBalanceDialogOpen: false }));
         await reloadData();
 
     } catch (e) {
         handleApiError(e);
     }
-}
+  }
+
+  const openInitialBalanceDialog = () => {
+    if(state.user?.role === 'admin') {
+      setState(prev => ({ ...prev, isInitialBalanceDialogOpen: true }));
+    } else {
+      toast.error("Permission Denied.");
+    }
+  }
 
   const addInitialStockItem = async (item: { name: string; weight: number; pricePerKg: number }) => {
       try {
@@ -988,6 +999,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setCurrency: (c) => setState(prev => ({ ...prev, currency: c })),
         setShowStockValue: (s) => setState(prev => ({ ...prev, showStockValue: s })),
         setInitialBalances,
+        openInitialBalanceDialog,
         addInitialStockItem,
         handleExport,
         handleImport,

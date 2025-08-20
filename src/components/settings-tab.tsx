@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { Badge } from "@/components/ui/badge"
-import { Plus, Trash2, Eye, EyeOff, Users, Settings, Palette, FileCog, Recycle, Landmark, Activity, ArrowUpCircle, ArrowDownCircle, User, Contact } from "lucide-react"
+import { Plus, Trash2, Eye, EyeOff, Users, Settings, Palette, FileCog, Recycle, Landmark, Activity, ArrowUpCircle, ArrowDownCircle, User, Contact, RefreshCw } from "lucide-react"
 import { toast } from "sonner"
 import { ResponsiveSelect } from "@/components/ui/responsive-select"
 import { RecycleBinTab } from "./recycle-bin-tab"
@@ -95,6 +95,7 @@ function GeneralSettings() {
     deleteCategory,
     wastagePercentage,
     setWastagePercentage,
+    openInitialBalanceDialog,
   } = useAppContext();
 
   const newCategoryNameRef = useRef<HTMLInputElement>(null)
@@ -143,6 +144,18 @@ function GeneralSettings() {
 
   return (
      <div className="space-y-6">
+        <Card>
+            <CardHeader>
+                <CardTitle>Initial Balances</CardTitle>
+                <CardDescription>Set or reset the initial cash, bank, and stock balances for the application.</CardDescription>
+            </CardHeader>
+            <CardContent>
+                <Button onClick={openInitialBalanceDialog}>
+                    <RefreshCw className="mr-2 h-4 w-4" />
+                    Set / Reset Initial Balances
+                </Button>
+            </CardContent>
+        </Card>
         <Card>
             <CardHeader>
                 <CardTitle>Bank Accounts</CardTitle>
@@ -296,5 +309,3 @@ export function SettingsTab() {
     </div>
   );
 }
-
-    

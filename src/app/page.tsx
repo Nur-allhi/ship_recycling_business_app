@@ -37,7 +37,7 @@ const navItems = [
 ]
 
 function ShipShapeLedger() {
-  const { fontSize, needsInitialBalance, user, logout, isLoading } = useAppContext();
+  const { fontSize, needsInitialBalance, isInitialBalanceDialogOpen, user, logout, isLoading } = useAppContext();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isSheetOpen, setIsSheetOpen] = useState(false);
@@ -64,7 +64,7 @@ function ShipShapeLedger() {
 
   return (
     <div className={cn('min-h-screen bg-background text-foreground animate-fade-in', fontClasses[fontSize] || 'text-base')}>
-      {isAdmin && <InitialBalanceDialog isOpen={needsInitialBalance} />}
+      {isAdmin && <InitialBalanceDialog isOpen={needsInitialBalance || isInitialBalanceDialogOpen} />}
       <div className="container mx-auto p-4 md:p-6 lg:p-8">
         <header className="mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div className="flex items-center gap-4 w-full">
@@ -183,5 +183,3 @@ export default function Home() {
     <ShipShapeLedger />
   );
 }
-
-    
