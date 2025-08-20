@@ -294,7 +294,7 @@ export async function batchImportData(dataToImport: z.infer<typeof ImportDataSch
     
     try {
         for (const table of tables) {
-             const { error: deleteError } = await supabase.from(table).delete().neq('id', 'this-is-a-placeholder-that-will-never-match'); // This will delete all rows
+             const { error: deleteError } = await supabase.from(table).delete().gt('created_at', '1970-01-01');
              if (deleteError && deleteError.code !== '42P01') {
                 console.error(`Failed to clear ${table}: ${deleteError.message}`);
                 throw new Error(`Failed to clear ${table}: ${deleteError.message}`);
@@ -336,8 +336,10 @@ export async function deleteAllData() {
         
         const tables = ['payment_installments', 'ap_ar_transactions', 'cash_transactions', 'bank_transactions', 'stock_transactions', 'initial_stock', 'categories', 'vendors', 'clients', 'banks', 'activity_log', 'monthly_snapshots'];
         for (const tableName of tables) {
-            const { error } = await supabase.from(tableName).delete().neq('id', 'this-is-a-placeholder-that-will-never-match');
-            if (error && error.code !== '42P01') {
+            // Using `created_at` is a robust way to delete all records as it exists on all tables
+            // and avoids type mismatches with different `id` column types (bigint vs uuid).
+            const { error } = await supabase.from(tableName).delete().gt('created_at', '1970-01-01');
+            if (error && error.code !== '42P01') { // 42P01 = table does not exist, which is fine.
                 console.error(`Error deleting from ${tableName}:`, error);
                 throw new Error(`Failed to delete data from ${tableName}.`);
             }
@@ -777,4 +779,3 @@ export async function recordDirectPayment(input: z.infer<typeof RecordDirectPaym
 
     
 
-    
