@@ -51,7 +51,12 @@ export function InitialBalanceDialog({ isOpen }: InitialBalanceDialogProps) {
   }
   
   const handleStockItemChange = (id: number, field: keyof Omit<StockItemEntry, 'id'>, value: string | number) => {
-      setStockItems(stockItems.map(item => item.id === id ? { ...item, [field]: value } : item));
+    let finalValue = value;
+    if (field === 'weight' || field === 'pricePerKg') {
+      // Ensure empty strings become 0 to avoid NaN errors
+      finalValue = value === '' ? 0 : parseFloat(value as string);
+    }
+    setStockItems(stockItems.map(item => item.id === id ? { ...item, [field]: finalValue } : item));
   }
 
   const handleSave = async () => {
@@ -192,11 +197,11 @@ export function InitialBalanceDialog({ isOpen }: InitialBalanceDialogProps) {
                                 </div>
                                 <div className="space-y-1">
                                     <Label htmlFor={`item-weight-${item.id}`} className="text-xs">Weight (kg)</Label>
-                                    <Input id={`item-weight-${item.id}`} type="number" value={item.weight} onChange={e => handleStockItemChange(item.id, 'weight', parseFloat(e.target.value))} placeholder="0.00" />
+                                    <Input id={`item-weight-${item.id}`} type="number" value={item.weight} onChange={e => handleStockItemChange(item.id, 'weight', e.target.value)} placeholder="0.00" />
                                 </div>
                                  <div className="space-y-1">
                                     <Label htmlFor={`item-price-${item.id}`} className="text-xs">Price/kg</Label>
-                                    <Input id={`item-price-${item.id}`} type="number" value={item.pricePerKg} onChange={e => handleStockItemChange(item.id, 'pricePerKg', parseFloat(e.target.value))} placeholder="0.00" />
+                                    <Input id={`item-price-${item.id}`} type="number" value={item.pricePerKg} onChange={e => handleStockItemChange(item.id, 'pricePerKg', e.target.value)} placeholder="0.00" />
                                 </div>
                             </div>
                         </div>
