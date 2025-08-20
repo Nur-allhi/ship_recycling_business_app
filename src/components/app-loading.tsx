@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useEffect } from 'react';
@@ -22,5 +21,3 @@ export function AppLoading() {
         </div>
     );
 }
-
-    
