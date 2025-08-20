@@ -255,6 +255,35 @@ export async function restoreData(input: z.infer<typeof RestoreDataInputSchema>)
     }
 }
 
+export async function emptyRecycleBin() {
+    try {
+        const session = await getSession();
+        if (session?.role !== 'admin') throw new Error("Only admins can empty the recycle bin.");
+
+        const supabase = await getAuthenticatedSupabaseClient();
+        const tablesToClear = ['cash_transactions', 'bank_transactions', 'stock_transactions', 'ap_ar_transactions'];
+
+        for (const tableName of tablesToClear) {
+            const { error } = await supabase
+                .from(tableName)
+                .delete()
+                .not('deletedAt', 'is', null);
+
+            if (error && error.code !== '42P01') {
+                // If table doesn't exist, it's fine. Otherwise, throw.
+                throw new Error(`Failed to empty recycle bin for ${tableName}: ${error.message}`);
+            }
+        }
+        
+        await logActivity("Emptied the recycle bin.");
+        return { success: true };
+
+    } catch (error: any) {
+        return handleApiError(error);
+    }
+}
+
+
 export async function exportAllData() {
     try {
         const session = await getSession();
@@ -782,6 +811,7 @@ export async function recordDirectPayment(input: z.infer<typeof RecordDirectPaym
     
 
     
+
 
 
 

@@ -4,7 +4,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import type { CashTransaction, BankTransaction, StockItem, StockTransaction, User, Vendor, Client, LedgerTransaction, PaymentInstallment, Bank, Category } from '@/lib/types';
 import { toast } from 'sonner';
-import { readData, appendData, updateData, deleteData, readDeletedData, restoreData, exportAllData, batchImportData, deleteAllData, logout as serverLogout, recordPaymentAgainstTotal, getBalances, login as serverLogin, hasUsers } from '@/app/actions';
+import { readData, appendData, updateData, deleteData, readDeletedData, restoreData, exportAllData, batchImportData, deleteAllData, logout as serverLogout, recordPaymentAgainstTotal, getBalances, login as serverLogin, hasUsers, emptyRecycleBin as serverEmptyRecycleBin, recordDirectPayment } from '@/app/actions';
 import { format, subDays, startOfMonth, endOfMonth } from 'date-fns';
 import { supabase } from '@/lib/supabase';
 import { saveAs } from 'file-saver';
@@ -63,6 +63,7 @@ interface AppContextType extends AppState {
   deleteMultipleStockTransactions: (txs: StockTransaction[]) => void;
   deleteLedgerTransaction: (tx: LedgerTransaction) => void;
   restoreTransaction: (txType: 'cash' | 'bank' | 'stock' | 'ap_ar', id: string) => void;
+  emptyRecycleBin: () => void;
   transferFunds: (from: 'cash' | 'bank', amount: number, date?: string, bankId?: string, description?: string) => Promise<void>;
   addCategory: (type: 'cash' | 'bank', category: string, direction: 'credit' | 'debit') => void;
   deleteCategory: (id: string) => void;
@@ -450,14 +451,35 @@ export function AppProvider({ children }: { children: ReactNode }) {
   
     const addCashTransaction = async (tx: Omit<CashTransaction, 'id' | 'createdAt' | 'deletedAt'>) => {
         try {
-            const newTx = await appendData({ tableName: 'cash_transactions', data: tx, logDescription: `Added cash transaction: ${tx.description}`, select: '*' });
-            if (newTx) {
-                setState(prev => ({
-                    ...prev,
-                    cashTransactions: [newTx, ...prev.cashTransactions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
-                }));
+            if(tx.category === 'A/P Settlement' || tx.category === 'A/R Settlement') {
+                if(!tx.contact_id) throw new Error("Contact is required for settlements");
+
+                const contactType = tx.category === 'A/P Settlement' ? 'vendor' : 'client';
+                const contactList = contactType === 'vendor' ? state.vendors : state.clients;
+                const contactName = contactList.find(c => c.id === tx.contact_id)?.name;
+                if(!contactName) throw new Error("Contact not found for settlement");
+                
+                await recordDirectPayment({
+                    payment_method: 'cash',
+                    date: tx.date,
+                    amount: tx.actual_amount,
+                    category: tx.category,
+                    description: tx.description,
+                    contact_id: tx.contact_id,
+                    contact_name: contactName
+                });
+                await reloadData();
+
+            } else {
+                const newTx = await appendData({ tableName: 'cash_transactions', data: tx, logDescription: `Added cash transaction: ${tx.description}`, select: '*' });
+                if (newTx) {
+                    setState(prev => ({
+                        ...prev,
+                        cashTransactions: [newTx, ...prev.cashTransactions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+                    }));
+                }
+                await updateBalances();
             }
-            await updateBalances();
         } catch (error) {
             handleApiError(error);
         }
@@ -465,14 +487,35 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     const addBankTransaction = async (tx: Omit<BankTransaction, 'id' | 'createdAt' | 'deletedAt'>) => {
         try {
-            const newTx = await appendData({ tableName: 'bank_transactions', data: tx, logDescription: `Added bank transaction: ${tx.description}`, select: '*' });
-            if (newTx) {
-                setState(prev => ({
-                    ...prev,
-                    bankTransactions: [newTx, ...prev.bankTransactions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
-                }));
+             if(tx.category === 'A/P Settlement' || tx.category === 'A/R Settlement') {
+                if(!tx.contact_id) throw new Error("Contact is required for settlements");
+
+                const contactType = tx.category === 'A/P Settlement' ? 'vendor' : 'client';
+                const contactList = contactType === 'vendor' ? state.vendors : state.clients;
+                const contactName = contactList.find(c => c.id === tx.contact_id)?.name;
+                if(!contactName) throw new Error("Contact not found for settlement");
+                
+                await recordDirectPayment({
+                    payment_method: 'bank',
+                    bank_id: tx.bank_id,
+                    date: tx.date,
+                    amount: tx.actual_amount,
+                    category: tx.category,
+                    description: tx.description,
+                    contact_id: tx.contact_id,
+                    contact_name: contactName
+                });
+                await reloadData();
+            } else {
+                const newTx = await appendData({ tableName: 'bank_transactions', data: tx, logDescription: `Added bank transaction: ${tx.description}`, select: '*' });
+                if (newTx) {
+                    setState(prev => ({
+                        ...prev,
+                        bankTransactions: [newTx, ...prev.bankTransactions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+                    }));
+                }
+                await updateBalances();
             }
-            await updateBalances();
         } catch (error) {
             handleApiError(error);
         }
@@ -532,7 +575,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
           const description = tx.description || `${tx.type === 'purchase' ? 'Purchase' : 'Sale'} of ${tx.weight}kg of ${tx.stockItemName}`;
           
           if (tx.paymentMethod === 'cash') {
-              const category = tx.type === 'purchase' ? 'Cash Out' : 'Cash In';
               const newCashTx = {
                   date: tx.date,
                   expected_amount: tx.expected_amount,
@@ -540,7 +582,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
                   difference: tx.difference,
                   difference_reason: tx.difference_reason,
                   description,
-                  category,
+                  category: 'Stock Transaction',
                   type: tx.type === 'purchase' ? 'expense' : 'income',
                   linkedStockTxId: newStockTx.id
               };
@@ -554,7 +596,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
           } else if (tx.paymentMethod === 'bank') { 
               if (!bank_id) throw new Error("Bank ID is required for bank payment.");
-              const category = tx.type === 'purchase' ? 'Withdrawal' : 'Deposit';
               const newBankTx = {
                   date: tx.date,
                   expected_amount: tx.expected_amount,
@@ -562,7 +603,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
                   difference: tx.difference,
                   difference_reason: tx.difference_reason,
                   description,
-                  category,
+                  category: 'Stock Transaction',
                   type: tx.type === 'purchase' ? 'withdrawal' : 'deposit',
                   bank_id: bank_id,
                   linkedStockTxId: newStockTx.id
@@ -713,6 +754,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
         handleApiError(error);
     }
   };
+
+  const emptyRecycleBin = async () => {
+    try {
+        await serverEmptyRecycleBin();
+        toast.success("Recycle Bin Emptied", { description: "All deleted items have been permanently removed."});
+        loadRecycleBinData();
+    } catch (error: any) {
+        handleApiError(error);
+    }
+  }
 
   const deleteMultipleCashTransactions = async (txs: CashTransaction[]) => {
      try {
@@ -1091,6 +1142,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         deleteMultipleStockTransactions,
         deleteLedgerTransaction,
         restoreTransaction,
+        emptyRecycleBin,
         transferFunds,
         addCategory,
         deleteCategory,
