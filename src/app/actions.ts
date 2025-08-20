@@ -5,6 +5,7 @@ import { createClient } from '@supabase/supabase-js';
 import { cookies } from 'next/headers';
 import { z } from 'zod';
 import { createSession, getSession, removeSession } from '@/lib/auth';
+import { startOfMonth, subMonths } from 'date-fns';
 
 // Helper function to create a Supabase client.
 const createSupabaseClient = (serviceRole = false) => {
@@ -298,7 +299,7 @@ const ImportDataSchema = z.record(z.array(z.record(z.any())));
 
 export async function batchImportData(dataToImport: z.infer<typeof ImportDataSchema>) {
     const supabase = createSupabaseClient(true);
-    const tables = ['banks', 'cash_transactions', 'bank_transactions', 'stock_transactions', 'initial_stock', 'categories', 'vendors', 'clients', 'ap_ar_transactions', 'payment_installments'];
+    const tables = ['banks', 'cash_transactions', 'bank_transactions', 'stock_transactions', 'initial_stock', 'categories', 'vendors', 'clients', 'ap_ar_transactions', 'payment_installments', 'monthly_snapshots'];
     const session = await getSession();
     if (!session) throw new Error("No active session for import.");
     if (session.role !== 'admin') throw new Error("Only admins can import data.");
@@ -347,7 +348,7 @@ export async function deleteAllData() {
             }
         }
         
-        const tables = ['payment_installments', 'ap_ar_transactions', 'cash_transactions', 'bank_transactions', 'stock_transactions', 'initial_stock', 'categories', 'vendors', 'clients', 'banks', 'activity_log'];
+        const tables = ['payment_installments', 'ap_ar_transactions', 'cash_transactions', 'bank_transactions', 'stock_transactions', 'initial_stock', 'categories', 'vendors', 'clients', 'banks', 'activity_log', 'monthly_snapshots'];
         for (const tableName of tables) {
             const { error } = await supabase.from(tableName).delete().neq('id', '00000000-0000-0000-0000-000000000000');
             if (error && error.code !== '42P01') {
@@ -522,31 +523,65 @@ export async function logout() {
 export async function getBalances() {
     const supabase = await getAuthenticatedSupabaseClient();
     try {
-        // Cash Balance
-        const { data: cashData, error: cashError } = await supabase.from('cash_transactions').select('type, amount');
-        if (cashError && cashError.code !== '42P01') throw cashError;
-        const cashBalance = (cashData || []).reduce((acc, tx) => acc + (tx.type === 'income' ? tx.amount : -tx.amount), 0);
+        const { data: latestSnapshot } = await supabase
+            .from('monthly_snapshots')
+            .select('*')
+            .order('snapshot_date', { ascending: false })
+            .limit(1)
+            .maybeSingle();
 
-        // Bank Balance
-        const { data: bankData, error: bankError } = await supabase.from('bank_transactions').select('type, amount');
-        if (bankError && bankError.code !== '42P01') throw bankError;
-        const bankBalance = (bankData || []).reduce((acc, tx) => acc + (tx.type === 'deposit' ? tx.amount : -tx.amount), 0);
-        
-        // Stock Balance
-        const { data: stockData, error: stockError } = await supabase.from('stock_transactions').select('type, weight, pricePerKg');
-        if (stockError && stockError.code !== '42P01') throw stockError;
-        const { data: initialStockData, error: initialStockError } = await supabase.from('initial_stock').select('*');
-        if(initialStockError && initialStockError.code !== '42P01') throw initialStockError;
-        
-        const stockPortfolio: Record<string, { weight: number, totalValue: number }> = {};
-        (initialStockData || []).forEach(item => {
-              if (!stockPortfolio[item.name]) {
-                  stockPortfolio[item.name] = { weight: 0, totalValue: 0 };
-              }
-              stockPortfolio[item.name].weight += item.weight;
-              stockPortfolio[item.name].totalValue += item.weight * item.purchasePricePerKg;
-        });
+        const startDate = latestSnapshot ? latestSnapshot.snapshot_date : '1970-01-01';
 
+        let cashBalance = latestSnapshot?.cash_balance || 0;
+        let bankBalances: Record<string, number> = latestSnapshot?.bank_balances || {};
+        let stockPortfolio: Record<string, { weight: number; totalValue: number }> = {};
+        if (latestSnapshot?.stock_items) {
+             Object.entries(latestSnapshot.stock_items).forEach(([name, data]: [string, any]) => {
+                stockPortfolio[name] = { weight: data.weight, totalValue: data.value };
+            });
+        }
+        let totalPayables = latestSnapshot?.total_payables || 0;
+        let totalReceivables = latestSnapshot?.total_receivables || 0;
+
+        const [
+            cashData, bankData, stockData, initialStockData, ledgerData
+        ] = await Promise.all([
+            readData({ tableName: 'cash_transactions', startDate }),
+            readData({ tableName: 'bank_transactions', startDate }),
+            readData({ tableName: 'stock_transactions', startDate }),
+            readData({ tableName: 'initial_stock' }),
+            readData({ tableName: 'ap_ar_transactions', startDate }),
+        ]);
+
+        // If no snapshot, calculate from beginning of time
+        if (!latestSnapshot) {
+            cashBalance = (cashData || []).reduce((acc, tx) => acc + (tx.type === 'income' ? tx.amount : -tx.amount), 0);
+            (bankData || []).forEach(tx => {
+                bankBalances[tx.bank_id] = (bankBalances[tx.bank_id] || 0) + (tx.type === 'deposit' ? tx.amount : -tx.amount);
+            });
+            (initialStockData || []).forEach(item => {
+                if (!stockPortfolio[item.name]) {
+                    stockPortfolio[item.name] = { weight: 0, totalValue: 0 };
+                }
+                stockPortfolio[item.name].weight += item.weight;
+                stockPortfolio[item.name].totalValue += item.weight * item.purchasePricePerKg;
+            });
+            totalPayables = (ledgerData || []).filter(tx => tx.type === 'payable').reduce((acc, tx) => acc + (tx.amount - tx.paid_amount), 0);
+            totalReceivables = (ledgerData || []).filter(tx => tx.type === 'receivable').reduce((acc, tx) => acc + (tx.amount - tx.paid_amount), 0);
+        } else {
+             // Apply transactions since snapshot
+            (cashData || []).forEach(tx => cashBalance += (tx.type === 'income' ? tx.amount : -tx.amount));
+            (bankData || []).forEach(tx => {
+                bankBalances[tx.bank_id] = (bankBalances[tx.bank_id] || 0) + (tx.type === 'deposit' ? tx.amount : -tx.amount);
+            });
+             (ledgerData || []).forEach(tx => {
+                if(tx.type === 'payable') totalPayables += (tx.amount - tx.paid_amount);
+                if(tx.type === 'receivable') totalReceivables += (tx.amount - tx.paid_amount);
+             });
+        }
+        
+        const totalBankBalance = Object.values(bankBalances).reduce((acc, bal) => acc + bal, 0);
+        
         const sortedStockTransactions = [...(stockData || [])].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
         sortedStockTransactions.forEach(tx => {
             if (!stockPortfolio[tx.stockItemName]) {
@@ -562,19 +597,15 @@ export async function getBalances() {
                 item.totalValue -= tx.weight * currentAvgPrice;
             }
         });
+        
         const aggregatedStockItems = Object.entries(stockPortfolio).map(([name, data], index) => ({
             id: `stock-agg-${index}`, name, weight: data.weight, purchasePricePerKg: data.weight > 0 ? data.totalValue / data.weight : 0,
         }));
 
-        // A/R and A/P Balances
-        const { data: ledgerData, error: ledgerError } = await supabase.from('ap_ar_transactions').select('type, amount, paid_amount, status');
-        if (ledgerError && ledgerError.code !== '42P01') throw ledgerError;
-        const totalPayables = (ledgerData || []).filter((tx) => tx.type === 'payable' && tx.status !== 'paid').reduce((acc, tx) => acc + (tx.amount - tx.paid_amount), 0);
-        const totalReceivables = (ledgerData || []).filter((tx) => tx.type === 'receivable' && tx.status !== 'paid').reduce((acc, tx) => acc + (tx.amount - tx.paid_amount), 0);
 
         return {
             cashBalance,
-            bankBalance,
+            bankBalance: totalBankBalance,
             stockItems: aggregatedStockItems,
             totalPayables,
             totalReceivables

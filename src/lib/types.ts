@@ -106,6 +106,19 @@ export interface Category {
     direction: 'credit' | 'debit' | null;
     is_deletable: boolean;
 }
+
+export interface MonthlySnapshot {
+    id: string;
+    user_id: string;
+    snapshot_date: string;
+    cash_balance: number;
+    bank_balances: Record<string, number>;
+    stock_items: Record<string, { weight: number, value: number }>;
+    total_receivables: number;
+    total_payables: number;
+    created_at: string;
+}
     
 
     
+

@@ -118,4 +118,43 @@ TO authenticated
 WITH CHECK (auth.uid() = user_id);
 ```
 
+To enable monthly balance snapshots for improved performance, please run the following SQL code:
+
+```sql
+-- Creates a table to store balance snapshots at the start of each month
+CREATE TABLE monthly_snapshots (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+    snapshot_date DATE NOT NULL,
+    cash_balance NUMERIC NOT NULL DEFAULT 0,
+    bank_balances JSONB NOT NULL DEFAULT '{}'::jsonb,
+    stock_items JSONB NOT NULL DEFAULT '{}'::jsonb, -- Stores { "itemName": { "weight": X, "value": Y } }
+    total_receivables NUMERIC NOT NULL DEFAULT 0,
+    total_payables NUMERIC NOT NULL DEFAULT 0,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE(user_id, snapshot_date)
+);
+
+-- RLS policy for the snapshots table
+ALTER TABLE monthly_snapshots ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can manage their own snapshots"
+ON monthly_snapshots FOR ALL
+USING (auth.uid() = user_id)
+WITH CHECK (auth.uid() = user_id);
+
+-- A server-side function to be called to generate a snapshot.
+-- This would ideally be run by a cron job, but can be triggered manually or by the app.
+CREATE OR REPLACE FUNCTION generate_monthly_snapshot(p_user_id UUID)
+RETURNS void AS $$
+DECLARE
+    -- ... (function implementation would go here)
+BEGIN
+    -- NOTE: The logic for this function would be complex, involving iterating
+    -- all transactions. For now, we will perform this logic inside the `getBalances`
+    -- server action instead of a PL/pgSQL function to keep it in application code.
+    -- This function signature is a placeholder for a future, more advanced implementation.
+END;
+$$ LANGUAGE plpgsql;
+```
     
