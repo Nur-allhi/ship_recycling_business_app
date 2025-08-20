@@ -294,9 +294,8 @@ export async function batchImportData(dataToImport: z.infer<typeof ImportDataSch
     
     try {
         for (const table of tables) {
-             // The most robust way to clear a table is to delete all rows unconditionally.
-             const { error: deleteError } = await supabase.from(table).delete().gt('id', -1);
-             if (deleteError && deleteError.code !== '42P01') { // 42P01 = table does not exist
+             const { error: deleteError } = await supabase.from(table).delete().neq('id', 'this-is-a-placeholder-that-will-never-match'); // This will delete all rows
+             if (deleteError && deleteError.code !== '42P01') {
                 console.error(`Failed to clear ${table}: ${deleteError.message}`);
                 throw new Error(`Failed to clear ${table}: ${deleteError.message}`);
              }
@@ -337,8 +336,7 @@ export async function deleteAllData() {
         
         const tables = ['payment_installments', 'ap_ar_transactions', 'cash_transactions', 'bank_transactions', 'stock_transactions', 'initial_stock', 'categories', 'vendors', 'clients', 'banks', 'activity_log', 'monthly_snapshots'];
         for (const tableName of tables) {
-            // The most robust way to clear a table is to delete all rows unconditionally.
-            const { error } = await supabase.from(tableName).delete().gt('id', -1);
+            const { error } = await supabase.from(tableName).delete().neq('id', 'this-is-a-placeholder-that-will-never-match');
             if (error && error.code !== '42P01') {
                 console.error(`Error deleting from ${tableName}:`, error);
                 throw new Error(`Failed to delete data from ${tableName}.`);
