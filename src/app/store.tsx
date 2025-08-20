@@ -4,7 +4,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import type { CashTransaction, BankTransaction, StockItem, StockTransaction, User, Vendor, Client, LedgerTransaction, PaymentInstallment, Bank, Category } from '@/lib/types';
 import { toast } from 'sonner';
-import { readData, appendData, updateData, deleteData, readDeletedData, restoreData, exportAllData, batchImportData, deleteAllData, logout as serverLogout, recordPaymentAgainstTotal, recordDirectPayment, getBalances } from '@/app/actions';
+import { readData, appendData, updateData, deleteData, readDeletedData, restoreData, exportAllData, batchImportData, deleteAllData, logout as serverLogout, recordPaymentAgainstTotal, recordDirectPayment, getBalances, login as serverLogin, hasUsers } from '@/app/actions';
 import { format, subDays, startOfMonth, endOfMonth } from 'date-fns';
 import { supabase } from '@/lib/supabase';
 import { saveAs } from 'file-saver';
@@ -80,6 +80,7 @@ interface AppContextType extends AppState {
   addBank: (name: string) => Promise<void>;
   addLedgerTransaction: (tx: Omit<LedgerTransaction, 'id' | 'createdAt' | 'deletedAt' | 'status' | 'paid_amount' | 'installments'>) => Promise<void>;
   recordPayment: (contactId: string, contactName: string, paymentAmount: number, paymentMethod: 'cash' | 'bank', paymentDate: Date, ledgerType: 'payable' | 'receivable', bankId?: string) => Promise<void>;
+  login: (credentials: Parameters<typeof serverLogin>[0]) => Promise<any>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -114,62 +115,6 @@ const initialAppState: AppState = {
   loadedMonths: {},
 };
 
-const getCacheKey = (userId: string | null) => `ha-mim-iron-mart-cache-${userId || 'guest'}`;
-
-const getInitialState = (userId: string | null): AppState => {
-    let state = { ...initialAppState, isLoading: true };
-    if (typeof window === 'undefined') return state;
-    
-    try {
-        const storedSettings = localStorage.getItem('ha-mim-iron-mart-settings');
-        if (storedSettings) {
-            const settings = JSON.parse(storedSettings);
-            state = { ...state, ...settings };
-        }
-        
-        const cachedData = localStorage.getItem(getCacheKey(userId));
-        if (cachedData) {
-            const parsedData = JSON.parse(cachedData);
-            state = { ...state, ...parsedData, isLoading: true }; // Start loading fresh data
-        }
-    } catch (e) {
-        console.error("Could not parse data from local storage", e);
-    }
-    return state;
-}
-
-const saveStateToLocalStorage = (state: AppState) => {
-    if (typeof window === 'undefined' || !state.user) return;
-    try {
-        const settingsToSave = {
-            fontSize: state.fontSize,
-            wastagePercentage: state.wastagePercentage,
-            currency: state.currency,
-            showStockValue: state.showStockValue,
-        };
-        localStorage.setItem('ha-mim-iron-mart-settings', JSON.stringify(settingsToSave));
-
-        // For simplicity, we'll cache all loaded transactions.
-        // A more advanced strategy might prune this cache.
-        const dataToCache = {
-            cashTransactions: state.cashTransactions,
-            bankTransactions: state.bankTransactions,
-            stockTransactions: state.stockTransactions,
-            ledgerTransactions: state.ledgerTransactions,
-            initialStockItems: state.initialStockItems,
-            cashCategories: state.cashCategories,
-            bankCategories: state.bankCategories,
-            vendors: state.vendors,
-            clients: state.clients,
-            banks: state.banks,
-            loadedMonths: state.loadedMonths,
-        };
-        localStorage.setItem(getCacheKey(state.user.id), JSON.stringify(dataToCache));
-
-    } catch (e) {
-        console.error("Could not save state to local storage", e);
-    }
-}
 
 const FIXED_CASH_CATEGORIES = [
     { name: 'Stock Purchase', direction: 'debit', is_deletable: false },
@@ -199,13 +144,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(async () => {
     await serverLogout();
-    localStorage.removeItem('ha-mim-iron-mart-settings');
-    if (state.user) {
-        localStorage.removeItem(getCacheKey(state.user.id));
-    }
     setState({...initialAppState, user: null, isLoading: false});
     window.location.href = '/login';
-  }, [state.user]);
+  }, []);
+
+  const login = useCallback(async (credentials: Parameters<typeof serverLogin>[0]) => {
+    const result = await serverLogin(credentials);
+    if(result.success) {
+      await reloadData({ needsInitialBalance: result.needsInitialBalance });
+    }
+    return result;
+  }, []);
 
   const handleApiError = useCallback((error: any) => {
     const isAuthError = error.message.includes('JWT') || error.message.includes('Unauthorized') || error.message.includes("SESSION_EXPIRED");
@@ -292,6 +241,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [handleApiError]);
 
+  const updateBalances = useCallback(async () => {
+    try {
+      const balances = await getBalances();
+      setState(prev => ({
+        ...prev,
+        cashBalance: balances.cashBalance,
+        bankBalance: balances.bankBalance,
+        stockItems: balances.stockItems,
+        totalPayables: balances.totalPayables,
+        totalReceivables: balances.totalReceivables,
+      }));
+    } catch(e) {
+      handleApiError(e);
+    }
+  }, [handleApiError]);
+
+
   useEffect(() => {
     const checkSessionAndLoad = async () => {
         const session = await getSession();
@@ -317,11 +283,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [pathname, state.user, state.isLoading, router]);
   
-  useEffect(() => {
-    if(state.user && !state.isLoading) {
-        saveStateToLocalStorage(state);
-    }
-  }, [state]);
 
   const loadRecycleBinData = useCallback(async () => {
     if(!state.user || state.user.role !== 'admin') return;
@@ -403,32 +364,42 @@ export function AppProvider({ children }: { children: ReactNode }) {
   
     const addCashTransaction = async (tx: Omit<CashTransaction, 'id' | 'createdAt' | 'deletedAt'>) => {
         try {
-            await appendData({ tableName: 'cash_transactions', data: tx, select: '*' });
-            reloadData({force: true});
+            const newTx = await appendData({ tableName: 'cash_transactions', data: tx, select: '*' });
+            if (newTx) {
+                setState(prev => ({
+                    ...prev,
+                    cashTransactions: [newTx, ...prev.cashTransactions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+                }));
+                await updateBalances();
+            }
         } catch (error) {
             handleApiError(error);
         }
     };
 
     const addBankTransaction = async (tx: Omit<BankTransaction, 'id' | 'createdAt' | 'deletedAt'>, contactId?: string, contactName?: string) => {
-        if ((tx.category === 'A/R Settlement' || tx.category === 'A/P Settlement') && contactId && contactName) {
-            await recordDirectPayment({
-                payment_method: 'bank',
-                bank_id: tx.bank_id,
-                date: tx.date,
-                amount: tx.amount,
-                category: tx.category,
-                description: tx.description,
-                contact_id: contactId,
-                contact_name: contactName,
-            });
-            reloadData({ force: true });
-            return;
-        }
-
         try {
-            await appendData({ tableName: 'bank_transactions', data: tx, select: '*' });
-            reloadData({force: true});
+            if ((tx.category === 'A/R Settlement' || tx.category === 'A/P Settlement') && contactId && contactName) {
+                await recordDirectPayment({
+                    payment_method: 'bank',
+                    bank_id: tx.bank_id,
+                    date: tx.date,
+                    amount: tx.amount,
+                    category: tx.category,
+                    description: tx.description,
+                    contact_id: contactId,
+                    contact_name: contactName,
+                });
+            } else {
+                const newTx = await appendData({ tableName: 'bank_transactions', data: tx, select: '*' });
+                 if (newTx) {
+                    setState(prev => ({
+                        ...prev,
+                        bankTransactions: [newTx, ...prev.bankTransactions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+                    }));
+                }
+            }
+            await updateBalances();
         } catch (error) {
             handleApiError(error);
         }
@@ -437,8 +408,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const addLedgerTransaction = async (tx: Omit<LedgerTransaction, 'id' | 'createdAt' | 'deletedAt' | 'status' | 'paid_amount' | 'installments'>) => {
         try {
             const dataToSave = { ...tx, status: 'unpaid', paid_amount: 0 };
-            await appendData({ tableName: 'ap_ar_transactions', data: dataToSave });
-            reloadData({ force: true });
+            const newTx = await appendData({ tableName: 'ap_ar_transactions', data: dataToSave, select: '*' });
+             if (newTx) {
+                setState(prev => ({
+                    ...prev,
+                    ledgerTransactions: [{...newTx, installments: []}, ...prev.ledgerTransactions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+                }));
+                await updateBalances();
+            }
         } catch (error) {
             handleApiError(error);
         }
@@ -449,8 +426,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     try {
       const newStockTx = await appendData({ tableName: 'stock_transactions', data: stockTxData, select: '*' });
-      if (!newStockTx) throw new Error("Stock transaction creation failed. The 'stock_transactions' table may not exist.");
+      if (!newStockTx) throw new Error("Stock transaction creation failed.");
       
+      setState(prev => ({
+        ...prev,
+        stockTransactions: [newStockTx, ...prev.stockTransactions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+      }));
+
       const totalValue = tx.weight * tx.pricePerKg;
 
       if (tx.paymentMethod === 'credit' && contact_id) {
@@ -488,7 +470,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
       
       toast.success("Success", { description: "Stock transaction recorded."});
-      reloadData({ force: true });
+      await updateBalances();
+
     } catch (error: any) {
       handleApiError(error)
     }
@@ -498,7 +481,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       try {
         await updateData({ tableName: 'cash_transactions', id: originalTx.id, data: updatedTxData });
         toast.success("Success", { description: "Cash transaction updated." });
-        reloadData({ force: true });
+        await reloadData();
       } catch (error) {
             handleApiError(error);
       }
@@ -508,7 +491,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       try {
         await updateData({ tableName: 'bank_transactions', id: originalTx.id, data: updatedTxData });
         toast.success("Success", { description: "Bank transaction updated."});
-        reloadData({ force: true });
+        await reloadData();
       } catch(error) {
             handleApiError(error);
       }
@@ -534,7 +517,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
               description: "Stock transaction and linked financial entry updated.",
               duration: 5000,
           });
-          reloadData({ force: true });
+          await reloadData();
 
       } catch(error) {
           handleApiError(error);
@@ -550,7 +533,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         })
         .then(() => {
           toast.success("Success", { description: "Cash transaction moved to recycle bin."});
-          reloadData({ force: true });
+          reloadData();
         })
         .catch((error) => {
             handleApiError(error);
@@ -566,7 +549,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         })
         .then(() => {
           toast.success("Success", { description: "Bank transaction moved to recycle bin."});
-          reloadData({ force: true });
+          reloadData();
         })
         .catch(error => {
             handleApiError(error);
@@ -589,7 +572,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             }
 
             toast.success("Stock Transaction Deleted", { description: "The corresponding financial entry was also moved to the recycle bin."});
-            reloadData({ force: true });
+            reloadData();
         })
         .catch(error => {
             handleApiError(error);
@@ -617,7 +600,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
         
         toast.success("Transaction Restored", { description: "The item and any linked transactions have been restored." });
-        reloadData({ force: true });
+        reloadData();
         loadRecycleBinData();
     } catch (error: any) {
         handleApiError(error);
@@ -628,7 +611,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
      try {
         await Promise.all(txs.map(tx => deleteData({ tableName: "cash_transactions", id: tx.id })));
         toast.success("Success", { description: `${txs.length} cash transaction(s) deleted.`});
-        reloadData({ force: true });
+        reloadData();
     } catch(error) {
         handleApiError(error);
     }
@@ -638,7 +621,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
         await Promise.all(txs.map(tx => deleteData({ tableName: "bank_transactions", id: tx.id })));
         toast.success("Success", { description: `${txs.length} bank transaction(s) deleted.`});
-        reloadData({ force: true });
+        reloadData();
     } catch(error) {
         handleApiError(error);
     }
@@ -648,7 +631,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
         await Promise.all(txs.map(tx => deleteData({ tableName: "stock_transactions", id: tx.id })));
         toast.success("Success", { description: `${txs.length} stock transaction(s) deleted.`});
-        reloadData({ force: true });
+        reloadData();
     } catch(error) {
         handleApiError(error);
     }
@@ -658,18 +641,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
      const transactionDate = date || new Date().toISOString();
      
      try {
+        let newCashTx, newBankTx;
         if(from === 'cash') {
             if(!bankId) throw new Error("A destination bank account is required.");
             const description = 'Transfer to Bank';
-            await addCashTransaction({ date: transactionDate, amount, description, category: 'Transfer', type: 'expense' });
-            await addBankTransaction({ date: transactionDate, amount, description, category: 'Transfer', type: 'deposit', bank_id: bankId! });
+            newCashTx = await addCashTransaction({ date: transactionDate, amount, description, category: 'Transfer', type: 'expense' });
+            newBankTx = await addBankTransaction({ date: transactionDate, amount, description, category: 'Transfer', type: 'deposit', bank_id: bankId! });
         } else { // from bank
             if(!bankId) throw new Error("A source bank account is required.");
             const description = 'Transfer from Bank';
-            await addBankTransaction({ date: transactionDate, amount, description, category: 'Transfer', type: 'withdrawal', bank_id: bankId! });
-            await addCashTransaction({ date: transactionDate, amount, description, category: 'Transfer', type: 'income' });
+            newBankTx = await addBankTransaction({ date: transactionDate, amount, description, category: 'Transfer', type: 'withdrawal', bank_id: bankId! });
+            newCashTx = await addCashTransaction({ date: transactionDate, amount, description, category: 'Transfer', type: 'income' });
         }
-        reloadData({ force: true });
+        await updateBalances();
      } catch (error) {
         handleApiError(error);
      }
@@ -683,7 +667,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const newCategory = await appendData({ tableName: 'categories', data: dataToSave, select: '*' });
 
       if (newCategory) {
-          reloadData({ force: true });
+          if(type === 'cash') {
+              setState(prev => ({...prev, cashCategories: [...prev.cashCategories, newCategory]}));
+          } else {
+              setState(prev => ({...prev, bankCategories: [...prev.bankCategories, newCategory]}));
+          }
           toast.success("Success", { description: "Category added." });
       }
     } catch (error) {
@@ -696,7 +684,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
         const { error } = await supabase.from('categories').delete().eq('id', id).eq('is_deletable', true);
         if(error) throw error;
-        reloadData({ force: true });
+        reloadData();
         toast.success("Success", { description: "Category deleted." });
     } catch(error) {
         handleApiError(error);
@@ -730,7 +718,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         
         toast.success("Initial balances set.");
         setState(prev => ({ ...prev, needsInitialBalance: false }));
-        reloadData({ force: true });
+        await reloadData();
 
     } catch (e) {
         handleApiError(e);
@@ -744,7 +732,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const newItem = await appendData({ tableName: 'initial_stock', data: { name, weight, purchasePricePerKg: pricePerKg } });
         if(newItem) {
             toast.success("Initial stock item added.");
-            reloadData({ force: true });
+            await reloadData();
         }
       } catch (e) {
           handleApiError(e);
@@ -792,7 +780,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
             await batchImportData(data);
             toast.success("Import Successful", { description: "Your data has been restored from backup." });
-            reloadData({ force: true });
+            await reloadData();
 
         } catch (error: any) {
             handleApiError(error);
@@ -896,7 +884,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     deleteData({ tableName: 'ap_ar_transactions', id: txToDelete.id })
       .then(() => {
         toast.success('Transaction moved to recycle bin.');
-        reloadData({ force: true });
+        reloadData();
       })
       .catch(error => {
           handleApiError(error);
@@ -923,7 +911,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         });
 
         toast.success("Payment Recorded", { description: "The payment has been recorded and balances are updating."});
-        reloadData({ force: true });
+        await reloadData();
         
     } catch (error: any) {
          handleApiError(new Error(error.message || "An unexpected error occurred during payment recording."));
@@ -964,6 +952,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         handleImport,
         handleDeleteAllData,
         logout,
+        login,
         addVendor,
         addClient,
         addLedgerTransaction,
