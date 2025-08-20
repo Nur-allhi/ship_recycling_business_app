@@ -505,5 +505,3 @@ export function BankTab() {
     </>
   )
 }
-
-    
