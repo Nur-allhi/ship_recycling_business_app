@@ -2,7 +2,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useMemo } from 'react';
-import type { CashTransaction, BankTransaction, StockItem, StockTransaction, User, Vendor, Client, LedgerTransaction, PaymentInstallment, Bank, Category } from '@/lib/types';
+import type { CashTransaction, BankTransaction, StockItem, StockTransaction, User, Vendor, Client, LedgerTransaction, PaymentInstallment, Bank, Category, MonthlySnapshot } from '@/lib/types';
 import { toast } from 'sonner';
 import { readData, appendData, updateData, deleteData, readDeletedData, restoreData, exportAllData, batchImportData, deleteAllData, logout as serverLogout, recordPaymentAgainstTotal, getBalances, login as serverLogin, hasUsers, emptyRecycleBin as serverEmptyRecycleBin, recordDirectPayment } from '@/app/actions';
 import { format, subDays, startOfMonth, endOfMonth, parseISO } from 'date-fns';
@@ -253,7 +253,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             });
              const [
                 categoriesData, vendorsData, clientsData, banksData, balances,
-                cashTxs, bankTxs, stockTxs, ledgerData, installmentsData
+                cashTxs, bankTxs, stockTxs, ledgerData, installmentsData, snapshotsData
             ] = await Promise.all([
                 readData({ tableName: 'categories' }), readData({ tableName: 'vendors' }),
                 readData({ tableName: 'clients' }), readData({ tableName: 'banks' }),
@@ -261,6 +261,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
                 readData({ tableName: 'cash_transactions' }), readData({ tableName: 'bank_transactions' }),
                 readData({ tableName: 'stock_transactions' }), readData({ tableName: 'ap_ar_transactions' }),
                 readData({ tableName: 'payment_installments' }),
+                readData({ tableName: 'monthly_snapshots' }),
             ]);
              const ledgerTxsWithInstallments = (ledgerData || []).map((tx: any) => ({
                 ...tx,
@@ -271,6 +272,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
                 await bulkPut('clients', clientsData); await bulkPut('banks', banksData);
                 await bulkPut('cashTransactions', cashTxs); await bulkPut('bankTransactions', bankTxs);
                 await bulkPut('stockTransactions', stockTxs); await bulkPut('ledgerTransactions', ledgerTxsWithInstallments);
+                await bulkPut('monthlySnapshots', snapshotsData);
                 await db.appState.update(1, { lastSync: new Date().toISOString() });
             });
              setLoadedMonths({ [format(new Date(), 'yyyy-MM')]: true });
