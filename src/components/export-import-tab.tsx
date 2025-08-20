@@ -46,34 +46,7 @@ export function ExportImportTab() {
   const triggerDeleteAll = () => {
     handleDeleteAllData();
   }
-
-  const getBackupFileName = () => {
-    const backupName = "ha-mim-iron-mart-backup.json";
-    if (selectedFile?.name.endsWith('.zip')) {
-        const zipReader = new FileReader();
-        zipReader.onload = async (e) => {
-            try {
-                 const jszip = (await import('jszip')).default;
-                 const zip = await jszip.loadAsync(selectedFile);
-                 if (zip.file(backupName)) {
-                    // We're good
-                 } else {
-                    // For backward compatibility
-                    if (zip.file("shipshape-ledger-backup.json")) {
-                         // older format
-                    } else {
-                         // No valid file found
-                    }
-                 }
-            } catch (err) {
-                 console.error("error reading zip", err)
-            }
-        };
-        zipReader.readAsArrayBuffer(selectedFile);
-    }
-    return backupName;
-  }
-
+  
   return (
     <>
       <Card>

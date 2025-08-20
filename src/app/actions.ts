@@ -287,28 +287,25 @@ const ImportDataSchema = z.record(z.array(z.record(z.any())));
 
 export async function batchImportData(dataToImport: z.infer<typeof ImportDataSchema>) {
     const supabase = createSupabaseClient(true);
-    const tables = ['banks', 'cash_transactions', 'bank_transactions', 'stock_transactions', 'initial_stock', 'categories', 'vendors', 'clients', 'ap_ar_transactions', 'payment_installments', 'monthly_snapshots'];
+    const tables = ['payment_installments', 'ap_ar_transactions', 'cash_transactions', 'bank_transactions', 'stock_transactions', 'initial_stock', 'categories', 'vendors', 'clients', 'banks', 'monthly_snapshots'];
     const session = await getSession();
     if (!session) throw new Error("No active session for import.");
     if (session.role !== 'admin') throw new Error("Only admins can import data.");
     
     try {
         for (const table of tables) {
-             const { error: deleteError } = await supabase.from(table).delete().gt('id', 0); // Universal way to delete all rows assuming 'id' is a number or can be cast
+             const { error: deleteError } = await supabase.from(table).delete().neq('id', 'this-is-a-placeholder-that-will-never-match');
              if (deleteError && deleteError.code !== '42P01') {
-                // Fallback for non-numeric or non-existent IDs
-                const { error: fallbackError } = await supabase.from(table).delete().neq('id', 'a-non-existent-value');
-                 if (fallbackError && fallbackError.code !== '42P01') {
-                    console.error(`Failed to clear ${table}: ${fallbackError.message}`);
-                    throw new Error(`Failed to clear ${table}: ${fallbackError.message}`);
-                 }
+                console.error(`Failed to clear ${table}: ${deleteError.message}`);
+                throw new Error(`Failed to clear ${table}: ${deleteError.message}`);
             }
         }
 
-        for (const tableName of tables) {
+        const importOrder = ['banks', 'categories', 'vendors', 'clients', 'initial_stock', 'cash_transactions', 'bank_transactions', 'stock_transactions', 'ap_ar_transactions', 'payment_installments', 'monthly_snapshots'];
+
+        for (const tableName of importOrder) {
             const records = dataToImport[tableName];
             if (records && records.length > 0) {
-                 // No longer need to strip user_id
                 const { error: insertError } = await supabase.from(tableName).upsert(records);
                 if (insertError && insertError.code !== '42P01') throw new Error(`Failed to import to ${tableName}: ${insertError.message}`);
             }
