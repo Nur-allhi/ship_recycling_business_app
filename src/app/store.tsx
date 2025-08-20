@@ -4,7 +4,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useMemo } from 'react';
 import type { CashTransaction, BankTransaction, StockItem, StockTransaction, User, Vendor, Client, LedgerTransaction, PaymentInstallment, Bank, Category, MonthlySnapshot } from '@/lib/types';
 import { toast } from 'sonner';
-import { readData, appendData, updateData, deleteData, readDeletedData, restoreData, exportAllData, batchImportData, deleteAllData, logout as serverLogout, recordPaymentAgainstTotal, getBalances, login as serverLogin, hasUsers, emptyRecycleBin as serverEmptyRecycleBin, recordDirectPayment } from '@/app/actions';
+import { readData, appendData, updateData, deleteData, readDeletedData, restoreData, exportAllData, batchImportData, deleteAllData, logout as serverLogout, recordPaymentAgainstTotal, getBalances, login as serverLogin, hasUsers, emptyRecycleBin as serverEmptyRecycleBin, recordDirectPayment, updateStockTransaction } from '@/app/actions';
 import { format, subDays, startOfMonth, endOfMonth, parseISO } from 'date-fns';
 import { supabase } from '@/lib/supabase';
 import { saveAs } from 'file-saver';
@@ -51,9 +51,9 @@ interface AppContextType extends AppState {
   syncQueueCount: number;
   loadedMonths: Record<string, boolean>;
   
-  loadDataForMonth: (month: Date) => Promise<void>;
   reloadData: (options?: { force?: boolean; needsInitialBalance?: boolean }) => Promise<void>;
   loadRecycleBinData: () => Promise<void>;
+  loadDataForMonth: (month: Date) => Promise<void>;
   addCashTransaction: (tx: Omit<CashTransaction, 'id' | 'createdAt' | 'deletedAt'>) => Promise<void>;
   addBankTransaction: (tx: Omit<BankTransaction, 'id' | 'createdAt' | 'deletedAt'>) => Promise<void>;
   addStockTransaction: (tx: Omit<StockTransaction, 'id' | 'createdAt' | 'deletedAt'> & { contact_id?: string, contact_name?: string }, bank_id?: string) => Promise<void>;
@@ -114,9 +114,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   
   // --- Live Queries from IndexedDB ---
   const appState = useLiveQuery(() => db.appState.get(1), []);
-  const cashTransactions = useLiveQuery(() => db.cashTransactions.orderBy('date').reverse().toArray(), []);
-  const bankTransactions = useLiveQuery(() => db.bankTransactions.orderBy('date').reverse().toArray(), []);
-  const stockTransactions = useLiveQuery(() => db.stockTransactions.orderBy('date').reverse().toArray(), []);
+  const cashTransactions = useLiveQuery(() => db.cashTransactions.toArray(), []);
+  const bankTransactions = useLiveQuery(() => db.bankTransactions.toArray(), []);
+  const stockTransactions = useLiveQuery(() => db.stockTransactions.toArray(), []);
   const ledgerTransactions = useLiveQuery(() => db.ledgerTransactions.orderBy('date').reverse().toArray(), []);
   const banks = useLiveQuery(() => db.banks.toArray(), []);
   const categories = useLiveQuery(() => db.categories.toArray(), []);
@@ -275,7 +275,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
                 await bulkPut('monthlySnapshots', snapshotsData);
                 await db.appState.update(1, { lastSync: new Date().toISOString() });
             });
-             setLoadedMonths({ [format(new Date(), 'yyyy-MM')]: true });
+            setLoadedMonths({}); // Reset loaded months on full reload
+
              setState(prev => ({
                 ...prev, cashBalance: balances.cashBalance, bankBalance: balances.bankBalance,
                 stockItems: balances.stockItems, totalPayables: balances.totalPayables, totalReceivables: balances.totalReceivables,
@@ -296,6 +297,32 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setState(prev => ({...prev, isLoading: false}));
     }
   }, [handleApiError, updateBalances, processSyncQueue]);
+  
+  const loadDataForMonth = useCallback(async (month: Date) => {
+    const monthKey = format(month, 'yyyy-MM');
+    if (loadedMonths[monthKey]) return;
+
+    try {
+        const startDate = startOfMonth(month).toISOString();
+        const endDate = endOfMonth(month).toISOString();
+
+        const [cashTxs, bankTxs, stockTxs] = await Promise.all([
+            readData({ tableName: 'cash_transactions', startDate, endDate }),
+            readData({ tableName: 'bank_transactions', startDate, endDate }),
+            readData({ tableName: 'stock_transactions', startDate, endDate }),
+        ]);
+
+        await db.transaction('rw', db.cashTransactions, db.bankTransactions, db.stockTransactions, async () => {
+            if (cashTxs) await bulkPut('cashTransactions', cashTxs);
+            if (bankTxs) await bulkPut('bankTransactions', bankTxs);
+            if (stockTxs) await bulkPut('stockTransactions', stockTxs);
+        });
+
+        setLoadedMonths(prev => ({ ...prev, [monthKey]: true }));
+    } catch (error) {
+        handleApiError(error);
+    }
+  }, [loadedMonths, handleApiError]);
   
   useEffect(() => {
     const checkSessionAndLoad = async () => {
@@ -487,8 +514,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
       toast.success("Success", { description: "Bank transaction updated."});
     } catch(error) { handleApiError(error); }
   };
+
   const editStockTransaction = async (originalTx: StockTransaction, updatedTxData: Partial<Omit<StockTransaction, 'id' | 'date' | 'createdAt'>>) => {
-      await reloadData();
+      try {
+        await updateStockTransaction({
+            stockTxId: originalTx.id,
+            updates: updatedTxData,
+        });
+        toast.success("Transaction Updated", { description: "The stock transaction has been successfully updated." });
+        await reloadData({ force: true }); // Force reload to ensure all linked data is consistent
+      } catch (error) {
+        handleApiError(error);
+      }
   };
 
   const deleteTransaction = async (tableName: 'cash_transactions' | 'bank_transactions' | 'stock_transactions' | 'ap_ar_transactions', localTable: 'cashTransactions' | 'bankTransactions' | 'stockTransactions' | 'ledgerTransactions', txToDelete: any) => {
@@ -564,30 +601,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const openInitialBalanceDialog = () => setState(prev => ({...prev, isInitialBalanceDialogOpen: true}));
   const closeInitialBalanceDialog = () => setState(prev => ({...prev, isInitialBalanceDialogOpen: false}));
 
-  const loadDataForMonth = useCallback(async (month: Date) => {
-    const monthKey = format(month, 'yyyy-MM');
-    if (loadedMonths[monthKey]) return;
-
-    try {
-        const startDate = startOfMonth(month).toISOString();
-        const endDate = endOfMonth(month).toISOString();
-        const [cashTxs, bankTxs, stockTxs] = await Promise.all([
-            readData({ tableName: 'cash_transactions', startDate, endDate }),
-            readData({ tableName: 'bank_transactions', startDate, endDate }),
-            readData({ tableName: 'stock_transactions', startDate, endDate }),
-        ]);
-
-        await db.transaction('rw', db.cashTransactions, db.bankTransactions, db.stockTransactions, async () => {
-            if (cashTxs) await bulkPut('cashTransactions', cashTxs);
-            if (bankTxs) await bulkPut('bankTransactions', bankTxs);
-            if (stockTxs) await bulkPut('stockTransactions', stockTxs);
-        });
-
-        setLoadedMonths(prev => ({ ...prev, [monthKey]: true }));
-    } catch (e) {
-        handleApiError(e);
-    }
-  }, [loadedMonths, handleApiError]);
 
   return (
     <AppContext.Provider value={{ 
@@ -612,9 +625,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         banks: banks || [],
         syncQueueCount,
         loadedMonths,
-        loadDataForMonth,
         reloadData,
         loadRecycleBinData: async () => {}, // Placeholder
+        loadDataForMonth,
         addCashTransaction,
         addBankTransaction,
         addStockTransaction,
@@ -672,5 +685,3 @@ export function useAppContext() {
   }
   return context;
 }
-
-    

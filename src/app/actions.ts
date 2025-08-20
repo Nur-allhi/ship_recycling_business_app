@@ -804,13 +804,75 @@ export async function recordDirectPayment(input: z.infer<typeof RecordDirectPaym
     }
 }
     
+const UpdateStockTransactionInputSchema = z.object({
+    stockTxId: z.string(),
+    updates: z.record(z.any()),
+});
+
+export async function updateStockTransaction(input: z.infer<typeof UpdateStockTransactionInputSchema>) {
+    const session = await getSession();
+    if (session?.role !== 'admin') throw new Error("Only admins can update transactions.");
     
+    const supabase = await getAuthenticatedSupabaseClient();
+
+    // Update the stock transaction first
+    const { data: updatedStockTx, error: stockError } = await supabase
+        .from('stock_transactions')
+        .update(input.updates)
+        .eq('id', input.stockTxId)
+        .select()
+        .single();
+    
+    if (stockError) throw stockError;
+    if (!updatedStockTx) throw new Error("Failed to find the stock transaction after update.");
+
+    // Check if there is a linked financial transaction
+    // A financial transaction is linked if it has the stock transaction's ID
+    const { data: linkedCashTx, error: cashError } = await supabase
+        .from('cash_transactions')
+        .select('id')
+        .eq('linkedStockTxId', input.stockTxId)
+        .maybeSingle();
+        
+    if (cashError) throw cashError;
+
+    const { data: linkedBankTx, error: bankError } = await supabase
+        .from('bank_transactions')
+        .select('id')
+        .eq('linkedStockTxId', input.stockTxId)
+        .maybeSingle();
+    
+    if (bankError) throw bankError;
+
+    // If there is a linked transaction, update its amount to match the new stock value
+    const hasAmountChanged = input.updates.pricePerKg !== undefined || input.updates.weight !== undefined;
+
+    if (hasAmountChanged) {
+        const newActualAmount = updatedStockTx.weight * updatedStockTx.pricePerKg;
+        const newExpectedAmount = newActualAmount; // Assuming for edits, expected and actual are reset
+        const financialUpdates = {
+            actual_amount: newActualAmount,
+            expected_amount: newExpectedAmount,
+            difference: 0,
+            difference_reason: 'Edited transaction',
+        };
+
+        if (linkedCashTx) {
+            await supabase.from('cash_transactions').update(financialUpdates).eq('id', linkedCashTx.id);
+        }
+        if (linkedBankTx) {
+            await supabase.from('bank_transactions').update(financialUpdates).eq('id', linkedBankTx.id);
+        }
+    }
+
+    await logActivity(`Edited stock transaction: ${input.stockTxId}`);
+    return { success: true };
+}    
 
     
 
     
 
-    
 
 
 

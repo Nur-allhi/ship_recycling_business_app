@@ -359,7 +359,7 @@ export function CashTab() {
                 View your cash-in-hand transactions.
               </CardDescription>
             </div>
-            <div className="flex items-center gap-2 self-center sm:self-auto">
+            <div className="flex items-center gap-2 self-center justify-center sm:self-auto">
               <Button variant="outline" size="icon" onClick={goToPreviousMonth} className="h-9 w-9">
                   <ChevronLeft className="h-4 w-4" />
               </Button>
