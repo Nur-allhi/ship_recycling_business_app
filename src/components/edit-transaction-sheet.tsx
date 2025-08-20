@@ -17,7 +17,7 @@ import {
 } from '@/components/ui/select';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { toast } from 'sonner';
-import { Pencil } from 'lucide-react';
+import { Pencil, Loader2 } from 'lucide-react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from './ui/sheet';
 import type { CashTransaction, BankTransaction, StockTransaction } from '@/lib/types';
 import { useEffect, useMemo } from 'react';
@@ -102,7 +102,7 @@ export function EditTransactionSheet({ isOpen, setIsOpen, transaction, transacti
   }, [transaction, transactionType, isCash, isBank, isStock]);
 
 
-  const { register, handleSubmit, control, setValue, formState: { errors } } = useForm<FormData>({
+  const { register, handleSubmit, control, setValue, formState: { errors, isSubmitting } } = useForm<FormData>({
     resolver: zodResolver(formSchema),
     defaultValues
   });
@@ -280,7 +280,10 @@ export function EditTransactionSheet({ isOpen, setIsOpen, transaction, transacti
                 )}
 
 
-                <Button type="submit" className="w-full sm:w-auto" disabled={isStockDerivedTx}>Save Changes</Button>
+                <Button type="submit" className="w-full sm:w-auto" disabled={isStockDerivedTx || isSubmitting}>
+                    {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Pencil className="mr-2 h-4 w-4" />}
+                    Save Changes
+                </Button>
             </form>
         </SheetContent>
     </Sheet>
