@@ -12,6 +12,14 @@ interface AppState {
     lastSync: string | null;
 }
 
+export interface SyncQueueItem {
+    id?: number;
+    action: 'appendData' | 'updateData' | 'deleteData' | 'restoreData' | 'recordPaymentAgainstTotal' | 'recordDirectPayment' | 'transferFunds' | 'setInitialBalances';
+    payload: any;
+    timestamp: number;
+}
+
+
 export class AppDatabase extends Dexie {
     appState!: EntityTable<AppState, 'id'>;
     cashTransactions!: EntityTable<CashTransaction, 'id'>;
@@ -26,10 +34,11 @@ export class AppDatabase extends Dexie {
     clients!: EntityTable<Client, 'id'>;
     initialStock!: EntityTable<StockItem, 'id'>;
     monthlySnapshots!: EntityTable<MonthlySnapshot, 'id'>;
+    syncQueue!: EntityTable<SyncQueueItem, 'id'>;
 
     constructor() {
         super('ShipShapeLedgerDB');
-        this.version(2).stores({
+        this.version(3).stores({
             appState: 'id',
             cashTransactions: '++id, date, category',
             bankTransactions: '++id, date, bank_id, category',
@@ -43,6 +52,7 @@ export class AppDatabase extends Dexie {
             clients: '++id, name',
             initialStock: '++id, name',
             monthlySnapshots: '++id, snapshot_date',
+            syncQueue: '++id, timestamp',
         });
     }
 }

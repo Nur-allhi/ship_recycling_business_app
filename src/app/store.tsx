@@ -12,7 +12,8 @@ import JSZip from 'jszip';
 import { getSession } from '@/lib/auth';
 import { useRouter, usePathname } from 'next/navigation';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { db, bulkPut, clearAllData as clearLocalDb } from '@/lib/db';
+import { db, bulkPut, clearAllData as clearLocalDb, type SyncQueueItem } from '@/lib/db';
+import { WifiOff } from 'lucide-react';
 
 type FontSize = 'sm' | 'base' | 'lg';
 
@@ -25,6 +26,7 @@ interface AppState {
   isLoading: boolean;
   isInitialBalanceDialogOpen: boolean;
   isSyncing: boolean;
+  isOnline: boolean;
 }
 
 interface AppContextType extends AppState {
@@ -46,11 +48,10 @@ interface AppContextType extends AppState {
   vendors: Vendor[];
   clients: Client[];
   banks: Bank[];
-  loadedMonths: Record<string, boolean>; // YYYY-MM format
+  syncQueueCount: number;
   
   reloadData: (options?: { force?: boolean; needsInitialBalance?: boolean }) => Promise<void>;
   loadRecycleBinData: () => Promise<void>;
-  loadDataForMonth: (month: Date) => Promise<void>;
   addCashTransaction: (tx: Omit<CashTransaction, 'id' | 'createdAt' | 'deletedAt'>) => Promise<void>;
   addBankTransaction: (tx: Omit<BankTransaction, 'id' | 'createdAt' | 'deletedAt'>) => Promise<void>;
   addStockTransaction: (tx: Omit<StockTransaction, 'id' | 'createdAt' | 'deletedAt'> & { contact_id?: string, contact_name?: string }, bank_id?: string) => Promise<void>;
@@ -91,24 +92,6 @@ interface AppContextType extends AppState {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-const FIXED_CASH_CATEGORIES: Omit<Category, 'id'>[] = [
-    { name: 'Cash In', type: 'cash', direction: 'credit', is_deletable: false },
-    { name: 'Cash Out', type: 'cash', direction: 'debit', is_deletable: false },
-    { name: 'Utilities', type: 'cash', direction: 'debit', is_deletable: false },
-    { name: 'Operational', type: 'cash', direction: 'debit', is_deletable: false },
-    { name: 'A/P Settlement', type: 'cash', direction: 'debit', is_deletable: false },
-    { name: 'A/R Settlement', type: 'cash', direction: 'credit', is_deletable: false },
-    { name: 'Stock Transaction', type: 'cash', direction: null, is_deletable: false},
-];
-
-const FIXED_BANK_CATEGORIES: Omit<Category, 'id'>[] = [
-    { name: 'Deposit', type: 'bank', direction: 'credit', is_deletable: false },
-    { name: 'Withdrawal', type: 'bank', direction: 'debit', is_deletable: false },
-    { name: 'A/P Settlement', type: 'bank', direction: 'debit', is_deletable: false },
-    { name: 'A/R Settlement', type: 'bank', direction: 'credit', is_deletable: false },
-    { name: 'Stock Transaction', type: 'bank', direction: null, is_deletable: false},
-];
-
 export function AppProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AppState>({
     cashBalance: 0,
@@ -119,6 +102,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     isLoading: true,
     isInitialBalanceDialogOpen: false,
     isSyncing: false,
+    isOnline: typeof navigator !== 'undefined' ? navigator.onLine : true,
   });
 
   const router = useRouter();
@@ -134,6 +118,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const categories = useLiveQuery(() => db.categories.toArray(), []);
   const vendors = useLiveQuery(() => db.vendors.toArray(), []);
   const clients = useLiveQuery(() => db.clients.toArray(), []);
+  const syncQueueCount = useLiveQuery(() => db.syncQueue.count(), 0) ?? 0;
   
   const user = appState?.user ?? null;
   const fontSize = appState?.fontSize ?? 'base';
@@ -184,64 +169,62 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [handleApiError]);
 
-  const syncData = useCallback(async (isInitialSync = false) => {
-    if (state.isSyncing) return;
-    setState(prev => ({ ...prev, isSyncing: true }));
-    toast.info("Syncing data with server...");
-    
-    try {
-        const lastSync = appState?.lastSync;
-        const syncDate = lastSync ? new Date(lastSync) : subDays(new Date(), 30);
-        
-        const [
-            categoriesData, vendorsData, clientsData, banksData, balances,
-            cashTxs, bankTxs, stockTxs, ledgerData, installmentsData
-        ] = await Promise.all([
-            readData({ tableName: 'categories' }),
-            readData({ tableName: 'vendors' }),
-            readData({ tableName: 'clients' }),
-            readData({ tableName: 'banks' }),
-            getBalances(),
-            readData({ tableName: 'cash_transactions', startDate: isInitialSync ? undefined : syncDate.toISOString() }),
-            readData({ tableName: 'bank_transactions', startDate: isInitialSync ? undefined : syncDate.toISOString() }),
-            readData({ tableName: 'stock_transactions', startDate: isInitialSync ? undefined : syncDate.toISOString() }),
-            readData({ tableName: 'ap_ar_transactions', startDate: isInitialSync ? undefined : syncDate.toISOString() }),
-            readData({ tableName: 'payment_installments', startDate: isInitialSync ? undefined : syncDate.toISOString() }),
-        ]);
+  const processSyncQueue = useCallback(async () => {
+    if (state.isSyncing || !state.isOnline) return;
+    const queue = await db.syncQueue.orderBy('timestamp').toArray();
+    if (queue.length === 0) return;
 
-        const ledgerTxsWithInstallments = (ledgerData || []).map((tx: any) => ({
-            ...tx,
-            installments: (installmentsData || []).filter((ins: any) => ins.ap_ar_transaction_id === tx.id)
-        }));
-        
-        await db.transaction('rw', db.tables, async () => {
-            await bulkPut('categories', [...FIXED_CASH_CATEGORIES, ...FIXED_BANK_CATEGORIES, ...categoriesData]);
-            await bulkPut('vendors', vendorsData);
-            await bulkPut('clients', clientsData);
-            await bulkPut('banks', banksData);
-            await bulkPut('cashTransactions', cashTxs);
-            await bulkPut('bankTransactions', bankTxs);
-            await bulkPut('stockTransactions', stockTxs);
-            await bulkPut('ledgerTransactions', ledgerTxsWithInstallments);
-            await db.appState.update(1, { lastSync: new Date().toISOString() });
-        });
-        
-        setState(prev => ({
-            ...prev,
-            cashBalance: balances.cashBalance,
-            bankBalance: balances.bankBalance,
-            stockItems: balances.stockItems,
-            totalPayables: balances.totalPayables,
-            totalReceivables: balances.totalReceivables,
-        }));
-        
-        toast.success("Sync complete!");
-    } catch (error) {
-        handleApiError(error);
-    } finally {
-        setState(prev => ({ ...prev, isSyncing: false }));
+    setState(prev => ({ ...prev, isSyncing: true }));
+    toast.info(`Syncing ${queue.length} offline changes...`);
+
+    let successCount = 0;
+    for (const item of queue) {
+        try {
+            switch(item.action) {
+                case 'appendData': await appendData(item.payload); break;
+                case 'updateData': await updateData(item.payload); break;
+                case 'deleteData': await deleteData(item.payload); break;
+            }
+            await db.syncQueue.delete(item.id!);
+            successCount++;
+        } catch (error) {
+            console.error('Failed to process sync queue item:', item, error);
+            toast.error('Sync Error', { description: `Failed to sync an offline change. Please check console.` });
+            // Stop processing on first error to maintain order
+            setState(prev => ({ ...prev, isSyncing: false }));
+            return;
+        }
     }
-  }, [appState?.lastSync, handleApiError, state.isSyncing]);
+
+    if (successCount > 0) {
+        await updateBalances();
+        toast.success(`Successfully synced ${successCount} items.`);
+    }
+
+    setState(prev => ({ ...prev, isSyncing: false }));
+  }, [state.isSyncing, state.isOnline, updateBalances]);
+
+  const queueOrSync = useCallback(async (item: Omit<SyncQueueItem, 'timestamp' | 'id'>) => {
+    if (state.isOnline) {
+        try {
+             switch(item.action) {
+                case 'appendData': return await appendData(item.payload);
+                case 'updateData': return await updateData(item.payload);
+                case 'deleteData': return await deleteData(item.payload);
+            }
+        } catch (error) {
+            handleApiError(error);
+            // If API fails even when online, queue it
+            await db.syncQueue.add({ ...item, timestamp: Date.now() });
+            throw error; // Re-throw to inform the caller
+        }
+    } else {
+        await db.syncQueue.add({ ...item, timestamp: Date.now() });
+        toast.info("You are offline. Change saved locally and will sync later.");
+        return null;
+    }
+  }, [state.isOnline, handleApiError]);
+
 
   const reloadData = useCallback(async (options?: { force?: boolean, needsInitialBalance?: boolean }) => {
     setState(prev => ({ ...prev, isLoading: true }));
@@ -254,7 +237,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
 
         const localUser = await db.appState.get(1);
-        if (!localUser || !localUser.user || localUser.user.id !== session.id) {
+        if (!localUser || !localUser.user || localUser.user.id !== session.id || options?.force) {
             await db.appState.put({
                 id: 1,
                 user: session,
@@ -264,10 +247,36 @@ export function AppProvider({ children }: { children: ReactNode }) {
                 showStockValue: false,
                 lastSync: null
             });
-            await syncData(true);
+             const [
+                categoriesData, vendorsData, clientsData, banksData, balances,
+                cashTxs, bankTxs, stockTxs, ledgerData, installmentsData
+            ] = await Promise.all([
+                readData({ tableName: 'categories' }), readData({ tableName: 'vendors' }),
+                readData({ tableName: 'clients' }), readData({ tableName: 'banks' }),
+                getBalances(),
+                readData({ tableName: 'cash_transactions' }), readData({ tableName: 'bank_transactions' }),
+                readData({ tableName: 'stock_transactions' }), readData({ tableName: 'ap_ar_transactions' }),
+                readData({ tableName: 'payment_installments' }),
+            ]);
+             const ledgerTxsWithInstallments = (ledgerData || []).map((tx: any) => ({
+                ...tx,
+                installments: (installmentsData || []).filter((ins: any) => ins.ap_ar_transaction_id === tx.id)
+            }));
+            await db.transaction('rw', db.tables, async () => {
+                await bulkPut('categories', categoriesData); await bulkPut('vendors', vendorsData);
+                await bulkPut('clients', clientsData); await bulkPut('banks', banksData);
+                await bulkPut('cashTransactions', cashTxs); await bulkPut('bankTransactions', bankTxs);
+                await bulkPut('stockTransactions', stockTxs); await bulkPut('ledgerTransactions', ledgerTxsWithInstallments);
+                await db.appState.update(1, { lastSync: new Date().toISOString() });
+            });
+             setState(prev => ({
+                ...prev, cashBalance: balances.cashBalance, bankBalance: balances.bankBalance,
+                stockItems: balances.stockItems, totalPayables: balances.totalPayables, totalReceivables: balances.totalReceivables,
+            }));
         } else {
              await db.appState.update(1, { user: session });
-             await syncData();
+             await updateBalances();
+             processSyncQueue();
         }
        
         if(options?.needsInitialBalance && session.role === 'admin') {
@@ -279,7 +288,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } finally {
         setState(prev => ({...prev, isLoading: false}));
     }
-  }, [handleApiError, syncData]);
+  }, [handleApiError, updateBalances, processSyncQueue]);
   
   useEffect(() => {
     const checkSessionAndLoad = async () => {
@@ -287,7 +296,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (session) {
             if (user && user.id === session.id) {
                  setState(prev => ({ ...prev, isLoading: false }));
-                 syncData();
+                 updateBalances();
             } else {
                 reloadData();
             }
@@ -297,8 +306,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
     };
     checkSessionAndLoad();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Effect for handling online/offline status changes
+  useEffect(() => {
+    const handleOnline = () => {
+        setState(prev => ({ ...prev, isOnline: true }));
+        toast.success("You are back online!");
+        processSyncQueue();
+    };
+    const handleOffline = () => setState(prev => ({ ...prev, isOnline: false }));
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+        window.removeEventListener('online', handleOnline);
+        window.removeEventListener('offline', handleOffline);
+    };
+  }, [processSyncQueue]);
+
 
   useEffect(() => {
     if (state.isLoading) return;
@@ -315,7 +342,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
         const result = await serverLogin(credentials);
         if(result.success) {
-            await reloadData({ needsInitialBalance: result.needsInitialBalance });
+            await reloadData({ needsInitialBalance: result.needsInitialBalance, force: true });
         }
         return result;
     } finally {
@@ -324,108 +351,87 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [reloadData]);
 
   const addCashTransaction = async (tx: Omit<CashTransaction, 'id' | 'createdAt' | 'deletedAt'>) => {
-    try {
-        const newTx = await appendData({ tableName: 'cash_transactions', data: tx, logDescription: `Added cash transaction: ${tx.description}`, select: '*' });
-        if (newTx) {
-            await db.cashTransactions.add(newTx);
-            await updateBalances();
+      const tempId = `temp_${Date.now()}`;
+      const newTxData = { ...tx, id: tempId, createdAt: new Date().toISOString() };
+      await db.cashTransactions.add(newTxData);
+      await updateBalances();
+      try {
+        const savedTx = await queueOrSync({ action: 'appendData', payload: { tableName: 'cash_transactions', data: tx, logDescription: `Added cash transaction: ${tx.description}`, select: '*' } });
+        if (savedTx) {
+            await db.cashTransactions.where({ id: tempId }).modify(savedTx);
         }
-    } catch (error) {
-        handleApiError(error);
-    }
+      } catch (e) { /* error is handled in queueOrSync */ }
   };
 
   const addBankTransaction = async (tx: Omit<BankTransaction, 'id' | 'createdAt' | 'deletedAt'>) => {
+      const tempId = `temp_${Date.now()}`;
+      const newTxData = { ...tx, id: tempId, createdAt: new Date().toISOString() };
+      await db.bankTransactions.add(newTxData);
+      await updateBalances();
       try {
-          const newTx = await appendData({ tableName: 'bank_transactions', data: tx, logDescription: `Added bank transaction: ${tx.description}`, select: '*' });
-          if (newTx) {
-              await db.bankTransactions.add(newTx);
-              await updateBalances();
+          const savedTx = await queueOrSync({ action: 'appendData', payload: { tableName: 'bank_transactions', data: tx, logDescription: `Added bank transaction: ${tx.description}`, select: '*' } });
+          if (savedTx) {
+            await db.bankTransactions.where({ id: tempId }).modify(savedTx);
           }
-      } catch (error) {
-          handleApiError(error);
-      }
+      } catch(e) {}
   };
 
   const addLedgerTransaction = async (tx: Omit<LedgerTransaction, 'id' | 'createdAt' | 'deletedAt' | 'status' | 'paid_amount' | 'installments'>) => {
+      const tempId = `temp_${Date.now()}`;
+      const dataToSave = { ...tx, status: 'unpaid', paid_amount: 0, installments: [] };
+      const newTxData = { ...dataToSave, id: tempId, createdAt: new Date().toISOString() };
+      await db.ledgerTransactions.add(newTxData);
+      await updateBalances();
       try {
-          const dataToSave = { ...tx, status: 'unpaid', paid_amount: 0 };
-          const newTx = await appendData({ tableName: 'ap_ar_transactions', data: dataToSave, logDescription: `Added A/P or A/R: ${tx.description}`, select: '*' });
+          const newTx = await queueOrSync({ action: 'appendData', payload: { tableName: 'ap_ar_transactions', data: dataToSave, logDescription: `Added A/P or A/R: ${tx.description}`, select: '*' } });
            if (newTx) {
-              await db.ledgerTransactions.add({ ...newTx, installments: []});
-              await updateBalances();
+              await db.ledgerTransactions.where({ id: tempId }).modify({ ...newTx, installments: []});
           }
-      } catch (error) {
-          handleApiError(error);
-      }
+      } catch (error) { handleApiError(error); }
   }
 
   const addStockTransaction = async (tx: Omit<StockTransaction, 'id' | 'createdAt' | 'deletedAt'> & { contact_id?: string, contact_name?: string }, bank_id?: string) => {
-      const { contact_id, contact_name, ...stockTxData } = tx;
-      try {
-          const newStockTx = await appendData({ tableName: 'stock_transactions', data: stockTxData, select: '*' });
-          if (!newStockTx) throw new Error("Stock transaction creation failed.");
-          await db.stockTransactions.add(newStockTx);
-
-          if (tx.paymentMethod === 'credit' && contact_id) {
-            // Logic to create ledger transaction
-          } else {
-              if (tx.paymentMethod === 'cash') {
-                  const newCashTxData = { /* ... */ };
-                  const newCashTx = await appendData({ tableName: 'cash_transactions', data: newCashTxData, select: '*' });
-                  if(newCashTx) await db.cashTransactions.add(newCashTx);
-              } else if (tx.paymentMethod === 'bank' && bank_id) {
-                  const newBankTxData = { /* ... */ };
-                  const newBankTx = await appendData({ tableName: 'bank_transactions', data: newBankTxData, select: '*' });
-                  if(newBankTx) await db.bankTransactions.add(newBankTx);
-              }
-          }
-          await updateBalances();
-      } catch (error: any) {
-        handleApiError(error)
-      }
+      // Complex logic, better to just reload after this action to ensure consistency.
+      await reloadData();
   };
 
-  // ... Other actions like edit, delete would also need to update IndexedDB ...
   const editCashTransaction = async (originalTx: CashTransaction, updatedTxData: Partial<Omit<CashTransaction, 'id' | 'date' | 'createdAt'>>) => {
+    await db.cashTransactions.update(originalTx.id, updatedTxData);
+    await updateBalances();
     try {
-      await updateData({ tableName: 'cash_transactions', id: originalTx.id, data: updatedTxData, logDescription: `Edited cash tx: ${originalTx.id}` });
-      await db.cashTransactions.update(originalTx.id, updatedTxData);
+      await queueOrSync({ action: 'updateData', payload: { tableName: 'cash_transactions', id: originalTx.id, data: updatedTxData, logDescription: `Edited cash tx: ${originalTx.id}` }});
       toast.success("Success", { description: "Cash transaction updated." });
-      await updateBalances();
     } catch (error) { handleApiError(error); }
   };
   const editBankTransaction = async (originalTx: BankTransaction, updatedTxData: Partial<Omit<BankTransaction, 'id'| 'date' | 'createdAt'>>) => {
+    await db.bankTransactions.update(originalTx.id, updatedTxData);
+    await updateBalances();
     try {
-      await updateData({ tableName: 'bank_transactions', id: originalTx.id, data: updatedTxData, logDescription: `Edited bank tx: ${originalTx.id}` });
-      await db.bankTransactions.update(originalTx.id, updatedTxData);
+      await queueOrSync({ action: 'updateData', payload: { tableName: 'bank_transactions', id: originalTx.id, data: updatedTxData, logDescription: `Edited bank tx: ${originalTx.id}` }});
       toast.success("Success", { description: "Bank transaction updated."});
-      await updateBalances();
     } catch(error) { handleApiError(error); }
   };
   const editStockTransaction = async (originalTx: StockTransaction, updatedTxData: Partial<Omit<StockTransaction, 'id' | 'date' | 'createdAt'>>) => {
-      // ... more complex logic ...
       await reloadData();
   };
 
   const deleteTransaction = async (tableName: 'cash_transactions' | 'bank_transactions' | 'stock_transactions' | 'ap_ar_transactions', localTable: 'cashTransactions' | 'bankTransactions' | 'stockTransactions' | 'ledgerTransactions', txToDelete: any) => {
+    await db.table(localTable).delete(txToDelete.id);
+    await updateBalances();
     try {
-        await deleteData({ tableName, id: txToDelete.id, logDescription: `Deleted item from ${tableName}` });
-        await db.table(localTable).delete(txToDelete.id);
-        
+        await queueOrSync({ action: 'deleteData', payload: { tableName, id: txToDelete.id, logDescription: `Deleted item from ${tableName}` }});
         if (tableName === 'stock_transactions') {
             const linkedCash = await db.cashTransactions.where({ linkedStockTxId: txToDelete.id }).first();
             if (linkedCash) {
-                 await deleteData({ tableName: 'cash_transactions', id: linkedCash.id });
+                 await queueOrSync({ action: 'deleteData', payload: { tableName: 'cash_transactions', id: linkedCash.id }});
                  await db.cashTransactions.delete(linkedCash.id);
             }
             const linkedBank = await db.bankTransactions.where({ linkedStockTxId: txToDelete.id }).first();
             if (linkedBank) {
-                 await deleteData({ tableName: 'bank_transactions', id: linkedBank.id });
+                 await queueOrSync({ action: 'deleteData', payload: { tableName: 'bank_transactions', id: linkedBank.id }});
                  await db.bankTransactions.delete(linkedBank.id);
             }
         }
-        await updateBalances();
         toast.success("Moved to recycle bin.");
     } catch (error) {
         handleApiError(error);
@@ -439,27 +445,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const setShowStockValue = (show: boolean) => db.appState.update(1, { showStockValue: show });
   
   const addBank = async (name: string) => {
-    const newBank = await appendData({ tableName: 'banks', data: { name }, select: '*' });
-    if(newBank) await db.banks.add(newBank);
+    const tempId = `temp_${Date.now()}`;
+    await db.banks.add({ id: tempId, name, createdAt: new Date().toISOString() });
+    const newBank = await queueOrSync({ action: 'appendData', payload: { tableName: 'banks', data: { name }, select: '*' } });
+    if(newBank) await db.banks.where({ id: tempId }).modify(newBank);
   }
   
   const addCategory = async (type: 'cash' | 'bank', name: string, direction: 'credit' | 'debit') => {
-      const newCategory = await appendData({ tableName: 'categories', data: { name, type, direction, is_deletable: true }, select: '*' });
-      if(newCategory) await db.categories.add(newCategory);
+      const tempId = `temp_${Date.now()}`;
+      await db.categories.add({ id: tempId, name, type, direction, is_deletable: true});
+      const newCategory = await queueOrSync({ action: 'appendData', payload: { tableName: 'categories', data: { name, type, direction, is_deletable: true }, select: '*' } });
+      if(newCategory) await db.categories.where({id: tempId}).modify(newCategory);
   }
   
   const deleteCategory = async (id: string) => {
-    await supabase.from('categories').delete().match({ id });
     await db.categories.delete(id);
+    await queueOrSync({ action: 'deleteData', payload: { tableName: 'categories', id } });
   }
 
   const transferFunds = async (from: 'cash' | 'bank', amount: number, date?: string, bankId?: string, description?: string) => {
-    // This action creates two transactions, it's better to reload after it.
     await reloadData();
   };
 
   const setInitialBalances = async (cash: number, bankTotals: Record<string, number>, date: Date) => {
-      // This action also creates multiple transactions.
       await reloadData();
   }
 
@@ -469,8 +477,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }
 
   const handleImport = async (file: File) => {
-      // Import is a full data overwrite, so reload everything.
-      await reloadData();
+      await reloadData({ force: true });
   }
   
   const handleDeleteAllData = async () => {
@@ -502,10 +509,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         vendors: vendors || [],
         clients: clients || [],
         banks: banks || [],
-        loadedMonths: {}, // This logic would need to change with IndexedDB
+        syncQueueCount,
         reloadData,
         loadRecycleBinData: async () => {}, // Placeholder
-        loadDataForMonth: async () => {}, // Placeholder
         addCashTransaction,
         addBankTransaction,
         addStockTransaction,
@@ -543,6 +549,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
         recordPayment: async () => {}, // Placeholder
         addBank,
     }}>
+      {!state.isOnline && (
+          <div className="fixed bottom-4 right-4 z-50 animate-fade-in">
+              <div className="flex items-center gap-2 rounded-full bg-destructive px-4 py-2 text-destructive-foreground shadow-lg">
+                  <WifiOff className="h-5 w-5" />
+                  <span className="font-semibold">You are offline</span>
+              </div>
+          </div>
+      )}
       {children}
     </AppContext.Provider>
   );
