@@ -40,7 +40,6 @@ interface AppState {
   totalPayables: number;
   totalReceivables: number;
   isLoading: boolean;
-  loadingProgress: number;
   banks: Bank[];
   loadedMonths: Record<string, boolean>; // YYYY-MM format
 }
@@ -112,7 +111,6 @@ const initialAppState: AppState = {
   totalPayables: 0,
   totalReceivables: 0,
   isLoading: true,
-  loadingProgress: 0,
   banks: [],
   loadedMonths: {},
 };
@@ -146,7 +144,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(async () => {
     await serverLogout();
-    setState({...initialAppState, user: null, isLoading: false, loadingProgress: 0});
+    setState({...initialAppState, user: null, isLoading: false});
     window.location.href = '/login';
   }, []);
 
@@ -166,11 +164,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [logout]);
   
   const reloadData = useCallback(async (options?: { force?: boolean, needsInitialBalance?: boolean }) => {
-    setState(prev => ({ ...prev, isLoading: true, loadingProgress: 10 }));
+    setState(prev => ({ ...prev, isLoading: true }));
     try {
         const session = await getSession();
         if (!session) {
-            setState(prev => ({...prev, isLoading: false, user: null, loadingProgress: 0 }));
+            setState(prev => ({...prev, isLoading: false, user: null }));
             return;
         }
         if (!state.user) {
@@ -178,7 +176,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
 
         if(options?.needsInitialBalance) {
-             setState(prev => ({ ...prev, needsInitialBalance: true, isLoading: false, loadingProgress: 100 }));
+             setState(prev => ({ ...prev, needsInitialBalance: true, isLoading: false }));
              return;
         }
         
@@ -197,8 +195,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
             getBalances()
         ]);
         
-        setState(prev => ({ ...prev, loadingProgress: 40 }));
-
         // Fetch recent transactions
         const [
             cashTxs, bankTxs, stockTxs, ledgerData, installmentsData
@@ -209,8 +205,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
             readData({ tableName: 'ap_ar_transactions', startDate: thirtyDaysAgo.toISOString() }),
             readData({ tableName: 'payment_installments', startDate: thirtyDaysAgo.toISOString() }),
         ]);
-
-        setState(prev => ({ ...prev, loadingProgress: 75 }));
 
         const ledgerTxs = (ledgerData || []).map((tx: any) => ({
             ...tx,
@@ -239,25 +233,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
             totalPayables: balances.totalPayables,
             totalReceivables: balances.totalReceivables,
             loadedMonths: { [monthKey]: true },
-            loadingProgress: 100,
         }));
         
     } catch (error: any) {
         handleApiError(error);
     } finally {
-        setTimeout(() => {
-            setState(prev => ({...prev, isLoading: false, needsInitialBalance: false}));
-        }, 500);
+        setState(prev => ({...prev, isLoading: false, needsInitialBalance: false}));
     }
   }, [handleApiError, state.user]);
 
   const login = useCallback(async (credentials: Parameters<typeof serverLogin>[0]) => {
-    setState(prev => ({ ...prev, isLoading: true, loadingProgress: 10 }));
+    setState(prev => ({ ...prev, isLoading: true }));
     const result = await serverLogin(credentials);
     if(result.success) {
       await reloadData({ needsInitialBalance: result.needsInitialBalance });
     } else {
-      setState(prev => ({ ...prev, isLoading: false, loadingProgress: 0 }));
+      setState(prev => ({ ...prev, isLoading: false }));
     }
     return result;
   }, [reloadData]);
@@ -446,7 +437,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const addStockTransaction = async (tx: Omit<StockTransaction, 'id' | 'createdAt' | 'deletedAt'> & { contact_id?: string, contact_name?: string }, bank_id?: string) => {
     const { contact_id, contact_name, ...stockTxData } = tx;
-    const logDescription = `Recorded stock ${tx.type}: ${tx.weight}kg of ${tx.stockItemName}`;
 
     try {
       const newStockTx = await appendData({ tableName: 'stock_transactions', data: stockTxData, select: '*' });
@@ -509,7 +499,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
           }
       }
       
-      toast.success("Success", { description: "Stock transaction recorded."});
       await updateBalances();
 
     } catch (error: any) {
