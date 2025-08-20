@@ -73,8 +73,14 @@ const cashSchema = baseSchema.extend({
     amount: z.coerce.number().positive(),
     category: z.string({ required_error: "Category is required." }),
     description: z.string().min(1, "Description is required."),
+    contact_id: z.string().optional(),
+}).superRefine((data, ctx) => {
+    if (data.category === 'A/R Settlement' || data.category === 'A/P Settlement') {
+        if (!data.contact_id) {
+           ctx.addIssue({ code: 'custom', message: `A contact is required for settlements.`, path: ['contact_id'] });
+        }
+    }
 });
-
 
 const bankSchema = baseSchema.extend({
     amount: z.coerce.number().positive(),
@@ -189,6 +195,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
   const ledgerType = watch('ledgerType');
   const contact_id = watch('contact_id');
   const transferFrom = watch('transferFrom');
+  const cashCategoryName = watch('category');
   const bankCategoryName = watch('category');
   const [isNewStockItem, setIsNewStockItem] = useState(false);
 
@@ -202,7 +209,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
   useEffect(() => {
     setValue('contact_id', undefined);
     setValue('newContact', '');
-  }, [stockType, ledgerType, bankCategoryName, setValue]);
+  }, [stockType, ledgerType, cashCategoryName, bankCategoryName, setValue]);
 
   const onSubmit = async (data: any) => {
     const transactionDate = data.date.toISOString();
@@ -210,15 +217,34 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
         switch(transactionType) {
             case 'cash': {
                 const category = cashCategories.find(c => c.name === data.category);
-                if (!category || !category.direction) throw new Error("Selected category is invalid.");
+                if (!category) throw new Error("Selected category is invalid.");
                 
-                await addCashTransaction({
-                    type: category.direction === 'credit' ? 'income' : 'expense',
-                    amount: data.amount!,
-                    description: data.description!,
-                    category: data.category!,
-                    date: transactionDate,
-                });
+                if (data.category === 'A/R Settlement' || data.category === 'A/P Settlement') {
+                    let contactName: string | undefined;
+                    if (data.category === 'A/R Settlement') {
+                        contactName = clients.find(c => c.id === data.contact_id)?.name;
+                    } else {
+                        contactName = vendors.find(v => v.id === data.contact_id)?.name;
+                    }
+                    if(!contactName) throw new Error("Contact not found for settlement.");
+
+                    await addCashTransaction({
+                        type: category.direction === 'credit' ? 'income' : 'expense',
+                        amount: data.amount!,
+                        description: `Settlement for ${contactName}`,
+                        category: data.category!,
+                        date: transactionDate,
+                    }, data.contact_id, contactName);
+
+                } else {
+                    await addCashTransaction({
+                        type: category.direction === 'credit' ? 'income' : 'expense',
+                        amount: data.amount!,
+                        description: data.description!,
+                        category: data.category!,
+                        date: transactionDate,
+                    });
+                }
                 break;
             }
             case 'bank': {
@@ -410,8 +436,8 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
     </div>
   )
   
-  const cashCategoryItems = useMemo(() => cashCategories.filter(c => c.direction).map(c => ({ value: c.name, label: `${c.name} (${c.direction})` })), [cashCategories]);
-  const bankCategoryItems = useMemo(() => bankCategories.map(c => ({ value: c.name, label: `${c.name} (${c.direction ? c.direction : 'Settlement'})` })), [bankCategories]);
+  const cashCategoryItems = useMemo(() => cashCategories.map(c => ({ value: c.name, label: `${c.name} (${c.direction})` })), [cashCategories]);
+  const bankCategoryItems = useMemo(() => bankCategories.map(c => ({ value: c.name, label: `${c.name} (${c.direction})` })), [bankCategories]);
   const bankAccountItems = useMemo(() => banks.map(b => ({ value: b.id, label: b.name })), [banks]);
   const stockItemsForSale = useMemo(() => stockItems.filter(i => i.weight > 0).map(item => ({ value: item.name, label: item.name })), [stockItems]);
   const stockItemsForPurchase = useMemo(() => stockItems.map(item => ({ value: item.name, label: item.name })), [stockItems]);
@@ -481,6 +507,32 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                         />
                         {errors.category && <p className="text-sm text-destructive">{(errors.category as any).message}</p>}
                     </div>
+                     {cashCategoryName === 'A/R Settlement' && (
+                        <div className="space-y-2 animate-fade-in">
+                        <Label>Client</Label>
+                        <Controller
+                            control={control}
+                            name="contact_id"
+                            render={({ field }) => (
+                                <ResponsiveSelect onValueChange={field.onChange} value={field.value} title="Select a Client" placeholder="Select a client" items={clientContactItems.filter(c => c.value !== 'new')} />
+                            )}
+                        />
+                        {errors.contact_id && <p className="text-sm text-destructive">{(errors.contact_id as any).message}</p>}
+                    </div>
+                    )}
+                    {cashCategoryName === 'A/P Settlement' && (
+                            <div className="space-y-2 animate-fade-in">
+                            <Label>Vendor</Label>
+                            <Controller
+                                control={control}
+                                name="contact_id"
+                                render={({ field }) => (
+                                    <ResponsiveSelect onValueChange={field.onChange} value={field.value} title="Select a Vendor" placeholder="Select a vendor" items={vendorContactItems.filter(c => c.value !== 'new')} />
+                                )}
+                            />
+                            {errors.contact_id && <p className="text-sm text-destructive">{(errors.contact_id as any).message}</p>}
+                        </div>
+                    )}
                     <div className="space-y-2">
                         <Label htmlFor="description-cash">Description</Label>
                         <Input id="description-cash" {...register('description')} placeholder="e.g., Weekly groceries" />
@@ -826,3 +878,5 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
     </>
   );
 }
+
+    

@@ -49,7 +49,7 @@ interface AppContextType extends AppState {
   reloadData: (options?: { force?: boolean; needsInitialBalance?: boolean }) => Promise<void>;
   loadRecycleBinData: () => Promise<void>;
   loadDataForMonth: (month: Date) => Promise<void>;
-  addCashTransaction: (tx: Omit<CashTransaction, 'id' | 'createdAt' | 'deletedAt'>) => Promise<void>;
+  addCashTransaction: (tx: Omit<CashTransaction, 'id' | 'createdAt' | 'deletedAt'>, contactId?: string, contactName?: string) => Promise<void>;
   addBankTransaction: (tx: Omit<BankTransaction, 'id' | 'createdAt' | 'deletedAt'>, contactId?: string, contactName?: string) => Promise<void>;
   addStockTransaction: (tx: Omit<StockTransaction, 'id' | 'createdAt' | 'deletedAt'> & { contact_id?: string, contact_name?: string }, bank_id?: string) => Promise<void>;
   editCashTransaction: (originalTx: CashTransaction, updatedTxData: Partial<Omit<CashTransaction, 'id' | 'date' | 'createdAt'>>) => Promise<void>;
@@ -414,16 +414,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [state.loadedMonths, state.cashTransactions, state.bankTransactions, state.stockTransactions, state.ledgerTransactions, handleApiError]);
   
-    const addCashTransaction = async (tx: Omit<CashTransaction, 'id' | 'createdAt' | 'deletedAt'>) => {
+    const addCashTransaction = async (tx: Omit<CashTransaction, 'id' | 'createdAt' | 'deletedAt'>, contactId?: string, contactName?: string) => {
         try {
-            const newTx = await appendData({ tableName: 'cash_transactions', data: tx, logDescription: `Added cash transaction: ${tx.description}`, select: '*' });
-            if (newTx) {
-                setState(prev => ({
-                    ...prev,
-                    cashTransactions: [newTx, ...prev.cashTransactions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
-                }));
-                await updateBalances();
+            if ((tx.category === 'A/R Settlement' || tx.category === 'A/P Settlement') && contactId && contactName) {
+                await recordDirectPayment({
+                    payment_method: 'cash',
+                    date: tx.date,
+                    amount: tx.amount,
+                    category: tx.category,
+                    description: tx.description,
+                    contact_id: contactId,
+                    contact_name: contactName,
+                });
+            } else {
+                const newTx = await appendData({ tableName: 'cash_transactions', data: tx, logDescription: `Added cash transaction: ${tx.description}`, select: '*' });
+                if (newTx) {
+                    setState(prev => ({
+                        ...prev,
+                        cashTransactions: [newTx, ...prev.cashTransactions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+                    }));
+                }
             }
+            await updateBalances();
         } catch (error) {
             handleApiError(error);
         }
@@ -1081,3 +1093,5 @@ export function useAppContext() {
   }
   return context;
 }
+
+    
