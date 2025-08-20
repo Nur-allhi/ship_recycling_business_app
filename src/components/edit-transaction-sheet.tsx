@@ -204,7 +204,7 @@ export function EditTransactionSheet({ isOpen, setIsOpen, transaction, transacti
                                         <Select onValueChange={field.onChange} value={field.value}>
                                             <SelectTrigger><SelectValue placeholder="Select a category" /></SelectTrigger>
                                             <SelectContent>
-                                                {currentCategories.map(c => <SelectItem key={c.name} value={c.name}>{c.name}</SelectItem>)}
+                                                {currentCategories.map((c, index) => <SelectItem key={`${c.name}-${index}`} value={c.name}>{c.name}</SelectItem>)}
                                             </SelectContent>
                                         </Select>
                                     )}

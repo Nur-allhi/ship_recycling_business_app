@@ -214,9 +214,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
             installments: (installmentsData || []).filter((ins: any) => ins.ap_ar_transaction_id === tx.id)
         }));
 
-        const dbCashCategories: Category[] = (categoriesData || []).filter((c: any) => c.type === 'cash');
-        const dbBankCategories: Category[] = (categoriesData || []).filter((c: any) => c.type === 'bank');
+        const fixedCashNames = new Set(FIXED_CASH_CATEGORIES.map(c => c.name));
+        const dbCashCategories: Category[] = (categoriesData || []).filter((c: any) => c.type === 'cash' && !fixedCashNames.has(c.name));
         const cashCategories = [...FIXED_CASH_CATEGORIES, ...dbCashCategories];
+
+        const fixedBankNames = new Set(FIXED_BANK_CATEGORIES.map(c => c.name));
+        const dbBankCategories: Category[] = (categoriesData || []).filter((c: any) => c.type === 'bank' && !fixedBankNames.has(c.name));
         const bankCategories = [...FIXED_BANK_CATEGORIES, ...dbBankCategories];
         
         setState(prev => ({
