@@ -27,9 +27,8 @@ const getAuthenticatedSupabaseClient = async () => {
         throw new Error("SESSION_EXPIRED");
     }
 
-    // For a shared app model, we can use the service role key for all authenticated actions
-    // that are gated by role checks within the action itself.
-    // This simplifies RLS policies significantly.
+    // For a shared app model, we use the service role key for all authenticated actions
+    // because RLS policies are now based on roles, not user_id.
     return createSupabaseClient(true);
 };
 
@@ -144,17 +143,6 @@ export async function appendData(input: z.infer<typeof AppendDataInputSchema>) {
         const supabase = await getAuthenticatedSupabaseClient();
         
         let dataToInsert = input.data;
-
-        // Server-side data cleaning for categories to prevent schema mismatch errors.
-        if (input.tableName === 'categories' && !Array.isArray(dataToInsert)) {
-            const categoryData = { ...dataToInsert }; // Create a copy to mutate
-            if (categoryData.type === 'cash' && 'direction' in categoryData) {
-                // This logic is now handled on the client, but keeping as a safeguard
-                // Cash categories shouldn't have a direction property sent to DB
-                // if the table schema doesn't support it for that type.
-            }
-            dataToInsert = categoryData;
-        }
 
         const { data, error } = await supabase
             .from(input.tableName)
@@ -316,10 +304,7 @@ export async function batchImportData(dataToImport: z.infer<typeof ImportDataSch
         for (const tableName of tables) {
             const records = dataToImport[tableName];
             if (records && records.length > 0) {
-                 records.forEach(r => {
-                    // Remove user_id if it exists from old exports
-                    delete r.user_id; 
-                 });
+                 // No longer need to strip user_id
                 const { error: insertError } = await supabase.from(tableName).upsert(records);
                 if (insertError && insertError.code !== '42P01') throw new Error(`Failed to import to ${tableName}: ${insertError.message}`);
             }
@@ -447,7 +432,7 @@ export async function login(input: z.infer<typeof LoginInputSchema>) {
 
     let needsData = false;
     if (!isFirstUser) {
-        // Create an authenticated client to check data
+        // Temporarily create a new authenticated client just for this check
         const tempAuthedSupabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
             global: { headers: { Authorization: `Bearer ${data.session.access_token}` } }
         });
@@ -785,3 +770,5 @@ export async function recordDirectPayment(input: z.infer<typeof RecordDirectPaym
         return handleApiError(error);
     }
 }
+
+    

@@ -19,8 +19,8 @@ CREATE TABLE payment_installments (
     ap_ar_transaction_id UUID NOT NULL REFERENCES ap_ar_transactions(id) ON DELETE CASCADE,
     amount NUMERIC NOT NULL,
     date TIMESTAMPTZ NOT NULL,
-    payment_method TEXT NOT NULL CHECK (payment_method IN ('cash', 'bank')),
-    user_id UUID REFERENCES auth.users(id)
+    payment_method TEXT NOT NULL CHECK (payment_method IN ('cash', 'bank'))
+    -- Removed user_id as it's a shared app
 );
 
 -- Add a column to ap_ar_transactions to track the amount paid
@@ -44,11 +44,11 @@ CHECK (status IN ('unpaid', 'partially paid', 'paid'));
 -- SECURE: Enable RLS for the new table
 ALTER TABLE payment_installments ENABLE ROW LEVEL SECURITY;
 
--- SECURE: Policy to allow users to manage their own installment payments
-CREATE POLICY "Users can manage their own payment installments"
+-- SECURE: Policy to allow authenticated users to manage their own installment payments
+CREATE POLICY "Authenticated users can manage payment installments"
 ON payment_installments FOR ALL
-USING (auth.uid() = user_id)
-WITH CHECK (auth.uid() = user_id);
+USING (true)
+WITH CHECK (true);
 ```
 
 To enable multi-bank accounts and activity logging, please run the following SQL code:
@@ -68,7 +68,7 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 CREATE TABLE banks (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    user_id UUID REFERENCES auth.users(id),
+    -- Removed user_id as it's a shared app
     name TEXT NOT NULL
 );
 
@@ -97,10 +97,10 @@ DROP VIEW IF EXISTS activity_log_with_users;
 
 -- RLS Policies for new tables
 ALTER TABLE banks ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Users can manage their own bank accounts"
+CREATE POLICY "Authenticated users can manage bank accounts"
 ON banks FOR ALL
-USING (auth.uid() = user_id)
-WITH CHECK (auth.uid() = user_id);
+USING (true)
+WITH CHECK (true);
 
 ALTER TABLE activity_log ENABLE ROW LEVEL SECURITY;
 
@@ -124,7 +124,7 @@ To enable monthly balance snapshots for improved performance, please run the fol
 -- Creates a table to store balance snapshots at the start of each month
 CREATE TABLE monthly_snapshots (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+    -- REMOVED: user_id column is not needed for a shared app
     snapshot_date DATE NOT NULL,
     cash_balance NUMERIC NOT NULL DEFAULT 0,
     bank_balances JSONB NOT NULL DEFAULT '{}'::jsonb,
@@ -132,20 +132,30 @@ CREATE TABLE monthly_snapshots (
     total_receivables NUMERIC NOT NULL DEFAULT 0,
     total_payables NUMERIC NOT NULL DEFAULT 0,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    UNIQUE(user_id, snapshot_date)
+    UNIQUE(snapshot_date) -- The snapshot is now unique for a given date across the whole system
 );
 
 -- RLS policy for the snapshots table
 ALTER TABLE monthly_snapshots ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Users can manage their own snapshots"
+-- This policy allows any authenticated user to read the snapshots.
+CREATE POLICY "Authenticated users can view snapshots"
+ON monthly_snapshots FOR SELECT
+TO authenticated
+USING (true);
+
+-- This policy allows only admins to create, update, or delete snapshots.
+CREATE POLICY "Admins can manage snapshots"
 ON monthly_snapshots FOR ALL
-USING (auth.uid() = user_id)
-WITH CHECK (auth.uid() = user_id);
+TO authenticated
+USING (get_user_role(auth.uid()) = 'admin')
+WITH CHECK (get_user_role(auth.uid()) = 'admin');
+
 
 -- A server-side function to be called to generate a snapshot.
--- This would ideally be run by a cron job, but can be triggered manually or by the app.
-CREATE OR REPLACE FUNCTION generate_monthly_snapshot(p_user_id UUID)
+-- This would ideally be run by a cron job, but can be triggered manually by the app.
+-- REMOVED: p_user_id parameter is no longer needed.
+CREATE OR REPLACE FUNCTION generate_monthly_snapshot()
 RETURNS void AS $$
 DECLARE
     -- ... (function implementation would go here)
@@ -157,4 +167,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 ```
+    
+
     

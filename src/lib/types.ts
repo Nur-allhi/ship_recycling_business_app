@@ -109,7 +109,7 @@ export interface Category {
 
 export interface MonthlySnapshot {
     id: string;
-    user_id: string;
+    // user_id removed for shared app model
     snapshot_date: string;
     cash_balance: number;
     bank_balances: Record<string, number>;
@@ -122,3 +122,6 @@ export interface MonthlySnapshot {
 
     
 
+
+
+    
