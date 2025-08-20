@@ -11,7 +11,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { login, hasUsers } from '@/app/actions';
+import { login as serverLogin, hasUsers } from '@/app/actions';
 import { Loader2 } from 'lucide-react';
 import Logo from './logo';
 import { Checkbox } from './ui/checkbox';
@@ -26,10 +26,10 @@ const formSchema = z.object({
 type FormData = z.infer<typeof formSchema>;
 
 export function LoginForm() {
+  const { login } = useAppContext();
   const [isLoading, setIsLoading] = useState(false);
   const [doesAnyUserExist, setDoesAnyUserExist] = useState(true);
-  const { reloadData } = useAppContext();
-
+  
   useEffect(() => {
     const checkUsers = async () => {
         try {
@@ -37,7 +37,6 @@ export function LoginForm() {
             setDoesAnyUserExist(usersExist);
         } catch (error: any) {
             console.error("Failed to check for users:", error);
-            // Default to true to show the regular login button on error
             setDoesAnyUserExist(true);
         }
     };
@@ -64,8 +63,8 @@ export function LoginForm() {
   const onSubmit = async (data: FormData) => {
     setIsLoading(true);
     try {
-      const result = await login(data);
-
+      await login(data);
+      
       if (data.rememberMe) {
           localStorage.setItem('rememberedUsername', data.username);
       } else {
@@ -73,9 +72,7 @@ export function LoginForm() {
       }
 
       toast.success("Login Successful", { description: "Welcome back!" });
-      // Reload the main app data with the flag from the server
-      await reloadData({ force: true, needsInitialBalance: result.needsInitialBalance });
-      window.location.href = '/'; 
+      // The context will handle the redirect
     } catch (error: any) {
       toast.error(
         'Login Failed',

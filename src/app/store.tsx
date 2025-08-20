@@ -77,6 +77,11 @@ interface AppContextType extends AppState {
   handleDeleteAllData: () => void;
   logout: () => void;
   login: (credentials: Parameters<typeof serverLogin>[0]) => Promise<any>;
+  addVendor: (name: string) => Promise<Vendor | null>;
+  addClient: (name: string) => Promise<Client | null>;
+  addLedgerTransaction: (tx: Omit<LedgerTransaction, 'id' | 'createdAt' | 'deletedAt' | 'status' | 'paid_amount' | 'installments'>) => Promise<void>;
+  recordPayment: (contactId: string, contactName: string, paymentAmount: number, paymentMethod: 'cash' | 'bank', paymentDate: Date, ledgerType: 'payable' | 'receivable', bankId?: string) => Promise<void>;
+  addBank: (name: string) => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -143,14 +148,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     await serverLogout();
     setState({...initialAppState, user: null, isLoading: false, loadingProgress: 0});
     window.location.href = '/login';
-  }, []);
-
-  const login = useCallback(async (credentials: Parameters<typeof serverLogin>[0]) => {
-    const result = await serverLogin(credentials);
-    if(result.success) {
-      await reloadData({ needsInitialBalance: result.needsInitialBalance });
-    }
-    return result;
   }, []);
 
   const handleApiError = useCallback((error: any) => {
@@ -248,12 +245,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } catch (error: any) {
         handleApiError(error);
     } finally {
-        // Use a timeout to ensure the loading bar completes its animation
         setTimeout(() => {
             setState(prev => ({...prev, isLoading: false, needsInitialBalance: false}));
         }, 500);
     }
   }, [handleApiError, state.user]);
+
+  const login = useCallback(async (credentials: Parameters<typeof serverLogin>[0]) => {
+    setState(prev => ({ ...prev, isLoading: true, loadingProgress: 10 }));
+    const result = await serverLogin(credentials);
+    if(result.success) {
+      await reloadData({ needsInitialBalance: result.needsInitialBalance });
+    } else {
+      setState(prev => ({ ...prev, isLoading: false, loadingProgress: 0 }));
+    }
+    return result;
+  }, [reloadData]);
 
   const updateBalances = useCallback(async () => {
     try {
@@ -276,10 +283,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const checkSessionAndLoad = async () => {
         const session = await getSession();
         if (session) {
-            setState(prev => ({ ...prev, user: session, isLoading: true }));
-            await reloadData();
+            setState(prev => ({ ...prev, user: session }));
+            if (pathname !== '/login') { // Avoid reloading data if we are about to redirect away
+                await reloadData();
+            }
         } else {
-            setState(prev => ({ ...prev, isLoading: false, user: null }));
+            setState(prev => ({...prev, isLoading: false, user: null }));
         }
     };
     
@@ -378,7 +387,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   
     const addCashTransaction = async (tx: Omit<CashTransaction, 'id' | 'createdAt' | 'deletedAt'>) => {
         try {
-            const newTx = await appendData({ tableName: 'cash_transactions', data: tx, select: '*' });
+            const newTx = await appendData({ tableName: 'cash_transactions', data: tx, logDescription: `Added cash transaction: ${tx.description}`, select: '*' });
             if (newTx) {
                 setState(prev => ({
                     ...prev,
@@ -405,7 +414,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
                     contact_name: contactName,
                 });
             } else {
-                const newTx = await appendData({ tableName: 'bank_transactions', data: tx, select: '*' });
+                const newTx = await appendData({ tableName: 'bank_transactions', data: tx, logDescription: `Added bank transaction: ${tx.description}`, select: '*' });
                  if (newTx) {
                     setState(prev => ({
                         ...prev,
@@ -422,7 +431,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const addLedgerTransaction = async (tx: Omit<LedgerTransaction, 'id' | 'createdAt' | 'deletedAt' | 'status' | 'paid_amount' | 'installments'>) => {
         try {
             const dataToSave = { ...tx, status: 'unpaid', paid_amount: 0 };
-            const newTx = await appendData({ tableName: 'ap_ar_transactions', data: dataToSave, select: '*' });
+            const newTx = await appendData({ tableName: 'ap_ar_transactions', data: dataToSave, logDescription: `Added A/P or A/R: ${tx.description}`, select: '*' });
              if (newTx) {
                 setState(prev => ({
                     ...prev,
@@ -437,6 +446,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const addStockTransaction = async (tx: Omit<StockTransaction, 'id' | 'createdAt' | 'deletedAt'> & { contact_id?: string, contact_name?: string }, bank_id?: string) => {
     const { contact_id, contact_name, ...stockTxData } = tx;
+    const logDescription = `Recorded stock ${tx.type}: ${tx.weight}kg of ${tx.stockItemName}`;
 
     try {
       const newStockTx = await appendData({ tableName: 'stock_transactions', data: stockTxData, select: '*' });
@@ -509,9 +519,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const editCashTransaction = async (originalTx: CashTransaction, updatedTxData: Partial<Omit<CashTransaction, 'id' | 'date' | 'createdAt'>>) => {
       try {
-        await updateData({ tableName: 'cash_transactions', id: originalTx.id, data: updatedTxData });
+        await updateData({ tableName: 'cash_transactions', id: originalTx.id, data: updatedTxData, logDescription: `Edited cash tx: ${originalTx.id}` });
         toast.success("Success", { description: "Cash transaction updated." });
-        await updateBalances();
         await reloadData();
       } catch (error) {
             handleApiError(error);
@@ -520,9 +529,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const editBankTransaction = async (originalTx: BankTransaction, updatedTxData: Partial<Omit<BankTransaction, 'id'| 'date' | 'createdAt'>>) => {
       try {
-        await updateData({ tableName: 'bank_transactions', id: originalTx.id, data: updatedTxData });
+        await updateData({ tableName: 'bank_transactions', id: originalTx.id, data: updatedTxData, logDescription: `Edited bank tx: ${originalTx.id}` });
         toast.success("Success", { description: "Bank transaction updated."});
-        await updateBalances();
         await reloadData();
       } catch(error) {
             handleApiError(error);
@@ -531,7 +539,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const editStockTransaction = async (originalTx: StockTransaction, updatedTxData: Partial<Omit<StockTransaction, 'id' | 'date' | 'createdAt'>>) => {
       try {
-          await updateData({ tableName: 'stock_transactions', id: originalTx.id, data: updatedTxData });
+          await updateData({ tableName: 'stock_transactions', id: originalTx.id, data: updatedTxData, logDescription: `Edited stock tx: ${originalTx.id}` });
           
           if (originalTx.paymentMethod === 'cash' || originalTx.paymentMethod === 'bank') {
               const tableName = `${originalTx.paymentMethod}_transactions`;
@@ -549,7 +557,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
               description: "Stock transaction and linked financial entry updated.",
               duration: 5000,
           });
-          await updateBalances();
           await reloadData();
 
       } catch(error) {
@@ -558,10 +565,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const deleteCashTransaction = (txToDelete: CashTransaction) => {
-    deleteData({ tableName: "cash_transactions", id: txToDelete.id })
+    deleteData({ tableName: "cash_transactions", id: txToDelete.id, logDescription: `Deleted cash tx: ${txToDelete.id}` })
         .then(() => {
             if (txToDelete.linkedStockTxId) {
-                return deleteData({ tableName: "stock_transactions", id: txToDelete.linkedStockTxId });
+                return deleteData({ tableName: "stock_transactions", id: txToDelete.linkedStockTxId, logDescription: `Deleted linked stock tx: ${txToDelete.linkedStockTxId}` });
             }
         })
         .then(() => {
@@ -574,10 +581,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const deleteBankTransaction = (txToDelete: BankTransaction) => {
-    deleteData({ tableName: "bank_transactions", id: txToDelete.id })
+    deleteData({ tableName: "bank_transactions", id: txToDelete.id, logDescription: `Deleted bank tx: ${txToDelete.id}` })
         .then(() => {
             if(txToDelete.linkedStockTxId) {
-                return deleteData({ tableName: "stock_transactions", id: txToDelete.linkedStockTxId });
+                return deleteData({ tableName: "stock_transactions", id: txToDelete.linkedStockTxId, logDescription: `Deleted linked stock tx: ${txToDelete.linkedStockTxId}` });
             }
         })
         .then(() => {
@@ -590,7 +597,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
   
   const deleteStockTransaction = (txToDelete: StockTransaction) => {
-    deleteData({ tableName: "stock_transactions", id: txToDelete.id })
+    deleteData({ tableName: "stock_transactions", id: txToDelete.id, logDescription: `Deleted stock tx: ${txToDelete.id}` })
         .then(async () => {
             const { data: allCashTxs } = await supabase.from('cash_transactions').select('id, deletedAt').eq('linkedStockTxId', txToDelete.id);
             const activeCashTx = allCashTxs?.find(tx => !tx.deletedAt);
@@ -707,7 +714,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       const dataToSave = { name: category, type, direction, is_deletable: true };
 
-      const newCategory = await appendData({ tableName: 'categories', data: dataToSave, select: '*' });
+      const newCategory = await appendData({ tableName: 'categories', data: dataToSave, logDescription: `Added category: ${category}`, select: '*' });
 
       if (newCategory) {
           if(type === 'cash') {
@@ -772,7 +779,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       try {
         if(state.user?.role !== 'admin') throw new Error("Only admins can add initial stock.");
         const { name, weight, pricePerKg } = item;
-        const newItem = await appendData({ tableName: 'initial_stock', data: { name, weight, purchasePricePerKg: pricePerKg } });
+        const newItem = await appendData({ tableName: 'initial_stock', data: { name, weight, purchasePricePerKg: pricePerKg }, logDescription: `Added initial stock: ${name}` });
         if(newItem) {
             toast.success("Initial stock item added.");
             await reloadData();
@@ -852,7 +859,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return null;
     }
     try {
-      const newVendor = await appendData({ tableName: 'vendors', data: { name }, select: '*' });
+      const newVendor = await appendData({ tableName: 'vendors', data: { name }, select: '*', logDescription: `Added vendor: ${name}` });
       if (!newVendor) {
         toast.error('Setup Incomplete', { description: "Could not save to the 'vendors' table. Please ensure it exists in your database." });
         return null;
@@ -875,7 +882,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const newClient = await appendData({
         tableName: 'clients',
         data: { name },
-        select: '*'
+        select: '*',
+        logDescription: `Added client: ${name}`,
       });
       if (!newClient) {
         toast.error(
@@ -902,7 +910,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const newBank = await appendData({
             tableName: 'banks',
             data: { name },
-            select: '*'
+            select: '*',
+            logDescription: `Added bank: ${name}`,
         });
         if (!newBank) {
             toast.error(
@@ -924,7 +933,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return;
     }
 
-    deleteData({ tableName: 'ap_ar_transactions', id: txToDelete.id })
+    deleteData({ tableName: 'ap_ar_transactions', id: txToDelete.id, logDescription: `Deleted ledger tx: ${txToDelete.id}` })
       .then(() => {
         toast.success('Transaction moved to recycle bin.');
         reloadData();

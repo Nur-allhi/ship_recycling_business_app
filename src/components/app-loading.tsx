@@ -1,7 +1,6 @@
 
 "use client";
 
-import { useEffect } from 'react';
 import { Progress } from "@/components/ui/progress";
 import Logo from './logo';
 import { useAppContext } from '@/app/store';
@@ -18,7 +17,7 @@ export function AppLoading() {
                 </div>
                 <Progress value={loadingProgress} className="w-full h-2" />
                 <p className="text-muted-foreground animate-pulse">
-                    Loading your ledger... {loadingProgress > 0 && `${Math.round(loadingProgress)}%`}
+                    Loading your ledger... {`${Math.round(loadingProgress)}%`}
                 </p>
             </div>
         </div>
