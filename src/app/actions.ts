@@ -519,6 +519,72 @@ export async function logout() {
 
 // --- Specific App Actions ---
 
+export async function getBalances() {
+    const supabase = await getAuthenticatedSupabaseClient();
+    try {
+        // Cash Balance
+        const { data: cashData, error: cashError } = await supabase.from('cash_transactions').select('type, amount');
+        if (cashError && cashError.code !== '42P01') throw cashError;
+        const cashBalance = (cashData || []).reduce((acc, tx) => acc + (tx.type === 'income' ? tx.amount : -tx.amount), 0);
+
+        // Bank Balance
+        const { data: bankData, error: bankError } = await supabase.from('bank_transactions').select('type, amount');
+        if (bankError && bankError.code !== '42P01') throw bankError;
+        const bankBalance = (bankData || []).reduce((acc, tx) => acc + (tx.type === 'deposit' ? tx.amount : -tx.amount), 0);
+        
+        // Stock Balance
+        const { data: stockData, error: stockError } = await supabase.from('stock_transactions').select('type, weight, pricePerKg');
+        if (stockError && stockError.code !== '42P01') throw stockError;
+        const { data: initialStockData, error: initialStockError } = await supabase.from('initial_stock').select('*');
+        if(initialStockError && initialStockError.code !== '42P01') throw initialStockError;
+        
+        const stockPortfolio: Record<string, { weight: number, totalValue: number }> = {};
+        (initialStockData || []).forEach(item => {
+              if (!stockPortfolio[item.name]) {
+                  stockPortfolio[item.name] = { weight: 0, totalValue: 0 };
+              }
+              stockPortfolio[item.name].weight += item.weight;
+              stockPortfolio[item.name].totalValue += item.weight * item.purchasePricePerKg;
+        });
+
+        const sortedStockTransactions = [...(stockData || [])].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+        sortedStockTransactions.forEach(tx => {
+            if (!stockPortfolio[tx.stockItemName]) {
+                stockPortfolio[tx.stockItemName] = { weight: 0, totalValue: 0 };
+            }
+            const item = stockPortfolio[tx.stockItemName];
+            const currentAvgPrice = item.weight > 0 ? item.totalValue / item.weight : 0;
+            if (tx.type === 'purchase') {
+                item.weight += tx.weight;
+                item.totalValue += tx.weight * tx.pricePerKg;
+            } else { // sale
+                item.weight -= tx.weight;
+                item.totalValue -= tx.weight * currentAvgPrice;
+            }
+        });
+        const aggregatedStockItems = Object.entries(stockPortfolio).map(([name, data], index) => ({
+            id: `stock-agg-${index}`, name, weight: data.weight, purchasePricePerKg: data.weight > 0 ? data.totalValue / data.weight : 0,
+        }));
+
+        // A/R and A/P Balances
+        const { data: ledgerData, error: ledgerError } = await supabase.from('ap_ar_transactions').select('type, amount, paid_amount, status');
+        if (ledgerError && ledgerError.code !== '42P01') throw ledgerError;
+        const totalPayables = (ledgerData || []).filter((tx) => tx.type === 'payable' && tx.status !== 'paid').reduce((acc, tx) => acc + (tx.amount - tx.paid_amount), 0);
+        const totalReceivables = (ledgerData || []).filter((tx) => tx.type === 'receivable' && tx.status !== 'paid').reduce((acc, tx) => acc + (tx.amount - tx.paid_amount), 0);
+
+        return {
+            cashBalance,
+            bankBalance,
+            stockItems: aggregatedStockItems,
+            totalPayables,
+            totalReceivables
+        };
+    } catch(e) {
+        return handleApiError(e);
+    }
+}
+
+
 // This is a shared helper function for recording payments.
 async function applyPaymentToLedger(
     supabase: ReturnType<typeof getAuthenticatedSupabaseClient>,
@@ -688,5 +754,3 @@ export async function recordDirectPayment(input: z.infer<typeof RecordDirectPaym
         return handleApiError(error);
     }
 }
-
-    
