@@ -730,12 +730,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const { error } = await supabase
             .from('categories')
             .delete()
-            .eq('id', id)
-            .eq('is_deletable', true);
+            .match({ id: id, is_deletable: true });
             
         if (error) throw error;
+        
+        setState(prev => ({
+            ...prev,
+            cashCategories: prev.cashCategories.filter(c => c.id !== id),
+            bankCategories: prev.bankCategories.filter(c => c.id !== id),
+        }));
 
-        await reloadData();
         toast.success("Success", { description: "Category deleted." });
     } catch (error) {
         handleApiError(error);
