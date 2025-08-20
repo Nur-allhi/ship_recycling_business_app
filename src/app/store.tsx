@@ -89,27 +89,9 @@ interface AppContextType extends AppState {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 const CACHE_KEY = 'haMimIronMartCache';
-const CACHE_VERSION = '1.0';
+const CACHE_VERSION = '1.1'; // Increment version to invalidate old cache
 
-const getInitialState = (): AppState => {
-  let cachedState: Partial<AppState> = {};
-  if (typeof window !== 'undefined') {
-    try {
-      const cachedData = localStorage.getItem(CACHE_KEY);
-      if (cachedData) {
-        const parsed = JSON.parse(cachedData);
-        if (parsed.version === CACHE_VERSION) {
-            cachedState = parsed.data;
-        } else {
-            localStorage.removeItem(CACHE_KEY);
-        }
-      }
-    } catch (e) {
-      console.error("Failed to load from localStorage", e);
-    }
-  }
-
-  const defaultState: AppState = {
+const defaultState: AppState = {
     cashBalance: 0,
     cashTransactions: [],
     bankBalance: 0,
@@ -137,9 +119,6 @@ const getInitialState = (): AppState => {
     isLoading: true,
     banks: [],
     loadedMonths: {},
-  };
-  
-  return { ...defaultState, ...cachedState, isLoading: true };
 };
 
 
@@ -161,11 +140,34 @@ const FIXED_BANK_CATEGORIES = [
 
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<AppState>(getInitialState());
+  const [state, setState] = useState<AppState>(defaultState);
+  const [isHydrated, setIsHydrated] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
+  
+  useEffect(() => {
+    // This effect runs only on the client, after hydration
+    let cachedState: Partial<AppState> = {};
+    try {
+      const cachedData = localStorage.getItem(CACHE_KEY);
+      if (cachedData) {
+        const parsed = JSON.parse(cachedData);
+        if (parsed.version === CACHE_VERSION) {
+            cachedState = parsed.data;
+        } else {
+            localStorage.removeItem(CACHE_KEY);
+        }
+      }
+    } catch (e) {
+      console.error("Failed to load from localStorage", e);
+    }
+    // Set the state from cache, but keep isLoading true until we fetch from server
+    setState(prev => ({...prev, ...cachedState, isLoading: true}));
+    setIsHydrated(true); // Signal that client-side state is now loaded
+  }, []);
 
   useEffect(() => {
+    if (!isHydrated) return; // Don't save to localStorage until client state is loaded
     // Persist state to localStorage on any change except for certain transient properties.
     const { isLoading, isInitialBalanceDialogOpen, deletedCashTransactions, deletedBankTransactions, deletedStockTransactions, deletedLedgerTransactions, ...stateToCache } = state;
     try {
@@ -178,7 +180,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } catch (e) {
       console.error("Failed to save to localStorage", e);
     }
-  }, [state]);
+  }, [state, isHydrated]);
 
 
   const openInitialBalanceDialog = () => {
@@ -198,7 +200,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if(typeof window !== 'undefined') {
         localStorage.removeItem(CACHE_KEY);
     }
-    setState({...getInitialState(), user: null, isLoading: false});
+    setState({...defaultState, user: null, isLoading: false});
     window.location.href = '/login';
   }, []);
 
@@ -340,6 +342,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
 
   useEffect(() => {
+    if (!isHydrated) return; // Wait for client state to be loaded
     const checkSessionAndLoad = async () => {
         const session = await getSession();
         if (session) {
@@ -354,9 +357,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     };
     
     checkSessionAndLoad();
-    // This effect should only run once on mount.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [isHydrated]); // Run only when hydration is complete
 
   useEffect(() => {
     if (state.isLoading) return; // Don't redirect while loading
@@ -1068,6 +1070,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setState(prev => ({ ...prev, showStockValue: show }));
   };
   
+  if (!isHydrated) {
+    // Render a static loading state on the server and during initial client render
+    return <div />;
+  }
+
   return (
     <AppContext.Provider value={{ 
         ...state, 
@@ -1122,5 +1129,3 @@ export function useAppContext() {
   }
   return context;
 }
-
-      
