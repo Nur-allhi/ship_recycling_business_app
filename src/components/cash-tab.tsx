@@ -30,7 +30,7 @@ type SortKey = keyof CashTransaction | null;
 type SortDirection = 'asc' | 'desc';
 
 export function CashTab() {
-  const { cashBalance, cashTransactions, transferFunds, deleteCashTransaction, deleteMultipleCashTransactions, currency, user, loadDataForMonth, loadedMonths } = useAppContext()
+  const { cashBalance, cashTransactions, transferFunds, deleteCashTransaction, deleteMultipleCashTransactions, currency, user, loadDataForMonth, loadedMonths, banks } = useAppContext()
   const [isTransferSheetOpen, setIsTransferSheetOpen] = useState(false)
   const [editSheetState, setEditSheetState] = useState<{isOpen: boolean, transaction: CashTransaction | null}>({ isOpen: false, transaction: null});
   const [deleteDialogState, setDeleteDialogState] = useState<{isOpen: boolean, txToDelete: CashTransaction | null, txsToDelete: CashTransaction[] | null}>({ isOpen: false, txToDelete: null, txsToDelete: null });
@@ -135,9 +135,11 @@ export function CashTab() {
   const handleTransferSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     const formData = new FormData(event.currentTarget)
-    const amount = parseFloat(formData.get('amount') as string)
-    if (amount > 0) {
-      transferFunds('cash', amount)
+    const amount = parseFloat(formData.get('amount') as string);
+    const bankId = formData.get('bank_id') as string;
+    const description = formData.get('description') as string;
+    if (amount > 0 && bankId) {
+      transferFunds('cash', amount, new Date().toISOString(), bankId, description);
       setIsTransferSheetOpen(false)
     }
   }
@@ -202,7 +204,7 @@ export function CashTab() {
              <TableHead className="text-center">
                 <Button variant="ghost" onClick={() => handleSort('date')}>Date {renderSortArrow('date')}</Button>
             </TableHead>
-            <TableHead className="text-center">
+            <TableHead>
                 <Button variant="ghost" onClick={() => handleSort('description')}>Description {renderSortArrow('description')}</Button>
             </TableHead>
             <TableHead className="text-center">
@@ -356,7 +358,7 @@ export function CashTab() {
                 Current Balance: <span className="font-bold text-primary font-mono">{formatCurrency(cashBalance)}</span>
               </CardDescription>
             </div>
-            <div className="flex items-center gap-2 self-center sm:self-auto">
+            <div className="flex items-center gap-2 self-center">
               <Button variant="outline" size="icon" onClick={goToPreviousMonth} className="h-9 w-9">
                   <ChevronLeft className="h-4 w-4" />
               </Button>
@@ -397,6 +399,14 @@ export function CashTab() {
                               <div className="space-y-2">
                                   <Label htmlFor="amount">Amount</Label>
                                   <Input id="amount" name="amount" type="number" step="0.01" placeholder="0.00" required />
+                              </div>
+                              <div className="space-y-2">
+                                  <Label htmlFor="bank_id">To Bank Account</Label>
+                                  <ResponsiveSelect name="bank_id" title="Select a Bank Account" required items={banks.map(b => ({value: b.id, label: b.name}))} />
+                              </div>
+                              <div className="space-y-2">
+                                  <Label htmlFor="description">Description (Optional)</Label>
+                                  <Input id="description" name="description" placeholder="e.g., Weekly deposit" />
                               </div>
                               <Button type="submit" className="w-full">Transfer to Bank</Button>
                           </form>
