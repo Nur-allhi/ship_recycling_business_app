@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useState, useMemo, useEffect } from "react"
@@ -37,7 +38,7 @@ type SortKey = keyof BankTransaction | null;
 type SortDirection = 'asc' | 'desc';
 
 export function BankTab() {
-  const { bankBalance, bankTransactions, transferFunds, deleteBankTransaction, deleteMultipleBankTransactions, currency, user, banks, loadDataForMonth, loadedMonths } = useAppContext()
+  const { bankBalance, bankTransactions, transferFunds, deleteBankTransaction, deleteMultipleBankTransactions, currency, user, banks, isLoading } = useAppContext()
   const [isTransferSheetOpen, setIsTransferSheetOpen] = useState(false)
   const [editSheetState, setEditSheetState] = useState<{isOpen: boolean, transaction: BankTransaction | null}>({ isOpen: false, transaction: null});
   const [deleteDialogState, setDeleteDialogState] = useState<{isOpen: boolean, txToDelete: BankTransaction | null, txsToDelete: BankTransaction[] | null}>({ isOpen: false, txToDelete: null, txsToDelete: null });
@@ -50,23 +51,11 @@ export function BankTab() {
   const [sortKey, setSortKey] = useState<SortKey>('date');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [selectedBankId, setSelectedBankId] = useState<string | 'all'>('all');
-  const [isMonthLoading, setIsMonthLoading] = useState(false);
   const isMobile = useIsMobile();
   const isAdmin = user?.role === 'admin';
 
-  const monthKey = format(currentMonth, 'yyyy-MM');
-  useEffect(() => {
-    const fetchMonthData = async () => {
-      if (!loadedMonths[monthKey]) {
-        setIsMonthLoading(true);
-        await loadDataForMonth(currentMonth);
-        setIsMonthLoading(false);
-      }
-    };
-    fetchMonthData();
-  }, [currentMonth, loadedMonths, loadDataForMonth, monthKey]);
-
   const filteredByBank = useMemo(() => {
+    if (!bankTransactions) return [];
     if (selectedBankId === 'all') return bankTransactions;
     return bankTransactions.filter(tx => tx.bank_id === selectedBankId);
   }, [bankTransactions, selectedBankId]);
@@ -100,19 +89,12 @@ export function BankTab() {
     });
   }, [filteredByBank, sortKey, sortDirection]);
 
-  const filteredByMonth = useMemo(() => {
-    return sortedTransactions.filter(tx => {
-        const txDate = new Date(tx.date);
-        return txDate.getFullYear() === currentMonth.getFullYear() && txDate.getMonth() === currentMonth.getMonth();
-    })
-  }, [sortedTransactions, currentMonth]);
-
   const paginatedTransactions = useMemo(() => {
     const startIndex = (currentPage - 1) * itemsPerPage;
-    return filteredByMonth.slice(startIndex, startIndex + itemsPerPage);
-  }, [filteredByMonth, currentPage, itemsPerPage]);
+    return sortedTransactions.slice(startIndex, startIndex + itemsPerPage);
+  }, [sortedTransactions, currentPage, itemsPerPage]);
 
-  const totalPages = Math.ceil(filteredByMonth.length / itemsPerPage);
+  const totalPages = Math.ceil(filteredByBank.length / itemsPerPage);
 
   const currentBankBalance = useMemo(() => {
     if (selectedBankId === 'all') return bankBalance;
@@ -201,7 +183,7 @@ export function BankTab() {
   
   const bankAccountItems = useMemo(() => [
       { value: 'all', label: 'All Banks'},
-      ...banks.map(bank => ({ value: bank.id, label: bank.name }))
+      ...(banks || []).map(bank => ({ value: bank.id, label: bank.name }))
   ], [banks]);
   
   const itemsPerPageItems = useMemo(() => [
@@ -245,7 +227,7 @@ export function BankTab() {
             </TableRow>
         </TableHeader>
         <TableBody>
-            {isMonthLoading ? (
+            {isLoading ? (
               <TableRow><TableCell colSpan={isSelectionMode ? 8 : 7} className="h-24 text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin" /></TableCell></TableRow>
             ) : paginatedTransactions.length > 0 ? (
             paginatedTransactions.map((tx: BankTransaction) => (
@@ -280,7 +262,7 @@ export function BankTab() {
                 <TableCell className="text-center">{tx.category}</TableCell>
                 {selectedBankId === 'all' && (
                     <TableCell className="text-center">
-                        {banks.find(b => b.id === tx.bank_id)?.name || 'N/A'}
+                        {(banks || []).find(b => b.id === tx.bank_id)?.name || 'N/A'}
                     </TableCell>
                 )}
                 <TableCell className={`text-center font-semibold font-mono ${tx.type === 'deposit' ? 'text-accent' : 'text-destructive'}`}>
@@ -307,7 +289,7 @@ export function BankTab() {
             ))
             ) : (
             <TableRow>
-                <TableCell colSpan={isSelectionMode ? (showActions ? 8 : 7) : (showActions ? 7 : 6)} className="text-center h-24">No bank transactions for {format(currentMonth, "MMMM yyyy")}.</TableCell>
+                <TableCell colSpan={isSelectionMode ? (showActions ? 8 : 7) : (showActions ? 7 : 6)} className="text-center h-24">No bank transactions found.</TableCell>
             </TableRow>
             )}
         </TableBody>
@@ -317,7 +299,7 @@ export function BankTab() {
 
   const renderMobileView = () => (
     <div className="space-y-4">
-      {isMonthLoading ? (
+      {isLoading ? (
         <div className="flex justify-center items-center h-24"><Loader2 className="h-6 w-6 animate-spin" /></div>
       ) : paginatedTransactions.length > 0 ? (
         paginatedTransactions.map((tx: BankTransaction) => (
@@ -343,7 +325,7 @@ export function BankTab() {
                 <div className="text-sm text-muted-foreground">{tx.category}</div>
                  {selectedBankId === 'all' && (
                     <div className="text-sm text-muted-foreground font-semibold">
-                        {banks.find(b => b.id === tx.bank_id)?.name || 'N/A'}
+                        {(banks || []).find(b => b.id === tx.bank_id)?.name || 'N/A'}
                     </div>
                 )}
                 <div className="flex justify-between items-center pt-2">
@@ -378,7 +360,7 @@ export function BankTab() {
         ))
       ) : (
         <div className="text-center text-muted-foreground py-12">
-            No bank transactions for {format(currentMonth, "MMMM yyyy")}.
+            No bank transactions found.
         </div>
       )}
     </div>
@@ -449,7 +431,7 @@ export function BankTab() {
                                 </div>
                                 <div className="space-y-2">
                                     <Label htmlFor="bank_id">From Bank Account</Label>
-                                    <ResponsiveSelect name="bank_id" title="Select a Bank Account" required items={banks.map(b => ({value: b.id, label: b.name}))} />
+                                    <ResponsiveSelect name="bank_id" title="Select a Bank Account" required items={(banks || []).map(b => ({value: b.id, label: b.name}))} />
                                 </div>
                                 <div className="space-y-2">
                                     <Label htmlFor="description">Description (Optional)</Label>
@@ -470,7 +452,7 @@ export function BankTab() {
         <CardContent>
           {isMobile ? renderMobileView() : renderDesktopView()}
         </CardContent>
-        {filteredByMonth.length > 0 && (
+        {totalPages > 1 && (
           <CardFooter className="flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="text-sm text-muted-foreground">
               Showing page {currentPage} of {totalPages}

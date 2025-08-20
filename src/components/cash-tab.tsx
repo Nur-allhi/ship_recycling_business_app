@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useState, useMemo, useEffect } from "react"
@@ -30,7 +31,7 @@ type SortKey = keyof CashTransaction | null;
 type SortDirection = 'asc' | 'desc';
 
 export function CashTab() {
-  const { cashBalance, cashTransactions, transferFunds, deleteCashTransaction, deleteMultipleCashTransactions, currency, user, loadDataForMonth, loadedMonths, banks } = useAppContext()
+  const { cashBalance, cashTransactions, transferFunds, deleteCashTransaction, deleteMultipleCashTransactions, currency, user, banks, isLoading } = useAppContext()
   const [isTransferSheetOpen, setIsTransferSheetOpen] = useState(false)
   const [editSheetState, setEditSheetState] = useState<{isOpen: boolean, transaction: CashTransaction | null}>({ isOpen: false, transaction: null});
   const [deleteDialogState, setDeleteDialogState] = useState<{isOpen: boolean, txToDelete: CashTransaction | null, txsToDelete: CashTransaction[] | null}>({ isOpen: false, txToDelete: null, txsToDelete: null });
@@ -42,21 +43,8 @@ export function CashTab() {
   const [showActions, setShowActions] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey>('date');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
-  const [isMonthLoading, setIsMonthLoading] = useState(false);
   const isMobile = useIsMobile();
   const isAdmin = user?.role === 'admin';
-  
-  const monthKey = format(currentMonth, 'yyyy-MM');
-  useEffect(() => {
-    const fetchMonthData = async () => {
-      if (!loadedMonths[monthKey]) {
-        setIsMonthLoading(true);
-        await loadDataForMonth(currentMonth);
-        setIsMonthLoading(false);
-      }
-    };
-    fetchMonthData();
-  }, [currentMonth, loadedMonths, loadDataForMonth, monthKey]);
 
   const handleSort = (key: SortKey) => {
     if (sortKey === key) {
@@ -68,7 +56,7 @@ export function CashTab() {
   };
 
   const sortedTransactions = useMemo(() => {
-    if (!sortKey) return cashTransactions;
+    if (!sortKey || !cashTransactions) return cashTransactions || [];
 
     return [...cashTransactions].sort((a, b) => {
       const aValue = a[sortKey];
@@ -87,19 +75,12 @@ export function CashTab() {
     });
   }, [cashTransactions, sortKey, sortDirection]);
 
-  const filteredByMonth = useMemo(() => {
-    return sortedTransactions.filter(tx => {
-        const txDate = new Date(tx.date);
-        return txDate.getFullYear() === currentMonth.getFullYear() && txDate.getMonth() === currentMonth.getMonth();
-    })
-  }, [sortedTransactions, currentMonth]);
-
   const paginatedTransactions = useMemo(() => {
     const startIndex = (currentPage - 1) * itemsPerPage;
-    return filteredByMonth.slice(startIndex, startIndex + itemsPerPage);
-  }, [filteredByMonth, currentPage, itemsPerPage]);
+    return sortedTransactions.slice(startIndex, startIndex + itemsPerPage);
+  }, [sortedTransactions, currentPage, itemsPerPage]);
 
-  const totalPages = Math.ceil(filteredByMonth.length / itemsPerPage);
+  const totalPages = Math.ceil((cashTransactions?.length || 0) / itemsPerPage);
 
   const handleEditClick = (tx: CashTransaction) => {
     setEditSheetState({ isOpen: true, transaction: tx });
@@ -217,7 +198,7 @@ export function CashTab() {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {isMonthLoading ? (
+          {isLoading ? (
             <TableRow><TableCell colSpan={isSelectionMode ? 6 : 5} className="h-24 text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin" /></TableCell></TableRow>
           ) : paginatedTransactions.length > 0 ? (
             paginatedTransactions.map((tx: CashTransaction) => (
@@ -274,7 +255,7 @@ export function CashTab() {
             ))
           ) : (
             <TableRow>
-              <TableCell colSpan={isSelectionMode ? (showActions ? 6 : 5) : (showActions ? 5 : 4)} className="text-center h-24">No cash transactions for {format(currentMonth, "MMMM yyyy")}.</TableCell>
+              <TableCell colSpan={isSelectionMode ? (showActions ? 6 : 5) : (showActions ? 5 : 4)} className="text-center h-24">No cash transactions found.</TableCell>
             </TableRow>
           )}
         </TableBody>
@@ -284,7 +265,7 @@ export function CashTab() {
 
   const renderMobileView = () => (
     <div className="space-y-4">
-      {isMonthLoading ? (
+      {isLoading ? (
         <div className="flex justify-center items-center h-24"><Loader2 className="h-6 w-6 animate-spin" /></div>
       ) : paginatedTransactions.length > 0 ? (
         paginatedTransactions.map((tx: CashTransaction) => (
@@ -341,7 +322,7 @@ export function CashTab() {
         ))
       ) : (
         <div className="text-center text-muted-foreground py-12">
-            No cash transactions for {format(currentMonth, "MMMM yyyy")}.
+            No cash transactions found.
         </div>
       )}
     </div>
@@ -402,7 +383,7 @@ export function CashTab() {
                               </div>
                               <div className="space-y-2">
                                   <Label htmlFor="bank_id">To Bank Account</Label>
-                                  <ResponsiveSelect name="bank_id" title="Select a Bank Account" required items={banks.map(b => ({value: b.id, label: b.name}))} />
+                                  <ResponsiveSelect name="bank_id" title="Select a Bank Account" required items={(banks || []).map(b => ({value: b.id, label: b.name}))} />
                               </div>
                               <div className="space-y-2">
                                   <Label htmlFor="description">Description (Optional)</Label>
@@ -423,7 +404,7 @@ export function CashTab() {
         <CardContent>
            {isMobile ? renderMobileView() : renderDesktopView()}
         </CardContent>
-        {filteredByMonth.length > 0 && (
+        {totalPages > 1 && (
           <CardFooter className="flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="text-sm text-muted-foreground">
               Showing page {currentPage} of {totalPages}
