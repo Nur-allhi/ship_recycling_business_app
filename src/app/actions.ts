@@ -294,15 +294,12 @@ export async function batchImportData(dataToImport: z.infer<typeof ImportDataSch
     
     try {
         for (const table of tables) {
-             const { error: deleteError } = await supabase.from(table).delete().gt('id', 0); // Using gt(id, 0) for tables with numeric-like IDs
+             // This will attempt to delete all rows. It's the most reliable way to clear a table.
+             const { error: deleteError } = await supabase.from(table).delete().or('id.gt.0,id.neq.00000000-0000-0000-0000-000000000000');
              if (deleteError && deleteError.code !== '42P01') {
-                 // Try a different approach for tables that might not have a numeric-like ID (e.g. UUID)
-                 const { error: fallbackError } = await supabase.from(table).delete().neq('id', 'a-non-existent-value');
-                 if (fallbackError && fallbackError.code !== '42P01') {
-                    console.error(`Failed to clear ${table}: ${fallbackError.message}`);
-                    throw new Error(`Failed to clear ${table}: ${fallbackError.message}`);
-                 }
-            }
+                console.error(`Failed to clear ${table}: ${deleteError.message}`);
+                throw new Error(`Failed to clear ${table}: ${deleteError.message}`);
+             }
         }
 
         const importOrder = ['banks', 'categories', 'vendors', 'clients', 'initial_stock', 'cash_transactions', 'bank_transactions', 'stock_transactions', 'ap_ar_transactions', 'payment_installments', 'monthly_snapshots'];
