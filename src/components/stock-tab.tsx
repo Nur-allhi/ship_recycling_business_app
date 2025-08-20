@@ -31,7 +31,7 @@ type SortDirection = 'asc' | 'desc';
 
 
 export function StockTab() {
-  const { stockItems, stockTransactions, deleteStockTransaction, deleteMultipleStockTransactions, currency, showStockValue, user, loadDataForMonth, loadedMonths } = useAppContext()
+  const { stockItems, stockTransactions, deleteStockTransaction, deleteMultipleStockTransactions, currency, showStockValue, setShowStockValue, user, loadDataForMonth, loadedMonths } = useAppContext()
   const [editSheetState, setEditSheetState] = useState<{isOpen: boolean, transaction: StockTransaction | null}>({ isOpen: false, transaction: null});
   const [deleteDialogState, setDeleteDialogState] = useState<{isOpen: boolean, txToDelete: StockTransaction | null, txsToDelete: StockTransaction[] | null}>({ isOpen: false, txToDelete: null, txsToDelete: null });
   const [selectedTxs, setSelectedTxs] = useState<StockTransaction[]>([]);
@@ -482,6 +482,18 @@ export function StockTab() {
                                         </TooltipTrigger>
                                         <TooltipContent>
                                         <p>{showActions ? 'Hide' : 'Show'} Actions</p>
+                                        </TooltipContent>
+                                    </Tooltip>
+                                </TooltipProvider>
+                                <TooltipProvider>
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <Button size="sm" variant="outline" onClick={() => setShowStockValue(!showStockValue)}>
+                                                {showStockValue ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                            </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent>
+                                        <p>{showStockValue ? 'Hide' : 'Show'} Total Value Column</p>
                                         </TooltipContent>
                                     </Tooltip>
                                 </TooltipProvider>

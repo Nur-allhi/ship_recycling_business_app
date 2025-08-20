@@ -155,8 +155,9 @@ export function BankTab() {
     const formData = new FormData(event.currentTarget)
     const amount = parseFloat(formData.get('amount') as string);
     const bankId = formData.get('bank_id') as string;
+    const description = formData.get('description') as string;
     if (amount > 0 && bankId) {
-      transferFunds('bank', amount, new Date().toISOString(), bankId);
+      transferFunds('bank', amount, new Date().toISOString(), bankId, description);
       setIsTransferSheetOpen(false)
     }
   }
@@ -386,29 +387,27 @@ export function BankTab() {
   return (
     <>
       <Card>
-        <CardHeader className="space-y-4">
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-2">
-                <div className="text-center sm:text-left">
+        <CardHeader>
+             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div className="flex-1">
                     <CardTitle>Bank Ledger</CardTitle>
                     <CardDescription>
                     Current Balance: <span className="font-bold text-primary font-mono">{formatCurrency(currentBankBalance)}</span>
                     </CardDescription>
                 </div>
-            </div>
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-2">
-                <ResponsiveSelect
-                    value={selectedBankId}
-                    onValueChange={(value) => setSelectedBankId(value)}
-                    title="Select a Bank Account"
-                    placeholder="All Banks"
-                    className="w-[180px]"
-                    items={bankAccountItems}
-                />
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-2 self-center sm:self-auto">
+                    <ResponsiveSelect
+                        value={selectedBankId}
+                        onValueChange={(value) => setSelectedBankId(value)}
+                        title="Select a Bank Account"
+                        placeholder="All Banks"
+                        className="w-[180px]"
+                        items={bankAccountItems}
+                    />
                     <Button variant="outline" size="icon" onClick={goToPreviousMonth} className="h-9 w-9">
                         <ChevronLeft className="h-4 w-4" />
                     </Button>
-                    <span className="text-sm font-medium w-24 text-center">{format(currentMonth, "MMMM yyyy")}</span>
+                    <span className="text-sm font-medium w-28 sm:w-32 text-center">{format(currentMonth, "MMMM yyyy")}</span>
                     <Button variant="outline" size="icon" onClick={goToNextMonth} className="h-9 w-9">
                         <ChevronRight className="h-4 w-4" />
                     </Button>
@@ -449,6 +448,10 @@ export function BankTab() {
                                 <div className="space-y-2">
                                     <Label htmlFor="bank_id">From Bank Account</Label>
                                     <ResponsiveSelect name="bank_id" title="Select a Bank Account" required items={banks.map(b => ({value: b.id, label: b.name}))} />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="description">Description (Optional)</Label>
+                                    <Input id="description" name="description" placeholder="e.g., Cash for expenses" />
                                 </div>
                                 <Button type="submit" className="w-full">Transfer to Cash</Button>
                             </form>

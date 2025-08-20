@@ -29,8 +29,6 @@ function AppearanceSettings() {
     setFontSize,
     currency,
     setCurrency,
-    showStockValue,
-    setShowStockValue,
   } = useAppContext();
 
   const handleCurrencyChange = (value: string) => {
@@ -70,15 +68,6 @@ function AppearanceSettings() {
               className="mt-2"
               items={currencyItems}
           />
-        </div>
-        <Separator />
-        <div>
-          <Label className="block mb-2">Data Visibility</Label>
-            <Button variant="outline" size="sm" onClick={() => setShowStockValue(!showStockValue)}>
-              {showStockValue ? <EyeOff className="mr-2 h-4 w-4" /> : <Eye className="mr-2 h-4 w-4" />}
-              {showStockValue ? 'Hide' : 'Show'} Stock Total Value
-          </Button>
-          <p className="text-xs text-muted-foreground mt-2">Toggle visibility for the 'Total Value' column in the stock transaction history.</p>
         </div>
       </CardContent>
     </Card>
