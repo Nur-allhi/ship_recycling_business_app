@@ -53,12 +53,12 @@ function ShipShapeLedger() {
 
   const roleDisplayName = user?.role ? user.role.charAt(0).toUpperCase() + user.role.slice(1) : '';
   
-  if (isLoading) {
+  if (isLoading && !user) {
     return <AppLoading />;
   }
   
   if (!user) {
-    return <AppLoading />;
+    return null; // or a redirect component
   }
 
 
@@ -183,3 +183,5 @@ export default function Home() {
     <ShipShapeLedger />
   );
 }
+
+    

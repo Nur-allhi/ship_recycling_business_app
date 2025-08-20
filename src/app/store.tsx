@@ -40,6 +40,7 @@ interface AppState {
   totalPayables: number;
   totalReceivables: number;
   isLoading: boolean;
+  loadingProgress: number;
   banks: Bank[];
   loadedMonths: Record<string, boolean>; // YYYY-MM format
 }
@@ -111,6 +112,7 @@ const initialAppState: AppState = {
   totalPayables: 0,
   totalReceivables: 0,
   isLoading: true,
+  loadingProgress: 0,
   banks: [],
   loadedMonths: {},
 };
@@ -144,7 +146,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(async () => {
     await serverLogout();
-    setState({...initialAppState, user: null, isLoading: false});
+    setState({...initialAppState, user: null, isLoading: false, loadingProgress: 0});
     window.location.href = '/login';
   }, []);
 
@@ -172,11 +174,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [logout]);
   
   const reloadData = useCallback(async (options?: { force?: boolean, needsInitialBalance?: boolean }) => {
-    setState(prev => ({ ...prev, isLoading: true }));
+    setState(prev => ({ ...prev, isLoading: true, loadingProgress: 10 }));
     try {
         const session = await getSession();
         if (!session) {
-            setState(prev => ({...prev, isLoading: false, user: null }));
+            setState(prev => ({...prev, isLoading: false, user: null, loadingProgress: 0 }));
             return;
         }
         if (!state.user) {
@@ -184,7 +186,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
 
         if(options?.needsInitialBalance) {
-             setState(prev => ({ ...prev, needsInitialBalance: true, isLoading: false }));
+             setState(prev => ({ ...prev, needsInitialBalance: true, isLoading: false, loadingProgress: 100 }));
              return;
         }
         
@@ -203,6 +205,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
             getBalances()
         ]);
         
+        setState(prev => ({ ...prev, loadingProgress: 40 }));
+
         // Fetch recent transactions
         const [
             cashTxs, bankTxs, stockTxs, ledgerData, installmentsData
@@ -213,6 +217,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
             readData({ tableName: 'ap_ar_transactions', startDate: thirtyDaysAgo.toISOString() }),
             readData({ tableName: 'payment_installments', startDate: thirtyDaysAgo.toISOString() }),
         ]);
+
+        setState(prev => ({ ...prev, loadingProgress: 75 }));
 
         const ledgerTxs = (ledgerData || []).map((tx: any) => ({
             ...tx,
@@ -241,12 +247,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
             totalPayables: balances.totalPayables,
             totalReceivables: balances.totalReceivables,
             loadedMonths: { [monthKey]: true },
+            loadingProgress: 100,
         }));
         
     } catch (error: any) {
         handleApiError(error);
     } finally {
-        setState(prev => ({...prev, isLoading: false, needsInitialBalance: false}));
+        // Use a timeout to ensure the loading bar completes its animation
+        setTimeout(() => {
+            setState(prev => ({...prev, isLoading: false, needsInitialBalance: false}));
+        }, 500);
     }
   }, [handleApiError, state.user]);
 
@@ -1006,3 +1016,5 @@ export function useAppContext() {
   }
   return context;
 }
+
+    

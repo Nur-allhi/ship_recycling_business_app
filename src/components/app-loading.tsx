@@ -1,18 +1,13 @@
 
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
 import { Progress } from "@/components/ui/progress";
 import Logo from './logo';
-import { cn } from '@/lib/utils';
+import { useAppContext } from '@/app/store';
 
 export function AppLoading() {
-    const [progress, setProgress] = useState(13)
-
-    useEffect(() => {
-        const timer = setTimeout(() => setProgress(80), 500)
-        return () => clearTimeout(timer)
-    }, [])
+    const { loadingProgress } = useAppContext();
 
     return (
         <div className="flex items-center justify-center min-h-screen bg-background">
@@ -21,9 +16,11 @@ export function AppLoading() {
                     <Logo className="h-12 w-12 text-primary" />
                     <h1 className="text-2xl font-bold text-primary">Ha-Mim Iron Mart</h1>
                 </div>
-                <Progress value={progress} className="w-full h-2" />
+                <Progress value={loadingProgress} className="w-full h-2" />
                 <p className="text-muted-foreground animate-pulse">Loading your ledger...</p>
             </div>
         </div>
     );
 }
+
+    
