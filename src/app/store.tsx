@@ -88,8 +88,28 @@ interface AppContextType extends AppState {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
+const CACHE_KEY = 'haMimIronMartCache';
+const CACHE_VERSION = '1.0';
+
 const getInitialState = (): AppState => {
-  const baseState: AppState = {
+  let cachedState: Partial<AppState> = {};
+  if (typeof window !== 'undefined') {
+    try {
+      const cachedData = localStorage.getItem(CACHE_KEY);
+      if (cachedData) {
+        const parsed = JSON.parse(cachedData);
+        if (parsed.version === CACHE_VERSION) {
+            cachedState = parsed.data;
+        } else {
+            localStorage.removeItem(CACHE_KEY);
+        }
+      }
+    } catch (e) {
+      console.error("Failed to load from localStorage", e);
+    }
+  }
+
+  const defaultState: AppState = {
     cashBalance: 0,
     cashTransactions: [],
     bankBalance: 0,
@@ -118,21 +138,8 @@ const getInitialState = (): AppState => {
     banks: [],
     loadedMonths: {},
   };
-
-  if (typeof window !== 'undefined') {
-    const savedFontSize = localStorage.getItem('fontSize') as FontSize;
-    const savedCurrency = localStorage.getItem('currency');
-    const savedShowStockValue = localStorage.getItem('showStockValue');
-    const savedWastagePercentage = localStorage.getItem('wastagePercentage');
-    const savedRememberedUsername = localStorage.getItem('rememberedUsername');
-
-    if (savedFontSize) baseState.fontSize = savedFontSize;
-    if (savedCurrency) baseState.currency = savedCurrency;
-    if (savedShowStockValue) baseState.showStockValue = JSON.parse(savedShowStockValue);
-    if (savedWastagePercentage) baseState.wastagePercentage = parseFloat(savedWastagePercentage);
-  }
-
-  return baseState;
+  
+  return { ...defaultState, ...cachedState, isLoading: true };
 };
 
 
@@ -158,6 +165,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
 
+  useEffect(() => {
+    // Persist state to localStorage on any change except for certain transient properties.
+    const { isLoading, isInitialBalanceDialogOpen, deletedCashTransactions, deletedBankTransactions, deletedStockTransactions, deletedLedgerTransactions, ...stateToCache } = state;
+    try {
+      const dataToStore = {
+        version: CACHE_VERSION,
+        timestamp: new Date().toISOString(),
+        data: stateToCache,
+      };
+      localStorage.setItem(CACHE_KEY, JSON.stringify(dataToStore));
+    } catch (e) {
+      console.error("Failed to save to localStorage", e);
+    }
+  }, [state]);
+
+
   const openInitialBalanceDialog = () => {
     if(state.user?.role === 'admin') {
       setState(prev => ({ ...prev, isInitialBalanceDialogOpen: true }));
@@ -172,6 +195,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(async () => {
     await serverLogout();
+    if(typeof window !== 'undefined') {
+        localStorage.removeItem(CACHE_KEY);
+    }
     setState({...getInitialState(), user: null, isLoading: false});
     window.location.href = '/login';
   }, []);
@@ -284,6 +310,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setState(prev => ({ ...prev, isLoading: true }));
     const result = await serverLogin(credentials);
     if(result.success) {
+      if (credentials.rememberMe) {
+          localStorage.setItem('rememberedUsername', credentials.username);
+      } else {
+          localStorage.removeItem('rememberedUsername');
+      }
       await reloadData({ needsInitialBalance: result.needsInitialBalance });
     } else {
       setState(prev => ({ ...prev, isLoading: false }));
@@ -312,11 +343,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const checkSessionAndLoad = async () => {
         const session = await getSession();
         if (session) {
-            setState(prev => ({ ...prev, user: session }));
-            if (pathname !== '/login') { // Avoid reloading data if we are about to redirect away
-                await reloadData();
-            }
+            // We have a session, set user from session, keep cached data for now.
+            setState(prev => ({ ...prev, user: session, isLoading: false }));
+            // Fetch fresh data in the background
+            reloadData();
         } else {
+            // No session, clear user and stop loading.
             setState(prev => ({...prev, isLoading: false, user: null }));
         }
     };
@@ -771,17 +803,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const deleteCategory = async (id: string) => {
     if (!state.user || state.user.role !== 'admin') return;
     try {
-        await supabase
+        const { error } = await supabase
             .from('categories')
             .delete()
-            .eq('id', id)
-            .eq('is_deletable', true);
-
-      setState(prev => ({
+            .match({ id: id, is_deletable: true });
+        
+        if (error) throw error;
+      
+        setState(prev => ({
           ...prev,
           cashCategories: prev.cashCategories.filter(c => c.id !== id),
           bankCategories: prev.bankCategories.filter(c => c.id !== id),
-      }));
+        }));
 
       toast.success("Success", { description: "Category deleted." });
     } catch (error) {
@@ -1020,22 +1053,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }
 
   const setFontSize = (size: FontSize) => {
-    localStorage.setItem('fontSize', size);
     setState(prev => ({ ...prev, fontSize: size }));
   };
 
   const setWastagePercentage = (percentage: number) => {
-    localStorage.setItem('wastagePercentage', String(percentage));
     setState(prev => ({ ...prev, wastagePercentage: percentage }));
   };
 
   const setCurrency = (currency: string) => {
-    localStorage.setItem('currency', currency);
     setState(prev => ({ ...prev, currency }));
   };
 
   const setShowStockValue = (show: boolean) => {
-    localStorage.setItem('showStockValue', JSON.stringify(show));
     setState(prev => ({ ...prev, showStockValue: show }));
   };
   
@@ -1093,3 +1122,5 @@ export function useAppContext() {
   }
   return context;
 }
+
+      
