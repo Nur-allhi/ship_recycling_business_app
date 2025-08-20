@@ -263,6 +263,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                     description: data.description!,
                     category: data.category!,
                     date: transactionDate,
+                    contact_id: data.contact_id,
                 });
                 break;
             }
@@ -280,6 +281,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                     category: data.category!,
                     date: transactionDate,
                     bank_id: data.bank_id!,
+                    contact_id: data.contact_id,
                  });
                 break;
             }
@@ -608,7 +610,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                             control={control}
                             name="stockType"
                             render={({ field }) => (
-                                <RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex pt-2 gap-4">
+                                <RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex flex-col sm:flex-row pt-2 gap-4">
                                     <Label htmlFor="purchase" className="flex items-center gap-2 cursor-pointer"><RadioGroupItem value="purchase" id="purchase" />Purchase</Label>
                                     <Label htmlFor="sale" className="flex items-center gap-2 cursor-pointer"><RadioGroupItem value="sale" id="sale" />Sale</Label>
                                 </RadioGroup>
@@ -677,7 +679,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                             control={control}
                             name="paymentMethod"
                             render={({ field }) => (
-                                <RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex pt-2 gap-4">
+                                <RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex flex-col sm:flex-row pt-2 gap-4">
                                     <Label htmlFor="cash-payment" className="flex items-center gap-2 cursor-pointer"><RadioGroupItem value="cash" id="cash-payment" /><span>Cash</span></Label>
                                     <Label htmlFor="bank-payment" className="flex items-center gap-2 cursor-pointer"><RadioGroupItem value="bank" id="bank-payment" /><span>Bank</span></Label>
                                     <Label htmlFor="credit-payment" className="flex items-center gap-2 cursor-pointer"><RadioGroupItem value="credit" id="credit-payment" /><span>Credit</span></Label>
@@ -805,7 +807,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                             control={control}
                             name="ledgerType"
                             render={({ field }) => (
-                                <RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex pt-2 gap-4">
+                                <RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex flex-col sm:flex-row pt-2 gap-4">
                                     <Label className="flex items-center gap-2 cursor-pointer"><RadioGroupItem value="payable" />Payable (Expense on Credit)</Label>
                                     <Label className="flex items-center gap-2 cursor-pointer"><RadioGroupItem value="receivable" />Receivable (Sale on Credit)</Label>
                                 </RadioGroup>
