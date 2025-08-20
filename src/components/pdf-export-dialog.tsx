@@ -14,7 +14,7 @@ import {
 } from './ui/dialog';
 import { Label } from './ui/label';
 import { toast } from 'sonner';
-import { CalendarIcon, FileText } from 'lucide-react';
+import { CalendarIcon, FileText, Loader2 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { Calendar } from './ui/calendar';
@@ -23,6 +23,7 @@ import { cn } from '@/lib/utils';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import type { CashTransaction, BankTransaction, StockTransaction } from '@/lib/types';
+import { readData } from '@/app/actions';
 
 
 interface PdfExportDialogProps {
@@ -40,13 +41,14 @@ declare module 'jspdf' {
 }
 
 export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
-  const { cashTransactions, bankTransactions, stockTransactions, currency, banks } = useAppContext();
+  const { currency, banks } = useAppContext();
   const [dataSource, setDataSource] = useState<DataSource>('cash');
   const [selectedBankId, setSelectedBankId] = useState<string>('all');
   const [dateRange, setDateRange] = useState<{ from: Date; to: Date }>({
     from: startOfMonth(new Date()),
     to: endOfMonth(new Date()),
   });
+  const [isExporting, setIsExporting] = useState(false);
 
   const handleExport = async () => {
     if (!dateRange.from || !dateRange.to) {
@@ -56,241 +58,161 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
         return;
     }
 
-    const doc = new jsPDF();
-    doc.setFont('Helvetica', 'normal');
-    
-    const pageMargins = { left: 15, right: 15, top: 20, bottom: 20 };
-    let tableData: any[] = [];
-    let tableHeaders: any[] = [];
-    let columnStyles: any = {};
-    const generationDate = new Date();
-    
-    const formatCurrencyForPdf = (value: number) => {
-        if (!value) return '';
-        // Use "BDT" prefix instead of the symbol to ensure compatibility
-        const prefix = currency === 'BDT' ? 'BDT' : currency;
-        return `${prefix} ${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-    }
-    
-    const fromDate = new Date(dateRange.from);
-    fromDate.setHours(0,0,0,0);
+    setIsExporting(true);
 
-    const toDate = new Date(dateRange.to);
-    toDate.setHours(23,59,59,999);
-
-    let finalY = 0;
-
-    // Header
     try {
-      let title = '';
-      if (dataSource === 'cash') title = 'Cash Ledger';
-      if (dataSource === 'bank') {
-        const selectedBank = banks.find(b => b.id === selectedBankId);
-        title = selectedBank ? `Bank Ledger - ${selectedBank.name}` : 'Bank Ledger - All Accounts';
-      }
-      if (dataSource === 'stock') title = 'Stock Transactions';
-      
-      const centerX = doc.internal.pageSize.getWidth() / 2;
-      const rightAlignX = doc.internal.pageSize.getWidth() - pageMargins.right;
+        const fromDate = new Date(dateRange.from);
+        fromDate.setHours(0,0,0,0);
+        const toDate = new Date(dateRange.to);
+        toDate.setHours(23,59,59,999);
 
-      // Centered Titles
-      doc.setFontSize(18);
-      doc.text("Ha-Mim Iron Mart", centerX, 15, { align: 'center' });
-      
-      doc.setFontSize(14);
-      doc.text(title, centerX, 22, { align: 'center' });
+        // Fetch ALL data for the given range, ignoring what's in the state
+        const [cashTransactions, bankTransactions, stockTransactions] = await Promise.all([
+            readData({ tableName: 'cash_transactions', startDate: fromDate.toISOString(), endDate: toDate.toISOString() }),
+            readData({ tableName: 'bank_transactions', startDate: fromDate.toISOString(), endDate: toDate.toISOString() }),
+            readData({ tableName: 'stock_transactions', startDate: fromDate.toISOString(), endDate: toDate.toISOString() }),
+        ]);
 
-      // Left Aligned Dates
-      doc.setFontSize(9);
-      doc.text(`From: ${format(dateRange.from, 'dd-MM-yyyy')}`, pageMargins.left, 15);
-      doc.text(`To: ${format(dateRange.to, 'dd-MM-yyyy')}`, pageMargins.left, 20);
-      doc.text(`Generated: ${format(generationDate, 'dd-MM-yyyy HH:mm')}`, pageMargins.left, 25);
-      
-      finalY = 35; // Starting Y for the table
-
-    } catch (e) {
-      console.error("Failed to build PDF header:", e);
-      toast.error('PDF Error', {
-        description: 'Could not generate the PDF header.'
-      })
-    }
-    
-    
-    if (dataSource === 'cash' || dataSource === 'bank') {
-        let allTxs: (CashTransaction | BankTransaction)[] = dataSource === 'cash' ? [...cashTransactions] : [...bankTransactions];
-        if (dataSource === 'bank' && selectedBankId !== 'all') {
-            allTxs = allTxs.filter(tx => (tx as BankTransaction).bank_id === selectedBankId);
+        const doc = new jsPDF();
+        doc.setFont('Helvetica', 'normal');
+        
+        const pageMargins = { left: 15, right: 15, top: 20, bottom: 20 };
+        let tableData: any[] = [];
+        let tableHeaders: any[] = [];
+        let columnStyles: any = {};
+        const generationDate = new Date();
+        
+        const formatCurrencyForPdf = (value: number) => {
+            if (!value) return '';
+            const prefix = currency === 'BDT' ? 'BDT' : currency;
+            return `${prefix} ${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
         }
         
-        const txsBeforeRange = allTxs.filter(tx => new Date(tx.date) < fromDate);
-        
-        let balance = txsBeforeRange.reduce((acc, tx) => {
-             const amount = (tx.type === 'income' || tx.type === 'deposit') ? tx.amount : -tx.amount;
-             return acc + amount;
-        }, 0);
+        let finalY = 0;
 
-        const txsInRange = allTxs
-            .filter(tx => {
-                const txDate = new Date(tx.date);
-                return txDate >= fromDate && txDate <= toDate;
-            })
-            .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-
-        const { totalCredit, totalDebit } = txsInRange.reduce((acc, tx) => {
-            const isCredit = tx.type === 'income' || tx.type === 'deposit';
-            if (isCredit) {
-                acc.totalCredit += tx.amount;
-            } else {
-                acc.totalDebit += tx.amount;
-            }
-            return acc;
-        }, { totalCredit: 0, totalDebit: 0 });
+        // Header
+        let title = '';
+        if (dataSource === 'cash') title = 'Cash Ledger';
+        if (dataSource === 'bank') {
+            const selectedBank = banks.find(b => b.id === selectedBankId);
+            title = selectedBank ? `Bank Ledger - ${selectedBank.name}` : 'Bank Ledger - All Accounts';
+        }
+        if (dataSource === 'stock') title = 'Stock Transactions';
         
-        const rightAlignX = doc.internal.pageSize.getWidth() - pageMargins.right;
+        const centerX = doc.internal.pageSize.getWidth() / 2;
+        doc.setFontSize(18);
+        doc.text("Ha-Mim Iron Mart", centerX, 15, { align: 'center' });
+        doc.setFontSize(14);
+        doc.text(title, centerX, 22, { align: 'center' });
         doc.setFontSize(9);
-        doc.text(`Total Credit:`, rightAlignX - 45, 15, { align: 'left'});
-        doc.text(`Total Debit:`, rightAlignX - 45, 20, { align: 'left'});
-        doc.text(formatCurrencyForPdf(totalCredit), rightAlignX, 15, { align: 'right'});
-        doc.text(formatCurrencyForPdf(totalDebit), rightAlignX, 20, { align: 'right'});
+        doc.text(`From: ${format(dateRange.from, 'dd-MM-yyyy')}`, pageMargins.left, 15);
+        doc.text(`To: ${format(dateRange.to, 'dd-MM-yyyy')}`, pageMargins.left, 20);
+        doc.text(`Generated: ${format(generationDate, 'dd-MM-yyyy HH:mm')}`, pageMargins.left, 25);
         
-        const baseHeaders = ['Date', 'Description', 'Category', 'Debit', 'Credit', 'Balance'];
-        if (dataSource === 'bank' && selectedBankId === 'all') {
-            baseHeaders.splice(2, 0, 'Bank');
-        }
-        tableHeaders = [baseHeaders];
-
-        tableData = txsInRange.map(tx => {
-            const isCredit = tx.type === 'income' || tx.type === 'deposit';
-            balance += isCredit ? tx.amount : -tx.amount;
-            const baseRow = [
-                format(new Date(tx.date), 'dd-MM-yyyy'),
-                tx.description,
-                tx.category,
-                !isCredit ? formatCurrencyForPdf(tx.amount) : '',
-                isCredit ? formatCurrencyForPdf(tx.amount) : '',
-                formatCurrencyForPdf(balance),
-            ];
-            if (dataSource === 'bank' && selectedBankId === 'all') {
-                const bankName = banks.find(b => b.id === (tx as BankTransaction).bank_id)?.name || 'N/A';
-                baseRow.splice(2, 0, bankName);
+        finalY = 35;
+        
+        if (dataSource === 'cash' || dataSource === 'bank') {
+            let allTxs: (CashTransaction | BankTransaction)[] = dataSource === 'cash' ? [...cashTransactions] : [...bankTransactions];
+            if (dataSource === 'bank' && selectedBankId !== 'all') {
+                allTxs = allTxs.filter(tx => (tx as BankTransaction).bank_id === selectedBankId);
             }
-            return baseRow;
-        });
 
-        columnStyles = { 
-            0: { },
-            3: { halign: 'right' },
-            4: { halign: 'right' },
-            5: { halign: 'right', fontStyle: 'bold' },
-        };
-        if (dataSource === 'bank' && selectedBankId === 'all') {
-            columnStyles = {
-                ...columnStyles,
-                4: { halign: 'right'},
-                5: { halign: 'right'},
-                6: { halign: 'right', fontStyle: 'bold' }
-            }
-        }
-
-    } else { // Stock
-        const txsInRange = stockTransactions
-            .filter(tx => {
-                const txDate = new Date(tx.date);
-                return txDate >= fromDate && txDate <= toDate;
-            })
-            .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-
-        const { totalPurchaseValue, totalSaleValue } = txsInRange.reduce((acc, tx) => {
-            if (tx.type === 'purchase') {
-                acc.totalPurchaseValue += tx.weight * tx.pricePerKg;
-            } else {
-                acc.totalSaleValue += tx.weight * tx.pricePerKg;
-            }
-            return acc;
-        }, { totalPurchaseValue: 0, totalSaleValue: 0 });
-
-        const rightAlignX = doc.internal.pageSize.getWidth() - pageMargins.right;
-        doc.setFontSize(9);
-        doc.text(`Total Purchase:`, rightAlignX - 45, 15, { align: 'left'});
-        doc.text(`Total Sale:`, rightAlignX - 45, 20, { align: 'left'});
-        doc.text(formatCurrencyForPdf(totalPurchaseValue), rightAlignX, 15, { align: 'right'});
-        doc.text(formatCurrencyForPdf(totalSaleValue), rightAlignX, 20, { align: 'right'});
-
-        tableHeaders = [['Date', 'Description', 'Item', 'Purchase (kg)', 'Sale (kg)', 'Price/kg', 'Balance (kg)']];
-
-        const itemBalances: Record<string, number> = {};
-
-        tableData = txsInRange.map(tx => {
-            if (itemBalances[tx.stockItemName] === undefined) {
-                // Find initial balance for this item before the date range
-                const txsBeforeRange = stockTransactions.filter(t => 
-                    t.stockItemName === tx.stockItemName && new Date(t.date) < fromDate
-                );
-                itemBalances[tx.stockItemName] = txsBeforeRange.reduce((acc, t) => acc + (t.type === 'purchase' ? t.weight : -t.weight), 0);
-            }
+            const { totalCredit, totalDebit } = allTxs.reduce((acc, tx) => {
+                const isCredit = tx.type === 'income' || tx.type === 'deposit';
+                if (isCredit) acc.totalCredit += tx.amount;
+                else acc.totalDebit += tx.amount;
+                return acc;
+            }, { totalCredit: 0, totalDebit: 0 });
             
-            if (tx.type === 'purchase') {
-                itemBalances[tx.stockItemName] += tx.weight;
-            } else {
-                itemBalances[tx.stockItemName] -= tx.weight;
+            const rightAlignX = doc.internal.pageSize.getWidth() - pageMargins.right;
+            doc.setFontSize(9);
+            doc.text(`Total Credit:`, rightAlignX - 45, 15, { align: 'left'});
+            doc.text(`Total Debit:`, rightAlignX - 45, 20, { align: 'left'});
+            doc.text(formatCurrencyForPdf(totalCredit), rightAlignX, 15, { align: 'right'});
+            doc.text(formatCurrencyForPdf(totalDebit), rightAlignX, 20, { align: 'right'});
+            
+            const baseHeaders = ['Date', 'Description', 'Category', 'Debit', 'Credit'];
+            if (dataSource === 'bank' && selectedBankId === 'all') {
+                baseHeaders.splice(2, 0, 'Bank');
+            }
+            tableHeaders = [baseHeaders];
+
+            tableData = allTxs.sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime()).map(tx => {
+                const isCredit = tx.type === 'income' || tx.type === 'deposit';
+                const baseRow = [
+                    format(new Date(tx.date), 'dd-MM-yyyy'),
+                    tx.description,
+                    tx.category,
+                    !isCredit ? formatCurrencyForPdf(tx.amount) : '',
+                    isCredit ? formatCurrencyForPdf(tx.amount) : '',
+                ];
+                if (dataSource === 'bank' && selectedBankId === 'all') {
+                    const bankName = banks.find(b => b.id === (tx as BankTransaction).bank_id)?.name || 'N/A';
+                    baseRow.splice(2, 0, bankName);
+                }
+                return baseRow;
+            });
+
+            columnStyles = { 3: { halign: 'right' }, 4: { halign: 'right' }};
+            if (dataSource === 'bank' && selectedBankId === 'all') {
+                columnStyles = { ...columnStyles, 4: { halign: 'right'}, 5: { halign: 'right'}};
             }
 
-            return [
+        } else { // Stock
+            const { totalPurchaseValue, totalSaleValue } = stockTransactions.reduce((acc, tx) => {
+                const value = tx.weight * tx.pricePerKg;
+                if (tx.type === 'purchase') acc.totalPurchaseValue += value;
+                else acc.totalSaleValue += value;
+                return acc;
+            }, { totalPurchaseValue: 0, totalSaleValue: 0 });
+
+            const rightAlignX = doc.internal.pageSize.getWidth() - pageMargins.right;
+            doc.setFontSize(9);
+            doc.text(`Total Purchase:`, rightAlignX - 45, 15, { align: 'left'});
+            doc.text(`Total Sale:`, rightAlignX - 45, 20, { align: 'left'});
+            doc.text(formatCurrencyForPdf(totalPurchaseValue), rightAlignX, 15, { align: 'right'});
+            doc.text(formatCurrencyForPdf(totalSaleValue), rightAlignX, 20, { align: 'right'});
+
+            tableHeaders = [['Date', 'Description', 'Item', 'Type', 'Weight (kg)', 'Price/kg', 'Total Value']];
+
+            tableData = stockTransactions.sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime()).map(tx => [
                 format(new Date(tx.date), 'dd-MM-yyyy'),
                 tx.description || '',
                 tx.stockItemName,
-                tx.type === 'purchase' ? tx.weight.toFixed(2) : '',
-                tx.type === 'sale' ? tx.weight.toFixed(2) : '',
+                tx.type,
+                tx.weight.toFixed(2),
                 formatCurrencyForPdf(tx.pricePerKg),
-                itemBalances[tx.stockItemName].toFixed(2)
-            ];
+                formatCurrencyForPdf(tx.weight * tx.pricePerKg)
+            ]);
+            columnStyles = { 4: { halign: 'right' }, 5: { halign: 'right' }, 6: { halign: 'right' }};
+        }
+
+        doc.autoTable({
+            startY: finalY,
+            head: tableHeaders,
+            body: tableData,
+            theme: 'grid',
+            styles: { font: 'Helvetica', fontSize: 9 },
+            headStyles: { fillColor: [34, 49, 63], textColor: 255, fontStyle: 'bold', halign: 'center' },
+            columnStyles: columnStyles,
+            didDrawPage: (data) => {
+                doc.setFontSize(8);
+                doc.setTextColor(150);
+                doc.text('System Generated Report', data.settings.margin.left, doc.internal.pageSize.getHeight() - 10);
+                doc.text(`Page ${data.pageNumber}`, doc.internal.pageSize.getWidth() - data.settings.margin.right, doc.internal.pageSize.getHeight() - 10, { align: 'right' });
+            },
         });
-        columnStyles = { 
-            3: { halign: 'right' },
-            4: { halign: 'right' },
-            5: { halign: 'right' },
-            6: { halign: 'right', fontStyle: 'bold' },
-        };
+
+        const fileName = `${dataSource}_report_${selectedBankId !== 'all' ? banks.find(b=>b.id===selectedBankId)?.name.toLowerCase().replace(' ','_') : ''}_${format(new Date(), 'yyyy-MM-dd')}.pdf`;
+        doc.save(fileName);
+        toast.success('Export Successful', { description: 'Your PDF has been generated.' });
+        setIsOpen(false);
+    } catch (error) {
+        console.error("PDF Export failed:", error);
+        toast.error("Export Failed", { description: "Could not fetch data for the PDF report."})
+    } finally {
+        setIsExporting(false);
     }
-
-    doc.autoTable({
-        startY: finalY,
-        head: tableHeaders,
-        body: tableData,
-        theme: 'grid',
-        styles: {
-            font: 'Helvetica',
-            fontSize: 9,
-        },
-        headStyles: {
-            fillColor: [34, 49, 63],
-            textColor: 255,
-            fontStyle: 'bold',
-            halign: 'center', // Center align all headers
-        },
-        columnStyles: columnStyles,
-        didDrawPage: (data) => {
-            // Footer
-            doc.setFontSize(8);
-            doc.setTextColor(150);
-            doc.text(
-                'System Generated Report',
-                data.settings.margin.left,
-                doc.internal.pageSize.getHeight() - 10
-            );
-            doc.text(
-                `Page ${data.pageNumber}`,
-                data.settings.margin.right,
-                doc.internal.pageSize.getHeight() - 10,
-                { align: 'right' }
-            );
-        },
-    });
-
-    const fileName = `${dataSource}_report_${selectedBankId !== 'all' ? banks.find(b=>b.id===selectedBankId)?.name.toLowerCase().replace(' ','_') : ''}_${format(new Date(), 'yyyy-MM-dd')}.pdf`;
-    doc.save(fileName);
-    toast.success('Export Successful', { description: 'Your PDF has been generated.' });
-    setIsOpen(false);
   };
 
   return (
@@ -389,7 +311,10 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
         </div>
         <DialogFooter>
             <Button variant="outline" onClick={() => setIsOpen(false)}>Cancel</Button>
-            <Button onClick={handleExport}>Generate PDF</Button>
+            <Button onClick={handleExport} disabled={isExporting}>
+                {isExporting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Generate PDF
+            </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
