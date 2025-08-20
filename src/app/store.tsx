@@ -296,9 +296,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const checkSessionAndLoad = async () => {
         const session = await getSession();
         if (session) {
-            const cachedState = getInitialState(session.id);
-            setState(prev => ({ ...prev, ...cachedState, user: session, isLoading: true }));
-            // reloadData is called from the login form to pass the needsInitialBalance flag
+            setState(prev => ({ ...prev, user: session, isLoading: true }));
+            await reloadData();
         } else {
             setState(prev => ({ ...prev, isLoading: false, user: null }));
         }
@@ -983,5 +982,3 @@ export function useAppContext() {
   }
   return context;
 }
-
-    
