@@ -70,23 +70,45 @@ const baseSchema = z.object({
 });
 
 const cashSchema = baseSchema.extend({
-    amount: z.coerce.number({ required_error: "Amount is required." }).positive("Amount must be positive."),
+    amount: z.coerce.number().optional(),
     category: z.string({ required_error: "Category is required." }),
-    description: z.string().min(1, "Description is required."),
+    description: z.string().optional(),
+    stockItemName: z.string().optional(),
+    weight: z.coerce.number().optional(),
+    pricePerKg: z.coerce.number().optional(),
+}).superRefine((data, ctx) => {
+    if (data.category === 'Stock Purchase' || data.category === 'Stock Sale') {
+        if (!data.stockItemName) ctx.addIssue({ code: 'custom', message: 'Item name is required.', path: ['stockItemName'] });
+        if (!data.weight || data.weight <= 0) ctx.addIssue({ code: 'custom', message: 'Weight must be positive.', path: ['weight'] });
+        if (!data.pricePerKg || data.pricePerKg < 0) ctx.addIssue({ code: 'custom', message: 'Price must be positive.', path: ['pricePerKg'] });
+    } else {
+        if (!data.amount || data.amount <= 0) ctx.addIssue({ code: 'custom', message: 'Amount must be positive.', path: ['amount']});
+        if (!data.description || data.description.length === 0) ctx.addIssue({ code: 'custom', message: 'Description is required.', path: ['description']});
+    }
 });
 
+
 const bankSchema = baseSchema.extend({
-    amount: z.coerce.number({ required_error: "Amount is required." }).positive("Amount must be positive."),
+    amount: z.coerce.number().optional(),
     bank_id: z.string({ required_error: "Bank account is required." }),
     category: z.string({ required_error: "Category is required." }),
-    description: z.string().optional(), // Optional because it can be derived for settlements
+    description: z.string().optional(),
     contact_id: z.string().optional(),
+    stockItemName: z.string().optional(),
+    weight: z.coerce.number().optional(),
+    pricePerKg: z.coerce.number().optional(),
 }).superRefine((data, ctx) => {
     if (data.category === 'A/R Settlement' || data.category === 'A/P Settlement') {
         if (!data.contact_id) {
            ctx.addIssue({ code: 'custom', message: `A contact is required for settlements.`, path: ['contact_id'] });
         }
+        if (!data.amount || data.amount <= 0) ctx.addIssue({ code: 'custom', message: 'Amount must be positive.', path: ['amount']});
+    } else if (data.category === 'Stock Purchase' || data.category === 'Stock Sale') {
+        if (!data.stockItemName) ctx.addIssue({ code: 'custom', message: 'Item name is required.', path: ['stockItemName'] });
+        if (!data.weight || data.weight <= 0) ctx.addIssue({ code: 'custom', message: 'Weight must be positive.', path: ['weight'] });
+        if (!data.pricePerKg || data.pricePerKg < 0) ctx.addIssue({ code: 'custom', message: 'Price must be positive.', path: ['pricePerKg'] });
     } else {
+        if (!data.amount || data.amount <= 0) ctx.addIssue({ code: 'custom', message: 'Amount must be positive.', path: ['amount']});
         if (!data.description || data.description.length === 0) {
             ctx.addIssue({ code: 'custom', message: `Description is required for this category.`, path: ['description'] });
         }
@@ -192,6 +214,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
   const ledgerType = watch('ledgerType');
   const contact_id = watch('contact_id');
   const transferFrom = watch('transferFrom');
+  const cashCategoryName = watch('category');
   const bankCategoryName = watch('category');
   const [isNewStockItem, setIsNewStockItem] = useState(false);
 
@@ -214,39 +237,71 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
             case 'cash': {
                 const category = cashCategories.find(c => c.name === data.category);
                 if (!category || !category.direction) throw new Error("Selected category is invalid.");
-                await addCashTransaction({
-                    type: category.direction === 'credit' ? 'income' : 'expense',
-                    amount: data.amount!,
-                    description: data.description!,
-                    category: data.category!,
-                    date: transactionDate,
-                });
+                
+                if (data.category === 'Stock Purchase' || data.category === 'Stock Sale') {
+                    await addStockTransaction({
+                        type: data.category === 'Stock Purchase' ? 'purchase' : 'sale',
+                        stockItemName: data.stockItemName,
+                        weight: data.weight,
+                        pricePerKg: data.pricePerKg,
+                        paymentMethod: 'cash',
+                        description: `From cash transaction: ${data.category}`,
+                        date: transactionDate,
+                    });
+                } else {
+                    await addCashTransaction({
+                        type: category.direction === 'credit' ? 'income' : 'expense',
+                        amount: data.amount!,
+                        description: data.description!,
+                        category: data.category!,
+                        date: transactionDate,
+                    });
+                }
                 break;
             }
             case 'bank': {
                  const selectedCategory = bankCategories.find(c => c.name === data.category);
                  if(!selectedCategory) throw new Error("Could not find a valid direction for the selected category.");
 
-                 let contactName: string | undefined;
-                 if (data.category === 'A/R Settlement') {
-                     contactName = clients.find(c => c.id === data.contact_id)?.name;
-                 } else if (data.category === 'A/P Settlement') {
-                     contactName = vendors.find(v => v.id === data.contact_id)?.name;
-                 }
-                 const description = data.category === 'A/R Settlement' || data.category === 'A/P Settlement' 
-                    ? `Settlement for ${contactName}` 
-                    : data.description!;
-                 
-                 const type = selectedCategory.direction === 'credit' ? 'deposit' : 'withdrawal';
+                if (data.category === 'Stock Purchase' || data.category === 'Stock Sale') {
+                     await addStockTransaction({
+                        type: data.category === 'Stock Purchase' ? 'purchase' : 'sale',
+                        stockItemName: data.stockItemName,
+                        weight: data.weight,
+                        pricePerKg: data.pricePerKg,
+                        paymentMethod: 'bank',
+                        bank_id: data.bank_id,
+                        description: `From bank transaction: ${data.category}`,
+                        date: transactionDate,
+                    });
+                } else if (data.category === 'A/R Settlement' || data.category === 'A/P Settlement') {
+                    let contactName: string | undefined;
+                    if (data.category === 'A/R Settlement') {
+                        contactName = clients.find(c => c.id === data.contact_id)?.name;
+                    } else {
+                        contactName = vendors.find(v => v.id === data.contact_id)?.name;
+                    }
+                    if(!contactName) throw new Error("Contact not found for settlement.");
+                    
+                    await addBankTransaction({
+                        type: selectedCategory.direction === 'credit' ? 'deposit' : 'withdrawal',
+                        amount: data.amount!,
+                        description: `Settlement for ${contactName}`,
+                        category: data.category!,
+                        date: transactionDate,
+                        bank_id: data.bank_id!,
+                    }, data.contact_id, contactName);
 
-                 await addBankTransaction({
-                    type: type,
-                    amount: data.amount!,
-                    description: description,
-                    category: data.category!,
-                    date: transactionDate,
-                    bank_id: data.bank_id!,
-                }, data.contact_id, contactName);
+                } else {
+                    await addBankTransaction({
+                        type: selectedCategory.direction === 'credit' ? 'deposit' : 'withdrawal',
+                        amount: data.amount!,
+                        description: data.description!,
+                        category: data.category!,
+                        date: transactionDate,
+                        bank_id: data.bank_id!,
+                    });
+                }
                 break;
             }
             case 'stock':
@@ -419,6 +474,67 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
     { value: 'new', label: <span className="flex items-center gap-2"><Plus className="h-4 w-4"/>Add New</span>}
   ], [clients]);
   const currentLedgerContactItems = ledgerType === 'payable' ? vendorContactItems : clientContactItems;
+
+  const stockFields = (
+    <div className="space-y-4 animate-fade-in">
+        <Separator className="my-4"/>
+         <div className="space-y-2">
+            <Label>Item Name</Label>
+            {(cashCategoryName === 'Stock Purchase' || bankCategoryName === 'Stock Purchase') ? (
+                <div className="flex items-center gap-2">
+                    {isNewStockItem ? (
+                        <Input {...register('stockItemName')} placeholder="e.g. Iron Rod"/>
+                    ) : (
+                        <Controller
+                            control={control}
+                            name="stockItemName"
+                            render={({ field }) => (
+                                <ResponsiveSelect
+                                    onValueChange={field.onChange}
+                                    value={field.value}
+                                    title="Select an item"
+                                    placeholder="Select existing item"
+                                    className="flex-1"
+                                    items={stockItemsForPurchase}
+                                />
+                            )}
+                        />
+                    )}
+                    <Button type="button" variant="outline" size="sm" onClick={() => setIsNewStockItem(prev => !prev)}>
+                        {isNewStockItem ? 'Select Existing' : 'Add New'}
+                    </Button>
+                </div>
+            ) : (
+                <Controller
+                    control={control}
+                    name="stockItemName"
+                    render={({ field }) => (
+                        <ResponsiveSelect
+                            onValueChange={field.onChange}
+                            value={field.value}
+                            title="Select an item"
+                            placeholder="Select item to sell"
+                            items={stockItemsForSale}
+                        />
+                    )}
+                />
+            )}
+            {errors.stockItemName && <p className="text-sm text-destructive">{(errors.stockItemName as any).message}</p>}
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+                <Label>Weight (kg)</Label>
+                <Input type="number" step="0.01" {...register('weight')} placeholder="0.00"/>
+                {errors.weight && <p className="text-sm text-destructive">{(errors.weight as any).message}</p>}
+            </div>
+            <div className="space-y-2">
+                <Label>Price per kg</Label>
+                <Input type="number" step="0.01" {...register('pricePerKg')} placeholder="0.00"/>
+                {errors.pricePerKg && <p className="text-sm text-destructive">{(errors.pricePerKg as any).message}</p>}
+            </div>
+        </div>
+    </div>
+  )
   
   const transactionTypeItems: {value: TransactionType, label: string, icon: React.ElementType}[] = [
       { value: 'cash', label: 'Cash', icon: Wallet },
@@ -460,11 +576,13 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                   <div className="m-0 space-y-4 animate-fade-in">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="md:col-span-2">{dateField}</div>
-                        <div className="space-y-2">
-                            <Label htmlFor="amount">Amount</Label>
-                            <Input id="amount" type="number" step="0.01" {...register('amount')} placeholder="0.00"/>
-                            {errors.amount && <p className="text-sm text-destructive">{(errors.amount as any).message}</p>}
-                        </div>
+                        {(cashCategoryName !== 'Stock Purchase' && cashCategoryName !== 'Stock Sale') && (
+                            <div className="space-y-2">
+                                <Label htmlFor="amount">Amount</Label>
+                                <Input id="amount" type="number" step="0.01" {...register('amount')} placeholder="0.00"/>
+                                {errors.amount && <p className="text-sm text-destructive">{(errors.amount as any).message}</p>}
+                            </div>
+                        )}
                     </div>
                     <div className="space-y-2">
                         <Label>Category</Label>
@@ -483,11 +601,14 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                         />
                         {errors.category && <p className="text-sm text-destructive">{(errors.category as any).message}</p>}
                     </div>
+                    {(cashCategoryName !== 'Stock Purchase' && cashCategoryName !== 'Stock Sale') && (
                         <div className="space-y-2">
-                        <Label htmlFor="description-cash">Description</Label>
-                        <Input id="description-cash" {...register('description')} placeholder="e.g., Weekly groceries" />
-                        {errors.description && <p className="text-sm text-destructive">{(errors.description as any).message}</p>}
-                    </div>
+                            <Label htmlFor="description-cash">Description</Label>
+                            <Input id="description-cash" {...register('description')} placeholder="e.g., Weekly groceries" />
+                            {errors.description && <p className="text-sm text-destructive">{(errors.description as any).message}</p>}
+                        </div>
+                    )}
+                    {(cashCategoryName === 'Stock Purchase' || cashCategoryName === 'Stock Sale') && stockFields}
                   </div>
               )}
 
@@ -495,12 +616,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                   <div className="m-0 space-y-4 animate-fade-in">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
                         <div className="md:col-span-2">{dateField}</div>
-                        <div className="space-y-2">
-                            <Label htmlFor="amount-bank">Amount</Label>
-                            <Input id="amount-bank" type="number" step="0.01" {...register('amount')} placeholder="0.00"/>
-                            {errors.amount && <p className="text-sm text-destructive">{(errors.amount as any).message}</p>}
-                        </div>
-                        <div className="space-y-2">
+                         <div className="space-y-2">
                             <Label>Bank Account</Label>
                             <Controller
                                 control={control}
@@ -517,6 +633,13 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                             />
                             {errors.bank_id && <p className="text-sm text-destructive">{(errors.bank_id as any).message}</p>}
                         </div>
+                        {(bankCategoryName !== 'Stock Purchase' && bankCategoryName !== 'Stock Sale') && (
+                           <div className="space-y-2">
+                                <Label htmlFor="amount-bank">Amount</Label>
+                                <Input id="amount-bank" type="number" step="0.01" {...register('amount')} placeholder="0.00"/>
+                                {errors.amount && <p className="text-sm text-destructive">{(errors.amount as any).message}</p>}
+                            </div>
+                        )}
                     </div>
                         <div className="space-y-2">
                         <Label>Category</Label>
@@ -561,13 +684,14 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                             {errors.contact_id && <p className="text-sm text-destructive">{(errors.contact_id as any).message}</p>}
                         </div>
                     )}
-                    {(bankCategoryName !== 'A/R Settlement' && bankCategoryName !== 'A/P Settlement') && (
+                    {(bankCategoryName !== 'A/R Settlement' && bankCategoryName !== 'A/P Settlement' && bankCategoryName !== 'Stock Purchase' && bankCategoryName !== 'Stock Sale') && (
                         <div className="space-y-2">
                             <Label htmlFor="description-bank">Description</Label>
                             <Input id="description-bank" {...register('description')} placeholder="e.g., Monthly salary" />
                             {errors.description && <p className="text-sm text-destructive">{(errors.description as any).message}</p>}
                         </div>
                     )}
+                     {(bankCategoryName === 'Stock Purchase' || bankCategoryName === 'Stock Sale') && stockFields}
                   </div>
               )}
               
