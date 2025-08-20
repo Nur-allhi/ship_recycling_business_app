@@ -50,7 +50,7 @@ interface AppContextType extends AppState {
   loadDataForMonth: (month: Date) => Promise<void>;
   addCashTransaction: (tx: Omit<CashTransaction, 'id' | 'createdAt' | 'deletedAt'>) => Promise<void>;
   addBankTransaction: (tx: Omit<BankTransaction, 'id' | 'createdAt' | 'deletedAt'>, contactId?: string, contactName?: string) => Promise<void>;
-  addStockTransaction: (tx: Omit<StockTransaction, 'id' | 'createdAt' | 'deletedAt'> & { contact_id?: string, contact_name?: string }) => Promise<void>;
+  addStockTransaction: (tx: Omit<StockTransaction, 'id' | 'createdAt' | 'deletedAt'> & { contact_id?: string, contact_name?: string }, bank_id?: string) => Promise<void>;
   editCashTransaction: (originalTx: CashTransaction, updatedTxData: Partial<Omit<CashTransaction, 'id' | 'date' | 'createdAt'>>) => Promise<void>;
   editBankTransaction: (originalTx: BankTransaction, updatedTxData: Partial<Omit<BankTransaction, 'id' | 'date' | 'createdAt'>>) => Promise<void>;
   editStockTransaction: (originalTx: StockTransaction, updatedTxData: Partial<Omit<StockTransaction, 'id' | 'date' | 'createdAt'>>) => Promise<void>;
@@ -430,7 +430,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
     }
 
-  const addStockTransaction = async (tx: Omit<StockTransaction, 'id' | 'createdAt' | 'deletedAt'> & { contact_id?: string, contact_name?: string }) => {
+  const addStockTransaction = async (tx: Omit<StockTransaction, 'id' | 'createdAt' | 'deletedAt'> & { contact_id?: string, contact_name?: string }, bank_id?: string) => {
     const { contact_id, contact_name, ...stockTxData } = tx;
 
     try {
@@ -481,8 +481,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
               }
 
           } else if (tx.paymentMethod === 'bank') { 
+              if (!bank_id) throw new Error("Bank ID is required for bank payment.");
               const category = tx.type === 'purchase' ? 'Stock Purchase' : 'Stock Sale';
-              const newBankTx = { date: tx.date, amount: totalValue, description, category, type: tx.type === 'purchase' ? 'withdrawal' : 'deposit', bank_id: tx.bank_id!, linkedStockTxId: newStockTx.id };
+              const newBankTx = { date: tx.date, amount: totalValue, description, category, type: tx.type === 'purchase' ? 'withdrawal' : 'deposit', bank_id: bank_id, linkedStockTxId: newStockTx.id };
               const savedBankTx = await appendData({ tableName: 'bank_transactions', data: newBankTx, select: '*' });
               if (savedBankTx) {
                   setState(prev => ({
@@ -505,7 +506,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       try {
         await updateData({ tableName: 'cash_transactions', id: originalTx.id, data: updatedTxData });
         toast.success("Success", { description: "Cash transaction updated." });
-        await reloadData();
+        await updateBalances();
       } catch (error) {
             handleApiError(error);
       }
@@ -515,7 +516,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       try {
         await updateData({ tableName: 'bank_transactions', id: originalTx.id, data: updatedTxData });
         toast.success("Success", { description: "Bank transaction updated."});
-        await reloadData();
+        await updateBalances();
       } catch(error) {
             handleApiError(error);
       }
@@ -541,7 +542,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
               description: "Stock transaction and linked financial entry updated.",
               duration: 5000,
           });
-          await reloadData();
+          await updateBalances();
 
       } catch(error) {
           handleApiError(error);

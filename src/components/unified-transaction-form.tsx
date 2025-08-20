@@ -270,10 +270,9 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                         weight: data.weight,
                         pricePerKg: data.pricePerKg,
                         paymentMethod: 'bank',
-                        bank_id: data.bank_id,
                         description: `From bank transaction: ${data.category}`,
                         date: transactionDate,
-                    });
+                    }, data.bank_id);
                 } else if (data.category === 'A/R Settlement' || data.category === 'A/P Settlement') {
                     let contactName: string | undefined;
                     if (data.category === 'A/R Settlement') {
@@ -329,8 +328,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                     date: transactionDate,
                     contact_id: stockContactId,
                     contact_name: stockContactName,
-                    bank_id: data.bank_id,
-                });
+                }, data.bank_id);
                 break;
             case 'transfer':
                 const bankId = data.transferFrom === 'cash' ? data.transferToBankId : data.transferFromBankId;
