@@ -49,7 +49,7 @@ export function LoginForm() {
     defaultValues: {
         username: '',
         password: '',
-        rememberMe: false
+        rememberMe: true
     }
   });
 
@@ -91,8 +91,9 @@ export function LoginForm() {
   return (
     <Card className="w-full max-w-sm">
       <CardHeader className="text-center">
-        <div className="mx-auto mb-4">
+        <div className="mx-auto mb-4 flex flex-col items-center gap-2">
             <Logo className="h-16 w-16 text-primary" />
+            <h1 className="text-2xl font-bold text-primary">Ha-Mim Iron Mart</h1>
         </div>
         <CardTitle className="text-2xl">Login to your account</CardTitle>
         <CardDescription>Enter your email and password below.</CardDescription>
@@ -115,7 +116,7 @@ export function LoginForm() {
                 htmlFor="rememberMe"
                 className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
             >
-                Remember me
+                Remember me for 30 days
             </label>
            </div>
         </CardContent>
@@ -129,5 +130,3 @@ export function LoginForm() {
     </Card>
   );
 }
-
-    
