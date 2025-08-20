@@ -494,7 +494,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
       if (tx.paymentMethod === 'credit' && contact_id) {
           const ledgerType = tx.type === 'purchase' ? 'payable' : 'receivable';
-          const description = `${tx.type === 'purchase' ? 'Purchase' : 'Sale'} of ${tx.weight}kg of ${tx.stockItemName} on credit`;
+          const description = tx.description || `${tx.type === 'purchase' ? 'Purchase' : 'Sale'} of ${tx.weight}kg of ${tx.stockItemName} on credit`;
           
           let finalContactName = contact_name;
           if (!finalContactName) {
@@ -515,7 +515,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
               contact_name: finalContactName,
           });
       } else {
-          const description = `${tx.type === 'purchase' ? 'Purchase' : 'Sale'} of ${tx.weight}kg of ${tx.stockItemName}`;
+          const description = tx.description || `${tx.type === 'purchase' ? 'Purchase' : 'Sale'} of ${tx.weight}kg of ${tx.stockItemName}`;
           
           if (tx.paymentMethod === 'cash') {
               const category = tx.type === 'purchase' ? 'Stock Purchase' : 'Stock Sale';

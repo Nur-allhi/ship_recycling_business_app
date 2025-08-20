@@ -245,7 +245,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                         weight: data.weight,
                         pricePerKg: data.pricePerKg,
                         paymentMethod: 'cash',
-                        description: `From cash transaction: ${data.category}`,
+                        description: data.description,
                         date: transactionDate,
                     });
                 } else {
@@ -270,7 +270,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                         weight: data.weight,
                         pricePerKg: data.pricePerKg,
                         paymentMethod: 'bank',
-                        description: `From bank transaction: ${data.category}`,
+                        description: data.description,
                         date: transactionDate,
                     }, data.bank_id);
                 } else if (data.category === 'A/R Settlement' || data.category === 'A/P Settlement') {
@@ -530,6 +530,11 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                 <Input type="number" step="0.01" {...register('pricePerKg')} placeholder="0.00"/>
                 {errors.pricePerKg && <p className="text-sm text-destructive">{(errors.pricePerKg as any).message}</p>}
             </div>
+        </div>
+        <div className="space-y-2">
+            <Label htmlFor="description">Description (Optional)</Label>
+            <Input {...register('description')} placeholder="e.g., Invoice #123, for John Doe" />
+            {errors.description && <p className="text-sm text-destructive">{(errors.description as any).message}</p>}
         </div>
     </div>
   )
