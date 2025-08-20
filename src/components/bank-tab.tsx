@@ -23,7 +23,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { ArrowUpCircle, ArrowDownCircle, ArrowRightLeft, Pencil, History, Trash2, CheckSquare, ChevronLeft, ChevronRight, Eye, EyeOff, ArrowUpDown, Loader2 } from "lucide-react"
+import { ArrowUpCircle, ArrowDownCircle, ArrowRightLeft, Pencil, History, Trash2, CheckSquare, ChevronLeft, ChevronRight, Eye, EyeOff, ArrowUpDown, Loader2, DollarSign } from "lucide-react"
 import type { BankTransaction } from "@/lib/types"
 import { EditTransactionSheet } from "./edit-transaction-sheet"
 import { DeleteConfirmationDialog } from "./delete-confirmation-dialog"
@@ -227,7 +227,7 @@ export function BankTab() {
             <TableHead className="text-center">
                 <Button variant="ghost" onClick={() => handleSort('date')}>Date {renderSortArrow('date')}</Button>
             </TableHead>
-            <TableHead className="text-center">
+            <TableHead>
                 <Button variant="ghost" onClick={() => handleSort('description')}>Description {renderSortArrow('description')}</Button>
             </TableHead>
             <TableHead className="text-center">
@@ -395,22 +395,24 @@ export function BankTab() {
                     Current Balance: <span className="font-bold text-primary font-mono">{formatCurrency(currentBankBalance)}</span>
                     </CardDescription>
                 </div>
-                <div className="flex items-center gap-2 self-center sm:self-auto">
+                <div className="flex items-center flex-wrap gap-2 self-start sm:self-center">
                     <ResponsiveSelect
                         value={selectedBankId}
                         onValueChange={(value) => setSelectedBankId(value)}
                         title="Select a Bank Account"
                         placeholder="All Banks"
-                        className="w-[180px]"
+                        className="min-w-[150px]"
                         items={bankAccountItems}
                     />
-                    <Button variant="outline" size="icon" onClick={goToPreviousMonth} className="h-9 w-9">
-                        <ChevronLeft className="h-4 w-4" />
-                    </Button>
-                    <span className="text-sm font-medium w-28 sm:w-32 text-center">{format(currentMonth, "MMMM yyyy")}</span>
-                    <Button variant="outline" size="icon" onClick={goToNextMonth} className="h-9 w-9">
-                        <ChevronRight className="h-4 w-4" />
-                    </Button>
+                    <div className="flex items-center gap-2">
+                        <Button variant="outline" size="icon" onClick={goToPreviousMonth} className="h-9 w-9">
+                            <ChevronLeft className="h-4 w-4" />
+                        </Button>
+                        <span className="text-sm font-medium w-28 text-center">{format(currentMonth, "MMMM yyyy")}</span>
+                        <Button variant="outline" size="icon" onClick={goToNextMonth} className="h-9 w-9">
+                            <ChevronRight className="h-4 w-4" />
+                        </Button>
+                    </div>
                 </div>
             </div>
              {isAdmin && <div className="flex flex-col items-center justify-center gap-2 pt-4">
