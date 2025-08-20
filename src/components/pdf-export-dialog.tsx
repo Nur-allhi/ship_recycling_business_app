@@ -40,8 +40,9 @@ declare module 'jspdf' {
 }
 
 export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
-  const { cashTransactions, bankTransactions, stockTransactions, currency } = useAppContext();
+  const { cashTransactions, bankTransactions, stockTransactions, currency, banks } = useAppContext();
   const [dataSource, setDataSource] = useState<DataSource>('cash');
+  const [selectedBankId, setSelectedBankId] = useState<string>('all');
   const [dateRange, setDateRange] = useState<{ from: Date; to: Date }>({
     from: startOfMonth(new Date()),
     to: endOfMonth(new Date()),
@@ -83,7 +84,10 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
     try {
       let title = '';
       if (dataSource === 'cash') title = 'Cash Ledger';
-      if (dataSource === 'bank') title = 'Bank Ledger';
+      if (dataSource === 'bank') {
+        const selectedBank = banks.find(b => b.id === selectedBankId);
+        title = selectedBank ? `Bank Ledger - ${selectedBank.name}` : 'Bank Ledger - All Accounts';
+      }
       if (dataSource === 'stock') title = 'Stock Transactions';
       
       const centerX = doc.internal.pageSize.getWidth() / 2;
@@ -113,7 +117,10 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
     
     
     if (dataSource === 'cash' || dataSource === 'bank') {
-        const allTxs: (CashTransaction | BankTransaction)[] = dataSource === 'cash' ? [...cashTransactions] : [...bankTransactions];
+        let allTxs: (CashTransaction | BankTransaction)[] = dataSource === 'cash' ? [...cashTransactions] : [...bankTransactions];
+        if (dataSource === 'bank' && selectedBankId !== 'all') {
+            allTxs = allTxs.filter(tx => (tx as BankTransaction).bank_id === selectedBankId);
+        }
         
         const txsBeforeRange = allTxs.filter(tx => new Date(tx.date) < fromDate);
         
@@ -146,18 +153,28 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
         doc.text(formatCurrencyForPdf(totalCredit), rightAlignX, 15, { align: 'right'});
         doc.text(formatCurrencyForPdf(totalDebit), rightAlignX, 20, { align: 'right'});
         
-        tableHeaders = [['Date', 'Description', 'Category', 'Debit', 'Credit', 'Balance']];
+        const baseHeaders = ['Date', 'Description', 'Category', 'Debit', 'Credit', 'Balance'];
+        if (dataSource === 'bank' && selectedBankId === 'all') {
+            baseHeaders.splice(2, 0, 'Bank');
+        }
+        tableHeaders = [baseHeaders];
+
         tableData = txsInRange.map(tx => {
             const isCredit = tx.type === 'income' || tx.type === 'deposit';
             balance += isCredit ? tx.amount : -tx.amount;
-            return [
+            const baseRow = [
                 format(new Date(tx.date), 'dd-MM-yyyy'),
                 tx.description,
                 tx.category,
                 !isCredit ? formatCurrencyForPdf(tx.amount) : '',
                 isCredit ? formatCurrencyForPdf(tx.amount) : '',
                 formatCurrencyForPdf(balance),
-            ]
+            ];
+            if (dataSource === 'bank' && selectedBankId === 'all') {
+                const bankName = banks.find(b => b.id === (tx as BankTransaction).bank_id)?.name || 'N/A';
+                baseRow.splice(2, 0, bankName);
+            }
+            return baseRow;
         });
 
         columnStyles = { 
@@ -166,6 +183,14 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
             4: { halign: 'right' },
             5: { halign: 'right', fontStyle: 'bold' },
         };
+        if (dataSource === 'bank' && selectedBankId === 'all') {
+            columnStyles = {
+                ...columnStyles,
+                4: { halign: 'right'},
+                5: { halign: 'right'},
+                6: { halign: 'right', fontStyle: 'bold' }
+            }
+        }
 
     } else { // Stock
         const txsInRange = stockTransactions
@@ -262,7 +287,8 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
         },
     });
 
-    doc.save(`${dataSource}_report_${format(new Date(), 'yyyy-MM-dd')}.pdf`);
+    const fileName = `${dataSource}_report_${selectedBankId !== 'all' ? banks.find(b=>b.id===selectedBankId)?.name.toLowerCase().replace(' ','_') : ''}_${format(new Date(), 'yyyy-MM-dd')}.pdf`;
+    doc.save(fileName);
     toast.success('Export Successful', { description: 'Your PDF has been generated.' });
     setIsOpen(false);
   };
@@ -290,6 +316,24 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
               </SelectContent>
             </Select>
           </div>
+
+          {dataSource === 'bank' && (
+            <div className="space-y-2 animate-fade-in">
+              <Label htmlFor="bank-account">Bank Account</Label>
+              <Select value={selectedBankId} onValueChange={setSelectedBankId}>
+                <SelectTrigger id="bank-account">
+                  <SelectValue placeholder="Select a bank" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Banks (Consolidated)</SelectItem>
+                  {banks.map(bank => (
+                    <SelectItem key={bank.id} value={bank.id}>{bank.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>From</Label>
