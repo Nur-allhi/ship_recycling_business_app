@@ -294,11 +294,14 @@ export async function batchImportData(dataToImport: z.infer<typeof ImportDataSch
     
     try {
         for (const table of tables) {
-             // This will attempt to delete all rows. It's the most reliable way to clear a table.
-             const { error: deleteError } = await supabase.from(table).delete().or('id.gt.0,id.neq.00000000-0000-0000-0000-000000000000');
-             if (deleteError && deleteError.code !== '42P01') {
-                console.error(`Failed to clear ${table}: ${deleteError.message}`);
-                throw new Error(`Failed to clear ${table}: ${deleteError.message}`);
+             const { error: deleteError } = await supabase.from(table).delete().gt('id', 0);
+             if (deleteError && deleteError.code !== '42P01') { // 42P01 = table does not exist
+                // Fallback for non-numeric IDs
+                const { error: fallbackError } = await supabase.from(table).delete().neq('id', 'a-non-existent-value');
+                 if (fallbackError && fallbackError.code !== '42P01') {
+                    console.error(`Failed to clear ${table}: ${fallbackError.message}`);
+                    throw new Error(`Failed to clear ${table}: ${fallbackError.message}`);
+                 }
              }
         }
 
@@ -337,8 +340,7 @@ export async function deleteAllData() {
         
         const tables = ['payment_installments', 'ap_ar_transactions', 'cash_transactions', 'bank_transactions', 'stock_transactions', 'initial_stock', 'categories', 'vendors', 'clients', 'banks', 'activity_log', 'monthly_snapshots'];
         for (const tableName of tables) {
-            // Unconditional delete to safely clear the table regardless of column types.
-            const { error } = await supabase.from(tableName).delete().or('id.gt.0,id.neq.00000000-0000-0000-0000-000000000000');
+            const { error } = await supabase.from(tableName).delete().neq('id', 'this-is-a-placeholder-that-will-never-match');
             if (error && error.code !== '42P01') {
                 console.error(`Error deleting from ${tableName}:`, error);
                 throw new Error(`Failed to delete data from ${tableName}.`);
@@ -771,6 +773,8 @@ export async function recordDirectPayment(input: z.infer<typeof RecordDirectPaym
     }
 }
     
+    
+
     
 
     
