@@ -83,7 +83,7 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
         const generationDate = new Date();
         
         const formatCurrencyForPdf = (value: number) => {
-            if (!value) return '';
+            if (!value && value !== 0) return '';
             const prefix = currency === 'BDT' ? 'BDT' : currency;
             return `${prefix} ${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
         }
@@ -119,8 +119,8 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
 
             const { totalCredit, totalDebit } = allTxs.reduce((acc, tx) => {
                 const isCredit = tx.type === 'income' || tx.type === 'deposit';
-                if (isCredit) acc.totalCredit += tx.amount;
-                else acc.totalDebit += tx.amount;
+                if (isCredit) acc.totalCredit += tx.actual_amount;
+                else acc.totalDebit += tx.actual_amount;
                 return acc;
             }, { totalCredit: 0, totalDebit: 0 });
             
@@ -131,20 +131,21 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
             doc.text(formatCurrencyForPdf(totalCredit), rightAlignX, 15, { align: 'right'});
             doc.text(formatCurrencyForPdf(totalDebit), rightAlignX, 20, { align: 'right'});
             
-            const baseHeaders = ['Date', 'Description', 'Category', 'Debit', 'Credit'];
+            const baseHeaders = ['Date', 'Description', 'Category', 'Expected', 'Actual', 'Diff.', 'Reason'];
             if (dataSource === 'bank' && selectedBankId === 'all') {
                 baseHeaders.splice(2, 0, 'Bank');
             }
             tableHeaders = [baseHeaders];
 
             tableData = allTxs.sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime()).map(tx => {
-                const isCredit = tx.type === 'income' || tx.type === 'deposit';
                 const baseRow = [
                     format(new Date(tx.date), 'dd-MM-yyyy'),
                     tx.description,
                     tx.category,
-                    !isCredit ? formatCurrencyForPdf(tx.amount) : '',
-                    isCredit ? formatCurrencyForPdf(tx.amount) : '',
+                    formatCurrencyForPdf(tx.expected_amount),
+                    formatCurrencyForPdf(tx.actual_amount),
+                    formatCurrencyForPdf(tx.difference),
+                    tx.difference_reason || '',
                 ];
                 if (dataSource === 'bank' && selectedBankId === 'all') {
                     const bankName = banks.find(b => b.id === (tx as BankTransaction).bank_id)?.name || 'N/A';
@@ -153,16 +154,15 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
                 return baseRow;
             });
 
-            columnStyles = { 3: { halign: 'right' }, 4: { halign: 'right' }};
+            columnStyles = { 3: { halign: 'right' }, 4: { halign: 'right' }, 5: { halign: 'right' }};
             if (dataSource === 'bank' && selectedBankId === 'all') {
-                columnStyles = { ...columnStyles, 4: { halign: 'right'}, 5: { halign: 'right'}};
+                columnStyles = { ...columnStyles, 4: { halign: 'right'}, 5: { halign: 'right'}, 6: { halign: 'right' }};
             }
 
         } else { // Stock
             const { totalPurchaseValue, totalSaleValue } = stockTransactions.reduce((acc, tx) => {
-                const value = tx.weight * tx.pricePerKg;
-                if (tx.type === 'purchase') acc.totalPurchaseValue += value;
-                else acc.totalSaleValue += value;
+                if (tx.type === 'purchase') acc.totalPurchaseValue += tx.actual_amount;
+                else acc.totalSaleValue += tx.actual_amount;
                 return acc;
             }, { totalPurchaseValue: 0, totalSaleValue: 0 });
 
@@ -173,7 +173,7 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
             doc.text(formatCurrencyForPdf(totalPurchaseValue), rightAlignX, 15, { align: 'right'});
             doc.text(formatCurrencyForPdf(totalSaleValue), rightAlignX, 20, { align: 'right'});
 
-            tableHeaders = [['Date', 'Description', 'Item', 'Type', 'Weight (kg)', 'Price/kg', 'Total Value']];
+            tableHeaders = [['Date', 'Description', 'Item', 'Type', 'Weight (kg)', 'Expected', 'Actual', 'Diff.', 'Reason']];
 
             tableData = stockTransactions.sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime()).map(tx => [
                 format(new Date(tx.date), 'dd-MM-yyyy'),
@@ -181,10 +181,12 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
                 tx.stockItemName,
                 tx.type,
                 tx.weight.toFixed(2),
-                formatCurrencyForPdf(tx.pricePerKg),
-                formatCurrencyForPdf(tx.weight * tx.pricePerKg)
+                formatCurrencyForPdf(tx.expected_amount),
+                formatCurrencyForPdf(tx.actual_amount),
+                formatCurrencyForPdf(tx.difference),
+                tx.difference_reason || '',
             ]);
-            columnStyles = { 4: { halign: 'right' }, 5: { halign: 'right' }, 6: { halign: 'right' }};
+            columnStyles = { 4: { halign: 'right' }, 5: { halign: 'right' }, 6: { halign: 'right' }, 7: { halign: 'right' }};
         }
 
         doc.autoTable({
@@ -192,7 +194,7 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
             head: tableHeaders,
             body: tableData,
             theme: 'grid',
-            styles: { font: 'Helvetica', fontSize: 9 },
+            styles: { font: 'Helvetica', fontSize: 8 },
             headStyles: { fillColor: [34, 49, 63], textColor: 255, fontStyle: 'bold', halign: 'center' },
             columnStyles: columnStyles,
             didDrawPage: (data) => {

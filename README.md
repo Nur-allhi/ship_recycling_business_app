@@ -168,5 +168,32 @@ END;
 $$ LANGUAGE plpgsql;
 ```
     
+To enable tracking of Expected vs. Actual amounts, please run the following SQL code:
 
+```sql
+-- Add new columns to cash_transactions
+ALTER TABLE cash_transactions RENAME COLUMN amount TO actual_amount;
+ALTER TABLE cash_transactions ADD COLUMN expected_amount NUMERIC NOT NULL DEFAULT 0;
+ALTER TABLE cash_transactions ADD COLUMN difference NUMERIC NOT NULL DEFAULT 0;
+ALTER TABLE cash_transactions ADD COLUMN difference_reason TEXT;
+
+-- Add new columns to bank_transactions
+ALTER TABLE bank_transactions RENAME COLUMN amount TO actual_amount;
+ALTER TABLE bank_transactions ADD COLUMN expected_amount NUMERIC NOT NULL DEFAULT 0;
+ALTER TABLE bank_transactions ADD COLUMN difference NUMERIC NOT NULL DEFAULT 0;
+ALTER TABLE bank_transactions ADD COLUMN difference_reason TEXT;
+
+-- Add new columns to stock_transactions
+ALTER TABLE stock_transactions ADD COLUMN expected_amount NUMERIC NOT NULL DEFAULT 0;
+ALTER TABLE stock_transactions ADD COLUMN actual_amount NUMERIC NOT NULL DEFAULT 0;
+ALTER TABLE stock_transactions ADD COLUMN difference NUMERIC NOT NULL DEFAULT 0;
+ALTER TABLE stock_transactions ADD COLUMN difference_reason TEXT;
+
+-- Backfill data for existing records if necessary.
+-- Set expected_amount equal to actual_amount for all old records.
+UPDATE cash_transactions SET expected_amount = actual_amount WHERE expected_amount = 0;
+UPDATE bank_transactions SET expected_amount = actual_amount WHERE expected_amount = 0;
+UPDATE stock_transactions SET expected_amount = (weight * "pricePerKg"), actual_amount = (weight * "pricePerKg") WHERE expected_amount = 0;
+
+```
     

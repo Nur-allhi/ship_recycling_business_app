@@ -3,7 +3,10 @@ export interface Transaction {
   id: string;
   date: string;
   description: string;
-  amount: number;
+  expected_amount: number;
+  actual_amount: number;
+  difference: number;
+  difference_reason?: string;
   category: string;
   lastEdited?: string;
   deletedAt?: string;
@@ -39,13 +42,18 @@ export interface StockTransaction {
   stockItemName: string;
   type: 'purchase' | 'sale';
   weight: number; // in kg
-  pricePerKg: number;
+  pricePerKg: number; // This becomes the expected price
   paymentMethod: 'cash' | 'bank' | 'credit';
   bank_id?: string | null;
   description?: string;
   lastEdited?: string;
   deletedAt?: string;
   createdAt: string;
+  // New fields for payment discrepancies
+  expected_amount: number;
+  actual_amount: number;
+  difference: number;
+  difference_reason?: string;
 }
 
 export interface User {

@@ -528,11 +528,11 @@ export async function getBalances() {
 
         // If no snapshot, calculate initial state from the beginning of time
         if (!latestSnapshot) {
-            cashBalance = (cashData || []).reduce((acc, tx) => acc + (tx.type === 'income' ? tx.amount : -tx.amount), 0);
+            cashBalance = (cashData || []).reduce((acc, tx) => acc + (tx.type === 'income' ? tx.actual_amount : -tx.actual_amount), 0);
             
             bankBalances = {};
             (bankData || []).forEach(tx => {
-                bankBalances[tx.bank_id] = (bankBalances[tx.bank_id] || 0) + (tx.type === 'deposit' ? tx.amount : -tx.amount);
+                bankBalances[tx.bank_id] = (bankBalances[tx.bank_id] || 0) + (tx.type === 'deposit' ? tx.actual_amount : -tx.actual_amount);
             });
 
             stockPortfolio = {};
@@ -549,10 +549,10 @@ export async function getBalances() {
 
         } else {
             // Apply transactions that happened *after* the snapshot was taken
-            (cashData || []).forEach(tx => cashBalance += (tx.type === 'income' ? tx.amount : -tx.amount));
+            (cashData || []).forEach(tx => cashBalance += (tx.type === 'income' ? tx.actual_amount : -tx.actual_amount));
             
             (bankData || []).forEach(tx => {
-                bankBalances[tx.bank_id] = (bankBalances[tx.bank_id] || 0) + (tx.type === 'deposit' ? tx.amount : -tx.amount);
+                bankBalances[tx.bank_id] = (bankBalances[tx.bank_id] || 0) + (tx.type === 'deposit' ? tx.actual_amount : -tx.actual_amount);
             });
              
             (ledgerData || []).forEach(tx => {
@@ -685,12 +685,14 @@ export async function recordPaymentAgainstTotal(input: z.infer<typeof RecordPaym
         // Create a single financial transaction for the total payment
         const financialTxData = {
             date: input.payment_date,
-            amount: input.payment_amount,
+            actual_amount: input.payment_amount,
+            expected_amount: input.payment_amount, // For settlements, expected and actual are the same.
+            difference: 0,
             description: `Payment ${input.ledger_type === 'payable' ? 'to' : 'from'} ${input.contact_name}`,
             category: input.ledger_type === 'payable' ? 'A/P Settlement' : 'A/R Settlement',
         };
         
-        const logDescription = `Recorded payment of ${financialTxData.amount} ${input.ledger_type === 'payable' ? 'to' : 'from'} ${input.contact_name} via ${input.payment_method}`;
+        const logDescription = `Recorded payment of ${financialTxData.actual_amount} ${input.ledger_type === 'payable' ? 'to' : 'from'} ${input.contact_name} via ${input.payment_method}`;
 
         if (input.payment_method === 'cash') {
             await supabase.from('cash_transactions').insert({
@@ -743,7 +745,9 @@ export async function recordDirectPayment(input: z.infer<typeof RecordDirectPaym
         // Log the corresponding financial transaction
         const financialTxData = {
             date: input.date,
-            amount: input.amount,
+            actual_amount: input.amount,
+            expected_amount: input.amount, // For settlements, expected and actual are the same
+            difference: 0,
             description: input.description,
             category: input.category,
         };
@@ -778,5 +782,6 @@ export async function recordDirectPayment(input: z.infer<typeof RecordDirectPaym
     
 
     
+
 
 

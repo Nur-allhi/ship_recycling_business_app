@@ -4,7 +4,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import type { CashTransaction, BankTransaction, StockItem, StockTransaction, User, Vendor, Client, LedgerTransaction, PaymentInstallment, Bank, Category } from '@/lib/types';
 import { toast } from 'sonner';
-import { readData, appendData, updateData, deleteData, readDeletedData, restoreData, exportAllData, batchImportData, deleteAllData, logout as serverLogout, recordPaymentAgainstTotal, recordDirectPayment, getBalances, login as serverLogin, hasUsers } from '@/app/actions';
+import { readData, appendData, updateData, deleteData, readDeletedData, restoreData, exportAllData, batchImportData, deleteAllData, logout as serverLogout, recordPaymentAgainstTotal, getBalances, login as serverLogin, hasUsers } from '@/app/actions';
 import { format, subDays, startOfMonth, endOfMonth } from 'date-fns';
 import { supabase } from '@/lib/supabase';
 import { saveAs } from 'file-saver';
@@ -49,8 +49,8 @@ interface AppContextType extends AppState {
   reloadData: (options?: { force?: boolean; needsInitialBalance?: boolean }) => Promise<void>;
   loadRecycleBinData: () => Promise<void>;
   loadDataForMonth: (month: Date) => Promise<void>;
-  addCashTransaction: (tx: Omit<CashTransaction, 'id' | 'createdAt' | 'deletedAt'>, contactId?: string, contactName?: string) => Promise<void>;
-  addBankTransaction: (tx: Omit<BankTransaction, 'id' | 'createdAt' | 'deletedAt'>, contactId?: string, contactName?: string) => Promise<void>;
+  addCashTransaction: (tx: Omit<CashTransaction, 'id' | 'createdAt' | 'deletedAt'>) => Promise<void>;
+  addBankTransaction: (tx: Omit<BankTransaction, 'id' | 'createdAt' | 'deletedAt'>) => Promise<void>;
   addStockTransaction: (tx: Omit<StockTransaction, 'id' | 'createdAt' | 'deletedAt'> & { contact_id?: string, contact_name?: string }, bank_id?: string) => Promise<void>;
   editCashTransaction: (originalTx: CashTransaction, updatedTxData: Partial<Omit<CashTransaction, 'id' | 'date' | 'createdAt'>>) => Promise<void>;
   editBankTransaction: (originalTx: BankTransaction, updatedTxData: Partial<Omit<BankTransaction, 'id' | 'date' | 'createdAt'>>) => Promise<void>;
@@ -89,7 +89,7 @@ interface AppContextType extends AppState {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 const CACHE_KEY = 'haMimIronMartCache';
-const CACHE_VERSION = '1.1'; // Increment version to invalidate old cache
+const CACHE_VERSION = '1.2'; // Increment version to invalidate old cache
 
 const defaultState: AppState = {
     cashBalance: 0,
@@ -448,26 +448,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [state.loadedMonths, state.cashTransactions, state.bankTransactions, state.stockTransactions, state.ledgerTransactions, handleApiError]);
   
-    const addCashTransaction = async (tx: Omit<CashTransaction, 'id' | 'createdAt' | 'deletedAt'>, contactId?: string, contactName?: string) => {
+    const addCashTransaction = async (tx: Omit<CashTransaction, 'id' | 'createdAt' | 'deletedAt'>) => {
         try {
-            if ((tx.category === 'A/R Settlement' || tx.category === 'A/P Settlement') && contactId && contactName) {
-                await recordDirectPayment({
-                    payment_method: 'cash',
-                    date: tx.date,
-                    amount: tx.amount,
-                    category: tx.category,
-                    description: tx.description,
-                    contact_id: contactId,
-                    contact_name: contactName,
-                });
-            } else {
-                const newTx = await appendData({ tableName: 'cash_transactions', data: tx, logDescription: `Added cash transaction: ${tx.description}`, select: '*' });
-                if (newTx) {
-                    setState(prev => ({
-                        ...prev,
-                        cashTransactions: [newTx, ...prev.cashTransactions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
-                    }));
-                }
+            const newTx = await appendData({ tableName: 'cash_transactions', data: tx, logDescription: `Added cash transaction: ${tx.description}`, select: '*' });
+            if (newTx) {
+                setState(prev => ({
+                    ...prev,
+                    cashTransactions: [newTx, ...prev.cashTransactions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+                }));
             }
             await updateBalances();
         } catch (error) {
@@ -475,27 +463,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
     };
 
-    const addBankTransaction = async (tx: Omit<BankTransaction, 'id' | 'createdAt' | 'deletedAt'>, contactId?: string, contactName?: string) => {
+    const addBankTransaction = async (tx: Omit<BankTransaction, 'id' | 'createdAt' | 'deletedAt'>) => {
         try {
-            if ((tx.category === 'A/R Settlement' || tx.category === 'A/P Settlement') && contactId && contactName) {
-                await recordDirectPayment({
-                    payment_method: 'bank',
-                    bank_id: tx.bank_id,
-                    date: tx.date,
-                    amount: tx.amount,
-                    category: tx.category,
-                    description: tx.description,
-                    contact_id: contactId,
-                    contact_name: contactName,
-                });
-            } else {
-                const newTx = await appendData({ tableName: 'bank_transactions', data: tx, logDescription: `Added bank transaction: ${tx.description}`, select: '*' });
-                 if (newTx) {
-                    setState(prev => ({
-                        ...prev,
-                        bankTransactions: [newTx, ...prev.bankTransactions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
-                    }));
-                }
+            const newTx = await appendData({ tableName: 'bank_transactions', data: tx, logDescription: `Added bank transaction: ${tx.description}`, select: '*' });
+            if (newTx) {
+                setState(prev => ({
+                    ...prev,
+                    bankTransactions: [newTx, ...prev.bankTransactions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+                }));
             }
             await updateBalances();
         } catch (error) {
@@ -531,8 +506,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
         stockTransactions: [newStockTx, ...prev.stockTransactions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
       }));
 
-      const totalValue = tx.weight * tx.pricePerKg;
-
       if (tx.paymentMethod === 'credit' && contact_id) {
           const ledgerType = tx.type === 'purchase' ? 'payable' : 'receivable';
           const description = tx.description || `${tx.type === 'purchase' ? 'Purchase' : 'Sale'} of ${tx.weight}kg of ${tx.stockItemName} on credit`;
@@ -550,7 +523,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           await addLedgerTransaction({
               type: ledgerType,
               description,
-              amount: totalValue,
+              amount: tx.expected_amount, // The credit is for the full expected amount
               date: tx.date,
               contact_id: contact_id,
               contact_name: finalContactName,
@@ -560,7 +533,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
           
           if (tx.paymentMethod === 'cash') {
               const category = tx.type === 'purchase' ? 'Cash Out' : 'Cash In';
-              const newCashTx = { date: tx.date, amount: totalValue, description, category, type: tx.type === 'purchase' ? 'expense' : 'income', linkedStockTxId: newStockTx.id };
+              const newCashTx = {
+                  date: tx.date,
+                  expected_amount: tx.expected_amount,
+                  actual_amount: tx.actual_amount,
+                  difference: tx.difference,
+                  difference_reason: tx.difference_reason,
+                  description,
+                  category,
+                  type: tx.type === 'purchase' ? 'expense' : 'income',
+                  linkedStockTxId: newStockTx.id
+              };
               const savedCashTx = await appendData({ tableName: 'cash_transactions', data: newCashTx, select: '*' });
               if (savedCashTx) {
                   setState(prev => ({
@@ -572,7 +555,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
           } else if (tx.paymentMethod === 'bank') { 
               if (!bank_id) throw new Error("Bank ID is required for bank payment.");
               const category = tx.type === 'purchase' ? 'Withdrawal' : 'Deposit';
-              const newBankTx = { date: tx.date, amount: totalValue, description, category, type: tx.type === 'purchase' ? 'withdrawal' : 'deposit', bank_id: bank_id, linkedStockTxId: newStockTx.id };
+              const newBankTx = {
+                  date: tx.date,
+                  expected_amount: tx.expected_amount,
+                  actual_amount: tx.actual_amount,
+                  difference: tx.difference,
+                  difference_reason: tx.difference_reason,
+                  description,
+                  category,
+                  type: tx.type === 'purchase' ? 'withdrawal' : 'deposit',
+                  bank_id: bank_id,
+                  linkedStockTxId: newStockTx.id
+              };
               const savedBankTx = await appendData({ tableName: 'bank_transactions', data: newBankTx, select: '*' });
               if (savedBankTx) {
                   setState(prev => ({
@@ -622,7 +616,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
               if (activeLinkedTx) {
                   const newAmount = (updatedTxData.weight || originalTx.weight) * (updatedTxData.pricePerKg || originalTx.pricePerKg);
                   const newDescription = `${updatedTxData.type || originalTx.type === 'purchase' ? 'Purchase' : 'Sale'} of ${updatedTxData.weight || originalTx.weight}kg of ${updatedTxData.stockItemName || originalTx.stockItemName}`;
-                  await updateData({ tableName, id: activeLinkedTx.id, data: { amount: newAmount, description: newDescription } });
+                  await updateData({ tableName, id: activeLinkedTx.id, data: { actual_amount: newAmount, expected_amount: newAmount, description: newDescription } });
               }
           }
           
@@ -757,8 +751,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if(from === 'cash') {
             if(!bankId) throw new Error("A destination bank account is required.");
             const txDescription = description || 'Transfer to Bank';
-            const cashTx = await appendData({ tableName: 'cash_transactions', data: { date: transactionDate, amount, description: txDescription, category: 'Cash Out', type: 'expense' }, select: '*' });
-            const bankTx = await appendData({ tableName: 'bank_transactions', data: { date: transactionDate, amount, description: txDescription, category: 'Deposit', type: 'deposit', bank_id: bankId! }, select: '*' });
+            const cashTx = await appendData({ tableName: 'cash_transactions', data: { date: transactionDate, actual_amount: amount, expected_amount: amount, difference: 0, description: txDescription, category: 'Cash Out', type: 'expense' }, select: '*' });
+            const bankTx = await appendData({ tableName: 'bank_transactions', data: { date: transactionDate, actual_amount: amount, expected_amount: amount, difference: 0, description: txDescription, category: 'Deposit', type: 'deposit', bank_id: bankId! }, select: '*' });
             setState(prev => ({
               ...prev,
               cashTransactions: [cashTx, ...prev.cashTransactions].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
@@ -768,8 +762,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         } else { // from bank
             if(!bankId) throw new Error("A source bank account is required.");
             const txDescription = description || 'Transfer from Bank';
-            const bankTx = await appendData({ tableName: 'bank_transactions', data: { date: transactionDate, amount, description: txDescription, category: 'Withdrawal', type: 'withdrawal', bank_id: bankId! }, select: '*' });
-            const cashTx = await appendData({ tableName: 'cash_transactions', data: { date: transactionDate, amount, description: txDescription, category: 'Cash In', type: 'income' }, select: '*' });
+            const bankTx = await appendData({ tableName: 'bank_transactions', data: { date: transactionDate, actual_amount: amount, expected_amount: amount, difference: 0, description: txDescription, category: 'Withdrawal', type: 'withdrawal', bank_id: bankId! }, select: '*' });
+            const cashTx = await appendData({ tableName: 'cash_transactions', data: { date: transactionDate, actual_amount: amount, expected_amount: amount, difference: 0, description: txDescription, category: 'Cash In', type: 'income' }, select: '*' });
             setState(prev => ({
               ...prev,
               cashTransactions: [cashTx, ...prev.cashTransactions].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
@@ -828,12 +822,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (state.user?.role !== 'admin') return;
     try {
         const transactionDate = date.toISOString();
-        const cashData = { date: transactionDate, type: 'income' as const, amount: cash, description: 'Initial Balance', category: 'Cash In' };
+        const cashData = { date: transactionDate, type: 'income' as const, actual_amount: cash, expected_amount: cash, difference: 0, description: 'Initial Balance', category: 'Cash In' };
         
         const bankData = Object.entries(bankTotals).filter(([, amount]) => amount > 0).map(([bankId, amount]) => ({
             date: transactionDate,
             type: 'deposit' as const,
-            amount,
+            actual_amount: amount,
+            expected_amount: amount,
+            difference: 0,
             description: 'Initial Balance',
             category: 'Deposit',
             bank_id: bankId,

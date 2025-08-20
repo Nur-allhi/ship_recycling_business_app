@@ -53,6 +53,11 @@ const formSchema = z.object({
   // A/R A/P specific
   ledgerType: z.enum(['payable', 'receivable']).optional(),
 
+  // Discrepancy tracking
+  expected_amount: z.coerce.number().optional(),
+  actual_amount: z.coerce.number().optional(),
+  difference_reason: z.string().optional(),
+
 
 }).superRefine((data, ctx) => {
     // This superRefine is now less critical as we switch form schemas, but kept for safety.
@@ -70,7 +75,9 @@ const baseSchema = z.object({
 });
 
 const cashSchema = baseSchema.extend({
-    amount: z.coerce.number().positive(),
+    expected_amount: z.coerce.number().positive("Transaction value must be positive."),
+    actual_amount: z.coerce.number().nonnegative("Paid amount is required."),
+    difference_reason: z.string().optional(),
     category: z.string({ required_error: "Category is required." }),
     description: z.string().min(1, "Description is required."),
     contact_id: z.string().optional(),
@@ -83,7 +90,9 @@ const cashSchema = baseSchema.extend({
 });
 
 const bankSchema = baseSchema.extend({
-    amount: z.coerce.number().positive(),
+    expected_amount: z.coerce.number().positive("Transaction value must be positive."),
+    actual_amount: z.coerce.number().nonnegative("Paid amount is required."),
+    difference_reason: z.string().optional(),
     bank_id: z.string({ required_error: "Bank account is required." }),
     category: z.string({ required_error: "Category is required." }),
     description: z.string().min(1, "Description is required."),
@@ -107,6 +116,10 @@ const stockSchema = baseSchema.extend({
     bank_id: z.string().optional(),
     contact_id: z.string().optional(),
     newContact: z.string().optional(),
+    // Discrepancy fields for stock
+    expected_amount: z.coerce.number().positive(),
+    actual_amount: z.coerce.number().nonnegative(),
+    difference_reason: z.string().optional(),
 }).superRefine((data, ctx) => {
     if (data.paymentMethod === 'bank' && !data.bank_id) {
         ctx.addIssue({ code: 'custom', message: 'Bank account is required.', path: ['bank_id'] });
@@ -178,7 +191,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
     vendors,
     clients,
     banks,
-    reloadData,
+    currency,
   } = useAppContext();
   
   const currentSchema = formSchemas[transactionType];
@@ -200,6 +213,25 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
   const bankCategoryName = watch('category');
   const [isNewStockItem, setIsNewStockItem] = useState(false);
 
+  const expectedAmount = watch('expected_amount');
+  const actualAmount = watch('actual_amount');
+  const weight = watch('weight');
+  const pricePerKg = watch('pricePerKg');
+  const difference = useMemo(() => {
+    if (typeof actualAmount === 'number' && typeof expectedAmount === 'number') {
+        return actualAmount - expectedAmount;
+    }
+    return 0;
+  }, [expectedAmount, actualAmount]);
+  
+  useEffect(() => {
+    if (transactionType === 'stock' && weight && pricePerKg) {
+      const calculatedAmount = weight * pricePerKg;
+      setValue('expected_amount', calculatedAmount);
+      setValue('actual_amount', calculatedAmount);
+    }
+  }, [weight, pricePerKg, transactionType, setValue]);
+
   useEffect(() => {
     reset({
         date: new Date(),
@@ -215,71 +247,40 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
   const onSubmit = async (data: any) => {
     const transactionDate = data.date.toISOString();
     try {
+        const finalDifference = data.actual_amount - data.expected_amount;
+        
         switch(transactionType) {
             case 'cash': {
                 const category = cashCategories.find(c => c.name === data.category);
                 if (!category) throw new Error("Selected category is invalid.");
                 
-                if (data.category === 'A/R Settlement' || data.category === 'A/P Settlement') {
-                    let contactName: string | undefined;
-                    if (data.category === 'A/R Settlement') {
-                        contactName = clients.find(c => c.id === data.contact_id)?.name;
-                    } else {
-                        contactName = vendors.find(v => v.id === data.contact_id)?.name;
-                    }
-                    if(!contactName) throw new Error("Contact not found for settlement.");
-
-                    await addCashTransaction({
-                        type: category.direction === 'credit' ? 'income' : 'expense',
-                        amount: data.amount!,
-                        description: `Settlement for ${contactName}`,
-                        category: data.category!,
-                        date: transactionDate,
-                    }, data.contact_id, contactName);
-
-                } else {
-                    await addCashTransaction({
-                        type: category.direction === 'credit' ? 'income' : 'expense',
-                        amount: data.amount!,
-                        description: data.description!,
-                        category: data.category!,
-                        date: transactionDate,
-                    });
-                }
+                await addCashTransaction({
+                    type: category.direction === 'credit' ? 'income' : 'expense',
+                    expected_amount: data.expected_amount,
+                    actual_amount: data.actual_amount,
+                    difference: finalDifference,
+                    difference_reason: data.difference_reason,
+                    description: data.description!,
+                    category: data.category!,
+                    date: transactionDate,
+                });
                 break;
             }
             case 'bank': {
                  const selectedCategory = bankCategories.find(c => c.name === data.category);
                  if(!selectedCategory) throw new Error("Could not find a valid direction for the selected category.");
 
-                if (data.category === 'A/R Settlement' || data.category === 'A/P Settlement') {
-                    let contactName: string | undefined;
-                    if (data.category === 'A/R Settlement') {
-                        contactName = clients.find(c => c.id === data.contact_id)?.name;
-                    } else {
-                        contactName = vendors.find(v => v.id === data.contact_id)?.name;
-                    }
-                    if(!contactName) throw new Error("Contact not found for settlement.");
-                    
-                    await addBankTransaction({
-                        type: selectedCategory.direction === 'credit' ? 'deposit' : 'withdrawal',
-                        amount: data.amount!,
-                        description: `Settlement for ${contactName}`,
-                        category: data.category!,
-                        date: transactionDate,
-                        bank_id: data.bank_id!,
-                    }, data.contact_id, contactName);
-
-                } else {
-                    await addBankTransaction({
-                        type: selectedCategory.direction === 'credit' ? 'deposit' : 'withdrawal',
-                        amount: data.amount!,
-                        description: data.description!,
-                        category: data.category!,
-                        date: transactionDate,
-                        bank_id: data.bank_id!,
-                    });
-                }
+                 await addBankTransaction({
+                    type: selectedCategory.direction === 'credit' ? 'deposit' : 'withdrawal',
+                    expected_amount: data.expected_amount,
+                    actual_amount: data.actual_amount,
+                    difference: finalDifference,
+                    difference_reason: data.difference_reason,
+                    description: data.description!,
+                    category: data.category!,
+                    date: transactionDate,
+                    bank_id: data.bank_id!,
+                 });
                 break;
             }
             case 'stock':
@@ -305,6 +306,10 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                     paymentMethod: data.paymentMethod!,
                     description: data.description,
                     date: transactionDate,
+                    expected_amount: data.expected_amount,
+                    actual_amount: data.actual_amount,
+                    difference: finalDifference,
+                    difference_reason: data.difference_reason,
                     contact_id: stockContactId,
                     contact_name: stockContactName,
                 }, data.bank_id);
@@ -460,6 +465,37 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
       { value: 'ap_ar', label: 'A/R & A/P', icon: UserPlus },
   ];
 
+  const renderDiscrepancyFields = () => (
+    <>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+                <Label htmlFor="expected_amount">Transaction Value</Label>
+                <Input id="expected_amount" type="number" step="0.01" {...register('expected_amount')} placeholder="e.g., Invoice total"/>
+                {errors.expected_amount && <p className="text-sm text-destructive">{(errors.expected_amount as any).message}</p>}
+            </div>
+            <div className="space-y-2">
+                <Label htmlFor="actual_amount">Amount Paid/Received</Label>
+                <Input id="actual_amount" type="number" step="0.01" {...register('actual_amount')} placeholder="e.g., Actual cash paid"/>
+                {errors.actual_amount && <p className="text-sm text-destructive">{(errors.actual_amount as any).message}</p>}
+            </div>
+        </div>
+        {difference !== 0 && (
+             <div className="p-3 border rounded-md bg-muted/50 space-y-2 animate-fade-in">
+                <div className="flex justify-between items-center">
+                    <Label>Difference</Label>
+                    <span className={cn("font-bold", difference > 0 ? "text-accent" : "text-destructive")}>
+                        {new Intl.NumberFormat('en-US', { style: 'currency', currency: currency, currencyDisplay: 'symbol' }).format(difference)}
+                    </span>
+                </div>
+                <div className="space-y-2">
+                    <Label htmlFor="difference_reason">Reason for Difference</Label>
+                    <Input id="difference_reason" {...register('difference_reason')} placeholder="e.g., Discount, Rounding, Late fee" />
+                </div>
+            </div>
+        )}
+    </>
+  );
+
   return (
     <>
       <DialogHeader>
@@ -508,42 +544,12 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                         />
                         {errors.category && <p className="text-sm text-destructive">{(errors.category as any).message}</p>}
                     </div>
-                     {cashCategoryName === 'A/R Settlement' && (
-                        <div className="space-y-2 animate-fade-in">
-                        <Label>Client</Label>
-                        <Controller
-                            control={control}
-                            name="contact_id"
-                            render={({ field }) => (
-                                <ResponsiveSelect onValueChange={field.onChange} value={field.value} title="Select a Client" placeholder="Select a client" items={clientContactItems.filter(c => c.value !== 'new')} />
-                            )}
-                        />
-                        {errors.contact_id && <p className="text-sm text-destructive">{(errors.contact_id as any).message}</p>}
-                    </div>
-                    )}
-                    {cashCategoryName === 'A/P Settlement' && (
-                            <div className="space-y-2 animate-fade-in">
-                            <Label>Vendor</Label>
-                            <Controller
-                                control={control}
-                                name="contact_id"
-                                render={({ field }) => (
-                                    <ResponsiveSelect onValueChange={field.onChange} value={field.value} title="Select a Vendor" placeholder="Select a vendor" items={vendorContactItems.filter(c => c.value !== 'new')} />
-                                )}
-                            />
-                            {errors.contact_id && <p className="text-sm text-destructive">{(errors.contact_id as any).message}</p>}
-                        </div>
-                    )}
                     <div className="space-y-2">
                         <Label htmlFor="description-cash">Description</Label>
                         <Input id="description-cash" {...register('description')} placeholder="e.g., Weekly groceries" />
                         {errors.description && <p className="text-sm text-destructive">{(errors.description as any).message}</p>}
                     </div>
-                    <div className="space-y-2">
-                        <Label htmlFor="amount">Amount</Label>
-                        <Input id="amount" type="number" step="0.01" {...register('amount')} placeholder="0.00"/>
-                        {errors.amount && <p className="text-sm text-destructive">{(errors.amount as any).message}</p>}
-                    </div>
+                    {renderDiscrepancyFields()}
                   </div>
               )}
 
@@ -584,42 +590,12 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                         />
                         {errors.category && <p className="text-sm text-destructive">{(errors.category as any).message}</p>}
                     </div>
-                    {bankCategoryName === 'A/R Settlement' && (
-                            <div className="space-y-2 animate-fade-in">
-                            <Label>Client</Label>
-                            <Controller
-                                control={control}
-                                name="contact_id"
-                                render={({ field }) => (
-                                    <ResponsiveSelect onValueChange={field.onChange} value={field.value} title="Select a Client" placeholder="Select a client" items={clientContactItems.filter(c => c.value !== 'new')} />
-                                )}
-                            />
-                            {errors.contact_id && <p className="text-sm text-destructive">{(errors.contact_id as any).message}</p>}
-                        </div>
-                    )}
-                    {bankCategoryName === 'A/P Settlement' && (
-                            <div className="space-y-2 animate-fade-in">
-                            <Label>Vendor</Label>
-                            <Controller
-                                control={control}
-                                name="contact_id"
-                                render={({ field }) => (
-                                    <ResponsiveSelect onValueChange={field.onChange} value={field.value} title="Select a Vendor" placeholder="Select a vendor" items={vendorContactItems.filter(c => c.value !== 'new')} />
-                                )}
-                            />
-                            {errors.contact_id && <p className="text-sm text-destructive">{(errors.contact_id as any).message}</p>}
-                        </div>
-                    )}
                     <div className="space-y-2">
                         <Label htmlFor="description-bank">Description</Label>
                         <Input id="description-bank" {...register('description')} placeholder="e.g., Monthly salary" />
                         {errors.description && <p className="text-sm text-destructive">{(errors.description as any).message}</p>}
                     </div>
-                     <div className="space-y-2">
-                        <Label htmlFor="amount-bank">Amount</Label>
-                        <Input id="amount-bank" type="number" step="0.01" {...register('amount')} placeholder="0.00"/>
-                        {errors.amount && <p className="text-sm text-destructive">{(errors.amount as any).message}</p>}
-                    </div>
+                    {renderDiscrepancyFields()}
                   </div>
               )}
               
@@ -710,6 +686,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                         />
                         {errors.paymentMethod && <p className="text-sm text-destructive">{(errors.paymentMethod as any).message}</p>}
                     </div>
+                     {stockPaymentMethod !== 'credit' && renderDiscrepancyFields()}
                     {stockPaymentMethod === 'bank' && (
                         <div className="space-y-2 animate-fade-in">
                         <Label>Bank Account</Label>
