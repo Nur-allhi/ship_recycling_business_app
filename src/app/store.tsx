@@ -4,7 +4,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useMemo } from 'react';
 import type { CashTransaction, BankTransaction, StockItem, StockTransaction, User, Vendor, Client, LedgerTransaction, PaymentInstallment, Bank, Category, MonthlySnapshot } from '@/lib/types';
 import { toast } from 'sonner';
-import { readData, appendData, updateData, deleteData, readDeletedData, restoreData, exportAllData, batchImportData, deleteAllData, logout as serverLogout, recordPaymentAgainstTotal, getBalances, login as serverLogin, hasUsers, emptyRecycleBin as serverEmptyRecycleBin, recordDirectPayment, updateStockTransaction } from '@/app/actions';
+import { readData, appendData, updateData, deleteData, readDeletedData, restoreData, exportAllData, batchImportData, deleteAllData, logout as serverLogout, recordPaymentAgainstTotal, getBalances, login as serverLogin, hasUsers, emptyRecycleBin as serverEmptyRecycleBin, recordDirectPayment, updateStockTransaction, setInitialBalances as serverSetInitialBalances } from '@/app/actions';
 import { format, subDays, startOfMonth, endOfMonth, parseISO } from 'date-fns';
 import { supabase } from '@/lib/supabase';
 import { saveAs } from 'file-saver';
@@ -76,7 +76,7 @@ interface AppContextType extends AppState {
   setWastagePercentage: (percentage: number) => void;
   setCurrency: (currency: string) => void;
   setShowStockValue: (show: boolean) => void;
-  setInitialBalances: (cash: number, bankTotals: Record<string, number>, date: Date) => void;
+  setInitialBalances: (cash: number, bankTotals: Record<string, number>, date: Date) => Promise<void>;
   openInitialBalanceDialog: () => void;
   closeInitialBalanceDialog: () => void;
   addInitialStockItem: (item: { name: string; weight: number; pricePerKg: number }) => void;
@@ -581,8 +581,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const setInitialBalances = async (cash: number, bankTotals: Record<string, number>, date: Date) => {
-      await reloadData();
-  }
+    try {
+      await serverSetInitialBalances({ cash, bankTotals, date: date.toISOString() });
+      await reloadData({ force: true });
+      closeInitialBalanceDialog();
+    } catch (error) {
+      handleApiError(error);
+      throw error; // Re-throw to be caught in the component
+    }
+  };
 
   const addInitialStockItem = async (item: { name: string; weight: number; pricePerKg: number }) => {
       const newItem = await appendData({ tableName: 'initial_stock', data: { name: item.name, weight: item.weight, purchasePricePerKg: item.pricePerKg }, select: '*' });

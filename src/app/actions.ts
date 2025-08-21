@@ -869,9 +869,55 @@ export async function updateStockTransaction(input: z.infer<typeof UpdateStockTr
     return { success: true };
 }    
 
+const SetInitialBalancesSchema = z.object({
+  cash: z.number().nonnegative(),
+  bankTotals: z.record(z.string(), z.number().nonnegative()),
+  date: z.string(),
+});
+
+export async function setInitialBalances(input: z.infer<typeof SetInitialBalancesSchema>) {
+    const session = await getSession();
+    if (session?.role !== 'admin') throw new Error("Only admins can set initial balances.");
+
+    const supabase = await getAuthenticatedSupabaseClient();
+    
+    // First, delete any existing initial balance entries to prevent duplicates.
+    await supabase.from('cash_transactions').delete().eq('category', 'Initial Balance');
+    await supabase.from('bank_transactions').delete().eq('category', 'Initial Balance');
+
+    const cashTx = {
+        date: input.date,
+        type: 'income',
+        category: 'Initial Balance',
+        description: 'Initial cash balance set.',
+        expected_amount: input.cash,
+        actual_amount: input.cash,
+        difference: 0,
+    };
+    const { error: cashError } = await supabase.from('cash_transactions').insert(cashTx);
+    if(cashError) throw new Error(`Failed to set cash balance: ${cashError.message}`);
+
+    const bankTxs = Object.entries(input.bankTotals).map(([bank_id, amount]) => ({
+        date: input.date,
+        type: 'deposit',
+        category: 'Initial Balance',
+        description: 'Initial bank balance set.',
+        bank_id,
+        expected_amount: amount,
+        actual_amount: amount,
+        difference: 0,
+    }));
+    
+    if (bankTxs.length > 0) {
+        const { error: bankError } = await supabase.from('bank_transactions').insert(bankTxs);
+        if(bankError) throw new Error(`Failed to set bank balances: ${bankError.message}`);
+    }
+
+    await logActivity("Set initial cash and bank balances.");
+    return { success: true };
+}
     
 
-    
 
 
 

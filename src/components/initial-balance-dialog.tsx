@@ -15,7 +15,7 @@ import {
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { toast } from 'sonner';
-import { Landmark, Wallet, Boxes, PlusCircle, Trash2, CalendarIcon } from 'lucide-react';
+import { Landmark, Wallet, Boxes, PlusCircle, Trash2, CalendarIcon, Loader2 } from 'lucide-react';
 import { Separator } from './ui/separator';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { Calendar } from './ui/calendar';
@@ -40,6 +40,7 @@ export function InitialBalanceDialog({ isOpen }: InitialBalanceDialogProps) {
   const [stockItems, setStockItems] = useState<StockItemEntry[]>([]);
   const [date, setDate] = useState<Date>(new Date());
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
 
   const handleAddStockItem = () => {
@@ -64,51 +65,61 @@ export function InitialBalanceDialog({ isOpen }: InitialBalanceDialogProps) {
   }
 
   const handleSave = async () => {
-    const cash = parseFloat(cashRef.current?.value || '0');
-    if (isNaN(cash) || cash < 0) {
-      toast.error(
-        'Invalid Input',
-        {description: 'Please enter a valid, non-negative number for the cash balance.',}
-      );
-      return;
-    }
-    
-    const bankTotals: Record<string, number> = {};
-    for (const bank of banks) {
-      const value = parseFloat(bankRefs.current[bank.id]?.value || '0');
-      if (isNaN(value) || value < 0) {
-        toast.error(
+    setIsSaving(true);
+    try {
+        const cash = parseFloat(cashRef.current?.value || '0');
+        if (isNaN(cash) || cash < 0) {
+          toast.error(
             'Invalid Input',
-            {description: `Please enter a valid, non-negative number for ${bank.name}.`,}
-        );
-        return;
-      }
-      bankTotals[bank.id] = value;
-    }
-
-    for (const item of stockItems) {
-        // Treat empty string as 0 for validation and saving.
-        const weight = item.weight === '' ? 0 : Number(item.weight);
-        const pricePerKg = item.pricePerKg === '' ? 0 : Number(item.pricePerKg);
-
-        if (!item.name || isNaN(weight) || weight <= 0 || isNaN(pricePerKg) || pricePerKg < 0) {
-            toast.error('Invalid Stock Item', {
-                description: `Please ensure all fields for "${item.name || 'new item'}" are filled correctly.`
-            });
-            return;
+            {description: 'Please enter a valid, non-negative number for the cash balance.',}
+          );
+          return;
         }
-    }
-    
-    // Pass the selected date to the context function
-    setInitialBalances(cash, bankTotals, date);
+        
+        const bankTotals: Record<string, number> = {};
+        for (const bank of banks) {
+          const value = parseFloat(bankRefs.current[bank.id]?.value || '0');
+          if (isNaN(value) || value < 0) {
+            toast.error(
+                'Invalid Input',
+                {description: `Please enter a valid, non-negative number for ${bank.name}.`,}
+            );
+            return;
+          }
+          bankTotals[bank.id] = value;
+        }
 
-    // Now, add the stock items one by one.
-    for (const item of stockItems) {
-        await addInitialStockItem({ 
-            name: item.name, 
-            weight: Number(item.weight), 
-            pricePerKg: Number(item.pricePerKg) 
-        });
+        for (const item of stockItems) {
+            // Treat empty string as 0 for validation and saving.
+            const weight = item.weight === '' ? 0 : Number(item.weight);
+            const pricePerKg = item.pricePerKg === '' ? 0 : Number(item.pricePerKg);
+
+            if (!item.name || isNaN(weight) || weight <= 0 || isNaN(pricePerKg) || pricePerKg < 0) {
+                toast.error('Invalid Stock Item', {
+                    description: `Please ensure all fields for "${item.name || 'new item'}" are filled correctly.`
+                });
+                return;
+            }
+        }
+        
+        // Pass the selected date to the context function
+        await setInitialBalances(cash, bankTotals, date);
+
+        // Now, add the stock items one by one.
+        for (const item of stockItems) {
+            await addInitialStockItem({ 
+                name: item.name, 
+                weight: Number(item.weight), 
+                pricePerKg: Number(item.pricePerKg) 
+            });
+        }
+
+        toast.success("Initial Balances Set", { description: "Your initial financial and stock balances have been saved." });
+        
+    } catch(e: any) {
+        toast.error("Failed to Save", { description: e.message || "An unknown error occurred." });
+    } finally {
+        setIsSaving(false);
     }
   };
 
@@ -224,7 +235,10 @@ export function InitialBalanceDialog({ isOpen }: InitialBalanceDialogProps) {
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={closeInitialBalanceDialog}>Set Balances Later</Button>
-          <Button onClick={handleSave}>Save and Continue</Button>
+          <Button onClick={handleSave} disabled={isSaving}>
+            {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Save and Continue
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
