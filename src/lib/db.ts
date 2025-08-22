@@ -14,7 +14,7 @@ interface AppState {
 
 export interface SyncQueueItem {
     id?: number;
-    action: 'appendData' | 'updateData' | 'deleteData' | 'restoreData' | 'recordPaymentAgainstTotal' | 'recordDirectPayment' | 'transferFunds' | 'setInitialBalances' | 'deleteCategory' | 'addStockTransaction' | 'addInitialStockItem' | 'batchImportData' | 'deleteAllData' | 'updateStockTransaction';
+    action: 'appendData' | 'updateData' | 'deleteData' | 'restoreData' | 'recordPaymentAgainstTotal' | 'recordDirectPayment' | 'transferFunds' | 'setInitialBalances' | 'deleteCategory' | 'addStockTransaction' | 'addInitialStockItem' | 'batchImportData' | 'deleteAllData' | 'updateStockTransaction' | 'recordAdvancePayment';
     payload: any;
     timestamp: number;
 }
@@ -38,10 +38,10 @@ export class AppDatabase extends Dexie {
 
     constructor() {
         super('ShipShapeLedgerDB');
-        this.version(6).stores({
+        this.version(8).stores({
             app_state: 'id',
-            cash_transactions: '++id, date, category, linkedStockTxId',
-            bank_transactions: '++id, date, bank_id, category, linkedStockTxId',
+            cash_transactions: '++id, date, category, linkedStockTxId, advance_id',
+            bank_transactions: '++id, date, bank_id, category, linkedStockTxId, advance_id',
             stock_transactions: '++id, date, stockItemName, type',
             ap_ar_transactions: '++id, date, type, contact_id, status',
             payment_installments: '++id, ap_ar_transaction_id, date',

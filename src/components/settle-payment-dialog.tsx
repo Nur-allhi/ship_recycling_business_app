@@ -30,8 +30,7 @@ import { useState } from 'react';
 interface AggregatedContact {
     contact_id: string;
     contact_name: string;
-    total_amount: number;
-    total_paid: number;
+    net_balance: number;
     type: 'payable' | 'receivable';
 }
 
@@ -63,7 +62,7 @@ export function SettlePaymentDialog({ isOpen, setIsOpen, contact }: SettlePaymen
     const { recordPayment } = useAppActions();
     const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
     
-    const remainingBalance = contact.total_amount - contact.total_paid;
+    const remainingBalance = contact.net_balance;
 
     const { control, handleSubmit, register, watch, formState: { errors, isSubmitting }} = useForm<FormData>({
         resolver: zodResolver(formSchema.refine(data => {
@@ -137,7 +136,7 @@ export function SettlePaymentDialog({ isOpen, setIsOpen, contact }: SettlePaymen
                                                   mode="single" 
                                                   selected={field.value} 
                                                   onSelect={(date) => {
-                                                    field.onChange(date);
+                                                    if (date) field.onChange(date);
                                                     setIsDatePickerOpen(false);
                                                   }} 
                                                   initialFocus 

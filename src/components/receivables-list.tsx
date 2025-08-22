@@ -7,8 +7,9 @@ import { LedgerTransaction } from "@/lib/types";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "./ui/card";
 import { Button } from "./ui/button";
-import { HandCoins } from "lucide-react";
+import { HandCoins, PlusCircle } from "lucide-react";
 import { SettlePaymentDialog } from "./settle-payment-dialog";
+import { RecordAdvanceDialog } from "./record-advance-dialog";
 import { Progress } from "./ui/progress";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./ui/tooltip";
@@ -16,36 +17,53 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./ui/t
 interface AggregatedContact {
     contact_id: string;
     contact_name: string;
-    total_amount: number;
+    total_due: number;
     total_paid: number;
+    total_advance: number;
+    net_balance: number;
     type: 'receivable';
 }
 
 export function ReceivablesList() {
     const { ledgerTransactions, currency, user } = useAppContext();
     const [settleDialogState, setSettleDialogState] = useState<{isOpen: boolean, contact: AggregatedContact | null}>({isOpen: false, contact: null});
+    const [advanceDialogState, setAdvanceDialogState] = useState<{isOpen: boolean, contact: AggregatedContact | null, ledgerType: 'payable' | 'receivable' | null}>({isOpen: false, contact: null, ledgerType: null});
     const isMobile = useIsMobile();
     const isAdmin = user?.role === 'admin';
 
     const receivablesByContact = useMemo(() => {
-        const unpaidTxs = ledgerTransactions.filter(tx => tx.type === 'receivable' && tx.status !== 'paid');
-        const groups: Record<string, AggregatedContact> = {};
+        const groups: Record<string, { total_due: number, total_paid: number, total_advance: number, contact_name: string }> = {};
 
-        unpaidTxs.forEach(tx => {
+        ledgerTransactions.filter(tx => tx.type === 'receivable' || (tx.type === 'advance' && tx.contact_id.startsWith('temp_client')) || (tx.type === 'advance' && ledgerTransactions.some(lt => lt.contact_id === tx.contact_id && lt.type === 'receivable'))).forEach(tx => {
             if (!groups[tx.contact_id]) {
                 groups[tx.contact_id] = {
-                    contact_id: tx.contact_id,
                     contact_name: tx.contact_name,
-                    total_amount: 0,
+                    total_due: 0,
                     total_paid: 0,
-                    type: 'receivable'
+                    total_advance: 0,
                 };
             }
-            groups[tx.contact_id].total_amount += tx.amount;
-            groups[tx.contact_id].total_paid += tx.paid_amount;
+            if (tx.type === 'receivable') {
+                groups[tx.contact_id].total_due += tx.amount;
+                groups[tx.contact_id].total_paid += tx.paid_amount;
+            } else if (tx.type === 'advance') {
+                groups[tx.contact_id].total_advance += Math.abs(tx.amount);
+            }
         });
+        
+        return Object.entries(groups).map(([contact_id, group]) => {
+            const net_balance = group.total_due - group.total_paid - group.total_advance;
+            return {
+                contact_id,
+                contact_name: group.contact_name,
+                total_due: group.total_due,
+                total_paid: group.total_paid,
+                total_advance: group.total_advance,
+                net_balance: net_balance,
+                type: 'receivable' as const,
+            };
+        }).filter(c => c.net_balance > 0 || c.total_advance > 0);
 
-        return Object.values(groups);
     }, [ledgerTransactions]);
     
     const formatCurrency = (amount: number) => {
@@ -58,6 +76,10 @@ export function ReceivablesList() {
     const handleSettleClick = (contact: AggregatedContact) => {
         setSettleDialogState({ isOpen: true, contact });
     }
+    
+    const handleAdvanceClick = (contact: AggregatedContact) => {
+        setAdvanceDialogState({ isOpen: true, contact, ledgerType: 'receivable' });
+    }
 
     const renderDesktopView = () => (
         <div className="overflow-x-auto">
@@ -66,14 +88,13 @@ export function ReceivablesList() {
                     <TableRow>
                         <TableHead>Client</TableHead>
                         <TableHead className="text-right">Balance Due</TableHead>
-                        <TableHead className="text-center">Receive</TableHead>
+                        <TableHead className="text-center">Actions</TableHead>
                     </TableRow>
                 </TableHeader>
                 <TableBody>
                     {receivablesByContact.length > 0 ? (
                         receivablesByContact.map(contact => {
-                            const remainingBalance = contact.total_amount - contact.total_paid;
-                            const progress = (contact.total_paid / contact.total_amount) * 100;
+                            const progress = contact.total_due > 0 ? ((contact.total_paid + contact.total_advance) / contact.total_due) * 100 : 0;
                             return (
                             <TableRow key={contact.contact_id}>
                                 <TableCell className="font-medium">
@@ -82,22 +103,35 @@ export function ReceivablesList() {
                                         <Progress value={progress} className="h-2 w-24" />
                                         <span className="text-xs text-muted-foreground font-mono">{progress.toFixed(0)}%</span>
                                     </div>
+                                    {contact.total_advance > 0 && <div className="text-xs text-blue-600 dark:text-blue-400">Advance: {formatCurrency(contact.total_advance)}</div>}
                                 </TableCell>
                                 <TableCell className="text-right font-mono font-semibold">
-                                    <div>{formatCurrency(remainingBalance)}</div>
-                                    <div className="text-xs text-muted-foreground font-normal">of {formatCurrency(contact.total_amount)}</div>
+                                    <div>{formatCurrency(contact.net_balance)}</div>
+                                    <div className="text-xs text-muted-foreground font-normal">of {formatCurrency(contact.total_due)}</div>
                                 </TableCell>
                                 <TableCell className="text-center">
-                                    <TooltipProvider>
-                                        <Tooltip>
-                                            <TooltipTrigger asChild>
-                                                <Button variant="outline" size="icon" className="h-9 w-9" onClick={() => handleSettleClick(contact)}>
-                                                    <HandCoins className="h-4 w-4"/>
-                                                </Button>
-                                            </TooltipTrigger>
-                                            <TooltipContent><p>Receive Payment</p></TooltipContent>
-                                        </Tooltip>
-                                    </TooltipProvider>
+                                    <div className="flex items-center justify-center gap-2">
+                                        <TooltipProvider>
+                                            <Tooltip>
+                                                <TooltipTrigger asChild>
+                                                    <Button variant="outline" size="icon" className="h-9 w-9" onClick={() => handleSettleClick(contact)} disabled={contact.net_balance <= 0}>
+                                                        <HandCoins className="h-4 w-4"/>
+                                                    </Button>
+                                                </TooltipTrigger>
+                                                <TooltipContent><p>Receive Payment</p></TooltipContent>
+                                            </Tooltip>
+                                        </TooltipProvider>
+                                        <TooltipProvider>
+                                            <Tooltip>
+                                                <TooltipTrigger asChild>
+                                                    <Button variant="outline" size="icon" className="h-9 w-9" onClick={() => handleAdvanceClick(contact)}>
+                                                        <PlusCircle className="h-4 w-4 text-blue-500"/>
+                                                    </Button>
+                                                </TooltipTrigger>
+                                                <TooltipContent><p>Record Advance Received</p></TooltipContent>
+                                            </Tooltip>
+                                        </TooltipProvider>
+                                    </div>
                                 </TableCell>
                             </TableRow>
                         )})
@@ -115,8 +149,7 @@ export function ReceivablesList() {
         <div className="space-y-4">
             {receivablesByContact.length > 0 ? (
                 receivablesByContact.map(contact => {
-                    const remainingBalance = contact.total_amount - contact.total_paid;
-                    const progress = (contact.total_paid / contact.total_amount) * 100;
+                    const progress = contact.total_due > 0 ? ((contact.total_paid + contact.total_advance) / contact.total_due) * 100 : 0;
                     return (
                         <Card key={contact.contact_id}>
                             <CardContent className="p-4 space-y-3">
@@ -126,11 +159,11 @@ export function ReceivablesList() {
                                         <div className="text-sm text-muted-foreground">Outstanding Balance</div>
                                     </div>
                                     <div className="text-right">
-                                        <div className="font-bold text-accent text-lg">{formatCurrency(remainingBalance)}</div>
-                                        <div className="text-xs text-muted-foreground">of {formatCurrency(contact.total_amount)}</div>
+                                        <div className="font-bold text-accent text-lg">{formatCurrency(contact.net_balance)}</div>
+                                        <div className="text-xs text-muted-foreground">of {formatCurrency(contact.total_due)}</div>
                                     </div>
                                 </div>
-                                
+                                {contact.total_advance > 0 && <div className="text-xs text-blue-600 dark:text-blue-400">Advance credit of {formatCurrency(contact.total_advance)} applied</div>}
                                 <div className="flex items-center gap-2">
                                     <Progress value={progress} className="h-2 flex-1" />
                                     <span className="text-xs text-muted-foreground font-mono">{progress.toFixed(0)}% paid</span>
@@ -138,9 +171,13 @@ export function ReceivablesList() {
 
                                 {isAdmin && (
                                     <div className="flex gap-2 pt-2">
-                                        <Button variant="outline" size="sm" className="flex-1" onClick={() => handleSettleClick(contact)}>
+                                        <Button variant="outline" size="sm" className="flex-1" onClick={() => handleSettleClick(contact)} disabled={contact.net_balance <= 0}>
                                             <HandCoins className="mr-2 h-4 w-4"/>
-                                            Receive Payment
+                                            Receive
+                                        </Button>
+                                        <Button variant="outline" size="sm" className="flex-1" onClick={() => handleAdvanceClick(contact)}>
+                                            <PlusCircle className="mr-2 h-4 w-4 text-blue-500"/>
+                                            Advance
                                         </Button>
                                     </div>
                                 )}
@@ -177,8 +214,14 @@ export function ReceivablesList() {
                     contact={settleDialogState.contact}
                 />
             )}
+             {advanceDialogState.contact && (
+                <RecordAdvanceDialog
+                    isOpen={advanceDialogState.isOpen}
+                    setIsOpen={(isOpen) => setAdvanceDialogState({ isOpen, contact: null, ledgerType: null })}
+                    contact={advanceDialogState.contact}
+                    ledgerType={advanceDialogState.ledgerType!}
+                />
+            )}
         </>
     )
 }
-
-    

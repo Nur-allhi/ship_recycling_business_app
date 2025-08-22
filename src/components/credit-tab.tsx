@@ -16,6 +16,9 @@ export function CreditTab() {
     const isMobile = useIsMobile();
     
     const formatCurrency = (amount: number) => {
+        if (amount < 0) {
+            return `-${formatCurrency(Math.abs(amount))}`;
+        }
         if (currency === 'BDT') {
             return `৳ ${new Intl.NumberFormat('en-US').format(amount)}`;
         }
@@ -27,6 +30,9 @@ export function CreditTab() {
             <div className="p-4 text-center rounded-lg bg-red-50 dark:bg-red-900/20 mb-4">
                 <div className="text-sm text-red-600 dark:text-red-300">Total Outstanding</div>
                 <div className="text-2xl font-bold text-red-700 dark:text-red-200">{formatCurrency(totalPayables)}</div>
+                 {totalPayables < 0 && (
+                    <p className="text-xs text-red-500 dark:text-red-400 mt-1">(You have an advance credit of {formatCurrency(Math.abs(totalPayables))})</p>
+                )}
             </div>
             <PayablesList />
         </div>
@@ -37,6 +43,9 @@ export function CreditTab() {
             <div className="p-4 text-center rounded-lg bg-green-50 dark:bg-green-900/20 mb-4">
                 <div className="text-sm text-green-600 dark:text-green-300">Total Outstanding</div>
                 <div className="text-2xl font-bold text-green-700 dark:text-green-200">{formatCurrency(totalReceivables)}</div>
+                 {totalReceivables < 0 && (
+                    <p className="text-xs text-green-500 dark:text-green-400 mt-1">(Clients have an advance credit of {formatCurrency(Math.abs(totalReceivables))})</p>
+                )}
             </div>
             <ReceivablesList />
         </div>

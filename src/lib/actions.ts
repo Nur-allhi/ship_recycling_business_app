@@ -434,45 +434,48 @@ async function applyPaymentToLedger(
         .order('date', { ascending: true });
 
     if (fetchError) throw fetchError;
-    if (!outstandingTxs || outstandingTxs.length === 0) {
-        throw new Error("No outstanding balance to settle for this contact.");
-    }
     
-    const totalOutstanding = outstandingTxs.reduce((acc: number, tx: any) => acc + (tx.amount - tx.paid_amount), 0);
-    if (paymentAmount > totalOutstanding + 0.01) { // Add a small tolerance for floating point issues
-        throw new Error(`Payment amount (${paymentAmount}) exceeds the total outstanding balance (${totalOutstanding}).`);
-    }
-
     let amountToSettle = paymentAmount;
 
-    for (const tx of outstandingTxs) {
-        if (amountToSettle <= 0) break;
+    if (!outstandingTxs || outstandingTxs.length === 0) {
+        // This case can happen if it's an overpayment on a zero balance, which is valid.
+        // We just skip settling against specific transactions.
+    } else {
+         const totalOutstanding = outstandingTxs.reduce((acc: number, tx: any) => acc + (tx.amount - tx.paid_amount), 0);
+        if (paymentAmount > totalOutstanding + 0.01) { // Add a small tolerance for floating point issues
+            // This is now a valid scenario (overpayment), so we don't throw an error.
+            // We'll settle what we can, and the rest is handled by the advance logic.
+        }
 
-        const remainingBalance = tx.amount - tx.paid_amount;
-        const paymentForThisTx = Math.min(amountToSettle, remainingBalance);
-        
-        const newPaidAmount = tx.paid_amount + paymentForThisTx;
-        const newStatus = newPaidAmount >= tx.amount ? 'paid' : 'partially paid';
+        for (const tx of outstandingTxs) {
+            if (amountToSettle <= 0) break;
 
-        // 2. Update the ledger transaction
-        const { error: updateError } = await supabase
-            .from('ap_ar_transactions')
-            .update({ paid_amount: newPaidAmount, status: newStatus })
-            .eq('id', tx.id);
-        
-        if (updateError) throw updateError;
-        
-        // 3. Create an installment record for this part of the payment
-        const { error: installmentError } = await supabase.from('payment_installments').insert({
-            ap_ar_transaction_id: tx.id,
-            amount: paymentForThisTx,
-            date: paymentDate,
-            payment_method: paymentMethod,
-        });
+            const remainingBalance = tx.amount - tx.paid_amount;
+            const paymentForThisTx = Math.min(amountToSettle, remainingBalance);
+            
+            const newPaidAmount = tx.paid_amount + paymentForThisTx;
+            const newStatus = newPaidAmount >= tx.amount ? 'paid' : 'partially paid';
 
-        if (installmentError) throw installmentError;
+            // 2. Update the ledger transaction
+            const { error: updateError } = await supabase
+                .from('ap_ar_transactions')
+                .update({ paid_amount: newPaidAmount, status: newStatus })
+                .eq('id', tx.id);
+            
+            if (updateError) throw updateError;
+            
+            // 3. Create an installment record for this part of the payment
+            const { error: installmentError } = await supabase.from('payment_installments').insert({
+                ap_ar_transaction_id: tx.id,
+                amount: paymentForThisTx,
+                date: paymentDate,
+                payment_method: paymentMethod,
+            });
 
-        amountToSettle -= paymentForThisTx;
+            if (installmentError) throw installmentError;
+
+            amountToSettle -= paymentForThisTx;
+        }
     }
 }
 
@@ -530,8 +533,6 @@ export async function recordDirectPayment(input: z.infer<typeof RecordDirectPaym
     const supabase = await getAuthenticatedSupabaseClient();
 
     try {
-        const ledgerType = input.category === 'A/P Settlement' ? 'payable' : 'receivable';
-
         await applyPaymentToLedger(supabase, input.contact_id, input.amount, input.date, input.payment_method);
         
         await logActivity(`Recorded ${input.category} of ${input.amount} for ${input.contact_name}`);
@@ -552,6 +553,7 @@ export async function addStockTransaction(input: z.infer<typeof AddStockTransact
     const supabase = await getAuthenticatedSupabaseClient();
     const { stockTx, bank_id } = input;
     
+    // Step 1: Insert the stock transaction itself
     const { data: savedStockTx, error: stockError } = await supabase
         .from('stock_transactions')
         .insert(stockTx)
@@ -559,6 +561,7 @@ export async function addStockTransaction(input: z.infer<typeof AddStockTransact
         .single();
     if(stockError) throw stockError;
 
+    // Step 2: Handle the financial side of the transaction
     let savedFinancialTx = null;
     if (stockTx.paymentMethod === 'cash' || stockTx.paymentMethod === 'bank') {
         const financialTxData = {
@@ -574,14 +577,47 @@ export async function addStockTransaction(input: z.infer<typeof AddStockTransact
         if(error) throw error;
         savedFinancialTx = data;
     } else if (stockTx.paymentMethod === 'credit') {
-         const ledgerData = {
-            type: stockTx.type === 'purchase' ? 'payable' : 'receivable',
-            description: stockTx.description || `${stockTx.stockItemName} (${stockTx.weight}kg)`,
-            amount: stockTx.actual_amount, date: stockTx.date, contact_id: stockTx.contact_id!, contact_name: stockTx.contact_name!,
-            status: 'unpaid', paid_amount: 0
-        };
-        const { error } = await supabase.from('ap_ar_transactions').insert(ledgerData);
-        if(error) throw error;
+        // This is a new debt or it settles an advance.
+        let amountToLog = stockTx.actual_amount;
+        
+        // Check for an advance balance
+        const { data: advances } = await supabase
+            .from('ap_ar_transactions')
+            .select('id, amount')
+            .eq('contact_id', stockTx.contact_id)
+            .eq('type', 'advance')
+            .lt('amount', 0); // Advances are stored as negative numbers
+
+        if (advances && advances.length > 0) {
+            for (const advance of advances) {
+                if (amountToLog <= 0) break;
+
+                const advanceBalance = Math.abs(advance.amount);
+                const amountToSettle = Math.min(amountToLog, advanceBalance);
+
+                // Reduce the advance balance (make it less negative)
+                const { error: updateError } = await supabase
+                    .from('ap_ar_transactions')
+                    .update({ amount: advance.amount + amountToSettle })
+                    .eq('id', advance.id);
+                
+                if (updateError) throw updateError;
+                
+                amountToLog -= amountToSettle;
+            }
+        }
+        
+        // If there's still an amount left, create a new payable/receivable
+        if (amountToLog > 0) {
+            const ledgerData = {
+                type: stockTx.type === 'purchase' ? 'payable' : 'receivable',
+                description: stockTx.description || `${stockTx.stockItemName} (${stockTx.weight}kg)`,
+                amount: amountToLog, date: stockTx.date, contact_id: stockTx.contact_id!, contact_name: stockTx.contact_name!,
+                status: 'unpaid', paid_amount: 0
+            };
+            const { error } = await supabase.from('ap_ar_transactions').insert(ledgerData);
+            if(error) throw error;
+        }
     }
     await logActivity(`Added stock transaction: ${stockTx.stockItemName}`);
     return { stockTx: savedStockTx, financialTx: savedFinancialTx };
@@ -692,5 +728,68 @@ export async function transferFunds(input: z.infer<typeof TransferFundsSchema>) 
     }
     
     await logActivity(`Transferred ${input.amount} from ${input.from}`);
+    return { success: true };
+}
+
+const RecordAdvancePaymentSchema = z.object({
+    contact_id: z.string(),
+    contact_name: z.string(),
+    amount: z.number().positive(),
+    date: z.string(),
+    payment_method: z.enum(['cash', 'bank']),
+    ledger_type: z.enum(['payable', 'receivable']),
+    bank_id: z.string().optional(),
+    description: z.string().optional(),
+});
+
+export async function recordAdvancePayment(input: z.infer<typeof RecordAdvancePaymentSchema>) {
+    const session = await getSession();
+    if (!session || session.role !== 'admin') throw new Error("Only admins can record advance payments.");
+    const supabase = await getAuthenticatedSupabaseClient();
+
+    const { contact_id, contact_name, amount, date, payment_method, ledger_type, bank_id, description } = input;
+
+    // The amount is stored as negative in the ledger to represent a credit/advance
+    const ledgerAmount = -amount;
+    const ledgerDescription = description || `Advance ${ledger_type === 'payable' ? 'to' : 'from'} ${contact_name}`;
+
+    // 1. Create the advance entry in the ledger
+    const { data: ledgerEntry, error: ledgerError } = await supabase
+        .from('ap_ar_transactions')
+        .insert({
+            type: 'advance',
+            date: date,
+            description: ledgerDescription,
+            amount: ledgerAmount,
+            paid_amount: 0,
+            status: 'paid', // An advance is technically a "paid" liability on your part
+            contact_id: contact_id,
+            contact_name: contact_name,
+        })
+        .select()
+        .single();
+    
+    if (ledgerError) throw ledgerError;
+    if (!ledgerEntry) throw new Error("Failed to create ledger entry for advance.");
+
+    // 2. Create the corresponding financial transaction
+    const financialTxData = {
+        date: date,
+        description: ledgerDescription,
+        category: `Advance ${ledger_type === 'payable' ? 'Payment' : 'Received'}`,
+        actual_amount: amount,
+        expected_amount: amount,
+        difference: 0,
+        contact_id: contact_id,
+        advance_id: ledgerEntry.id, // Link the financial tx to the advance entry
+    };
+
+    if (payment_method === 'cash') {
+        await supabase.from('cash_transactions').insert({ ...financialTxData, type: ledger_type === 'payable' ? 'expense' : 'income' });
+    } else {
+        await supabase.from('bank_transactions').insert({ ...financialTxData, type: ledger_type === 'payable' ? 'withdrawal' : 'deposit', bank_id: bank_id! });
+    }
+
+    await logActivity(`Recorded advance of ${amount} ${ledger_type === 'payable' ? 'to' : 'from'} ${contact_name}`);
     return { success: true };
 }

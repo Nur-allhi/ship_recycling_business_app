@@ -12,6 +12,7 @@ export interface Transaction {
   deletedAt?: string;
   linkedStockTxId?: string;
   createdAt: string;
+  advance_id?: string | null;
 }
 
 export interface CashTransaction extends Transaction {
@@ -91,7 +92,7 @@ export interface PaymentInstallment {
 export interface LedgerTransaction {
   id: string;
   date: string;
-  type: 'payable' | 'receivable'; // A/P or A/R
+  type: 'payable' | 'receivable' | 'advance';
   description: string;
   amount: number;
   paid_amount: number;
@@ -136,4 +137,5 @@ export interface MonthlySnapshot {
 
 
     
+
 

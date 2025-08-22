@@ -305,6 +305,56 @@ export function useAppActions() {
         });
         toast.success("Payment recorded locally.");
     };
+
+    const recordAdvancePayment = async (payload: { contact_id: string, contact_name: string, amount: number, date: Date, payment_method: 'cash' | 'bank', ledger_type: 'payable' | 'receivable', bank_id?: string, description?: string }) => {
+        const { contact_id, contact_name, amount, date, payment_method, ledger_type, bank_id, description } = payload;
+        
+        const tempLedgerId = `temp_adv_ledger_${Date.now()}`;
+        const tempFinancialId = `temp_adv_fin_${Date.now()}`;
+        const ledgerDescription = description || `Advance ${ledger_type === 'payable' ? 'to' : 'from'} ${contact_name}`;
+
+        // Create the advance entry in the local ledger. Amount is negative.
+        const advanceLedgerEntry: LedgerTransaction = {
+            id: tempLedgerId,
+            date: date.toISOString(),
+            type: 'advance',
+            description: ledgerDescription,
+            amount: -amount,
+            paid_amount: 0,
+            status: 'paid',
+            contact_id: contact_id,
+            contact_name: contact_name,
+            installments: []
+        };
+        await db.ap_ar_transactions.add(advanceLedgerEntry);
+
+        // Create the corresponding financial transaction
+        const financialTxData = {
+            id: tempFinancialId,
+            date: date.toISOString(),
+            description: ledgerDescription,
+            category: `Advance ${ledger_type === 'payable' ? 'Payment' : 'Received'}`,
+            actual_amount: amount,
+            expected_amount: amount,
+            difference: 0,
+            contact_id: contact_id,
+            advance_id: tempLedgerId,
+            createdAt: new Date().toISOString()
+        };
+
+        if (payment_method === 'cash') {
+            await db.cash_transactions.add({ ...financialTxData, type: ledger_type === 'payable' ? 'expense' : 'income' });
+        } else {
+            await db.bank_transactions.add({ ...financialTxData, type: ledger_type === 'payable' ? 'withdrawal' : 'deposit', bank_id: bank_id! });
+        }
+        
+        await updateBalances();
+        queueOrSync({
+            action: 'recordAdvancePayment',
+            payload: { ...payload, date: date.toISOString() }
+        });
+        toast.success("Advance payment recorded locally.");
+    };
     
     const loadDataForMonth = useCallback(async (month: Date) => {
        // This function is now less critical for UI speed but good for fetching historical data.
@@ -405,6 +455,7 @@ export function useAppActions() {
         addVendor,
         addClient,
         recordPayment,
+        recordAdvancePayment,
         loadDataForMonth,
         loadRecycleBinData,
         restoreTransaction,
