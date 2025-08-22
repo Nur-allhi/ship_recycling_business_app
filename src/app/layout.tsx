@@ -8,6 +8,8 @@ import { LayoutProvider } from '@/components/layout-provider';
 export const metadata: Metadata = {
   title: 'Ha-Mim Iron Mart',
   description: 'Manage your inventory, sales, and finances for Ha-Mim Iron Mart.',
+  manifest: '/manifest.json',
+  themeColor: '#ffffff',
 };
 
 export default function RootLayout({
