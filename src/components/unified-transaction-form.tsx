@@ -150,7 +150,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
   
   const currentSchema = formSchemas[transactionType];
 
-  const { register, handleSubmit, control, reset, setValue, formState: { errors, isSubmitting } } = useForm({
+  const { register, handleSubmit, control, reset, setValue, watch, formState: { errors, isSubmitting } } = useForm({
     resolver: zodResolver(currentSchema),
     defaultValues: {
         date: new Date(),
