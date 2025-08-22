@@ -53,6 +53,7 @@ export function BankTab() {
   const [sortKey, setSortKey] = useState<SortKey>('date');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [selectedBankId, setSelectedBankId] = useState<string | 'all'>('all');
+  const [selectedTransferBankId, setSelectedTransferBankId] = useState<string | undefined>(banks.length > 0 ? banks[0].id : undefined);
   const isMobile = useIsMobile();
   const isAdmin = user?.role === 'admin';
 
@@ -160,10 +161,9 @@ export function BankTab() {
     event.preventDefault()
     const formData = new FormData(event.currentTarget)
     const amount = parseFloat(formData.get('amount') as string);
-    const bankId = formData.get('bank_id') as string;
     const description = formData.get('description') as string;
-    if (amount > 0 && bankId) {
-      transferFunds('bank', amount, new Date().toISOString(), bankId, description);
+    if (amount > 0 && selectedTransferBankId) {
+      transferFunds('bank', amount, new Date().toISOString(), selectedTransferBankId, description);
       setIsTransferSheetOpen(false)
     }
   }
@@ -457,7 +457,14 @@ export function BankTab() {
                                 </div>
                                 <div className="space-y-2">
                                     <Label htmlFor="bank_id">From Bank Account</Label>
-                                    <ResponsiveSelect onValueChange={() => {}} name="bank_id" title="Select a Bank Account" required items={(banks || []).map(b => ({value: b.id, label: b.name}))} />
+                                    <ResponsiveSelect
+                                      value={selectedTransferBankId}
+                                      onValueChange={setSelectedTransferBankId}
+                                      name="bank_id"
+                                      title="Select a Bank Account"
+                                      required
+                                      items={(banks || []).map(b => ({value: b.id, label: b.name}))}
+                                    />
                                 </div>
                                 <div className="space-y-2">
                                     <Label htmlFor="description">Description (Optional)</Label>
