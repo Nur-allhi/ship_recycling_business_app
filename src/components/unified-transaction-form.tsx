@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect, useMemo } from 'react';
@@ -176,6 +177,9 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
     addVendor,
     addClient,
     transferFunds,
+  } = useAppActions();
+
+  const {
     cashCategories,
     bankCategories,
     stockItems,
@@ -183,9 +187,6 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
     clients,
     banks,
     currency,
-  } = useAppActions();
-
-  const {
     user, // Assuming user context is available here for admin checks
   } = useAppContext();
   
@@ -259,8 +260,10 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
         
         switch(transactionType) {
             case 'cash': {
+                const categoryInfo = (cashCategories || []).find(c => c.name === data.category);
+                if (!categoryInfo) throw new Error("Category information not found.");
                 await addCashTransaction({
-                    type: cashCategories.find(c => c.name === data.category)!.direction === 'credit' ? 'income' : 'expense',
+                    type: categoryInfo.direction === 'credit' ? 'income' : 'expense',
                     expected_amount: data.expected_amount,
                     actual_amount: data.actual_amount,
                     difference: finalDifference,
@@ -273,8 +276,10 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                 break;
             }
             case 'bank': {
+                 const categoryInfo = (bankCategories || []).find(c => c.name === data.category);
+                 if (!categoryInfo) throw new Error("Category information not found.");
                  await addBankTransaction({
-                    type: bankCategories.find(c => c.name === data.category)!.direction === 'credit' ? 'deposit' : 'withdrawal',
+                    type: categoryInfo.direction === 'credit' ? 'deposit' : 'withdrawal',
                     expected_amount: data.expected_amount,
                     actual_amount: data.actual_amount,
                     difference: finalDifference,
@@ -299,7 +304,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                     } else {
                         stockContactId = data.contact_id;
                         const contactList = data.stockType === 'purchase' ? vendors : clients;
-                        stockContactName = contactList.find(c => c.id === stockContactId)?.name;
+                        stockContactName = (contactList || []).find(c => c.id === stockContactId)?.name;
                     }
                     if (!stockContactId) throw new Error("Contact ID is required for credit transaction.");
                 }
@@ -338,7 +343,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                     ledgerContactName = newContact.name;
                 } else {
                     ledgerContactId = data.contact_id;
-                    ledgerContactName = contactList.find(c => c.id === ledgerContactId)?.name;
+                    ledgerContactName = (contactList || []).find(c => c.id === ledgerContactId)?.name;
                 }
                 
                 if(!ledgerContactId || !ledgerContactName) {
@@ -421,7 +426,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                     value={field.value}
                     title={`Select a ${settlementContactType}`}
                     placeholder={`Select a ${settlementContactType}`}
-                    items={settlementContacts.map(c => ({ value: c.id, label: c.name }))}
+                    items={(settlementContacts || []).map(c => ({ value: c.id, label: c.name }))}
                 />
             )}
         />
@@ -429,17 +434,17 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
     </div>
   );
   
-  const cashCategoryItems = useMemo(() => cashCategories.filter(c => c.name !== 'Stock Purchase' && c.name !== 'Stock Sale').map(c => ({ value: c.name, label: `${c.name}` })), [cashCategories]);
-  const bankCategoryItems = useMemo(() => bankCategories.filter(c => c.name !== 'Stock Purchase' && c.name !== 'Stock Sale').map(c => ({ value: c.name, label: `${c.name}` })), [bankCategories]);
-  const bankAccountItems = useMemo(() => banks.map(b => ({ value: b.id, label: b.name })), [banks]);
-  const stockItemsForSale = useMemo(() => stockItems.filter(i => i.weight > 0).map(item => ({ value: item.name, label: item.name })), [stockItems]);
-  const stockItemsForPurchase = useMemo(() => stockItems.map(item => ({ value: item.name, label: item.name })), [stockItems]);
+  const cashCategoryItems = useMemo(() => (cashCategories || []).filter(c => c.name !== 'Stock Purchase' && c.name !== 'Stock Sale').map(c => ({ value: c.name, label: `${c.name}` })), [cashCategories]);
+  const bankCategoryItems = useMemo(() => (bankCategories || []).filter(c => c.name !== 'Stock Purchase' && c.name !== 'Stock Sale').map(c => ({ value: c.name, label: `${c.name}` })), [bankCategories]);
+  const bankAccountItems = useMemo(() => (banks || []).map(b => ({ value: b.id, label: b.name })), [banks]);
+  const stockItemsForSale = useMemo(() => (stockItems || []).filter(i => i.weight > 0).map(item => ({ value: item.name, label: item.name })), [stockItems]);
+  const stockItemsForPurchase = useMemo(() => (stockItems || []).map(item => ({ value: item.name, label: item.name })), [stockItems]);
   const vendorContactItems = useMemo(() => [
-      ...vendors.map(c => ({ value: c.id, label: c.name })), 
+      ...(vendors || []).map(c => ({ value: c.id, label: c.name })), 
       { value: 'new', label: <span className="flex items-center gap-2"><Plus className="h-4 w-4"/>Add New</span>}
   ], [vendors]);
   const clientContactItems = useMemo(() => [
-    ...clients.map(c => ({ value: c.id, label: c.name })), 
+    ...(clients || []).map(c => ({ value: c.id, label: c.name })), 
     { value: 'new', label: <span className="flex items-center gap-2"><Plus className="h-4 w-4"/>Add New</span>}
   ], [clients]);
   const currentLedgerContactItems = ledgerType === 'payable' ? vendorContactItems : clientContactItems;
@@ -716,7 +721,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                                         placeholder={`Select a ${stockCreditContactType}`}
                                         items={
                                             [
-                                                ...(stockType === 'purchase' ? vendors : clients).map(c => ({ value: c.id, label: c.name })),
+                                                ...(stockType === 'purchase' ? (vendors || []) : (clients || [])).map(c => ({ value: c.id, label: c.name })),
                                                 { value: 'new', label: <span className="flex items-center gap-2"><Plus className="h-4 w-4"/>Add New</span>}
                                             ]
                                         }
@@ -890,3 +895,5 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
     </>
   );
 }
+
+    
