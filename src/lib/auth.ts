@@ -18,16 +18,13 @@ export async function createSession(payload: SessionPayload, rememberMe?: boolea
 
   cookies().set('session', sessionPayload, {
     httpOnly: true,
-    // The `secure` flag is required for `sameSite: 'none'`.
-    // We set it to true for all environments because the editor preview
-    // operates in a cross-site context.
     secure: true, 
     maxAge: maxAge,
     path: '/',
-    // This is the critical change. 'lax' (the default) prevents the cookie
-    // from being sent in a cross-site iframe context (the editor preview).
-    // 'none' allows the cookie to be sent, fixing the login loop.
-    sameSite: 'none',
+    // 'lax' is the modern default for production apps, providing a good balance of security and usability.
+    // It prevents the cookie from being sent on most cross-site subrequests (e.g., for images or frames),
+    // which helps protect against cross-site request forgery (CSRF) attacks.
+    sameSite: 'lax',
   });
 }
 
@@ -48,7 +45,7 @@ export async function removeSession() {
   cookies().set('session', '', {
     httpOnly: true,
     secure: true,
-    sameSite: 'none',
+    sameSite: 'lax',
     path: '/',
     expires: new Date(0),
   });
