@@ -21,38 +21,38 @@ export interface SyncQueueItem {
 
 
 export class AppDatabase extends Dexie {
-    appState!: EntityTable<AppState, 'id'>;
-    cashTransactions!: EntityTable<CashTransaction, 'id'>;
-    bankTransactions!: EntityTable<BankTransaction, 'id'>;
-    stockTransactions!: EntityTable<StockTransaction, 'id'>;
-    ledgerTransactions!: EntityTable<LedgerTransaction, 'id'>;
-    paymentInstallments!: EntityTable<PaymentInstallment, 'id'>;
+    app_state!: EntityTable<AppState, 'id'>;
+    cash_transactions!: EntityTable<CashTransaction, 'id'>;
+    bank_transactions!: EntityTable<BankTransaction, 'id'>;
+    stock_transactions!: EntityTable<StockTransaction, 'id'>;
+    ap_ar_transactions!: EntityTable<LedgerTransaction, 'id'>;
+    payment_installments!: EntityTable<PaymentInstallment, 'id'>;
     
     banks!: EntityTable<Bank, 'id'>;
     categories!: EntityTable<Category, 'id'>;
     vendors!: EntityTable<Vendor, 'id'>;
     clients!: EntityTable<Client, 'id'>;
-    initialStock!: EntityTable<StockItem, 'id'>;
-    monthlySnapshots!: EntityTable<MonthlySnapshot, 'id'>;
-    syncQueue!: EntityTable<SyncQueueItem, 'id'>;
+    initial_stock!: EntityTable<StockItem, 'id'>;
+    monthly_snapshots!: EntityTable<MonthlySnapshot, 'id'>;
+    sync_queue!: EntityTable<SyncQueueItem, 'id'>;
 
     constructor() {
         super('ShipShapeLedgerDB');
-        this.version(4).stores({
-            appState: 'id',
-            cashTransactions: '++id, date, category, linkedStockTxId',
-            bankTransactions: '++id, date, bank_id, category, linkedStockTxId',
-            stockTransactions: '++id, date, stockItemName, type',
-            ledgerTransactions: '++id, date, type, contact_id, status',
-            paymentInstallments: '++id, ap_ar_transaction_id, date',
+        this.version(5).stores({
+            app_state: 'id',
+            cash_transactions: '++id, date, category, linkedStockTxId',
+            bank_transactions: '++id, date, bank_id, category, linkedStockTxId',
+            stock_transactions: '++id, date, stockItemName, type',
+            ap_ar_transactions: '++id, date, type, contact_id, status',
+            payment_installments: '++id, ap_ar_transaction_id, date',
 
             banks: '++id, name',
             categories: '++id, type, name',
             vendors: '++id, name',
             clients: '++id, name',
-            initialStock: '++id, name',
-            monthlySnapshots: '++id, snapshot_date',
-            syncQueue: '++id, timestamp',
+            initial_stock: '++id, name',
+            monthly_snapshots: '++id, snapshot_date',
+            sync_queue: '++id, timestamp',
         });
     }
 }
@@ -71,7 +71,7 @@ export async function bulkPut(tableName: keyof AppDatabase, data: any[]) {
 
 export async function clearAllData() {
     await Promise.all(db.tables.map(table => {
-        if (table.name !== 'appState') { // Keep appState
+        if (table.name !== 'app_state') { // Keep app_state
             return table.clear();
         }
     }));

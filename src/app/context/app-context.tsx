@@ -5,10 +5,10 @@ import React, { createContext, useContext, useState, useEffect, ReactNode, useCa
 import type { User, CashTransaction, BankTransaction, StockItem, StockTransaction, Vendor, Client, LedgerTransaction, Bank, Category, MonthlySnapshot } from '@/lib/types';
 import { toast } from 'sonner';
 import * as server from '@/lib/actions';
-import { getSession } from '@/lib/auth';
+import { getSession, login as serverLogin, logout as serverLogout } from '@/app/auth/actions';
 import { useRouter, usePathname } from 'next/navigation';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { db, bulkPut, clearAllData as clearLocalDb, type SyncQueueItem } from '@/lib/db';
+import { db, bulkPut, clearAllData as clearLocalDb, type SyncQueueItem, AppDatabase } from '@/lib/db';
 import { WifiOff, Wifi, RefreshCw } from 'lucide-react';
 
 type FontSize = 'sm' | 'base' | 'lg';
@@ -46,6 +46,7 @@ interface AppData {
 }
 
 interface AppContextType extends AppData {
+  login: (credentials: Parameters<typeof serverLogin>[0]) => Promise<any>;
   logout: () => Promise<void>;
   reloadData: (options?: { force?: boolean; needsInitialBalance?: boolean }) => Promise<void>;
   updateBalances: () => Promise<void>;
@@ -55,6 +56,7 @@ interface AppContextType extends AppData {
   closeInitialBalanceDialog: () => void;
   setLoadedMonths: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
   setDeletedItems: React.Dispatch<React.SetStateAction<{ cash: any[]; bank: any[]; stock: any[]; ap_ar: any[]; }>>;
+  setUser: (user: User | null) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -79,10 +81,27 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const logout = useCallback(async () => {
-    await server.logout();
+    await serverLogout();
     await clearLocalDb();
     setUser(null);
     window.location.href = '/login';
+  }, [setUser]);
+  
+  const login = useCallback(async (credentials: Parameters<typeof serverLogin>[0]) => {
+    try {
+      const result = await serverLogin(credentials);
+      if (result.success && result.session) {
+        await db.app_state.update(1, { user: result.session });
+        setUser(result.session); // Immediately update context state
+        // Let useEffect handle navigation
+      } else if (!result.success) {
+        throw new Error(result.error || "Login failed");
+      }
+      return result;
+    } catch (error: any) {
+      toast.error('Login Failed', { description: error.message });
+      throw error;
+    }
   }, [setUser]);
 
   const handleApiError = useCallback((error: any) => {
@@ -101,11 +120,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const [
       allCash, allBank, allLedger, allStock, allInitialStock
     ] = await Promise.all([
-      db.cashTransactions.toArray(),
-      db.bankTransactions.toArray(),
-      db.ledgerTransactions.toArray(),
-      db.stockTransactions.toArray(),
-      db.initialStock.toArray(),
+      db.cash_transactions.toArray(),
+      db.bank_transactions.toArray(),
+      db.ap_ar_transactions.toArray(),
+      db.stock_transactions.toArray(),
+      db.initial_stock.toArray(),
     ]);
 
     const cashBalance = allCash.reduce((acc, tx) => acc + (tx.type === 'income' ? tx.actual_amount : -tx.actual_amount), 0);
@@ -151,7 +170,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (state.isSyncing) return;
     setState(prev => ({ ...prev, isSyncing: true }));
     
-    const queue = await db.syncQueue.orderBy('timestamp').toArray();
+    const queue = await db.sync_queue.orderBy('timestamp').toArray();
     if (queue.length === 0) {
         setState(prev => ({ ...prev, isSyncing: false }));
         return;
@@ -169,15 +188,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 case 'appendData':
                     result = await server.appendData(payloadWithoutId);
                     if (result && localId) {
-                         const tableName = payloadWithoutId.tableName;
-                         let localTableName: keyof AppDatabase;
-
-                         if (tableName === 'ap_ar_transactions') localTableName = 'ledgerTransactions';
-                         else if (tableName === 'cash_transactions') localTableName = 'cashTransactions';
-                         else if (tableName === 'bank_transactions') localTableName = 'bankTransactions';
-                         else if (tableName === 'stock_transactions') localTableName = 'stockTransactions';
-                         else localTableName = tableName.slice(0, -1) + 's' as any; // e.g. 'vendors'
-                        
+                        const localTableName = payloadWithoutId.tableName; // e.g. 'cash_transactions'
                         await db.table(localTableName).where({ id: localId }).modify({ id: result.id });
                     }
                     break;
@@ -191,9 +202,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 case 'deleteCategory': result = await server.deleteCategory(item.payload); break;
                 case 'addStockTransaction': result = await server.addStockTransaction(payloadWithoutId); 
                     if (result && localId) {
-                         await db.stockTransactions.where({ id: localId }).modify({ id: result.stockTx.id });
+                         await db.stock_transactions.where({ id: localId }).modify({ id: result.stockTx.id });
                          if(result.financialTx) {
-                            const finTable = result.financialTx.bank_id ? 'bankTransactions' : 'cashTransactions';
+                            const finTable = result.financialTx.bank_id ? 'bank_transactions' : 'cash_transactions';
                             await db.table(finTable).where({ linkedStockTxId: localId }).modify({ id: result.financialTx.id, linkedStockTxId: result.stockTx.id });
                          }
                     }
@@ -206,7 +217,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             }
 
             // If action succeeded, remove it from the queue
-            if (item.id) await db.syncQueue.delete(item.id);
+            if (item.id) await db.sync_queue.delete(item.id);
             
         } catch (error) {
             failedItems++;
@@ -219,8 +230,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         toast.error(`${failedItems} sync operations failed. Check console for details.`);
     } else {
         toast.success("All items synced successfully!");
-        // We can do a gentle reload here if needed, but optimistic UI should be sufficient
-        // await reloadData(); // Optional: uncomment for a full refresh post-sync
     }
 
     setState(prev => ({ ...prev, isSyncing: false }));
@@ -232,15 +241,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         const session = await getSession();
         if (!session) {
             setState(prev => ({...prev, isLoading: false, user: null }));
-            await db.appState.update(1, { user: null });
+            await db.app_state.update(1, { user: null });
             return;
         }
 
         setUser(session); // Set user immediately
 
-        const localUser = await db.appState.get(1);
+        const localUser = await db.app_state.get(1);
         if (!localUser || !localUser.user || localUser.user.id !== session.id || options?.force) {
-            await db.appState.put({
+            await db.app_state.put({
                 id: 1, user: session, fontSize: 'base', currency: 'BDT',
                 wastagePercentage: 0, showStockValue: false, lastSync: null
             });
@@ -286,16 +295,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
             await db.transaction('rw', db.tables, async () => {
                 await clearLocalDb(); // Clear everything before a full reload
-                await db.appState.put({
+                await db.app_state.put({
                     id: 1, user: session, fontSize: 'base', currency: 'BDT',
                     wastagePercentage: 0, showStockValue: false, lastSync: null
                 });
                 await bulkPut('categories', categoriesData); await bulkPut('vendors', vendorsData);
                 await bulkPut('clients', clientsData); await bulkPut('banks', banksData);
-                await bulkPut('cashTransactions', cashTxs); await bulkPut('bankTransactions', bankTxs);
-                await bulkPut('stockTransactions', stockTxs); await bulkPut('ledgerTransactions', ledgerTxsWithInstallments);
-                await bulkPut('monthlySnapshots', snapshotsData); await bulkPut('initialStock', initialStockData);
-                await db.appState.update(1, { lastSync: new Date().toISOString() });
+                await bulkPut('cash_transactions', cashTxs); await bulkPut('bank_transactions', bankTxs);
+                await bulkPut('stock_transactions', stockTxs); await bulkPut('ap_ar_transactions', ledgerTxsWithInstallments);
+                await bulkPut('monthly_snapshots', snapshotsData); await bulkPut('initial_stock', initialStockData);
+                await db.app_state.update(1, { lastSync: new Date().toISOString() });
             });
             setLoadedMonths({});
         }
@@ -314,23 +323,39 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }, [handleApiError, updateBalances, processSyncQueue, setUser]);
 
+  // Effect to check session on initial load and trigger data load
   useEffect(() => {
     const checkSessionAndLoad = async () => {
-        const session = await getSession();
-        setUser(session);
-        if (session) {
-            if (liveData.user && liveData.user.id === session.id) {
-                 setState(prev => ({ ...prev, isLoading: false }));
-                 updateBalances();
-            } else {
-                reloadData();
-            }
+      const session = await getSession();
+      setUser(session);
+      if (session) {
+        if (liveData.user?.id === session.id) {
+          setState(prev => ({ ...prev, isLoading: false }));
+          await updateBalances(); // Ensure balances are up-to-date
         } else {
-            setState(prev => ({ ...prev, isLoading: false }));
+          // If local user is different, force a full reload
+          await reloadData({ force: true });
         }
+      } else {
+        setState(prev => ({ ...prev, isLoading: false }));
+      }
     };
     checkSessionAndLoad();
-  }, []);
+  }, []); // Run only once on mount
+
+  // Effect to handle navigation based on user state
+  useEffect(() => {
+    if (state.isLoading) return; // Wait until loading is finished
+
+    const userIsLoggedIn = !!state.user;
+    const onLoginPage = pathname === '/login';
+
+    if (userIsLoggedIn && onLoginPage) {
+      router.replace('/');
+    } else if (!userIsLoggedIn && !onLoginPage) {
+      router.replace('/login');
+    }
+  }, [state.user, state.isLoading, pathname, router]);
 
   useEffect(() => {
     const handleOnline = () => {
@@ -356,16 +381,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       window.removeEventListener('offline', handleOffline);
     };
   }, [processSyncQueue]);
-
-
-  useEffect(() => {
-    if (state.isLoading) return;
-    if (pathname === '/login') {
-        if(state.user) router.replace('/');
-    } else {
-        if(!state.user) router.replace('/login');
-    }
-  }, [pathname, state.user, state.isLoading, router]);
   
   const loadRecycleBinData = useCallback(async () => {
     if (state.isOnline) {
@@ -430,10 +445,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         updateBalances,
         handleApiError,
         processSyncQueue,
+        login,
         logout,
         openInitialBalanceDialog,
         closeInitialBalanceDialog,
-        loadRecycleBinData, // Expose this to be used by the recycle bin tab
+        loadRecycleBinData,
+        setUser
     }}>
       <OnlineStatusIndicator />
       {children}
@@ -442,17 +459,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 }
 
 function useLiveDBData() {
-    // Note: appState.user is used for initial load, but the context's own state.user is the primary one after that.
-    const appState = useLiveQuery(() => db.appState.get(1), []);
-    const cashTransactions = useLiveQuery(() => db.cashTransactions.toArray(), []);
-    const bankTransactions = useLiveQuery(() => db.bankTransactions.toArray(), []);
-    const stockTransactions = useLiveQuery(() => db.stockTransactions.toArray(), []);
-    const ledgerTransactions = useLiveQuery(() => db.ledgerTransactions.orderBy('date').reverse().toArray(), []);
+    // Note: app_state.user is used for initial load, but the context's own state.user is the primary one after that.
+    const appState = useLiveQuery(() => db.app_state.get(1), []);
+    const cashTransactions = useLiveQuery(() => db.cash_transactions.toArray(), []);
+    const bankTransactions = useLiveQuery(() => db.bank_transactions.toArray(), []);
+    const stockTransactions = useLiveQuery(() => db.stock_transactions.toArray(), []);
+    const ledgerTransactions = useLiveQuery(() => db.ap_ar_transactions.orderBy('date').reverse().toArray(), []);
     const banks = useLiveQuery(() => db.banks.toArray(), []);
     const categories = useLiveQuery(() => db.categories.toArray(), []);
     const vendors = useLiveQuery(() => db.vendors.toArray(), []);
     const clients = useLiveQuery(() => db.clients.toArray(), []);
-    const syncQueueCount = useLiveQuery(() => db.syncQueue.count(), 0) ?? 0;
+    const syncQueueCount = useLiveQuery(() => db.sync_queue.count(), 0) ?? 0;
 
     const { cashCategories, bankCategories } = useMemo(() => {
         const dbCash: Category[] = [];

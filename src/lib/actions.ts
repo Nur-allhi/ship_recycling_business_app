@@ -4,7 +4,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { cookies } from 'next/headers';
 import { z } from 'zod';
-import { createSession, getSession, removeSession } from '@/lib/auth';
+import { getSession } from '@/lib/auth';
 import { startOfMonth, subMonths } from 'date-fns';
 
 // Helper function to create a Supabase client.
@@ -399,146 +399,13 @@ export async function deleteAllData() {
         }
         
         await logActivity("DELETED ALL DATA AND USERS.");
-        await logout();
+        // await logout();
 
         return { success: true };
     } catch (error: any) {
         console.error("Failed to delete all data:", error);
         throw new Error(error.message || "An unknown error occurred during data deletion.");
     }
-}
-
-// --- Auth Actions ---
-
-export async function hasUsers() {
-    const supabaseAdmin = createSupabaseClient(true);
-    const { data, error } = await supabaseAdmin.auth.admin.listUsers();
-    if(error) throw new Error(error.message);
-    return data.users.length > 0;
-}
-
-const LoginInputSchema = z.object({
-    username: z.string().email("Username must be a valid email address."),
-    password: z.string(),
-    rememberMe: z.boolean().optional(),
-});
-
-export async function login(input: z.infer<typeof LoginInputSchema>) {
-    const supabase = createSupabaseClient();
-    let isFirstUser = false;
-    
-    let { data, error } = await supabase.auth.signInWithPassword({
-        email: input.username,
-        password: input.password,
-    });
-    
-    if (error) {
-        if (error.message === 'Invalid login credentials') {
-             const supabaseAdmin = createSupabaseClient(true);
-             const { data: allUsers } = await supabaseAdmin.auth.admin.listUsers();
-
-             if(allUsers?.users.length === 0) {
-                isFirstUser = true;
-                const { error: createError } = await supabaseAdmin.auth.admin.createUser({
-                    email: input.username,
-                    password: input.password,
-                    email_confirm: true, 
-                    user_metadata: { role: 'admin' } 
-                });
-                if(createError) throw new Error(createError.message);
-             } else {
-                throw new Error(error.message);
-             }
-            
-            const { data: loginData, error: loginError } = await supabase.auth.signInWithPassword({
-                email: input.username,
-                password: input.password,
-            });
-            if(loginError) throw new Error(loginError.message);
-            data = loginData;
-        } else {
-           throw new Error(error.message);
-        }
-    }
-    
-    const sessionPayload = {
-        id: data.user.id,
-        username: data.user.email!,
-        role: data.user.user_metadata.role || 'user',
-        accessToken: data.session.access_token,
-    };
-    
-    await createSession(sessionPayload, input.rememberMe);
-
-    let needsData = false;
-    if (!isFirstUser) {
-        // Temporarily create a new authenticated client just for this check
-        const tempAuthedSupabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
-        const { count: cashCount, error: cashError } = await tempAuthedSupabase.from('cash_transactions').select('id', { count: 'exact', head: true });
-        if (cashError && cashError.code !== '42P01') throw cashError;
-        const { count: bankCount, error: bankError } = await tempAuthedSupabase.from('bank_transactions').select('id', { count: 'exact', head: true });
-        if (bankError && bankError.code !== '42P01') throw bankError;
-        needsData = (cashCount ?? 0) === 0 && (bankCount ?? 0) === 0;
-    }
-    
-    if (isFirstUser) {
-        await logActivity("Created the first admin user and logged in.");
-    } else {
-        await logActivity("User logged in.");
-    }
-
-    return { success: true, needsInitialBalance: isFirstUser || needsData };
-}
-
-export async function getUsers() {
-    const session = await getSession();
-    if(session?.role !== 'admin') throw new Error("Only admins can view users.");
-
-    const supabase = createSupabaseClient(true);
-    const { data, error } = await supabase.auth.admin.listUsers();
-    if (error) throw new Error(error.message);
-    return data.users.map(u => ({ id: u.id, username: u.email || 'N/A', role: u.user_metadata.role || 'user' }));
-}
-
-const AddUserInputSchema = z.object({
-    username: z.string().email("Username must be a valid email address."),
-    password: z.string().min(6),
-    role: z.enum(['admin', 'user']),
-});
-
-export async function addUser(input: z.infer<typeof AddUserInputSchema>) {
-    const session = await getSession();
-    if(session?.role !== 'admin') throw new Error("Only admins can add users.");
-
-    const supabase = createSupabaseClient(true);
-    const { error } = await supabase.auth.admin.createUser({
-        email: input.username,
-        password: input.password,
-        email_confirm: true,
-        user_metadata: { role: input.role }
-    });
-    if (error) {
-        throw new Error(error.message);
-    }
-    await logActivity(`Added new user: ${input.username} with role: ${input.role}`);
-    return { success: true };
-}
-
-export async function deleteUser(id: string) {
-    const session = await getSession();
-    if(session?.role !== 'admin') throw new Error("Only admins can delete users.");
-
-    const supabase = createSupabaseClient(true);
-    const { error } = await supabase.auth.admin.deleteUser(id);
-    if (error) throw new Error(error.message);
-    
-    await logActivity(`Deleted user with ID: ${id}`);
-    return { success: true };
-}
-
-export async function logout() {
-  await logActivity("User logged out.");
-  await removeSession();
 }
 
 // --- Specific App Actions ---

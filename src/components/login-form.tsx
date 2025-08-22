@@ -1,21 +1,23 @@
+
 "use client";
 
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { hasUsers } from '@/lib/actions';
+import { hasUsers, login } from '@/app/auth/actions';
 import { Loader2 } from 'lucide-react';
 import Logo from './logo';
 import { Checkbox } from './ui/checkbox';
 import { useAppContext } from '@/app/context/app-context';
-import { useAppActions } from '@/app/context/app-actions';
+
 
 const formSchema = z.object({
   username: z.string().email("Username must be a valid email address."),
@@ -26,9 +28,10 @@ const formSchema = z.object({
 type FormData = z.infer<typeof formSchema>;
 
 export function LoginForm() {
-  const { login } = useAppActions();
+  const { reloadData } = useAppContext();
   const [isLoading, setIsLoading] = useState(false);
   const [doesAnyUserExist, setDoesAnyUserExist] = useState(true);
+  const router = useRouter();
   
   useEffect(() => {
     const checkUsers = async () => {
@@ -72,7 +75,9 @@ export function LoginForm() {
       }
 
       toast.success("Login Successful", { description: "Welcome back!" });
-      // The context will handle the redirect
+      // Force a full data reload to ensure the new session is picked up everywhere
+      await reloadData({ force: true, needsInitialBalance: result.needsInitialBalance });
+      router.push('/');
     } catch (error: any) {
       toast.error(
         'Login Failed',
