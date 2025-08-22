@@ -388,7 +388,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                     <Button
                         variant={"outline"}
                         className={cn(
-                        "w-full justify-start text-left font-normal",
+                        "w-full justify-start text-left font-normal border-2",
                         !field.value && "text-muted-foreground"
                         )}
                     >
@@ -427,6 +427,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                     title={`Select a ${settlementContactType}`}
                     placeholder={`Select a ${settlementContactType}`}
                     items={(settlementContacts || []).map(c => ({ value: c.id, label: c.name }))}
+                    className="border-2"
                 />
             )}
         />
@@ -462,12 +463,12 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
                 <Label htmlFor="expected_amount">Transaction Value</Label>
-                <Input id="expected_amount" type="number" step="0.01" {...register('expected_amount')} placeholder="e.g., Invoice total"/>
+                <Input id="expected_amount" type="number" step="0.01" {...register('expected_amount')} placeholder="e.g., Invoice total" className="border-2"/>
                 {errors.expected_amount && <p className="text-sm text-destructive">{(errors.expected_amount as any).message}</p>}
             </div>
             <div className="space-y-2">
                 <Label htmlFor="actual_amount">Amount Paid/Received</Label>
-                <Input id="actual_amount" type="number" step="0.01" {...register('actual_amount')} placeholder="e.g., Actual cash paid"/>
+                <Input id="actual_amount" type="number" step="0.01" {...register('actual_amount')} placeholder="e.g., Actual cash paid" className="border-2"/>
                 {errors.actual_amount && <p className="text-sm text-destructive">{(errors.actual_amount as any).message}</p>}
             </div>
         </div>
@@ -481,7 +482,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                 </div>
                 <div className="space-y-2">
                     <Label htmlFor="difference_reason">Reason for Difference</Label>
-                    <Input id="difference_reason" {...register('difference_reason')} placeholder="e.g., Discount, Rounding, Late fee" />
+                    <Input id="difference_reason" {...register('difference_reason')} placeholder="e.g., Discount, Rounding, Late fee" className="border-2"/>
                 </div>
             </div>
         )}
@@ -502,6 +503,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                 onValueChange={(value) => setTransactionType(value as TransactionType)}
                 title="Select Transaction Type"
                 items={transactionTypeItems.map(item => ({value: item.value, label: <span className="flex items-center gap-2"><item.icon className="h-4 w-4" />{item.label}</span>}))}
+                className="border-2"
             />
         ) : (
             <Tabs value={transactionType} onValueChange={(value) => setTransactionType(value as TransactionType)} className="w-full">
@@ -531,6 +533,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                                     title="Select a category"
                                     placeholder="Select a category"
                                     items={cashCategoryItems}
+                                    className="border-2"
                                 />
                             )}
                         />
@@ -539,7 +542,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                     {isCashSettlement && settlementContactFields}
                     <div className="space-y-2">
                         <Label htmlFor="description-cash">Description</Label>
-                        <Input id="description-cash" {...register('description')} placeholder="e.g., Weekly groceries" />
+                        <Input id="description-cash" {...register('description')} placeholder="e.g., Weekly groceries" className="border-2"/>
                         {errors.description && <p className="text-sm text-destructive">{(errors.description as any).message}</p>}
                     </div>
                     {renderDiscrepancyFields()}
@@ -561,6 +564,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                                     title="Select a bank account"
                                     placeholder="Select a bank account"
                                     items={bankAccountItems}
+                                    className="border-2"
                                 />
                             )}
                         />
@@ -578,6 +582,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                                     title="Select a category"
                                     placeholder="Select a category"
                                     items={bankCategoryItems}
+                                    className="border-2"
                                 />
                             )}
                         />
@@ -586,7 +591,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                     {isBankSettlement && settlementContactFields}
                     <div className="space-y-2">
                         <Label htmlFor="description-bank">Description</Label>
-                        <Input id="description-bank" {...register('description')} placeholder="e.g., Monthly salary" />
+                        <Input id="description-bank" {...register('description')} placeholder="e.g., Monthly salary" className="border-2"/>
                         {errors.description && <p className="text-sm text-destructive">{(errors.description as any).message}</p>}
                     </div>
                     {renderDiscrepancyFields()}
@@ -615,7 +620,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                         {stockType === 'purchase' ? (
                             <div className="flex items-center gap-2">
                                 {isNewStockItem ? (
-                                    <Input {...register('stockItemName')} placeholder="e.g. Iron Rod"/>
+                                    <Input {...register('stockItemName')} placeholder="e.g. Iron Rod" className="border-2"/>
                                 ) : (
                                     <Controller
                                         control={control}
@@ -626,7 +631,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                                                 value={field.value}
                                                 title="Select an item"
                                                 placeholder="Select existing item"
-                                                className="flex-1"
+                                                className="flex-1 border-2"
                                                 items={stockItemsForPurchase}
                                             />
                                         )}
@@ -647,6 +652,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                                         title="Select an item"
                                         placeholder="Select item to sell"
                                         items={stockItemsForSale}
+                                        className="border-2"
                                     />
                                 )}
                             />
@@ -656,12 +662,12 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-2">
                             <Label>Weight (kg)</Label>
-                            <Input type="number" step="0.01" {...register('weight')} placeholder="0.00"/>
+                            <Input type="number" step="0.01" {...register('weight')} placeholder="0.00" className="border-2"/>
                             {errors.weight && <p className="text-sm text-destructive">{(errors.weight as any).message}</p>}
                         </div>
                         <div className="space-y-2">
                             <Label>Price per kg</Label>
-                            <Input type="number" step="0.01" {...register('pricePerKg')} placeholder="0.00"/>
+                            <Input type="number" step="0.01" {...register('pricePerKg')} placeholder="0.00" className="border-2"/>
                             {errors.pricePerKg && <p className="text-sm text-destructive">{(errors.pricePerKg as any).message}</p>}
                         </div>
                     </div>
@@ -694,6 +700,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                                     title="Select a bank account"
                                     placeholder="Select a bank account"
                                     items={bankAccountItems}
+                                    className="border-2"
                                 />
                             )}
                         />
@@ -725,6 +732,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                                                 { value: 'new', label: <span className="flex items-center gap-2"><Plus className="h-4 w-4"/>Add New</span>}
                                             ]
                                         }
+                                        className="border-2"
                                     />
                                 )}
                             />
@@ -734,7 +742,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                                 <div className="flex items-end gap-2 pt-2 animate-fade-in">
                                     <div className="flex-grow space-y-1">
                                         <Label htmlFor="newContact">New {stockCreditContactType} Name</Label>
-                                        <Input {...register('newContact')} placeholder={`Enter new ${stockCreditContactType.toLowerCase()} name`}/>
+                                        <Input {...register('newContact')} placeholder={`Enter new ${stockCreditContactType.toLowerCase()} name`} className="border-2"/>
                                     </div>
                                 </div>
                             )}
@@ -743,7 +751,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                     )}
                     <div className="space-y-2">
                         <Label htmlFor="description-stock">Description (Optional)</Label>
-                        <Input id="description-stock" {...register('description')} placeholder="e.g., invoice #, delivery details" />
+                        <Input id="description-stock" {...register('description')} placeholder="e.g., invoice #, delivery details" className="border-2"/>
                         {errors.description && <p className="text-sm text-destructive">{(errors.description as any).message}</p>}
                     </div>
                   </div>
@@ -757,13 +765,13 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                         </div>
                         <div className="space-y-2">
                             <Label htmlFor="amount-transfer">Amount</Label>
-                            <Input id="amount-transfer" type="number" step="0.01" {...register('amount')} placeholder="0.00"/>
+                            <Input id="amount-transfer" type="number" step="0.01" {...register('amount')} placeholder="0.00" className="border-2"/>
                             {errors.amount && <p className="text-sm text-destructive">{(errors.amount as any).message}</p>}
                         </div>
                     </div>
                      <div className="space-y-2">
                         <Label htmlFor="description-transfer">Description (Optional)</Label>
-                        <Input id="description-transfer" {...register('description')} placeholder="e.g., Owner's drawing" />
+                        <Input id="description-transfer" {...register('description')} placeholder="e.g., Owner's drawing" className="border-2"/>
                         {errors.description && <p className="text-sm text-destructive">{(errors.description as any).message}</p>}
                     </div>
                     <div className="space-y-2">
@@ -793,6 +801,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                                         title="Select destination bank"
                                         placeholder="Select a bank account"
                                         items={bankAccountItems}
+                                        className="border-2"
                                     />
                                 )}
                             />
@@ -812,6 +821,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                                         title="Select source bank"
                                         placeholder="Select a bank account"
                                         items={bankAccountItems}
+                                        className="border-2"
                                     />
                                 )}
                             />
@@ -829,7 +839,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                         </div>
                         <div className="space-y-2">
                             <Label htmlFor="amount-ledger">Amount</Label>
-                            <Input id="amount-ledger" type="number" step="0.01" {...register('amount')} placeholder="0.00"/>
+                            <Input id="amount-ledger" type="number" step="0.01" {...register('amount')} placeholder="0.00" className="border-2"/>
                             {errors.amount && <p className="text-sm text-destructive">{(errors.amount as any).message}</p>}
                         </div>
                     </div>
@@ -861,6 +871,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                                         title={`Select a ${currentLedgerContactType}`}
                                         placeholder={`Select a ${currentLedgerContactType}`}
                                         items={currentLedgerContactItems}
+                                        className="border-2"
                                     />
                                 )}
                             />
@@ -870,7 +881,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                                 <div className="flex items-end gap-2 pt-2 animate-fade-in">
                                     <div className="flex-grow space-y-1">
                                         <Label htmlFor="newContact">New {currentLedgerContactType} Name</Label>
-                                        <Input {...register('newContact')} placeholder={`Enter new ${currentLedgerContactType.toLowerCase()} name`}/>
+                                        <Input {...register('newContact')} placeholder={`Enter new ${currentLedgerContactType.toLowerCase()} name`} className="border-2"/>
                                     </div>
                                 </div>
                             )}
@@ -879,7 +890,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                     )}
                         <div className="space-y-2">
                         <Label htmlFor="description-ap">Description</Label>
-                        <Input id="description-ap" {...register('description')} placeholder="e.g., Raw materials from X vendor" />
+                        <Input id="description-ap" {...register('description')} placeholder="e.g., Raw materials from X vendor" className="border-2"/>
                         {errors.description && <p className="text-sm text-destructive">{(errors.description as any).message}</p>}
                     </div>
                   </div>
