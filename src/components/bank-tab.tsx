@@ -2,7 +2,8 @@
 "use client"
 
 import { useState, useMemo, useEffect } from "react"
-import { useAppContext } from "@/app/store"
+import { useAppContext } from "@/app/context/app-context"
+import { useAppActions } from "@/app/context/app-actions"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card"
 import {
@@ -38,7 +39,8 @@ type SortKey = keyof BankTransaction | null;
 type SortDirection = 'asc' | 'desc';
 
 export function BankTab() {
-  const { bankTransactions, transferFunds, deleteBankTransaction, deleteMultipleBankTransactions, currency, user, banks, isLoading } = useAppContext()
+  const { bankTransactions, currency, user, banks, isLoading } = useAppContext()
+  const { transferFunds, deleteBankTransaction, deleteMultipleBankTransactions } = useAppActions();
   const [isTransferSheetOpen, setIsTransferSheetOpen] = useState(false)
   const [editSheetState, setEditSheetState] = useState<{isOpen: boolean, transaction: BankTransaction | null}>({ isOpen: false, transaction: null});
   const [deleteDialogState, setDeleteDialogState] = useState<{isOpen: boolean, txToDelete: BankTransaction | null, txsToDelete: BankTransaction[] | null}>({ isOpen: false, txToDelete: null, txsToDelete: null });

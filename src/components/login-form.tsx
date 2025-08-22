@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useForm } from 'react-hook-form';
@@ -11,11 +10,12 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { login as serverLogin, hasUsers } from '@/app/actions';
+import { hasUsers } from '@/lib/actions';
 import { Loader2 } from 'lucide-react';
 import Logo from './logo';
 import { Checkbox } from './ui/checkbox';
-import { useAppContext } from '@/app/store';
+import { useAppContext } from '@/app/context/app-context';
+import { useAppActions } from '@/app/context/app-actions';
 
 const formSchema = z.object({
   username: z.string().email("Username must be a valid email address."),
@@ -26,7 +26,7 @@ const formSchema = z.object({
 type FormData = z.infer<typeof formSchema>;
 
 export function LoginForm() {
-  const { login } = useAppContext();
+  const { login } = useAppActions();
   const [isLoading, setIsLoading] = useState(false);
   const [doesAnyUserExist, setDoesAnyUserExist] = useState(true);
   
@@ -63,7 +63,7 @@ export function LoginForm() {
   const onSubmit = async (data: FormData) => {
     setIsLoading(true);
     try {
-      await login(data);
+      const result = await login(data);
       
       if (data.rememberMe) {
           localStorage.setItem('rememberedUsername', data.username);

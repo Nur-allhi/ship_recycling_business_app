@@ -20,7 +20,8 @@ import { Calendar } from './ui/calendar';
 import { CalendarIcon, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
-import { useAppContext } from '@/app/store';
+import { useAppContext } from '@/app/context/app-context';
+import { useAppActions } from '@/app/context/app-actions';
 import { toast } from 'sonner';
 import { Input } from './ui/input';
 import { ResponsiveSelect } from './ui/responsive-select';
@@ -58,7 +59,8 @@ interface SettlePaymentDialogProps {
 }
 
 export function SettlePaymentDialog({ isOpen, setIsOpen, contact }: SettlePaymentDialogProps) {
-    const { recordPayment, currency, banks } = useAppContext();
+    const { currency, banks } = useAppContext();
+    const { recordPayment } = useAppActions();
     const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
     
     const remainingBalance = contact.total_amount - contact.total_paid;

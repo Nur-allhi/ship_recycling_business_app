@@ -4,7 +4,7 @@
 import React, { useState } from 'react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from './ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
-import { useAppContext } from '@/app/store';
+import { useAppContext } from '@/app/context/app-context';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { PayablesList } from './payables-list';
 import { ReceivablesList } from './receivables-list';

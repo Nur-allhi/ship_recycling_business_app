@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { useAppContext } from './store';
+import { useAppContext } from './context/app-context';
 import { cn } from '@/lib/utils';
 import { Wallet, Landmark, Boxes, Settings, PlusCircle, LogOut, CreditCard, Users, LineChart, Loader2 } from 'lucide-react';
 import { DashboardTab } from '@/components/dashboard-tab';

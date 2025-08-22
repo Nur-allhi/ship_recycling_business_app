@@ -2,7 +2,8 @@
 "use client"
 
 import { useRef, useState, useMemo, ReactNode } from "react"
-import { useAppContext } from "@/app/store"
+import { useAppContext } from "@/app/context/app-context"
+import { useAppActions } from "@/app/context/app-actions"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -26,10 +27,13 @@ type SettingsPage = 'appearance' | 'general' | 'contacts' | 'users' | 'activity_
 function AppearanceSettings() {
   const {
     fontSize,
-    setFontSize,
     currency,
-    setCurrency,
   } = useAppContext();
+
+  const {
+    setFontSize,
+    setCurrency,
+  } = useAppActions();
 
   const handleCurrencyChange = (value: string) => {
     setCurrency(value);
@@ -77,15 +81,17 @@ function AppearanceSettings() {
 function GeneralSettings() {
   const {
     banks,
-    addBank,
     cashCategories,
     bankCategories,
-    addCategory,
-    deleteCategory,
     wastagePercentage,
-    setWastagePercentage,
     openInitialBalanceDialog,
   } = useAppContext();
+  const {
+    addBank,
+    addCategory,
+    deleteCategory,
+    setWastagePercentage,
+  } = useAppActions();
 
   const newCategoryNameRef = useRef<HTMLInputElement>(null)
   const [newCategoryType, setNewCategoryType] = useState<'cash' | 'bank'>('cash');

@@ -2,7 +2,8 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { useAppContext } from "@/app/store";
+import { useAppActions } from "@/app/context/app-actions";
+import { useAppContext } from "@/app/context/app-context";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -25,7 +26,8 @@ import { PdfExportDialog } from "./pdf-export-dialog";
 
 
 export function ExportImportTab() {
-  const { handleExport, handleImport, handleDeleteAllData, user } = useAppContext();
+  const { handleExport, handleImport, handleDeleteAllData } = useAppActions();
+  const { user } = useAppContext();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isPdfDialogOpen, setIsPdfDialogOpen] = useState(false);

@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
@@ -13,9 +12,9 @@ import { Label } from '@/components/ui/label';
 import { ResponsiveSelect } from '@/components/ui/responsive-select';
 import { Plus, Trash2, Loader2, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
-import { getUsers, addUser, deleteUser } from '@/app/actions';
+import { getUsers, addUser, deleteUser } from '@/lib/actions';
 import type { User } from '@/lib/types';
-import { useAppContext } from '@/app/store';
+import { useAppContext } from '@/app/context/app-context';
 import {
   AlertDialog,
   AlertDialogAction,

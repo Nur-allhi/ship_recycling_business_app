@@ -6,7 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Button } from '@/components/ui/button';
 import { Loader2, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
-import { readData } from '@/app/actions';
+import { readData } from '@/lib/actions';
 import type { ActivityLog } from '@/lib/types';
 import { format, parseISO } from 'date-fns';
 

@@ -2,7 +2,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { useAppContext } from "@/app/store";
+import { useAppContext } from "@/app/context/app-context";
 import type { Vendor, Client, LedgerTransaction, PaymentInstallment } from "@/lib/types";
 import {
   Dialog,
@@ -152,7 +152,7 @@ export function ContactHistoryDialog({ isOpen, setIsOpen, contact, contactType }
             3: { halign: 'right' },
             4: { halign: 'right' },
         },
-        didParseCell: function(data) {
+        didParseCell: function(data: any) {
             // Center align the footer labels
             if (data.section === 'foot') {
                 if (data.column.index === 1) {
@@ -166,7 +166,7 @@ export function ContactHistoryDialog({ isOpen, setIsOpen, contact, contactType }
                 }
             }
         },
-        didDrawPage: (data) => {
+        didDrawPage: (data: any) => {
             doc.setFontSize(8);
             doc.setTextColor(150);
             doc.text(

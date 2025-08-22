@@ -2,7 +2,8 @@
 "use client";
 
 import { useRef, useState }from 'react';
-import { useAppContext } from '@/app/store';
+import { useAppContext } from '@/app/context/app-context';
+import { useAppActions } from '@/app/context/app-actions';
 import { Button } from './ui/button';
 import {
   Dialog,
@@ -34,7 +35,8 @@ interface StockItemEntry {
 }
 
 export function InitialBalanceDialog({ isOpen }: InitialBalanceDialogProps) {
-  const { setInitialBalances, addInitialStockItem, banks, closeInitialBalanceDialog } = useAppContext();
+  const { banks, closeInitialBalanceDialog } = useAppContext();
+  const { setInitialBalances, addInitialStockItem } = useAppActions();
   const cashRef = useRef<HTMLInputElement>(null);
   const bankRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const [stockItems, setStockItems] = useState<StockItemEntry[]>([]);
@@ -73,6 +75,7 @@ export function InitialBalanceDialog({ isOpen }: InitialBalanceDialogProps) {
             'Invalid Input',
             {description: 'Please enter a valid, non-negative number for the cash balance.',}
           );
+          setIsSaving(false);
           return;
         }
         
@@ -84,6 +87,7 @@ export function InitialBalanceDialog({ isOpen }: InitialBalanceDialogProps) {
                 'Invalid Input',
                 {description: `Please enter a valid, non-negative number for ${bank.name}.`,}
             );
+            setIsSaving(false);
             return;
           }
           bankTotals[bank.id] = value;
@@ -98,6 +102,7 @@ export function InitialBalanceDialog({ isOpen }: InitialBalanceDialogProps) {
                 toast.error('Invalid Stock Item', {
                     description: `Please ensure all fields for "${item.name || 'new item'}" are filled correctly.`
                 });
+                setIsSaving(false);
                 return;
             }
         }

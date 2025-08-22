@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { useAppContext } from "@/app/store";
+import { useAppContext } from "@/app/context/app-context";
 import { LedgerTransaction } from "@/lib/types";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "./ui/card";

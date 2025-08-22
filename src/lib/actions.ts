@@ -1,4 +1,3 @@
-
 'use server';
 
 import { createClient } from '@supabase/supabase-js';
@@ -33,7 +32,7 @@ const getAuthenticatedSupabaseClient = async () => {
 };
 
 
-const handleApiError = (error: any) => {
+export async function handleApiError(error: any) {
     const isAuthError = error.message.includes('JWT') || error.message.includes('Unauthorized') || error.message.includes("SESSION_EXPIRED");
     if (isAuthError) {
         // This specific error message will be caught by the client to trigger a logout.
@@ -99,7 +98,7 @@ export async function readData(input: z.infer<typeof ReadDataInputSchema>) {
     }
     return data;
   } catch (error) {
-    return handleApiError(error);
+    return await handleApiError(error);
   }
 }
 
@@ -124,7 +123,7 @@ export async function readDeletedData(input: z.infer<typeof ReadDataInputSchema>
         }
         return data;
     } catch (error) {
-        return handleApiError(error);
+        return await handleApiError(error);
     }
 }
 
@@ -163,7 +162,7 @@ export async function appendData(input: z.infer<typeof AppendDataInputSchema>) {
         return Array.isArray(input.data) ? data : data?.[0];
 
     } catch (error) {
-        return handleApiError(error);
+        return await handleApiError(error);
     }
 }
 
@@ -194,7 +193,7 @@ export async function updateData(input: z.infer<typeof UpdateDataInputSchema>) {
     }
     return data;
   } catch(error) {
-    return handleApiError(error);
+    return await handleApiError(error);
   }
 }
 
@@ -224,7 +223,7 @@ export async function deleteData(input: z.infer<typeof DeleteDataInputSchema>) {
 
     return { success: true };
   } catch(error) {
-    return handleApiError(error);
+    return await handleApiError(error);
   }
 }
 
@@ -251,7 +250,7 @@ export async function restoreData(input: z.infer<typeof RestoreDataInputSchema>)
 
         return { success: true };
     } catch (error) {
-        return handleApiError(error);
+        return await handleApiError(error);
     }
 }
 
@@ -279,7 +278,7 @@ export async function emptyRecycleBin() {
         return { success: true };
 
     } catch (error: any) {
-        return handleApiError(error);
+        return await handleApiError(error);
     }
 }
 
@@ -307,7 +306,7 @@ export async function exportAllData() {
         await logActivity("Exported all data to a backup file.");
         return exportedData;
     } catch (error) {
-        return handleApiError(error);
+        return await handleApiError(error);
     }
 }
 
@@ -625,14 +624,14 @@ export async function getBalances() {
             totalReceivables
         };
     } catch(e) {
-        return handleApiError(e);
+        return await handleApiError(e);
     }
 }
 
 
 // This is a shared helper function for recording payments.
 async function applyPaymentToLedger(
-    supabase: ReturnType<typeof getAuthenticatedSupabaseClient>,
+    supabase: any,
     contactId: string,
     paymentAmount: number,
     paymentDate: string,
@@ -651,7 +650,7 @@ async function applyPaymentToLedger(
         throw new Error("No outstanding balance to settle for this contact.");
     }
     
-    const totalOutstanding = outstandingTxs.reduce((acc, tx) => acc + (tx.amount - tx.paid_amount), 0);
+    const totalOutstanding = outstandingTxs.reduce((acc: number, tx: any) => acc + (tx.amount - tx.paid_amount), 0);
     if (paymentAmount > totalOutstanding) {
         throw new Error(`Payment amount (${paymentAmount}) exceeds the total outstanding balance (${totalOutstanding}).`);
     }
@@ -742,7 +741,7 @@ export async function recordPaymentAgainstTotal(input: z.infer<typeof RecordPaym
 
     } catch (error: any) {
         console.error("Error recording payment:", error);
-        return handleApiError(error);
+        return await handleApiError(error);
     }
 }
 
@@ -800,7 +799,7 @@ export async function recordDirectPayment(input: z.infer<typeof RecordDirectPaym
 
     } catch (error: any) {
         console.error("Error in direct payment recording:", error);
-        return handleApiError(error);
+        return await handleApiError(error);
     }
 }
     
@@ -916,11 +915,3 @@ export async function setInitialBalances(input: z.infer<typeof SetInitialBalance
     await logActivity("Set initial cash and bank balances.");
     return { success: true };
 }
-    
-
-
-
-
-
-
-

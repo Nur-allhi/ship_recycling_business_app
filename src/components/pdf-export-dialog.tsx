@@ -1,8 +1,7 @@
-
 "use client";
 
 import { useState } from 'react';
-import { useAppContext } from '@/app/store';
+import { useAppContext } from '@/app/context/app-context';
 import { Button } from './ui/button';
 import {
   Dialog,
@@ -23,7 +22,7 @@ import { cn } from '@/lib/utils';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import type { CashTransaction, BankTransaction, StockTransaction } from '@/lib/types';
-import { readData } from '@/app/actions';
+import { readData } from '@/lib/actions';
 
 
 interface PdfExportDialogProps {
@@ -112,7 +111,7 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
         finalY = 35;
         
         if (dataSource === 'cash' || dataSource === 'bank') {
-            let allTxs: (CashTransaction | BankTransaction)[] = dataSource === 'cash' ? [...cashTransactions] : [...bankTransactions];
+            let allTxs: (CashTransaction | BankTransaction)[] = dataSource === 'cash' ? [...(cashTransactions || [])] : [...(bankTransactions || [])];
             if (dataSource === 'bank' && selectedBankId !== 'all') {
                 allTxs = allTxs.filter(tx => (tx as BankTransaction).bank_id === selectedBankId);
             }
@@ -160,7 +159,7 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
             }
 
         } else { // Stock
-            const { totalPurchaseValue, totalSaleValue } = stockTransactions.reduce((acc, tx) => {
+            const { totalPurchaseValue, totalSaleValue } = (stockTransactions || []).reduce((acc, tx) => {
                 if (tx.type === 'purchase') acc.totalPurchaseValue += tx.actual_amount;
                 else acc.totalSaleValue += tx.actual_amount;
                 return acc;
@@ -175,7 +174,7 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
 
             tableHeaders = [['Date', 'Description', 'Item', 'Type', 'Weight (kg)', 'Expected', 'Actual', 'Diff.', 'Reason']];
 
-            tableData = stockTransactions.sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime()).map(tx => [
+            tableData = (stockTransactions || []).sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime()).map((tx: StockTransaction) => [
                 format(new Date(tx.date), 'dd-MM-yyyy'),
                 tx.description || '',
                 tx.stockItemName,
@@ -197,7 +196,7 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
             styles: { font: 'Helvetica', fontSize: 8 },
             headStyles: { fillColor: [34, 49, 63], textColor: 255, fontStyle: 'bold', halign: 'center' },
             columnStyles: columnStyles,
-            didDrawPage: (data) => {
+            didDrawPage: (data: any) => {
                 doc.setFontSize(8);
                 doc.setTextColor(150);
                 doc.text('System Generated Report', data.settings.margin.left, doc.internal.pageSize.getHeight() - 10);

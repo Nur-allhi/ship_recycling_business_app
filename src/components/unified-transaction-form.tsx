@@ -1,11 +1,11 @@
-
 "use client";
 
 import { useState, useEffect, useMemo } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { useAppContext } from '@/app/store';
+import { useAppActions } from '@/app/context/app-actions';
+import { useAppContext } from '@/app/context/app-context';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -81,12 +81,6 @@ const cashSchema = baseSchema.extend({
     category: z.string({ required_error: "Category is required." }),
     description: z.string().min(1, "Description is required."),
     contact_id: z.string().optional(),
-}).superRefine((data, ctx) => {
-    if (data.category === 'A/R Settlement' || data.category === 'A/P Settlement') {
-        if (!data.contact_id) {
-           ctx.addIssue({ code: 'custom', message: `A contact is required for settlements.`, path: ['contact_id'] });
-        }
-    }
 });
 
 const bankSchema = baseSchema.extend({
@@ -97,12 +91,6 @@ const bankSchema = baseSchema.extend({
     category: z.string({ required_error: "Category is required." }),
     description: z.string().min(1, "Description is required."),
     contact_id: z.string().optional(),
-}).superRefine((data, ctx) => {
-    if (data.category === 'A/R Settlement' || data.category === 'A/P Settlement') {
-        if (!data.contact_id) {
-           ctx.addIssue({ code: 'custom', message: `A contact is required for settlements.`, path: ['contact_id'] });
-        }
-    }
 });
 
 
@@ -176,6 +164,9 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
   const [transactionType, setTransactionType] = useState<TransactionType>('cash');
   const isMobile = useIsMobile();
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
+  const [isCashSettlement, setIsCashSettlement] = useState(false);
+  const [isBankSettlement, setIsBankSettlement] = useState(false);
+
   
   const { 
     addCashTransaction, 
@@ -192,6 +183,10 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
     clients,
     banks,
     currency,
+  } = useAppActions();
+
+  const {
+    user, // Assuming user context is available here for admin checks
   } = useAppContext();
   
   const currentSchema = formSchemas[transactionType];
@@ -212,6 +207,17 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
   const cashCategoryName = watch('category');
   const bankCategoryName = watch('category');
   const [isNewStockItem, setIsNewStockItem] = useState(false);
+
+  useEffect(() => {
+      const isSettlement = cashCategoryName === 'A/R Settlement' || cashCategoryName === 'A/P Settlement';
+      setIsCashSettlement(isSettlement);
+  }, [cashCategoryName]);
+
+  useEffect(() => {
+    const isSettlement = bankCategoryName === 'A/R Settlement' || bankCategoryName === 'A/P Settlement';
+    setIsBankSettlement(isSettlement);
+  }, [bankCategoryName]);
+
 
   const expectedAmount = watch('expected_amount');
   const actualAmount = watch('actual_amount');
@@ -237,6 +243,8 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
         date: new Date(),
     });
     setIsNewStockItem(false);
+    setIsCashSettlement(false);
+    setIsBankSettlement(false);
   }, [transactionType, reset]);
   
   useEffect(() => {
@@ -251,11 +259,8 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
         
         switch(transactionType) {
             case 'cash': {
-                const category = cashCategories.find(c => c.name === data.category);
-                if (!category) throw new Error("Selected category is invalid.");
-                
                 await addCashTransaction({
-                    type: category.direction === 'credit' ? 'income' : 'expense',
+                    type: cashCategories.find(c => c.name === data.category)!.direction === 'credit' ? 'income' : 'expense',
                     expected_amount: data.expected_amount,
                     actual_amount: data.actual_amount,
                     difference: finalDifference,
@@ -268,11 +273,8 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                 break;
             }
             case 'bank': {
-                 const selectedCategory = bankCategories.find(c => c.name === data.category);
-                 if(!selectedCategory) throw new Error("Could not find a valid direction for the selected category.");
-
                  await addBankTransaction({
-                    type: selectedCategory.direction === 'credit' ? 'deposit' : 'withdrawal',
+                    type: bankCategories.find(c => c.name === data.category)!.direction === 'credit' ? 'deposit' : 'withdrawal',
                     expected_amount: data.expected_amount,
                     actual_amount: data.actual_amount,
                     difference: finalDifference,
@@ -296,6 +298,8 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                         stockContactName = newContact.name;
                     } else {
                         stockContactId = data.contact_id;
+                        const contactList = data.stockType === 'purchase' ? vendors : clients;
+                        stockContactName = contactList.find(c => c.id === stockContactId)?.name;
                     }
                     if (!stockContactId) throw new Error("Contact ID is required for credit transaction.");
                 }
@@ -364,6 +368,9 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
   const currentLedgerContactType = ledgerType === 'payable' ? 'Vendor' : 'Client';
   const currentLedgerContacts = ledgerType === 'payable' ? vendors : clients;
   
+  const settlementContactType = cashCategoryName === 'A/P Settlement' || bankCategoryName === 'A/P Settlement' ? 'Vendor' : 'Client';
+  const settlementContacts = settlementContactType === 'Vendor' ? vendors : clients;
+  
   const dateField = (
       <div className="space-y-2">
         <Label htmlFor="date">Date</Label>
@@ -389,7 +396,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                             mode="single"
                             selected={field.value}
                             onSelect={(date) => {
-                                field.onChange(date);
+                                if (date) field.onChange(date);
                                 setIsDatePickerOpen(false);
                             }}
                             initialFocus
@@ -402,16 +409,9 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
     </div>
   )
 
-  const stockCreditFields = (
-     <div className="space-y-2 animate-fade-in pt-2">
-        <Separator />
-         <Alert variant="default" className="mt-4 bg-blue-50 border-blue-200 text-blue-800">
-            <AlertTitle>On Credit</AlertTitle>
-            <AlertDescription>
-                This will create a new item in your Accounts {stockType === 'purchase' ? 'Payable' : 'Receivable'} ledger.
-            </AlertDescription>
-        </Alert>
-        <Label>{stockCreditContactType}</Label>
+  const settlementContactFields = (
+    <div className="space-y-2 animate-fade-in pt-2">
+        <Label>{settlementContactType}</Label>
         <Controller
             control={control}
             name="contact_id"
@@ -419,33 +419,18 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                 <ResponsiveSelect 
                     onValueChange={field.onChange} 
                     value={field.value}
-                    title={`Select a ${stockCreditContactType}`}
-                    placeholder={`Select a ${stockCreditContactType}`}
-                    items={
-                        [
-                            ...stockCreditContacts.map(c => ({ value: c.id, label: c.name })),
-                            { value: 'new', label: <span className="flex items-center gap-2"><Plus className="h-4 w-4"/>Add New</span>}
-                        ]
-                    }
+                    title={`Select a ${settlementContactType}`}
+                    placeholder={`Select a ${settlementContactType}`}
+                    items={settlementContacts.map(c => ({ value: c.id, label: c.name }))}
                 />
             )}
         />
         {errors.contact_id && <p className="text-sm text-destructive">{(errors.contact_id as any).message}</p>}
-    
-        {contact_id === 'new' && (
-            <div className="flex items-end gap-2 pt-2 animate-fade-in">
-                <div className="flex-grow space-y-1">
-                    <Label htmlFor="newContact">New {stockCreditContactType} Name</Label>
-                    <Input {...register('newContact')} placeholder={`Enter new ${stockCreditContactType.toLowerCase()} name`}/>
-                </div>
-            </div>
-        )}
-        {errors.newContact && <p className="text-sm text-destructive">{(errors.newContact as any).message}</p>}
     </div>
-  )
+  );
   
-  const cashCategoryItems = useMemo(() => cashCategories.map(c => ({ value: c.name, label: `${c.name} (${c.direction})` })), [cashCategories]);
-  const bankCategoryItems = useMemo(() => bankCategories.map(c => ({ value: c.name, label: `${c.name} (${c.direction})` })), [bankCategories]);
+  const cashCategoryItems = useMemo(() => cashCategories.filter(c => c.name !== 'Stock Purchase' && c.name !== 'Stock Sale').map(c => ({ value: c.name, label: `${c.name}` })), [cashCategories]);
+  const bankCategoryItems = useMemo(() => bankCategories.filter(c => c.name !== 'Stock Purchase' && c.name !== 'Stock Sale').map(c => ({ value: c.name, label: `${c.name}` })), [bankCategories]);
   const bankAccountItems = useMemo(() => banks.map(b => ({ value: b.id, label: b.name })), [banks]);
   const stockItemsForSale = useMemo(() => stockItems.filter(i => i.weight > 0).map(item => ({ value: item.name, label: item.name })), [stockItems]);
   const stockItemsForPurchase = useMemo(() => stockItems.map(item => ({ value: item.name, label: item.name })), [stockItems]);
@@ -546,6 +531,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                         />
                         {errors.category && <p className="text-sm text-destructive">{(errors.category as any).message}</p>}
                     </div>
+                    {isCashSettlement && settlementContactFields}
                     <div className="space-y-2">
                         <Label htmlFor="description-cash">Description</Label>
                         <Input id="description-cash" {...register('description')} placeholder="e.g., Weekly groceries" />
@@ -592,6 +578,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                         />
                         {errors.category && <p className="text-sm text-destructive">{(errors.category as any).message}</p>}
                     </div>
+                    {isBankSettlement && settlementContactFields}
                     <div className="space-y-2">
                         <Label htmlFor="description-bank">Description</Label>
                         <Input id="description-bank" {...register('description')} placeholder="e.g., Monthly salary" />
@@ -708,7 +695,47 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                         {errors.bank_id && <p className="text-sm text-destructive">{(errors.bank_id as any).message}</p>}
                     </div>
                     )}
-                    {stockPaymentMethod === 'credit' && stockType && stockCreditFields}
+                    {stockPaymentMethod === 'credit' && stockType && (
+                        <div className="space-y-2 animate-fade-in pt-2">
+                            <Separator />
+                            <Alert variant="default" className="mt-4 bg-blue-50 border-blue-200 text-blue-800">
+                                <AlertTitle>On Credit</AlertTitle>
+                                <AlertDescription>
+                                    This will create a new item in your Accounts {stockType === 'purchase' ? 'Payable' : 'Receivable'} ledger.
+                                </AlertDescription>
+                            </Alert>
+                            <Label>{stockCreditContactType}</Label>
+                            <Controller
+                                control={control}
+                                name="contact_id"
+                                render={({ field }) => (
+                                    <ResponsiveSelect 
+                                        onValueChange={field.onChange} 
+                                        value={field.value}
+                                        title={`Select a ${stockCreditContactType}`}
+                                        placeholder={`Select a ${stockCreditContactType}`}
+                                        items={
+                                            [
+                                                ...(stockType === 'purchase' ? vendors : clients).map(c => ({ value: c.id, label: c.name })),
+                                                { value: 'new', label: <span className="flex items-center gap-2"><Plus className="h-4 w-4"/>Add New</span>}
+                                            ]
+                                        }
+                                    />
+                                )}
+                            />
+                            {errors.contact_id && <p className="text-sm text-destructive">{(errors.contact_id as any).message}</p>}
+                        
+                            {contact_id === 'new' && (
+                                <div className="flex items-end gap-2 pt-2 animate-fade-in">
+                                    <div className="flex-grow space-y-1">
+                                        <Label htmlFor="newContact">New {stockCreditContactType} Name</Label>
+                                        <Input {...register('newContact')} placeholder={`Enter new ${stockCreditContactType.toLowerCase()} name`}/>
+                                    </div>
+                                </div>
+                            )}
+                            {errors.newContact && <p className="text-sm text-destructive">{(errors.newContact as any).message}</p>}
+                        </div>
+                    )}
                     <div className="space-y-2">
                         <Label htmlFor="description-stock">Description (Optional)</Label>
                         <Input id="description-stock" {...register('description')} placeholder="e.g., invoice #, delivery details" />

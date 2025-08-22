@@ -1,7 +1,9 @@
+
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { useAppContext } from "@/app/store";
+import { useAppContext } from "@/app/context/app-context";
+import { useAppActions } from "@/app/context/app-actions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -16,16 +18,18 @@ import { toast } from "sonner";
 
 export function RecycleBinTab() {
     const { 
-        loadRecycleBinData, 
         deletedCashTransactions, 
         deletedBankTransactions, 
         deletedStockTransactions,
         deletedLedgerTransactions,
-        restoreTransaction,
-        emptyRecycleBin,
         currency,
         user
     } = useAppContext();
+    const { 
+        loadRecycleBinData, 
+        restoreTransaction,
+        emptyRecycleBin,
+    } = useAppActions();
     const [activeTab, setActiveTab] = useState('cash');
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
     const [isLoading, setIsLoading] = useState(true);

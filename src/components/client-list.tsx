@@ -2,7 +2,7 @@
 "use client";
 
 import { useState } from "react";
-import { useAppContext } from "@/app/store";
+import { useAppContext } from "@/app/context/app-context";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "./ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
 import { Button } from "./ui/button";

@@ -4,7 +4,8 @@
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { useAppContext } from '@/app/store';
+import { useAppContext } from '@/app/context/app-context';
+import { useAppActions } from '@/app/context/app-actions';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -64,14 +65,15 @@ interface EditTransactionSheetProps {
 
 export function EditTransactionSheet({ isOpen, setIsOpen, transaction, transactionType }: EditTransactionSheetProps) {
   const { 
+    cashCategories,
+    bankCategories,
+  } = useAppContext();
+
+  const {
     editCashTransaction, 
     editBankTransaction,
     editStockTransaction,
-    cashCategories,
-    bankCategories,
-    stockItems,
-    reloadData,
-  } = useAppContext();
+  } = useAppActions();
   
   
   const isCash = transactionType === 'cash';
