@@ -150,27 +150,26 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
   
   const currentSchema = formSchemas[transactionType];
 
-  const { register, handleSubmit, control, watch, reset, setValue, formState: { errors, isSubmitting } } = useForm({
+  const { register, handleSubmit, control, reset, setValue, formState: { errors, isSubmitting } } = useForm({
     resolver: zodResolver(currentSchema),
     defaultValues: {
         date: new Date(),
     }
   });
   
-  // Watch fields for conditional UI and logic
-  const watchedAmount = watch('amount');
-  const watchedExpectedAmount = watch('expected_amount');
-  const watchedActualAmount = watch('actual_amount');
-  const stockType = watch('stockType');
-  const stockPaymentMethod = watch('paymentMethod');
-  const ledgerType = watch('ledgerType');
-  const contact_id = watch('contact_id');
-  const transferFrom = watch('transferFrom');
-  const cashCategoryName = watch('category');
-  const bankCategoryName = watch('category');
+  const watchedAmount = useWatch({ control, name: 'amount' });
+  const watchedExpectedAmount = useWatch({ control, name: 'expected_amount'});
+  const watchedActualAmount = useWatch({ control, name: 'actual_amount'});
+  const stockType = useWatch({ control, name: 'stockType' });
+  const stockPaymentMethod = useWatch({ control, name: 'paymentMethod' });
+  const ledgerType = useWatch({ control, name: 'ledgerType' });
+  const contact_id = useWatch({ control, name: 'contact_id' });
+  const transferFrom = useWatch({ control, name: 'transferFrom' });
+  const cashCategoryName = useWatch({ control, name: 'category' });
+  const bankCategoryName = useWatch({ control, name: 'category' });
   const [isNewStockItem, setIsNewStockItem] = useState(false);
-  const weight = watch('weight');
-  const pricePerKg = watch('pricePerKg');
+  const weight = useWatch({ control, name: 'weight' });
+  const pricePerKg = useWatch({ control, name: 'pricePerKg' });
 
 
   useEffect(() => {
@@ -360,7 +359,8 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
     { value: 'new', label: <span className="flex items-center gap-2"><Plus className="h-4 w-4"/>Add New</span>}
   ], [clients]);
   const currentLedgerContactItems = ledgerType === 'payable' ? vendorContactItems : clientContactItems;
-  
+  const currentLedgerContactType = ledgerType === 'payable' ? 'Vendor' : 'Client';
+
   const transactionTypeItems: {value: TransactionType, label: string, icon: React.ElementType}[] = [
       { value: 'cash', label: 'Cash', icon: Wallet },
       { value: 'bank', label: 'Bank', icon: Landmark },
