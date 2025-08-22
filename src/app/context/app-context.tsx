@@ -197,6 +197,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 case 'restoreData': result = await server.restoreData(item.payload); break;
                 case 'recordPaymentAgainstTotal': result = await server.recordPaymentAgainstTotal(item.payload); break;
                 case 'recordDirectPayment': result = await server.recordDirectPayment(item.payload); break;
+                case 'recordAdvancePayment': result = await server.recordAdvancePayment(item.payload); break;
                 case 'transferFunds': result = await server.transferFunds(item.payload); break;
                 case 'setInitialBalances': result = await server.setInitialBalances(item.payload); break;
                 case 'deleteCategory': result = await server.deleteCategory(item.payload); break;
@@ -209,6 +210,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                          }
                     }
                     break;
+                case 'updateStockTransaction': result = await server.updateStockTransaction(item.payload); break;
+                case 'deleteVendor': result = await server.deleteVendor(item.payload.id); break;
+                case 'deleteClient': result = await server.deleteClient(item.payload.id); break;
                 case 'addInitialStockItem': result = await server.addInitialStockItem(item.payload); break;
                 case 'batchImportData': result = await server.batchImportData(item.payload.data); break;
                 case 'deleteAllData': result = await server.deleteAllData(); break;
@@ -283,6 +287,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 { name: 'Initial Balance', type: 'bank', direction: 'credit', is_deletable: false },
                 { name: 'Funds Transfer', type: 'cash', direction: null, is_deletable: false },
                 { name: 'Funds Transfer', type: 'bank', direction: null, is_deletable: false },
+                 { name: 'Advance Payment', type: 'cash', direction: 'debit', is_deletable: false },
+                { name: 'Advance Received', type: 'cash', direction: 'credit', is_deletable: false },
+                { name: 'Advance Payment', type: 'bank', direction: 'debit', is_deletable: false },
+                { name: 'Advance Received', type: 'bank', direction: 'credit', is_deletable: false },
             ];
 
             for (const cat of essentialCategories) {
