@@ -25,7 +25,7 @@ interface AggregatedContact {
 }
 
 export function ReceivablesList() {
-    const { ledgerTransactions, currency, user } = useAppContext();
+    const { ledgerTransactions, currency, user, clients } = useAppContext();
     const [settleDialogState, setSettleDialogState] = useState<{isOpen: boolean, contact: AggregatedContact | null}>({isOpen: false, contact: null});
     const [advanceDialogState, setAdvanceDialogState] = useState<{isOpen: boolean, contact: AggregatedContact | null, ledgerType: 'payable' | 'receivable' | null}>({isOpen: false, contact: null, ledgerType: null});
     const isMobile = useIsMobile();
@@ -34,20 +34,33 @@ export function ReceivablesList() {
     const receivablesByContact = useMemo(() => {
         const groups: Record<string, { total_due: number, total_paid: number, total_advance: number, contact_name: string }> = {};
 
-        ledgerTransactions.filter(tx => tx.type === 'receivable' || (tx.type === 'advance' && tx.contact_id.startsWith('temp_client')) || (tx.type === 'advance' && ledgerTransactions.some(lt => lt.contact_id === tx.contact_id && lt.type === 'receivable'))).forEach(tx => {
-            if (!groups[tx.contact_id]) {
-                groups[tx.contact_id] = {
-                    contact_name: tx.contact_name,
-                    total_due: 0,
-                    total_paid: 0,
-                    total_advance: 0,
-                };
-            }
-            if (tx.type === 'receivable') {
-                groups[tx.contact_id].total_due += tx.amount;
-                groups[tx.contact_id].total_paid += tx.paid_amount;
-            } else if (tx.type === 'advance') {
-                groups[tx.contact_id].total_advance += Math.abs(tx.amount);
+        // Initialize all clients in the groups object
+        clients.forEach(client => {
+            groups[client.id] = {
+                contact_name: client.name,
+                total_due: 0,
+                total_paid: 0,
+                total_advance: 0,
+            };
+        });
+
+        ledgerTransactions.forEach(tx => {
+            // Only process transactions for existing clients or new ones from ledger
+            if (tx.type === 'receivable' || (tx.type === 'advance' && clients.some(c => c.id === tx.contact_id))) {
+                 if (!groups[tx.contact_id]) {
+                    groups[tx.contact_id] = {
+                        contact_name: tx.contact_name,
+                        total_due: 0,
+                        total_paid: 0,
+                        total_advance: 0,
+                    };
+                }
+                if (tx.type === 'receivable') {
+                    groups[tx.contact_id].total_due += tx.amount;
+                    groups[tx.contact_id].total_paid += tx.paid_amount;
+                } else if (tx.type === 'advance') {
+                    groups[tx.contact_id].total_advance += Math.abs(tx.amount);
+                }
             }
         });
         
@@ -62,9 +75,9 @@ export function ReceivablesList() {
                 net_balance: net_balance,
                 type: 'receivable' as const,
             };
-        }).filter(c => c.net_balance > 0 || c.total_advance > 0);
+        }).sort((a,b) => b.net_balance - a.net_balance);
 
-    }, [ledgerTransactions]);
+    }, [ledgerTransactions, clients]);
     
     const formatCurrency = (amount: number) => {
         if (currency === 'BDT') {
@@ -87,14 +100,15 @@ export function ReceivablesList() {
                 <TableHeader>
                     <TableRow>
                         <TableHead>Client</TableHead>
-                        <TableHead className="text-right">Balance Due</TableHead>
+                        <TableHead className="text-right">Balance</TableHead>
                         <TableHead className="text-center">Actions</TableHead>
                     </TableRow>
                 </TableHeader>
                 <TableBody>
                     {receivablesByContact.length > 0 ? (
                         receivablesByContact.map(contact => {
-                            const progress = contact.total_due > 0 ? ((contact.total_paid + contact.total_advance) / contact.total_due) * 100 : 0;
+                            const totalCredit = contact.total_paid + contact.total_advance;
+                            const progress = contact.total_due > 0 ? (totalCredit / contact.total_due) * 100 : (contact.total_advance > 0 ? 100 : 0);
                             return (
                             <TableRow key={contact.contact_id}>
                                 <TableCell className="font-medium">
@@ -103,14 +117,17 @@ export function ReceivablesList() {
                                         <Progress value={progress} className="h-2 w-24" />
                                         <span className="text-xs text-muted-foreground font-mono">{progress.toFixed(0)}%</span>
                                     </div>
-                                    {contact.total_advance > 0 && <div className="text-xs text-blue-600 dark:text-blue-400">Advance: {formatCurrency(contact.total_advance)}</div>}
                                 </TableCell>
                                 <TableCell className="text-right font-mono font-semibold">
-                                    <div>{formatCurrency(contact.net_balance)}</div>
-                                    <div className="text-xs text-muted-foreground font-normal">of {formatCurrency(contact.total_due)}</div>
+                                     {contact.net_balance < 0 ? (
+                                         <div className="text-blue-600 dark:text-blue-400">Advance: {formatCurrency(Math.abs(contact.net_balance))}</div>
+                                    ) : (
+                                        <div>{formatCurrency(contact.net_balance)}</div>
+                                    )}
+                                    <div className="text-xs text-muted-foreground font-normal">Total Billed: {formatCurrency(contact.total_due)}</div>
                                 </TableCell>
                                 <TableCell className="text-center">
-                                    <div className="flex items-center justify-center gap-2">
+                                    {isAdmin && <div className="flex items-center justify-center gap-2">
                                         <TooltipProvider>
                                             <Tooltip>
                                                 <TooltipTrigger asChild>
@@ -131,13 +148,13 @@ export function ReceivablesList() {
                                                 <TooltipContent><p>Record Advance Received</p></TooltipContent>
                                             </Tooltip>
                                         </TooltipProvider>
-                                    </div>
+                                    </div>}
                                 </TableCell>
                             </TableRow>
                         )})
                     ) : (
                         <TableRow>
-                            <TableCell colSpan={3} className="text-center h-24">No outstanding receivables.</TableCell>
+                            <TableCell colSpan={3} className="text-center h-24">No clients found.</TableCell>
                         </TableRow>
                     )}
                 </TableBody>
@@ -149,21 +166,25 @@ export function ReceivablesList() {
         <div className="space-y-4">
             {receivablesByContact.length > 0 ? (
                 receivablesByContact.map(contact => {
-                    const progress = contact.total_due > 0 ? ((contact.total_paid + contact.total_advance) / contact.total_due) * 100 : 0;
+                    const totalCredit = contact.total_paid + contact.total_advance;
+                    const progress = contact.total_due > 0 ? (totalCredit / contact.total_due) * 100 : (contact.total_advance > 0 ? 100 : 0);
                     return (
                         <Card key={contact.contact_id}>
                             <CardContent className="p-4 space-y-3">
                                 <div className="flex justify-between items-start">
                                     <div>
                                         <div className="font-semibold">{contact.contact_name}</div>
-                                        <div className="text-sm text-muted-foreground">Outstanding Balance</div>
+                                        <div className="text-sm text-muted-foreground">Balance</div>
                                     </div>
                                     <div className="text-right">
-                                        <div className="font-bold text-accent text-lg">{formatCurrency(contact.net_balance)}</div>
-                                        <div className="text-xs text-muted-foreground">of {formatCurrency(contact.total_due)}</div>
+                                        {contact.net_balance < 0 ? (
+                                             <div className="font-bold text-blue-600 dark:text-blue-400 text-lg">Advance: {formatCurrency(Math.abs(contact.net_balance))}</div>
+                                        ): (
+                                            <div className="font-bold text-accent text-lg">{formatCurrency(contact.net_balance)}</div>
+                                        )}
+                                        <div className="text-xs text-muted-foreground">Total Billed: {formatCurrency(contact.total_due)}</div>
                                     </div>
                                 </div>
-                                {contact.total_advance > 0 && <div className="text-xs text-blue-600 dark:text-blue-400">Advance credit of {formatCurrency(contact.total_advance)} applied</div>}
                                 <div className="flex items-center gap-2">
                                     <Progress value={progress} className="h-2 flex-1" />
                                     <span className="text-xs text-muted-foreground font-mono">{progress.toFixed(0)}% paid</span>
@@ -186,7 +207,7 @@ export function ReceivablesList() {
                     )
                 })
             ) : (
-                 <div className="text-center text-muted-foreground py-12">No outstanding receivables.</div>
+                 <div className="text-center text-muted-foreground py-12">No clients found.</div>
             )}
         </div>
     );
