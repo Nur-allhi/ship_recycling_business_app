@@ -4,7 +4,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { cookies } from 'next/headers';
 import { z } from 'zod';
-import { getSession } from '@/lib/auth';
+import { getSession } from '@/app/auth/actions';
 import { startOfMonth, subMonths } from 'date-fns';
 
 // Helper function to create a Supabase client.
@@ -658,12 +658,11 @@ const AddInitialStockItemSchema = z.object({
         name: z.string(),
         weight: z.number(),
         pricePerKg: z.number(),
-    }),
-    date: z.string()
+    })
 });
 export async function addInitialStockItem(input: z.infer<typeof AddInitialStockItemSchema>) {
     const supabase = await getAuthenticatedSupabaseClient();
-    const { error } = await supabase.from('initial_stock').insert({ name: input.item.name, weight: input.item.weight, purchasePricePerKg: input.item.pricePerKg, date: input.date });
+    const { error } = await supabase.from('initial_stock').insert({ name: input.item.name, weight: input.item.weight, purchasePricePerKg: input.item.pricePerKg });
     if(error) throw error;
     return { success: true };
 }
