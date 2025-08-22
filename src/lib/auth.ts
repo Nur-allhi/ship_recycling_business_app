@@ -21,10 +21,9 @@ export async function createSession(payload: SessionPayload, rememberMe?: boolea
     secure: true, 
     maxAge: maxAge,
     path: '/',
-    // 'lax' is the modern default for production apps, providing a good balance of security and usability.
-    // It prevents the cookie from being sent on most cross-site subrequests (e.g., for images or frames),
-    // which helps protect against cross-site request forgery (CSRF) attacks.
-    sameSite: 'lax',
+    // 'none' is often required for cross-site contexts in development environments (like iframes or proxies).
+    // It requires the 'secure' attribute to be true.
+    sameSite: 'none',
   });
 }
 
@@ -45,7 +44,7 @@ export async function removeSession() {
   cookies().set('session', '', {
     httpOnly: true,
     secure: true,
-    sameSite: 'lax',
+    sameSite: 'none',
     path: '/',
     expires: new Date(0),
   });
