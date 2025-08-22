@@ -457,7 +457,7 @@ export function BankTab() {
                                 </div>
                                 <div className="space-y-2">
                                     <Label htmlFor="bank_id">From Bank Account</Label>
-                                    <ResponsiveSelect name="bank_id" title="Select a Bank Account" required items={(banks || []).map(b => ({value: b.id, label: b.name}))} />
+                                    <ResponsiveSelect onValueChange={() => {}} name="bank_id" title="Select a Bank Account" required items={(banks || []).map(b => ({value: b.id, label: b.name}))} />
                                 </div>
                                 <div className="space-y-2">
                                     <Label htmlFor="description">Description (Optional)</Label>
