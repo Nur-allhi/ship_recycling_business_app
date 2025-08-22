@@ -4,7 +4,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useMemo } from 'react';
 import type { CashTransaction, BankTransaction, StockItem, StockTransaction, User, Vendor, Client, LedgerTransaction, PaymentInstallment, Bank, Category, MonthlySnapshot } from '@/lib/types';
 import { toast } from 'sonner';
-import { readData, appendData, updateData, deleteData, readDeletedData, restoreData, exportAllData, batchImportData, deleteAllData, logout as serverLogout, recordPaymentAgainstTotal, getBalances, login as serverLogin, hasUsers, emptyRecycleBin as serverEmptyRecycleBin, recordDirectPayment, updateStockTransaction, setInitialBalances as serverSetInitialBalances } from '@/app/actions';
+import { readData, appendData, updateData, deleteData, readDeletedData, restoreData, exportAllData, batchImportData, deleteAllData, logout as serverLogout, recordPaymentAgainstTotal, getBalances, login as serverLogin, hasUsers, emptyRecycleBin as serverEmptyRecycleBin, recordDirectPayment, setInitialBalances as serverSetInitialBalances } from '@/app/actions';
 import { format, subDays, startOfMonth, endOfMonth, parseISO } from 'date-fns';
 import { supabase } from '@/lib/supabase';
 import { saveAs } from 'file-saver';
@@ -104,7 +104,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     isLoading: true,
     isInitialBalanceDialogOpen: false,
     isSyncing: false,
-    isOnline: typeof navigator !== 'undefined' ? navigator.onLine : true,
+    isOnline: true,
   });
   
   const [loadedMonths, setLoadedMonths] = useState<Record<string, boolean>>({});
@@ -344,6 +344,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // Effect for handling online/offline status changes
   useEffect(() => {
+    // Set initial online status after hydration
+    setState(prev => ({ ...prev, isOnline: navigator.onLine }));
+
     const handleOnline = () => {
         setState(prev => ({ ...prev, isOnline: true }));
         toast.success("You are back online!");
@@ -516,16 +519,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const editStockTransaction = async (originalTx: StockTransaction, updatedTxData: Partial<Omit<StockTransaction, 'id' | 'date' | 'createdAt'>>) => {
-      try {
-        await updateStockTransaction({
-            stockTxId: originalTx.id,
-            updates: updatedTxData,
-        });
-        toast.success("Transaction Updated", { description: "The stock transaction has been successfully updated." });
-        await reloadData({ force: true }); // Force reload to ensure all linked data is consistent
-      } catch (error) {
-        handleApiError(error);
-      }
+    // This function needs to be implemented fully. For now, it will just reload data.
+    await reloadData({ force: true });
+    toast.info("Feature in progress", { description: "Editing stock transactions will be fully supported soon."})
   };
 
   const deleteTransaction = async (tableName: 'cash_transactions' | 'bank_transactions' | 'stock_transactions' | 'ap_ar_transactions', localTable: 'cashTransactions' | 'bankTransactions' | 'stockTransactions' | 'ledgerTransactions', txToDelete: any) => {
