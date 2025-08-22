@@ -22,13 +22,7 @@ export function useAppActions() {
     }, [isOnline, processSyncQueue]);
     
     // AUTH ACTIONS
-    const login = useCallback(async (credentials: Parameters<typeof server.login>[0]) => {
-        const result = await server.login(credentials);
-        if (result.success) {
-            await reloadData({ needsInitialBalance: result.needsInitialBalance, force: true });
-        }
-        return result;
-    }, [reloadData]);
+    // Auth actions are now in src/app/auth/actions.ts
 
     // DATA MUTATION ACTIONS
     const addCashTransaction = async (tx: Omit<CashTransaction, 'id' | 'createdAt' | 'deletedAt'>) => {
@@ -384,7 +378,6 @@ export function useAppActions() {
     };
 
     return {
-        login,
         addCashTransaction,
         addBankTransaction,
         addStockTransaction,

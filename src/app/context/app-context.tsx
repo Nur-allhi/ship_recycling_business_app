@@ -10,7 +10,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, bulkPut, clearAllData as clearLocalDb, type SyncQueueItem } from '@/lib/db';
 import { WifiOff, Wifi, RefreshCw } from 'lucide-react';
-
+import { login } from '@/app/auth/actions';
 
 type FontSize = 'sm' | 'base' | 'lg';
 
@@ -164,7 +164,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 case 'appendData':
                     result = await server.appendData(payloadWithoutId);
                     if (result && localId) {
-                        await db.table(payloadWithoutId.tableName.slice(0, -1) + 's').where({ id: localId }).modify({ id: result.id });
+                        const localTableName = payloadWithoutId.tableName === 'ap_ar_transactions' ? 'ledgerTransactions' : payloadWithoutId.tableName.slice(0, -1) + 's';
+                        await db.table(localTableName).where({ id: localId }).modify({ id: result.id });
                     }
                     break;
                 case 'updateData': result = await server.updateData(item.payload); break;
