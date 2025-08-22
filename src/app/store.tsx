@@ -377,40 +377,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // Effect for handling online/offline status changes
   useEffect(() => {
-    const checkOnlineStatus = async () => {
-        if (!navigator.onLine) {
-            setState(prev => ({ ...prev, isOnline: false }));
-            return;
-        }
-        try {
-            // Perform a network check to a reliable host.
-            // Using a no-cors request to avoid CORS issues.
-            await fetch('https://1.1.1.1', { method: 'HEAD', mode: 'no-cors', cache: 'no-store' });
-            setState(prev => ({ ...prev, isOnline: true }));
-        } catch (error) {
-            setState(prev => ({ ...prev, isOnline: false }));
-        }
-    }
-
-    checkOnlineStatus();
-
     const handleOnline = () => {
-        toast.success("You are back online!");
-        setState(prev => ({ ...prev, isOnline: true }));
-        processSyncQueue();
+      toast.success("You are back online!");
+      setState(prev => ({ ...prev, isOnline: true }));
+      processSyncQueue();
     };
+
     const handleOffline = () => {
-        setState(prev => ({ ...prev, isOnline: false }));
-    }
+      setState(prev => ({ ...prev, isOnline: false }));
+    };
 
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
+    if (typeof window !== 'undefined') {
+      // Set initial state
+      setState(prev => ({...prev, isOnline: navigator.onLine}));
 
-    return () => {
+      window.addEventListener('online', handleOnline);
+      window.addEventListener('offline', handleOffline);
+
+      return () => {
         window.removeEventListener('online', handleOnline);
         window.removeEventListener('offline', handleOffline);
-    };
-}, [processSyncQueue]);
+      };
+    }
+  }, [processSyncQueue]);
 
 
   useEffect(() => {
