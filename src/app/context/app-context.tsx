@@ -10,7 +10,6 @@ import { useRouter, usePathname } from 'next/navigation';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, bulkPut, clearAllData as clearLocalDb, type SyncQueueItem } from '@/lib/db';
 import { WifiOff, Wifi, RefreshCw } from 'lucide-react';
-import { login } from '@/app/auth/actions';
 
 type FontSize = 'sm' | 'base' | 'lg';
 
@@ -65,6 +64,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     cashBalance: 0, bankBalance: 0, stockItems: [], totalPayables: 0, totalReceivables: 0,
     isLoading: true, isInitialBalanceDialogOpen: false, isSyncing: false, 
     isOnline: typeof navigator !== 'undefined' ? navigator.onLine : true,
+    user: null, // Initialize user here to avoid dependency issues
   });
   const [loadedMonths, setLoadedMonths] = useState<Record<string, boolean>>({});
   const [deletedItems, setDeletedItems] = useState<{ cash: any[], bank: any[], stock: any[], ap_ar: any[] }>({ cash: [], bank: [], stock: [], ap_ar: [] });
@@ -74,11 +74,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   
   const liveData = useLiveDBData();
 
+  const setUser = useCallback((user: User | null) => {
+    setState(prev => ({...prev, user}));
+  }, []);
+
   const logout = useCallback(async () => {
     await server.logout();
     await clearLocalDb();
+    setUser(null);
     window.location.href = '/login';
-  }, []);
+  }, [setUser]);
 
   const handleApiError = useCallback((error: any) => {
     const isAuthError = error.message.includes('JWT') || error.message.includes('Unauthorized') || error.message.includes("SESSION_EXPIRED");
@@ -164,7 +169,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 case 'appendData':
                     result = await server.appendData(payloadWithoutId);
                     if (result && localId) {
-                        const localTableName = payloadWithoutId.tableName === 'ap_ar_transactions' ? 'ledgerTransactions' : payloadWithoutId.tableName.slice(0, -1) + 's';
+                         const tableName = payloadWithoutId.tableName;
+                         let localTableName: keyof AppDatabase;
+
+                         if (tableName === 'ap_ar_transactions') localTableName = 'ledgerTransactions';
+                         else if (tableName === 'cash_transactions') localTableName = 'cashTransactions';
+                         else if (tableName === 'bank_transactions') localTableName = 'bankTransactions';
+                         else if (tableName === 'stock_transactions') localTableName = 'stockTransactions';
+                         else localTableName = tableName.slice(0, -1) + 's' as any; // e.g. 'vendors'
+                        
                         await db.table(localTableName).where({ id: localId }).modify({ id: result.id });
                     }
                     break;
@@ -218,10 +231,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     try {
         const session = await getSession();
         if (!session) {
-            setState(prev => ({...prev, isLoading: false }));
+            setState(prev => ({...prev, isLoading: false, user: null }));
             await db.appState.update(1, { user: null });
             return;
         }
+
+        setUser(session); // Set user immediately
 
         const localUser = await db.appState.get(1);
         if (!localUser || !localUser.user || localUser.user.id !== session.id || options?.force) {
@@ -297,11 +312,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     } finally {
         setState(prev => ({...prev, isLoading: false}));
     }
-  }, [handleApiError, updateBalances, processSyncQueue]);
+  }, [handleApiError, updateBalances, processSyncQueue, setUser]);
 
   useEffect(() => {
     const checkSessionAndLoad = async () => {
         const session = await getSession();
+        setUser(session);
         if (session) {
             if (liveData.user && liveData.user.id === session.id) {
                  setState(prev => ({ ...prev, isLoading: false }));
@@ -311,7 +327,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             }
         } else {
             setState(prev => ({ ...prev, isLoading: false }));
-            db.appState.update(1, { user: null });
         }
     };
     checkSessionAndLoad();
@@ -346,11 +361,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (state.isLoading) return;
     if (pathname === '/login') {
-        if(liveData.user) router.replace('/');
+        if(state.user) router.replace('/');
     } else {
-        if(!liveData.user) router.replace('/login');
+        if(!state.user) router.replace('/login');
     }
-  }, [pathname, liveData.user, state.isLoading, router]);
+  }, [pathname, state.user, state.isLoading, router]);
   
   const loadRecycleBinData = useCallback(async () => {
     if (state.isOnline) {
@@ -403,6 +418,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     <AppContext.Provider value={{ 
         ...state,
         ...liveData,
+        user: state.user, // Use the state's user object
         deletedCashTransactions: deletedItems.cash,
         deletedBankTransactions: deletedItems.bank,
         deletedStockTransactions: deletedItems.stock,
@@ -426,6 +442,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 }
 
 function useLiveDBData() {
+    // Note: appState.user is used for initial load, but the context's own state.user is the primary one after that.
     const appState = useLiveQuery(() => db.appState.get(1), []);
     const cashTransactions = useLiveQuery(() => db.cashTransactions.toArray(), []);
     const bankTransactions = useLiveQuery(() => db.bankTransactions.toArray(), []);
@@ -448,7 +465,7 @@ function useLiveDBData() {
     }, [categories]);
 
     return {
-        user: appState?.user ?? null,
+        user: appState?.user ?? null, // This is mainly for the initial check
         fontSize: appState?.fontSize ?? 'base',
         currency: appState?.currency ?? 'BDT',
         wastagePercentage: appState?.wastagePercentage ?? 0,
@@ -471,5 +488,5 @@ export function useAppContext() {
   if (context === undefined) {
     throw new Error('useAppContext must be used within an AppProvider');
   }
-  return { ...context, loadRecycleBinData: context.loadRecycleBinData, setDeletedItems: context.setDeletedItems };
+  return context;
 }
