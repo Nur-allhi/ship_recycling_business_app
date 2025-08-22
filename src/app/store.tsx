@@ -4,7 +4,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useMemo } from 'react';
 import type { CashTransaction, BankTransaction, StockItem, StockTransaction, User, Vendor, Client, LedgerTransaction, PaymentInstallment, Bank, Category, MonthlySnapshot } from '@/lib/types';
 import { toast } from 'sonner';
-import { readData, appendData, updateData, deleteData, readDeletedData, restoreData, exportAllData, batchImportData, deleteAllData, logout as serverLogout, recordPaymentAgainstTotal, getBalances, login as serverLogin, hasUsers, emptyRecycleBin as serverEmptyRecycleBin, recordDirectPayment, setInitialBalances as serverSetInitialBalances } from '@/app/actions';
+import { readData, appendData, updateData, deleteData, readDeletedData, restoreData, exportAllData, batchImportData, deleteAllData, logout as serverLogout, recordPaymentAgainstTotal, getBalances, login as serverLogin, hasUsers, emptyRecycleBin as serverEmptyRecycleBin, recordDirectPayment, setInitialBalances as serverSetInitialBalances, updateStockTransaction } from '@/app/actions';
 import { format, subDays, startOfMonth, endOfMonth, parseISO } from 'date-fns';
 import { supabase } from '@/lib/supabase';
 import { saveAs } from 'file-saver';
@@ -140,6 +140,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return { cashCategories: dbCash, bankCategories: dbBank };
   }, [categories]);
 
+
   const logout = useCallback(async () => {
     await serverLogout();
     await clearLocalDb();
@@ -188,6 +189,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
                 case 'appendData': await appendData(item.payload); break;
                 case 'updateData': await updateData(item.payload); break;
                 case 'deleteData': await deleteData(item.payload); break;
+                case 'recordDirectPayment': await recordDirectPayment(item.payload); break;
+                case 'updateStockTransaction': await updateStockTransaction(item.payload); break;
+                case 'setInitialBalances': await serverSetInitialBalances(item.payload); break;
+                case 'recordPaymentAgainstTotal': await recordPaymentAgainstTotal(item.payload); break;
             }
             await db.syncQueue.delete(item.id!);
             successCount++;
@@ -215,6 +220,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
                 case 'appendData': return await appendData(item.payload);
                 case 'updateData': return await updateData(item.payload);
                 case 'deleteData': return await deleteData(item.payload);
+                case 'recordDirectPayment': return await recordDirectPayment(item.payload);
+                case 'updateStockTransaction': return await updateStockTransaction(item.payload);
+                case 'setInitialBalances': return await serverSetInitialBalances(item.payload);
+                case 'recordPaymentAgainstTotal': return await recordPaymentAgainstTotal(item.payload);
             }
         } catch (error) {
             handleApiError(error);
@@ -267,6 +276,30 @@ export function AppProvider({ children }: { children: ReactNode }) {
                 ...tx,
                 installments: (installmentsData || []).filter((ins: any) => ins.ap_ar_transaction_id === tx.id)
             }));
+
+            // Auto-create essential categories if they don't exist
+            const essentialCategories = [
+                { name: 'A/R Settlement', type: 'cash', direction: 'credit', is_deletable: false },
+                { name: 'A/P Settlement', type: 'cash', direction: 'debit', is_deletable: false },
+                { name: 'A/R Settlement', type: 'bank', direction: 'credit', is_deletable: false },
+                { name: 'A/P Settlement', type: 'bank', direction: 'debit', is_deletable: false },
+                { name: 'Stock Purchase', type: 'cash', direction: 'debit', is_deletable: false },
+                { name: 'Stock Sale', type: 'cash', direction: 'credit', is_deletable: false },
+                { name: 'Stock Purchase', type: 'bank', direction: 'debit', is_deletable: false },
+                { name: 'Stock Sale', type: 'bank', direction: 'credit', is_deletable: false },
+                { name: 'Initial Balance', type: 'cash', direction: 'credit', is_deletable: false },
+                { name: 'Initial Balance', type: 'bank', direction: 'credit', is_deletable: false },
+            ];
+
+            for (const cat of essentialCategories) {
+                const exists = (categoriesData || []).some(c => c.name === cat.name && c.type === cat.type);
+                if (!exists) {
+                    const newCat = await appendData({ tableName: 'categories', data: cat, select: '*' });
+                    if(newCat) categoriesData.push(newCat);
+                }
+            }
+
+
             await db.transaction('rw', db.tables, async () => {
                 await bulkPut('categories', categoriesData); await bulkPut('vendors', vendorsData);
                 await bulkPut('clients', clientsData); await bulkPut('banks', banksData);
@@ -344,15 +377,31 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // Effect for handling online/offline status changes
   useEffect(() => {
-    // Set initial online status after hydration
-    setState(prev => ({ ...prev, isOnline: navigator.onLine }));
+    const checkOnlineStatus = async () => {
+        if (!navigator.onLine) {
+            setState(prev => ({ ...prev, isOnline: false }));
+            return;
+        }
+        try {
+            // Perform a network check to a reliable host.
+            // Using a no-cors request to avoid CORS issues.
+            await fetch('https://1.1.1.1', { method: 'HEAD', mode: 'no-cors', cache: 'no-store' });
+            setState(prev => ({ ...prev, isOnline: true }));
+        } catch (error) {
+            setState(prev => ({ ...prev, isOnline: false }));
+        }
+    }
+
+    checkOnlineStatus();
 
     const handleOnline = () => {
-        setState(prev => ({ ...prev, isOnline: true }));
         toast.success("You are back online!");
+        setState(prev => ({ ...prev, isOnline: true }));
         processSyncQueue();
     };
-    const handleOffline = () => setState(prev => ({ ...prev, isOnline: false }));
+    const handleOffline = () => {
+        setState(prev => ({ ...prev, isOnline: false }));
+    }
 
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
@@ -361,7 +410,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         window.removeEventListener('online', handleOnline);
         window.removeEventListener('offline', handleOffline);
     };
-  }, [processSyncQueue]);
+}, [processSyncQueue]);
 
 
   useEffect(() => {
@@ -391,12 +440,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const tempId = `temp_${Date.now()}`;
       const newTxData = { ...tx, id: tempId, createdAt: new Date().toISOString() };
       await db.cashTransactions.add(newTxData);
-      await updateBalances();
+      
+      const payload = {
+        payment_method: 'cash' as const,
+        date: tx.date,
+        amount: tx.actual_amount,
+        category: tx.category,
+        description: tx.description,
+        contact_id: tx.contact_id!,
+        contact_name: (tx.type === 'income' ? clients : vendors).find(c => c.id === tx.contact_id)?.name || 'Unknown',
+      };
+      
       try {
-        const savedTx = await queueOrSync({ action: 'appendData', payload: { tableName: 'cash_transactions', data: tx, logDescription: `Added cash transaction: ${tx.description}`, select: '*' } });
-        if (savedTx) {
-            await db.cashTransactions.where({ id: tempId }).modify(savedTx);
+        if (tx.category === 'A/R Settlement' || tx.category === 'A/P Settlement') {
+             await queueOrSync({ action: 'recordDirectPayment', payload });
+        } else {
+            const savedTx = await queueOrSync({ action: 'appendData', payload: { tableName: 'cash_transactions', data: tx, logDescription: `Added cash transaction: ${tx.description}`, select: '*' } });
+            if (savedTx) {
+                await db.cashTransactions.where({ id: tempId }).modify(savedTx);
+            }
         }
+        await updateBalances();
       } catch (e) { /* error is handled in queueOrSync */ }
   };
 
@@ -404,12 +468,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const tempId = `temp_${Date.now()}`;
       const newTxData = { ...tx, id: tempId, createdAt: new Date().toISOString() };
       await db.bankTransactions.add(newTxData);
-      await updateBalances();
+
+      const payload = {
+        payment_method: 'bank' as const,
+        bank_id: tx.bank_id,
+        date: tx.date,
+        amount: tx.actual_amount,
+        category: tx.category,
+        description: tx.description,
+        contact_id: tx.contact_id!,
+        contact_name: (tx.type === 'deposit' ? clients : vendors).find(c => c.id === tx.contact_id)?.name || 'Unknown',
+      };
+
       try {
-          const savedTx = await queueOrSync({ action: 'appendData', payload: { tableName: 'bank_transactions', data: tx, logDescription: `Added bank transaction: ${tx.description}`, select: '*' } });
-          if (savedTx) {
-            await db.bankTransactions.where({ id: tempId }).modify(savedTx);
+          if (tx.category === 'A/R Settlement' || tx.category === 'A/P Settlement') {
+              await queueOrSync({ action: 'recordDirectPayment', payload });
+          } else {
+             const savedTx = await queueOrSync({ action: 'appendData', payload: { tableName: 'bank_transactions', data: tx, logDescription: `Added bank transaction: ${tx.description}`, select: '*' } });
+              if (savedTx) {
+                await db.bankTransactions.where({ id: tempId }).modify(savedTx);
+              }
           }
+          await updateBalances();
       } catch(e) {}
   };
 
@@ -519,9 +599,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const editStockTransaction = async (originalTx: StockTransaction, updatedTxData: Partial<Omit<StockTransaction, 'id' | 'date' | 'createdAt'>>) => {
-    // This function needs to be implemented fully. For now, it will just reload data.
-    await reloadData({ force: true });
-    toast.info("Feature in progress", { description: "Editing stock transactions will be fully supported soon."})
+    await db.stockTransactions.update(originalTx.id, updatedTxData);
+    await updateBalances();
+    try {
+        await queueOrSync({
+            action: 'updateStockTransaction',
+            payload: { stockTxId: originalTx.id, updates: updatedTxData }
+        });
+        toast.success("Stock transaction updated.");
+    } catch (error) {
+        handleApiError(error);
+    }
   };
 
   const deleteTransaction = async (tableName: 'cash_transactions' | 'bank_transactions' | 'stock_transactions' | 'ap_ar_transactions', localTable: 'cashTransactions' | 'bankTransactions' | 'stockTransactions' | 'ledgerTransactions', txToDelete: any) => {
@@ -573,14 +661,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }
 
   const transferFunds = async (from: 'cash' | 'bank', amount: number, date?: string, bankId?: string, description?: string) => {
-      await reloadData();
+      await reloadData({ force: true });
   };
 
   const setInitialBalances = async (cash: number, bankTotals: Record<string, number>, date: Date) => {
     try {
-      await serverSetInitialBalances({ cash, bankTotals, date: date.toISOString() });
-      await reloadData({ force: true });
-      closeInitialBalanceDialog();
+        const payload = { cash, bankTotals, date: date.toISOString() };
+        await queueOrSync({ action: 'setInitialBalances', payload });
+        await reloadData({ force: true });
+        closeInitialBalanceDialog();
     } catch (error) {
       handleApiError(error);
       throw error; // Re-throw to be caught in the component
@@ -604,6 +693,102 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const openInitialBalanceDialog = () => setState(prev => ({...prev, isInitialBalanceDialogOpen: true}));
   const closeInitialBalanceDialog = () => setState(prev => ({...prev, isInitialBalanceDialogOpen: false}));
 
+  const addVendor = async (name: string) => {
+    const tempId = `temp_vendor_${Date.now()}`;
+    const newVendorData = { id: tempId, name, createdAt: new Date().toISOString() };
+    await db.vendors.add(newVendorData);
+    const newVendor = await queueOrSync({ action: 'appendData', payload: { tableName: 'vendors', data: { name }, select: '*' }});
+    if (newVendor) {
+        await db.vendors.where({id: tempId}).modify(newVendor);
+        return newVendor as Vendor;
+    }
+    return newVendorData as Vendor;
+  };
+  
+  const addClient = async (name: string) => {
+    const tempId = `temp_client_${Date.now()}`;
+    const newClientData = { id: tempId, name, createdAt: new Date().toISOString() };
+    await db.clients.add(newClientData);
+    const newClient = await queueOrSync({ action: 'appendData', payload: { tableName: 'clients', data: { name }, select: '*' }});
+    if (newClient) {
+        await db.clients.where({id: tempId}).modify(newClient);
+        return newClient as Client;
+    }
+    return newClientData as Client;
+  };
+
+  const recordPayment = async (contactId: string, contactName: string, paymentAmount: number, paymentMethod: 'cash' | 'bank', paymentDate: Date, ledgerType: 'payable' | 'receivable', bankId?: string) => {
+    try {
+        await queueOrSync({ 
+            action: 'recordPaymentAgainstTotal', 
+            payload: {
+                contact_id: contactId,
+                contact_name: contactName,
+                payment_amount: paymentAmount,
+                payment_date: paymentDate.toISOString(),
+                payment_method: paymentMethod,
+                ledger_type: ledgerType,
+                bank_id: bankId,
+            }
+        });
+        await reloadData({ force: true });
+    } catch (e) {
+        handleApiError(e);
+        throw e;
+    }
+  };
+
+  const [deletedItems, setDeletedItems] = useState({
+    cash: [], bank: [], stock: [], ap_ar: []
+  });
+
+  const loadRecycleBinData = useCallback(async () => {
+    try {
+        const [cash, bank, stock, ap_ar] = await Promise.all([
+            readDeletedData({ tableName: 'cash_transactions'}),
+            readDeletedData({ tableName: 'bank_transactions'}),
+            readDeletedData({ tableName: 'stock_transactions'}),
+            readDeletedData({ tableName: 'ap_ar_transactions'}),
+        ]);
+        setDeletedItems({
+            cash: cash || [],
+            bank: bank || [],
+            stock: stock || [],
+            ap_ar: ap_ar || [],
+        });
+    } catch (error) {
+        handleApiError(error);
+    }
+  }, [handleApiError]);
+
+  const restoreTransaction = useCallback(async (txType: 'cash' | 'bank' | 'stock' | 'ap_ar', id: string) => {
+    try {
+        let tableName = '';
+        switch(txType) {
+            case 'cash': tableName = 'cash_transactions'; break;
+            case 'bank': tableName = 'bank_transactions'; break;
+            case 'stock': tableName = 'stock_transactions'; break;
+            case 'ap_ar': tableName = 'ap_ar_transactions'; break;
+        }
+        await restoreData({ tableName, id });
+        toast.success("Item restored successfully.");
+        await loadRecycleBinData();
+        await updateBalances();
+    } catch (error) {
+        handleApiError(error);
+    }
+  }, [handleApiError, loadRecycleBinData, updateBalances]);
+
+  const emptyRecycleBin = useCallback(async () => {
+    try {
+        await serverEmptyRecycleBin();
+        toast.success("Recycle bin has been emptied.");
+        await loadRecycleBinData();
+    } catch(e) {
+        handleApiError(e);
+    }
+  }, [handleApiError, loadRecycleBinData]);
+
 
   return (
     <AppContext.Provider value={{ 
@@ -617,10 +802,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         bankTransactions: bankTransactions || [],
         stockTransactions: stockTransactions || [],
         ledgerTransactions: ledgerTransactions || [],
-        deletedCashTransactions: [], // These will now be handled differently
-        deletedBankTransactions: [],
-        deletedStockTransactions: [],
-        deletedLedgerTransactions: [],
+        deletedCashTransactions: deletedItems.cash,
+        deletedBankTransactions: deletedItems.bank,
+        deletedStockTransactions: deletedItems.stock,
+        deletedLedgerTransactions: deletedItems.ap_ar,
         cashCategories: cashCategories || [],
         bankCategories: bankCategories || [],
         vendors: vendors || [],
@@ -629,7 +814,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         syncQueueCount,
         loadedMonths,
         reloadData,
-        loadRecycleBinData: async () => {}, // Placeholder
+        loadRecycleBinData,
         loadDataForMonth,
         addCashTransaction,
         addBankTransaction,
@@ -644,8 +829,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         deleteMultipleCashTransactions: (txs) => Promise.all(txs.map(tx => deleteTransaction('cash_transactions', 'cashTransactions', tx))),
         deleteMultipleBankTransactions: (txs) => Promise.all(txs.map(tx => deleteTransaction('bank_transactions', 'bankTransactions', tx))),
         deleteMultipleStockTransactions: (txs) => Promise.all(txs.map(tx => deleteTransaction('stock_transactions', 'stockTransactions', tx))),
-        restoreTransaction: async () => {}, // Placeholder
-        emptyRecycleBin: async () => {}, // Placeholder
+        restoreTransaction,
+        emptyRecycleBin,
         transferFunds,
         addCategory,
         deleteCategory,
@@ -657,15 +842,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
         openInitialBalanceDialog,
         closeInitialBalanceDialog,
         addInitialStockItem,
-        handleExport: async () => {},
+        handleExport: async () => {}, // Placeholder, to be implemented
         handleImport,
         handleDeleteAllData,
         logout,
         login,
-        addVendor: async () => null, // Placeholder
-        addClient: async () => null, // Placeholder
+        addVendor,
+        addClient,
         addLedgerTransaction,
-        recordPayment: async () => {}, // Placeholder
+        recordPayment,
         addBank,
     }}>
       {!state.isOnline && (
