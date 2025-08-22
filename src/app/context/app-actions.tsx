@@ -255,6 +255,16 @@ export function useAppActions() {
         return newClient;
     };
 
+    const deleteVendor = async (id: string) => {
+        await db.vendors.delete(id);
+        queueOrSync({ action: 'deleteVendor', payload: { id } });
+    };
+  
+    const deleteClient = async (id: string) => {
+        await db.clients.delete(id);
+        queueOrSync({ action: 'deleteClient', payload: { id } });
+    };
+
     const recordPayment = async (contactId: string, contactName: string, paymentAmount: number, paymentMethod: 'cash' | 'bank', paymentDate: Date, ledgerType: 'payable' | 'receivable', bankId?: string) => {
         const tempId = `temp_payment_${Date.now()}`;
         const desc = `Payment ${ledgerType === 'payable' ? 'to' : 'from'} ${contactName}`;
@@ -454,6 +464,8 @@ export function useAppActions() {
         addInitialStockItem,
         addVendor,
         addClient,
+        deleteVendor,
+        deleteClient,
         recordPayment,
         recordAdvancePayment,
         loadDataForMonth,

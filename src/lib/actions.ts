@@ -410,6 +410,22 @@ export async function deleteAllData() {
 
 // --- Specific App Actions ---
 
+export async function deleteVendor(id: string) {
+    const supabase = await getAuthenticatedSupabaseClient();
+    const { error } = await supabase.from('vendors').delete().eq('id', id);
+    if(error) throw error;
+    await logActivity(`Deleted vendor with ID: ${id}`);
+    return { success: true };
+}
+
+export async function deleteClient(id: string) {
+    const supabase = await getAuthenticatedSupabaseClient();
+    const { error } = await supabase.from('clients').delete().eq('id', id);
+    if(error) throw error;
+    await logActivity(`Deleted client with ID: ${id}`);
+    return { success: true };
+}
+
 export async function getBalances() {
     // This function is deprecated for client-side use but can be kept for server-side reports or checks.
     // The client now calculates balances locally for speed.
