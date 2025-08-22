@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from 'react';
-import { useForm, Controller } from 'react-hook-form';
+import { useForm, Controller, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { useAppActions } from '@/app/context/app-actions';
@@ -199,7 +199,13 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
     }
   });
   
-  // Watch for changes in fields that affect other parts of the form
+  // Use useWatch to reliably get the latest values for calculation
+  const [expectedAmount, actualAmount] = useWatch({
+    control,
+    name: ["expected_amount", "actual_amount"],
+  });
+  
+  // Watch for other changes that affect other parts of the form
   const stockType = watch('stockType');
   const stockPaymentMethod = watch('paymentMethod');
   const ledgerType = watch('ledgerType');
@@ -208,6 +214,9 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
   const cashCategoryName = watch('category');
   const bankCategoryName = watch('category');
   const [isNewStockItem, setIsNewStockItem] = useState(false);
+  const weight = watch('weight');
+  const pricePerKg = watch('pricePerKg');
+
 
   useEffect(() => {
       const isSettlement = cashCategoryName === 'A/R Settlement' || cashCategoryName === 'A/P Settlement';
@@ -219,25 +228,24 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
     setIsBankSettlement(isSettlement);
   }, [bankCategoryName]);
 
-
-  const expectedAmount = watch('expected_amount');
-  const actualAmount = watch('actual_amount');
-  const weight = watch('weight');
-  const pricePerKg = watch('pricePerKg');
   const difference = useMemo(() => {
-    if (typeof actualAmount === 'number' && typeof expectedAmount === 'number') {
-        return actualAmount - expectedAmount;
+    const expected = parseFloat(expectedAmount || 0);
+    const actual = parseFloat(actualAmount || 0);
+    if (isNaN(expected) || isNaN(actual)) {
+      return 0;
     }
-    return 0;
+    return actual - expected;
   }, [expectedAmount, actualAmount]);
   
   useEffect(() => {
     if (transactionType === 'stock' && weight && pricePerKg) {
       const calculatedAmount = weight * pricePerKg;
       setValue('expected_amount', calculatedAmount);
-      setValue('actual_amount', calculatedAmount);
+      if (watch('actual_amount') === undefined || watch('actual_amount') === calculatedAmount) {
+        setValue('actual_amount', calculatedAmount);
+      }
     }
-  }, [weight, pricePerKg, transactionType, setValue]);
+  }, [weight, pricePerKg, transactionType, setValue, watch]);
 
   useEffect(() => {
     reset({
