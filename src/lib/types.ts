@@ -16,6 +16,7 @@ export interface Transaction {
 
 export interface CashTransaction extends Transaction {
   type: 'income' | 'expense';
+  contact_id?: string;
 }
 
 export interface Bank {
@@ -27,6 +28,7 @@ export interface Bank {
 export interface BankTransaction extends Transaction {
   type: 'deposit' | 'withdrawal';
   bank_id: string;
+  contact_id?: string;
 }
 
 export interface StockItem {
@@ -54,6 +56,8 @@ export interface StockTransaction {
   actual_amount: number;
   difference: number;
   difference_reason?: string;
+  contact_id?: string;
+  contact_name?: string;
 }
 
 export interface User {
@@ -95,7 +99,6 @@ export interface LedgerTransaction {
   contact_id: string;
   contact_name: string;
   deletedAt?: string;
-  createdAt: string;
   installments: PaymentInstallment[];
 }
     
@@ -133,3 +136,4 @@ export interface MonthlySnapshot {
 
 
     
+

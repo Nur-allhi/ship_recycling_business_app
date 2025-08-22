@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 import { db, bulkPut } from '@/lib/db';
 import type { SyncQueueItem } from '@/lib/db';
 import { useAppContext } from './app-context';
-import type { CashTransaction, BankTransaction, StockTransaction, Vendor, Client, LedgerTransaction, PaymentInstallment } from '@/lib/types';
+import type { CashTransaction, BankTransaction, StockTransaction, Vendor, Client, LedgerTransaction, PaymentInstallment, StockItem } from '@/lib/types';
 import * as server from '@/lib/actions'; 
 import { login as serverLogin, logout as serverLogout } from '@/app/auth/actions';
 
@@ -88,7 +88,7 @@ export function useAppActions() {
         } else if (tx.paymentMethod === 'credit') {
             const ledgerTempId = `temp_ledger_${Date.now()}`;
             const ledgerData: LedgerTransaction = {
-                id: ledgerTempId, createdAt: new Date().toISOString(),
+                id: ledgerTempId,
                 type: tx.type === 'purchase' ? 'payable' : 'receivable',
                 description: tx.description || `${tx.stockItemName} (${tx.weight}kg)`,
                 amount: tx.actual_amount, date: tx.date, contact_id: tx.contact_id!, contact_name: tx.contact_name!,
@@ -106,9 +106,9 @@ export function useAppActions() {
         });
     };
 
-    const addLedgerTransaction = async (tx: Omit<LedgerTransaction, 'id' | 'createdAt' | 'deletedAt' | 'status' | 'paid_amount' | 'installments'>) => {
+    const addLedgerTransaction = async (tx: Omit<LedgerTransaction, 'id' | 'deletedAt' | 'status' | 'paid_amount' | 'installments'>) => {
         const tempId = `temp_${Date.now()}`;
-        const dataToSave: LedgerTransaction = { ...tx, status: 'unpaid', paid_amount: 0, installments: [], id: tempId, createdAt: new Date().toISOString() };
+        const dataToSave: LedgerTransaction = { ...tx, status: 'unpaid', paid_amount: 0, installments: [], id: tempId };
         await db.ap_ar_transactions.add(dataToSave);
         await updateBalances();
         
