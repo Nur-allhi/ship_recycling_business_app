@@ -256,7 +256,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
   const onSubmit = async (data: any) => {
     const transactionDate = data.date.toISOString();
     try {
-        const finalDifference = data.actual_amount - data.expected_amount;
+        const finalDifference = (data.actual_amount || 0) - (data.expected_amount || 0);
         
         switch(transactionType) {
             case 'cash': {
@@ -895,5 +895,3 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
     </>
   );
 }
-
-    

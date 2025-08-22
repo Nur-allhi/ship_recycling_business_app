@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useMemo } from 'react';
@@ -221,11 +222,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     };
 
     const handleOffline = () => {
+        toast.info("You are offline", { description: "Changes will be saved locally and synced when you're back." });
         setState(prev => ({ ...prev, isOnline: false }));
     };
     
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
+
+    // Set initial status
+    setState(prev => ({...prev, isOnline: navigator.onLine }));
+
 
     return () => {
       window.removeEventListener('online', handleOnline);

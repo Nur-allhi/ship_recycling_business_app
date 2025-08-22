@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { Badge } from "@/components/ui/badge"
-import { Plus, Trash2, Eye, EyeOff, Users, Settings, Palette, FileCog, Recycle, Landmark, Activity, ArrowUpCircle, ArrowDownCircle, User, Contact, RefreshCw } from "lucide-react"
+import { Plus, Trash2, Eye, EyeOff, Users, Settings, Palette, FileCog, Recycle, Landmark, Activity, ArrowUpCircle, ArrowDownCircle, User, Contact, RefreshCw, Lock } from "lucide-react"
 import { toast } from "sonner"
 import { ResponsiveSelect } from "@/components/ui/responsive-select"
 import { RecycleBinTab } from "./recycle-bin-tab"
@@ -134,9 +134,6 @@ function GeneralSettings() {
     }
   }
 
-  const deletableCashCategories = useMemo(() => cashCategories.filter(c => c.is_deletable), [cashCategories]);
-  const deletableBankCategories = useMemo(() => bankCategories.filter(c => c.is_deletable), [bankCategories]);
-
   return (
      <div className="space-y-6">
         <Card>
@@ -207,36 +204,42 @@ function GeneralSettings() {
             </div>
                 <Separator />
             <div>
-                <h3 className="font-semibold mb-2">Custom Categories</h3>
+                <h3 className="font-semibold mb-2">Existing Categories</h3>
                 <div className="space-y-4">
                     <div>
                     <h4 className="font-medium text-muted-foreground mb-2">Cash</h4>
                         <div className="flex flex-wrap gap-2">
-                        {deletableCashCategories.map(cat => (
+                        {cashCategories.map(cat => (
                         <Badge key={cat.id} variant="secondary" className="flex items-center gap-2">
+                            {!cat.is_deletable && <Lock className="h-3 w-3 text-muted-foreground" />}
                             {cat.name}
                             {cat.direction === 'credit' ? <ArrowUpCircle className="h-3 w-3 text-green-500"/> : <ArrowDownCircle className="h-3 w-3 text-red-500" />}
-                            <button onClick={() => deleteCategory(cat.id)} className="rounded-full hover:bg-muted-foreground/20">
-                            <Trash2 className="h-3 w-3" />
-                            </button>
+                            {cat.is_deletable && (
+                                <button onClick={() => deleteCategory(cat.id)} className="rounded-full hover:bg-muted-foreground/20">
+                                <Trash2 className="h-3 w-3" />
+                                </button>
+                            )}
                         </Badge>
                         ))}
-                        {deletableCashCategories.length === 0 && <p className="text-sm text-muted-foreground">No custom cash categories.</p>}
+                        {cashCategories.length === 0 && <p className="text-sm text-muted-foreground">No cash categories.</p>}
                     </div>
                     </div>
                     <div>
                     <h4 className="font-medium text-muted-foreground mb-2">Bank</h4>
                     <div className="flex flex-wrap gap-2">
-                        {deletableBankCategories.map(cat => (
+                        {bankCategories.map(cat => (
                         <Badge key={cat.id} variant="secondary" className="flex items-center gap-2">
+                            {!cat.is_deletable && <Lock className="h-3 w-3 text-muted-foreground" />}
                             {cat.name}
                             {cat.direction === 'credit' ? <ArrowUpCircle className="h-3 w-3 text-green-500"/> : <ArrowDownCircle className="h-3 w-3 text-red-500" />}
-                            <button onClick={() => deleteCategory(cat.id)} className="rounded-full hover:bg-muted-foreground/20">
-                            <Trash2 className="h-3 w-3" />
-                            </button>
+                            {cat.is_deletable && (
+                                <button onClick={() => deleteCategory(cat.id)} className="rounded-full hover:bg-muted-foreground/20">
+                                <Trash2 className="h-3 w-3" />
+                                </button>
+                            )}
                         </Badge>
                         ))}
-                            {deletableBankCategories.length === 0 && <p className="text-sm text-muted-foreground">No custom bank categories.</p>}
+                            {bankCategories.length === 0 && <p className="text-sm text-muted-foreground">No bank categories.</p>}
                     </div>
                     </div>
                 </div>
