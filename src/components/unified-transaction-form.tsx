@@ -13,7 +13,7 @@ import { Label } from '@/components/ui/label';
 import { ResponsiveSelect } from '@/components/ui/responsive-select';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { toast } from 'sonner';
-import { CalendarIcon, Plus, PlusCircle, Wallet, Landmark, Boxes, ArrowRightLeft, UserPlus, Loader2 } from 'lucide-react';
+import { CalendarIcon, Plus, PlusCircle, Wallet, Landmark, Boxes, ArrowRightLeft, UserPlus, Loader2, Settings2 } from 'lucide-react';
 import { DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
@@ -25,77 +25,33 @@ import { Alert, AlertTitle, AlertDescription } from './ui/alert';
 import { useIsMobile } from '@/hooks/use-mobile';
 
 
-const formSchema = z.object({
-  amount: z.coerce.number().optional(),
-  description: z.string().optional(),
-  category: z.string().optional(),
-  date: z.date(),
-  
-  // stock specific
-  stockType: z.enum(['purchase', 'sale']).optional(),
-  stockItemName: z.string().optional(),
-  weight: z.coerce.number().optional(),
-  pricePerKg: z.coerce.number().optional(),
-  paymentMethod: z.enum(['cash', 'bank', 'credit']).optional(),
-
-  // cash/bank specific
-  bank_id: z.string().optional(),
-
-  // transfer specific
-  transferFrom: z.enum(['cash', 'bank']).optional(),
-  transferToBankId: z.string().optional(),
-  transferFromBankId: z.string().optional(),
-
-
-  // A/R A/P or Stock-on-credit or Bank-settlement specific
-  contact_id: z.string().optional(),
-  newContact: z.string().optional(),
-
-  // A/R A/P specific
-  ledgerType: z.enum(['payable', 'receivable']).optional(),
-
-  // Discrepancy tracking
-  expected_amount: z.coerce.number().optional(),
-  actual_amount: z.coerce.number().optional(),
-  difference_reason: z.string().optional(),
-
-
-}).superRefine((data, ctx) => {
-    // This superRefine is now less critical as we switch form schemas, but kept for safety.
-});
-
-
-type FormData = z.infer<typeof formSchema>;
-
-interface UnifiedTransactionFormProps {
-  setDialogOpen: (open: boolean) => void;
-}
-
 const baseSchema = z.object({
     date: z.date({ required_error: "Date is required." }),
+    amount: z.coerce.number().positive("Amount must be a positive number."),
 });
 
 const cashSchema = baseSchema.extend({
-    expected_amount: z.coerce.number().positive("Transaction value must be positive."),
-    actual_amount: z.coerce.number().nonnegative("Paid amount is required."),
-    difference_reason: z.string().optional(),
     category: z.string({ required_error: "Category is required." }),
     description: z.string().min(1, "Description is required."),
     contact_id: z.string().optional(),
+    expected_amount: z.coerce.number().optional(),
+    actual_amount: z.coerce.number().optional(),
+    difference_reason: z.string().optional(),
 });
 
 const bankSchema = baseSchema.extend({
-    expected_amount: z.coerce.number().positive("Transaction value must be positive."),
-    actual_amount: z.coerce.number().nonnegative("Paid amount is required."),
-    difference_reason: z.string().optional(),
     bank_id: z.string({ required_error: "Bank account is required." }),
     category: z.string({ required_error: "Category is required." }),
     description: z.string().min(1, "Description is required."),
     contact_id: z.string().optional(),
+    expected_amount: z.coerce.number().optional(),
+    actual_amount: z.coerce.number().optional(),
+    difference_reason: z.string().optional(),
 });
 
 
-const stockSchema = baseSchema.extend({
+const stockSchema = z.object({
+    date: z.date({ required_error: "Date is required." }),
     stockType: z.enum(['purchase', 'sale'], { required_error: "Please select purchase or sale."}),
     stockItemName: z.string({ required_error: "Item name is required." }),
     weight: z.coerce.number().positive(),
@@ -124,7 +80,6 @@ const stockSchema = baseSchema.extend({
 });
 
 const transferSchema = baseSchema.extend({
-    amount: z.coerce.number().positive(),
     transferFrom: z.enum(['cash', 'bank'], { required_error: "Please select transfer source."}),
     transferToBankId: z.string().optional(),
     transferFromBankId: z.string().optional(),
@@ -139,7 +94,6 @@ const transferSchema = baseSchema.extend({
 });
 
 const apArSchema = baseSchema.extend({
-    amount: z.coerce.number().positive(),
     ledgerType: z.enum(['payable', 'receivable'], { required_error: "Please select payable or receivable." }),
     contact_id: z.string({ required_error: "A contact is required." }),
     newContact: z.string().optional(),
@@ -161,12 +115,17 @@ const formSchemas = {
 
 type TransactionType = keyof typeof formSchemas;
 
+interface UnifiedTransactionFormProps {
+  setDialogOpen: (open: boolean) => void;
+}
+
 export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionFormProps) {
   const [transactionType, setTransactionType] = useState<TransactionType>('cash');
   const isMobile = useIsMobile();
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
   const [isCashSettlement, setIsCashSettlement] = useState(false);
   const [isBankSettlement, setIsBankSettlement] = useState(false);
+  const [showAdvancedFields, setShowAdvancedFields] = useState(false);
 
   
   const { 
@@ -187,7 +146,6 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
     clients,
     banks,
     currency,
-    user, // Assuming user context is available here for admin checks
   } = useAppContext();
   
   const currentSchema = formSchemas[transactionType];
@@ -199,13 +157,10 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
     }
   });
   
-  // Use useWatch to reliably get the latest values for calculation
-  const [expectedAmount, actualAmount] = useWatch({
-    control,
-    name: ["expected_amount", "actual_amount"],
-  });
-  
-  // Watch for other changes that affect other parts of the form
+  // Watch fields for conditional UI and logic
+  const watchedAmount = watch('amount');
+  const watchedExpectedAmount = watch('expected_amount');
+  const watchedActualAmount = watch('actual_amount');
   const stockType = watch('stockType');
   const stockPaymentMethod = watch('paymentMethod');
   const ledgerType = watch('ledgerType');
@@ -219,6 +174,15 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
 
 
   useEffect(() => {
+    // When the user is in simple mode, keep both amounts in sync
+    if (!showAdvancedFields && typeof watchedAmount === 'number') {
+        setValue('expected_amount', watchedAmount);
+        setValue('actual_amount', watchedAmount);
+    }
+  }, [watchedAmount, showAdvancedFields, setValue]);
+
+
+  useEffect(() => {
       const isSettlement = cashCategoryName === 'A/R Settlement' || cashCategoryName === 'A/P Settlement';
       setIsCashSettlement(isSettlement);
   }, [cashCategoryName]);
@@ -229,13 +193,13 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
   }, [bankCategoryName]);
 
   const difference = useMemo(() => {
-    const expected = parseFloat(expectedAmount || 0);
-    const actual = parseFloat(actualAmount || 0);
-    if (isNaN(expected) || isNaN(actual)) {
+    const expected = parseFloat(watchedExpectedAmount || 0);
+    const actual = parseFloat(watchedActualAmount || 0);
+    if (isNaN(expected) || isNaN(actual) || !showAdvancedFields) {
       return 0;
     }
     return actual - expected;
-  }, [expectedAmount, actualAmount]);
+  }, [watchedExpectedAmount, watchedActualAmount, showAdvancedFields]);
   
   useEffect(() => {
     if (transactionType === 'stock' && weight && pricePerKg) {
@@ -254,6 +218,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
     setIsNewStockItem(false);
     setIsCashSettlement(false);
     setIsBankSettlement(false);
+    setShowAdvancedFields(false);
   }, [transactionType, reset]);
   
   useEffect(() => {
@@ -264,7 +229,9 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
   const onSubmit = async (data: any) => {
     const transactionDate = data.date.toISOString();
     try {
-        const finalDifference = (data.actual_amount || 0) - (data.expected_amount || 0);
+        let finalExpectedAmount = showAdvancedFields ? data.expected_amount : data.amount;
+        let finalActualAmount = showAdvancedFields ? data.actual_amount : data.amount;
+        let finalDifference = finalActualAmount - finalExpectedAmount;
         
         switch(transactionType) {
             case 'cash': {
@@ -272,8 +239,8 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                 if (!categoryInfo) throw new Error("Category information not found.");
                 await addCashTransaction({
                     type: categoryInfo.direction === 'credit' ? 'income' : 'expense',
-                    expected_amount: data.expected_amount,
-                    actual_amount: data.actual_amount,
+                    expected_amount: finalExpectedAmount,
+                    actual_amount: finalActualAmount,
                     difference: finalDifference,
                     difference_reason: data.difference_reason,
                     description: data.description!,
@@ -288,8 +255,8 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                  if (!categoryInfo) throw new Error("Category information not found.");
                  await addBankTransaction({
                     type: categoryInfo.direction === 'credit' ? 'deposit' : 'withdrawal',
-                    expected_amount: data.expected_amount,
-                    actual_amount: data.actual_amount,
+                    expected_amount: finalExpectedAmount,
+                    actual_amount: finalActualAmount,
                     difference: finalDifference,
                     difference_reason: data.difference_reason,
                     description: data.description!,
@@ -327,7 +294,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                     date: transactionDate,
                     expected_amount: data.expected_amount,
                     actual_amount: data.actual_amount,
-                    difference: finalDifference,
+                    difference: data.actual_amount - data.expected_amount,
                     difference_reason: data.difference_reason,
                     contact_id: stockContactId,
                     contact_name: stockContactName,
@@ -376,13 +343,79 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
   };
 
   const stockCreditContactType = stockType === 'purchase' ? 'Vendor' : 'Client';
-  const stockCreditContacts = stockType === 'purchase' ? vendors : clients;
-  
-  const currentLedgerContactType = ledgerType === 'payable' ? 'Vendor' : 'Client';
-  const currentLedgerContacts = ledgerType === 'payable' ? vendors : clients;
-  
   const settlementContactType = cashCategoryName === 'A/P Settlement' || bankCategoryName === 'A/P Settlement' ? 'Vendor' : 'Client';
   const settlementContacts = settlementContactType === 'Vendor' ? vendors : clients;
+  
+  const cashCategoryItems = useMemo(() => (cashCategories || []).filter(c => c.name !== 'Stock Purchase' && c.name !== 'Stock Sale').map(c => ({ value: c.name, label: `${c.name}` })), [cashCategories]);
+  const bankCategoryItems = useMemo(() => (bankCategories || []).filter(c => c.name !== 'Stock Purchase' && c.name !== 'Stock Sale').map(c => ({ value: c.name, label: `${c.name}` })), [bankCategories]);
+  const bankAccountItems = useMemo(() => (banks || []).map(b => ({ value: b.id, label: b.name })), [banks]);
+  const stockItemsForSale = useMemo(() => (stockItems || []).filter(i => i.weight > 0).map(item => ({ value: item.name, label: item.name })), [stockItems]);
+  const stockItemsForPurchase = useMemo(() => (stockItems || []).map(item => ({ value: item.name, label: item.name })), [stockItems]);
+  const vendorContactItems = useMemo(() => [
+      ...(vendors || []).map(c => ({ value: c.id, label: c.name })), 
+      { value: 'new', label: <span className="flex items-center gap-2"><Plus className="h-4 w-4"/>Add New</span>}
+  ], [vendors]);
+  const clientContactItems = useMemo(() => [
+    ...(clients || []).map(c => ({ value: c.id, label: c.name })), 
+    { value: 'new', label: <span className="flex items-center gap-2"><Plus className="h-4 w-4"/>Add New</span>}
+  ], [clients]);
+  const currentLedgerContactItems = ledgerType === 'payable' ? vendorContactItems : clientContactItems;
+  
+  const transactionTypeItems: {value: TransactionType, label: string, icon: React.ElementType}[] = [
+      { value: 'cash', label: 'Cash', icon: Wallet },
+      { value: 'bank', label: 'Bank', icon: Landmark },
+      { value: 'stock', label: 'Stock', icon: Boxes },
+      { value: 'transfer', label: 'Transfer', icon: ArrowRightLeft },
+      { value: 'ap_ar', label: 'A/R & A/P', icon: UserPlus },
+  ];
+
+  const renderDiscrepancyFields = () => (
+    <>
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+            <Label htmlFor="amount">Amount</Label>
+            {!showAdvancedFields && (
+                <Button type="button" variant="link" size="sm" className="h-auto p-0" onClick={() => setShowAdvancedFields(true)}>
+                    <Settings2 className="mr-1 h-3 w-3" />
+                    Adjust
+                </Button>
+            )}
+        </div>
+        <Input id="amount" type="number" step="0.01" {...register('amount')} placeholder="e.g., 1000.00" className="border-2"/>
+        {errors.amount && <p className="text-sm text-destructive">{(errors.amount as any).message}</p>}
+      </div>
+        {showAdvancedFields && (
+            <div className="p-4 border rounded-md bg-muted/30 space-y-4 animate-fade-in">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                        <Label htmlFor="expected_amount">Transaction Value</Label>
+                        <Input id="expected_amount" type="number" step="0.01" {...register('expected_amount')} placeholder="e.g., Invoice total" className="border-2"/>
+                        {errors.expected_amount && <p className="text-sm text-destructive">{(errors.expected_amount as any).message}</p>}
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="actual_amount">Amount Paid/Received</Label>
+                        <Input id="actual_amount" type="number" step="0.01" {...register('actual_amount')} placeholder="e.g., Actual cash paid" className="border-2"/>
+                        {errors.actual_amount && <p className="text-sm text-destructive">{(errors.actual_amount as any).message}</p>}
+                    </div>
+                </div>
+                {difference !== 0 && (
+                    <div className="space-y-2 animate-fade-in">
+                        <div className="flex justify-between items-center">
+                            <Label>Difference</Label>
+                            <span className={cn("font-bold", difference > 0 ? "text-accent" : "text-destructive")}>
+                                {new Intl.NumberFormat('en-US', { style: 'currency', currency: currency, currencyDisplay: 'symbol' }).format(difference)}
+                            </span>
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="difference_reason">Reason for Difference</Label>
+                            <Input id="difference_reason" {...register('difference_reason')} placeholder="e.g., Discount, Rounding, Late fee" className="border-2"/>
+                        </div>
+                    </div>
+                )}
+            </div>
+        )}
+    </>
+  );
   
   const dateField = (
       <div className="space-y-2">
@@ -441,60 +474,6 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
         />
         {errors.contact_id && <p className="text-sm text-destructive">{(errors.contact_id as any).message}</p>}
     </div>
-  );
-  
-  const cashCategoryItems = useMemo(() => (cashCategories || []).filter(c => c.name !== 'Stock Purchase' && c.name !== 'Stock Sale').map(c => ({ value: c.name, label: `${c.name}` })), [cashCategories]);
-  const bankCategoryItems = useMemo(() => (bankCategories || []).filter(c => c.name !== 'Stock Purchase' && c.name !== 'Stock Sale').map(c => ({ value: c.name, label: `${c.name}` })), [bankCategories]);
-  const bankAccountItems = useMemo(() => (banks || []).map(b => ({ value: b.id, label: b.name })), [banks]);
-  const stockItemsForSale = useMemo(() => (stockItems || []).filter(i => i.weight > 0).map(item => ({ value: item.name, label: item.name })), [stockItems]);
-  const stockItemsForPurchase = useMemo(() => (stockItems || []).map(item => ({ value: item.name, label: item.name })), [stockItems]);
-  const vendorContactItems = useMemo(() => [
-      ...(vendors || []).map(c => ({ value: c.id, label: c.name })), 
-      { value: 'new', label: <span className="flex items-center gap-2"><Plus className="h-4 w-4"/>Add New</span>}
-  ], [vendors]);
-  const clientContactItems = useMemo(() => [
-    ...(clients || []).map(c => ({ value: c.id, label: c.name })), 
-    { value: 'new', label: <span className="flex items-center gap-2"><Plus className="h-4 w-4"/>Add New</span>}
-  ], [clients]);
-  const currentLedgerContactItems = ledgerType === 'payable' ? vendorContactItems : clientContactItems;
-  
-  const transactionTypeItems: {value: TransactionType, label: string, icon: React.ElementType}[] = [
-      { value: 'cash', label: 'Cash', icon: Wallet },
-      { value: 'bank', label: 'Bank', icon: Landmark },
-      { value: 'stock', label: 'Stock', icon: Boxes },
-      { value: 'transfer', label: 'Transfer', icon: ArrowRightLeft },
-      { value: 'ap_ar', label: 'A/R & A/P', icon: UserPlus },
-  ];
-
-  const renderDiscrepancyFields = () => (
-    <>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-                <Label htmlFor="expected_amount">Transaction Value</Label>
-                <Input id="expected_amount" type="number" step="0.01" {...register('expected_amount')} placeholder="e.g., Invoice total" className="border-2"/>
-                {errors.expected_amount && <p className="text-sm text-destructive">{(errors.expected_amount as any).message}</p>}
-            </div>
-            <div className="space-y-2">
-                <Label htmlFor="actual_amount">Amount Paid/Received</Label>
-                <Input id="actual_amount" type="number" step="0.01" {...register('actual_amount')} placeholder="e.g., Actual cash paid" className="border-2"/>
-                {errors.actual_amount && <p className="text-sm text-destructive">{(errors.actual_amount as any).message}</p>}
-            </div>
-        </div>
-        {difference !== 0 && (
-             <div className="p-3 border rounded-md bg-muted/50 space-y-2 animate-fade-in">
-                <div className="flex justify-between items-center">
-                    <Label>Difference</Label>
-                    <span className={cn("font-bold", difference > 0 ? "text-accent" : "text-destructive")}>
-                        {new Intl.NumberFormat('en-US', { style: 'currency', currency: currency, currencyDisplay: 'symbol' }).format(difference)}
-                    </span>
-                </div>
-                <div className="space-y-2">
-                    <Label htmlFor="difference_reason">Reason for Difference</Label>
-                    <Input id="difference_reason" {...register('difference_reason')} placeholder="e.g., Discount, Rounding, Late fee" className="border-2"/>
-                </div>
-            </div>
-        )}
-    </>
   );
 
   return (
@@ -694,7 +673,16 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                         />
                         {errors.paymentMethod && <p className="text-sm text-destructive">{(errors.paymentMethod as any).message}</p>}
                     </div>
-                     {stockPaymentMethod !== 'credit' && renderDiscrepancyFields()}
+                     {stockPaymentMethod !== 'credit' && (
+                        <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                                <Label htmlFor="actual_amount">Amount Paid/Received</Label>
+                                <span className="text-sm text-muted-foreground">Expected: {currency} {((weight || 0) * (pricePerKg || 0)).toFixed(2)}</span>
+                            </div>
+                            <Input id="actual_amount" type="number" step="0.01" {...register('actual_amount')} placeholder="e.g., Actual cash paid" className="border-2"/>
+                             {errors.actual_amount && <p className="text-sm text-destructive">{(errors.actual_amount as any).message}</p>}
+                        </div>
+                     )}
                     {stockPaymentMethod === 'bank' && (
                         <div className="space-y-2 animate-fade-in">
                         <Label>Bank Account</Label>
