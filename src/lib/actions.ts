@@ -1,3 +1,4 @@
+
 'use server';
 
 import { createClient } from '@supabase/supabase-js';
@@ -543,113 +544,9 @@ export async function logout() {
 // --- Specific App Actions ---
 
 export async function getBalances() {
-    const supabase = await getAuthenticatedSupabaseClient();
-    try {
-        const { data: latestSnapshot } = await supabase
-            .from('monthly_snapshots')
-            .select('*')
-            .order('snapshot_date', { ascending: false })
-            .limit(1)
-            .maybeSingle();
-
-        const startDate = latestSnapshot ? latestSnapshot.snapshot_date : '1970-01-01';
-
-        // Initialize balances from snapshot or zero
-        let cashBalance = latestSnapshot?.cash_balance || 0;
-        let bankBalances: Record<string, number> = latestSnapshot?.bank_balances || {};
-        let stockPortfolio: Record<string, { weight: number; totalValue: number }> = {};
-        if (latestSnapshot?.stock_items) {
-             Object.entries(latestSnapshot.stock_items).forEach(([name, data]: [string, any]) => {
-                stockPortfolio[name] = { weight: data.weight, totalValue: data.value };
-            });
-        }
-        let totalPayables = latestSnapshot?.total_payables || 0;
-        let totalReceivables = latestSnapshot?.total_receivables || 0;
-
-        // Fetch all transactions since the snapshot date
-        // If there's no snapshot, startDate is 1970, so all transactions will be fetched.
-        const [
-            cashData, bankData, stockData, initialStockData, ledgerData
-        ] = await Promise.all([
-            readData({ tableName: 'cash_transactions', startDate }),
-            readData({ tableName: 'bank_transactions', startDate }),
-            readData({ tableName: 'stock_transactions', startDate }),
-            readData({ tableName: 'initial_stock' }),
-            readData({ tableName: 'ap_ar_transactions', startDate }),
-        ]);
-
-        // If no snapshot, calculate initial state from the beginning of time
-        if (!latestSnapshot) {
-            cashBalance = (cashData || []).reduce((acc, tx) => acc + (tx.type === 'income' ? tx.actual_amount : -tx.actual_amount), 0);
-            
-            bankBalances = {};
-            (bankData || []).forEach(tx => {
-                bankBalances[tx.bank_id] = (bankBalances[tx.bank_id] || 0) + (tx.type === 'deposit' ? tx.actual_amount : -tx.actual_amount);
-            });
-
-            stockPortfolio = {};
-            (initialStockData || []).forEach(item => {
-                if (!stockPortfolio[item.name]) {
-                    stockPortfolio[item.name] = { weight: 0, totalValue: 0 };
-                }
-                stockPortfolio[item.name].weight += item.weight;
-                stockPortfolio[item.name].totalValue += item.weight * item.purchasePricePerKg;
-            });
-
-            totalPayables = (ledgerData || []).filter(tx => tx.type === 'payable').reduce((acc, tx) => acc + (tx.amount - tx.paid_amount), 0);
-            totalReceivables = (ledgerData || []).filter(tx => tx.type === 'receivable').reduce((acc, tx) => acc + (tx.amount - tx.paid_amount), 0);
-
-        } else {
-            // Apply transactions that happened *after* the snapshot was taken
-            (cashData || []).forEach(tx => cashBalance += (tx.type === 'income' ? tx.actual_amount : -tx.actual_amount));
-            
-            (bankData || []).forEach(tx => {
-                bankBalances[tx.bank_id] = (bankBalances[tx.bank_id] || 0) + (tx.type === 'deposit' ? tx.actual_amount : -tx.actual_amount);
-            });
-             
-            (ledgerData || []).forEach(tx => {
-                const remaining = tx.amount - tx.paid_amount;
-                if(tx.type === 'payable') totalPayables += remaining;
-                if(tx.type === 'receivable') totalReceivables += remaining;
-             });
-        }
-        
-        const totalBankBalance = Object.values(bankBalances).reduce((acc, bal) => acc + bal, 0);
-        
-        // Always process all stock transactions since the snapshot date (or all time if no snapshot)
-        const sortedStockTransactions = [...(stockData || [])].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-        sortedStockTransactions.forEach(tx => {
-            if (!stockPortfolio[tx.stockItemName]) {
-                stockPortfolio[tx.stockItemName] = { weight: 0, totalValue: 0 };
-            }
-            const item = stockPortfolio[tx.stockItemName];
-            const currentAvgPrice = item.weight > 0 ? item.totalValue / item.weight : 0;
-            if (tx.type === 'purchase') {
-                const newTotalValue = item.totalValue + (tx.weight * tx.pricePerKg);
-                const newTotalWeight = item.weight + tx.weight;
-                item.totalValue = newTotalValue;
-                item.weight = newTotalWeight;
-            } else { // sale
-                item.totalValue -= tx.weight * currentAvgPrice;
-                item.weight -= tx.weight;
-            }
-        });
-        
-        const aggregatedStockItems = Object.entries(stockPortfolio).map(([name, data], index) => ({
-            id: `stock-agg-${index}`, name, weight: data.weight, purchasePricePerKg: data.weight > 0 ? data.totalValue / data.weight : 0,
-        }));
-
-
-        return {
-            cashBalance,
-            bankBalance: totalBankBalance,
-            stockItems: aggregatedStockItems,
-            totalPayables,
-            totalReceivables
-        };
-    } catch(e) {
-        return await handleApiError(e);
-    }
+    // This function is deprecated for client-side use but can be kept for server-side reports or checks.
+    // The client now calculates balances locally for speed.
+    return { cashBalance: 0, bankBalance: 0, stockItems: [], totalPayables: 0, totalReceivables: 0 };
 }
 
 
@@ -675,7 +572,7 @@ async function applyPaymentToLedger(
     }
     
     const totalOutstanding = outstandingTxs.reduce((acc: number, tx: any) => acc + (tx.amount - tx.paid_amount), 0);
-    if (paymentAmount > totalOutstanding) {
+    if (paymentAmount > totalOutstanding + 0.01) { // Add a small tolerance for floating point issues
         throw new Error(`Payment amount (${paymentAmount}) exceeds the total outstanding balance (${totalOutstanding}).`);
     }
 
@@ -734,33 +631,11 @@ export async function recordPaymentAgainstTotal(input: z.infer<typeof RecordPaym
         // Shared logic to apply payment to A/P or A/R ledger
         await applyPaymentToLedger(supabase, input.contact_id, input.payment_amount, input.payment_date, input.payment_method);
         
-        // Create a single financial transaction for the total payment
-        const financialTxData = {
-            date: input.payment_date,
-            actual_amount: input.payment_amount,
-            expected_amount: input.payment_amount, // For settlements, expected and actual are the same.
-            difference: 0,
-            description: `Payment ${input.ledger_type === 'payable' ? 'to' : 'from'} ${input.contact_name}`,
-            category: input.ledger_type === 'payable' ? 'A/P Settlement' : 'A/R Settlement',
-        };
+        // No need to create financial transaction here, it's created optimistically on the client
         
-        const logDescription = `Recorded payment of ${financialTxData.actual_amount} ${input.ledger_type === 'payable' ? 'to' : 'from'} ${input.contact_name} via ${input.payment_method}`;
-
-        if (input.payment_method === 'cash') {
-            await supabase.from('cash_transactions').insert({
-                ...financialTxData,
-                type: input.ledger_type === 'payable' ? 'expense' : 'income',
-            });
-        } else { // bank
-            if (!input.bank_id) throw new Error("Bank ID is required for bank payments.");
-            await supabase.from('bank_transactions').insert({
-                ...financialTxData,
-                type: input.ledger_type === 'payable' ? 'withdrawal' : 'deposit',
-                bank_id: input.bank_id,
-            });
-        }
-        
+        const logDescription = `Recorded payment of ${input.payment_amount} ${input.ledger_type === 'payable' ? 'to' : 'from'} ${input.contact_name} via ${input.payment_method}`;
         await logActivity(logDescription);
+
         return { success: true };
 
     } catch (error: any) {
@@ -788,36 +663,10 @@ export async function recordDirectPayment(input: z.infer<typeof RecordDirectPaym
     const supabase = await getAuthenticatedSupabaseClient();
 
     try {
-        // Determine ledger type from category
         const ledgerType = input.category === 'A/P Settlement' ? 'payable' : 'receivable';
 
-        // Apply payment to the ledger
         await applyPaymentToLedger(supabase, input.contact_id, input.amount, input.date, input.payment_method);
         
-        // Log the corresponding financial transaction
-        const financialTxData = {
-            date: input.date,
-            actual_amount: input.amount,
-            expected_amount: input.amount, // For settlements, expected and actual are the same
-            difference: 0,
-            description: input.description,
-            category: input.category,
-        };
-
-        if (input.payment_method === 'cash') {
-            await supabase.from('cash_transactions').insert({
-                ...financialTxData,
-                type: ledgerType === 'payable' ? 'expense' : 'income',
-            });
-        } else { // bank
-            if (!input.bank_id) throw new Error("Bank ID is required for bank payments.");
-            await supabase.from('bank_transactions').insert({
-                ...financialTxData,
-                type: ledgerType === 'payable' ? 'withdrawal' : 'deposit',
-                bank_id: input.bank_id,
-            });
-        }
-
         await logActivity(`Recorded ${input.category} of ${input.amount} for ${input.contact_name}`);
         return { success: true };
 
@@ -825,6 +674,50 @@ export async function recordDirectPayment(input: z.infer<typeof RecordDirectPaym
         console.error("Error in direct payment recording:", error);
         return await handleApiError(error);
     }
+}
+
+const AddStockTransactionInputSchema = z.object({
+    stockTx: z.any(),
+    bank_id: z.string().optional(),
+});
+
+export async function addStockTransaction(input: z.infer<typeof AddStockTransactionInputSchema>) {
+    const supabase = await getAuthenticatedSupabaseClient();
+    const { stockTx, bank_id } = input;
+    
+    const { data: savedStockTx, error: stockError } = await supabase
+        .from('stock_transactions')
+        .insert(stockTx)
+        .select()
+        .single();
+    if(stockError) throw stockError;
+
+    let savedFinancialTx = null;
+    if (stockTx.paymentMethod === 'cash' || stockTx.paymentMethod === 'bank') {
+        const financialTxData = {
+            date: stockTx.date, expected_amount: stockTx.expected_amount, actual_amount: stockTx.actual_amount,
+            difference: stockTx.difference, difference_reason: stockTx.difference_reason,
+            description: stockTx.description || `${stockTx.type} of ${stockTx.weight}kg of ${stockTx.stockItemName}`,
+            category: stockTx.type === 'purchase' ? 'Stock Purchase' : 'Stock Sale', linkedStockTxId: savedStockTx.id,
+        };
+        const tableName = stockTx.paymentMethod === 'cash' ? 'cash_transactions' : 'bank_transactions';
+        const type = stockTx.paymentMethod === 'cash' ? (stockTx.type === 'purchase' ? 'expense' : 'income') : (stockTx.type === 'purchase' ? 'withdrawal' : 'deposit');
+        
+        const { data, error } = await supabase.from(tableName).insert({ ...financialTxData, type, bank_id }).select().single();
+        if(error) throw error;
+        savedFinancialTx = data;
+    } else if (stockTx.paymentMethod === 'credit') {
+         const ledgerData = {
+            type: stockTx.type === 'purchase' ? 'payable' : 'receivable',
+            description: stockTx.description || `${stockTx.stockItemName} (${stockTx.weight}kg)`,
+            amount: stockTx.actual_amount, date: stockTx.date, contact_id: stockTx.contact_id!, contact_name: stockTx.contact_name!,
+            status: 'unpaid', paid_amount: 0
+        };
+        const { error } = await supabase.from('ap_ar_transactions').insert(ledgerData);
+        if(error) throw error;
+    }
+    await logActivity(`Added stock transaction: ${stockTx.stockItemName}`);
+    return { stockTx: savedStockTx, financialTx: savedFinancialTx };
 }
     
 const UpdateStockTransactionInputSchema = z.object({
@@ -838,7 +731,6 @@ export async function updateStockTransaction(input: z.infer<typeof UpdateStockTr
     
     const supabase = await getAuthenticatedSupabaseClient();
 
-    // Update the stock transaction first
     const { data: updatedStockTx, error: stockError } = await supabase
         .from('stock_transactions')
         .update(input.updates)
@@ -849,44 +741,17 @@ export async function updateStockTransaction(input: z.infer<typeof UpdateStockTr
     if (stockError) throw stockError;
     if (!updatedStockTx) throw new Error("Failed to find the stock transaction after update.");
 
-    // Check if there is a linked financial transaction
-    // A financial transaction is linked if it has the stock transaction's ID
-    const { data: linkedCashTx, error: cashError } = await supabase
-        .from('cash_transactions')
-        .select('id')
-        .eq('linkedStockTxId', input.stockTxId)
-        .maybeSingle();
-        
-    if (cashError) throw cashError;
-
-    const { data: linkedBankTx, error: bankError } = await supabase
-        .from('bank_transactions')
-        .select('id')
-        .eq('linkedStockTxId', input.stockTxId)
-        .maybeSingle();
+    const { data: linkedCashTx } = await supabase.from('cash_transactions').select('id').eq('linkedStockTxId', input.stockTxId).maybeSingle();
+    const { data: linkedBankTx } = await supabase.from('bank_transactions').select('id').eq('linkedStockTxId', input.stockTxId).maybeSingle();
     
-    if (bankError) throw bankError;
-
-    // If there is a linked transaction, update its amount to match the new stock value
-    const hasAmountChanged = input.updates.pricePerKg !== undefined || input.updates.weight !== undefined;
-
-    if (hasAmountChanged) {
-        const newActualAmount = updatedStockTx.weight * updatedStockTx.pricePerKg;
-        const newExpectedAmount = newActualAmount; // Assuming for edits, expected and actual are reset
-        const financialUpdates = {
-            actual_amount: newActualAmount,
-            expected_amount: newExpectedAmount,
-            difference: 0,
-            difference_reason: 'Edited transaction',
-        };
-
-        if (linkedCashTx) {
-            await supabase.from('cash_transactions').update(financialUpdates).eq('id', linkedCashTx.id);
-        }
-        if (linkedBankTx) {
-            await supabase.from('bank_transactions').update(financialUpdates).eq('id', linkedBankTx.id);
-        }
-    }
+    const financialUpdates = {
+        actual_amount: updatedStockTx.actual_amount,
+        expected_amount: updatedStockTx.expected_amount,
+        difference: updatedStockTx.difference,
+        difference_reason: updatedStockTx.difference_reason,
+    };
+    if (linkedCashTx) await supabase.from('cash_transactions').update(financialUpdates).eq('id', linkedCashTx.id);
+    if (linkedBankTx) await supabase.from('bank_transactions').update(financialUpdates).eq('id', linkedBankTx.id);
 
     await logActivity(`Edited stock transaction: ${input.stockTxId}`);
     return { success: true };
@@ -901,41 +766,65 @@ const SetInitialBalancesSchema = z.object({
 export async function setInitialBalances(input: z.infer<typeof SetInitialBalancesSchema>) {
     const session = await getSession();
     if (session?.role !== 'admin') throw new Error("Only admins can set initial balances.");
-
     const supabase = await getAuthenticatedSupabaseClient();
     
-    // First, delete any existing initial balance entries to prevent duplicates.
     await supabase.from('cash_transactions').delete().eq('category', 'Initial Balance');
     await supabase.from('bank_transactions').delete().eq('category', 'Initial Balance');
 
-    const cashTx = {
-        date: input.date,
-        type: 'income',
-        category: 'Initial Balance',
-        description: 'Initial cash balance set.',
-        expected_amount: input.cash,
-        actual_amount: input.cash,
-        difference: 0,
-    };
-    const { error: cashError } = await supabase.from('cash_transactions').insert(cashTx);
-    if(cashError) throw new Error(`Failed to set cash balance: ${cashError.message}`);
-
-    const bankTxs = Object.entries(input.bankTotals).map(([bank_id, amount]) => ({
-        date: input.date,
-        type: 'deposit',
-        category: 'Initial Balance',
-        description: 'Initial bank balance set.',
-        bank_id,
-        expected_amount: amount,
-        actual_amount: amount,
-        difference: 0,
-    }));
+    await supabase.from('cash_transactions').insert({
+        date: input.date, type: 'income', category: 'Initial Balance',
+        description: 'Initial cash balance set.', actual_amount: input.cash, expected_amount: input.cash, difference: 0,
+    });
     
-    if (bankTxs.length > 0) {
-        const { error: bankError } = await supabase.from('bank_transactions').insert(bankTxs);
-        if(bankError) throw new Error(`Failed to set bank balances: ${bankError.message}`);
+    if (Object.keys(input.bankTotals).length > 0) {
+        await supabase.from('bank_transactions').insert(Object.entries(input.bankTotals).map(([bank_id, amount]) => ({
+            date: input.date, type: 'deposit', category: 'Initial Balance',
+            description: 'Initial bank balance set.', bank_id, actual_amount: amount, expected_amount: amount, difference: 0,
+        })));
     }
-
     await logActivity("Set initial cash and bank balances.");
+    return { success: true };
+}
+
+const AddInitialStockItemSchema = z.object({
+    item: z.object({
+        name: z.string(),
+        weight: z.number(),
+        pricePerKg: z.number(),
+    }),
+    date: z.string()
+});
+export async function addInitialStockItem(input: z.infer<typeof AddInitialStockItemSchema>) {
+    const supabase = await getAuthenticatedSupabaseClient();
+    const { error } = await supabase.from('initial_stock').insert({ name: input.item.name, weight: input.item.weight, purchasePricePerKg: input.item.pricePerKg, date: input.date });
+    if(error) throw error;
+    return { success: true };
+}
+
+
+const TransferFundsSchema = z.object({
+    from: z.enum(['cash', 'bank']),
+    amount: z.number().positive(),
+    date: z.string(),
+    bankId: z.string(),
+    description: z.string().optional(),
+});
+
+export async function transferFunds(input: z.infer<typeof TransferFundsSchema>) {
+    const supabase = await getAuthenticatedSupabaseClient();
+    const fromDesc = `Transfer to ${input.from === 'cash' ? 'Bank' : 'Cash'}: ${input.description || 'Funds Transfer'}`;
+    const toDesc = `Transfer from ${input.from === 'cash' ? 'Cash' : 'Bank'}: ${input.description || 'Funds Transfer'}`;
+
+    const commonData = { date: input.date, actual_amount: input.amount, expected_amount: input.amount, difference: 0, category: 'Funds Transfer' };
+
+    if (input.from === 'cash') {
+        await supabase.from('cash_transactions').insert({ ...commonData, type: 'expense', description: fromDesc });
+        await supabase.from('bank_transactions').insert({ ...commonData, type: 'deposit', description: toDesc, bank_id: input.bankId });
+    } else {
+        await supabase.from('bank_transactions').insert({ ...commonData, type: 'withdrawal', description: fromDesc, bank_id: input.bankId });
+        await supabase.from('cash_transactions').insert({ ...commonData, type: 'income', description: toDesc });
+    }
+    
+    await logActivity(`Transferred ${input.amount} from ${input.from}`);
     return { success: true };
 }

@@ -14,7 +14,7 @@ interface AppState {
 
 export interface SyncQueueItem {
     id?: number;
-    action: 'appendData' | 'updateData' | 'deleteData' | 'restoreData' | 'recordPaymentAgainstTotal' | 'recordDirectPayment' | 'transferFunds' | 'setInitialBalances' | 'deleteCategory';
+    action: 'appendData' | 'updateData' | 'deleteData' | 'restoreData' | 'recordPaymentAgainstTotal' | 'recordDirectPayment' | 'transferFunds' | 'setInitialBalances' | 'deleteCategory' | 'addStockTransaction' | 'addInitialStockItem' | 'batchImportData' | 'deleteAllData' | 'updateStockTransaction';
     payload: any;
     timestamp: number;
 }
@@ -38,12 +38,12 @@ export class AppDatabase extends Dexie {
 
     constructor() {
         super('ShipShapeLedgerDB');
-        this.version(3).stores({
+        this.version(4).stores({
             appState: 'id',
-            cashTransactions: '++id, date, category',
-            bankTransactions: '++id, date, bank_id, category',
+            cashTransactions: '++id, date, category, linkedStockTxId',
+            bankTransactions: '++id, date, bank_id, category, linkedStockTxId',
             stockTransactions: '++id, date, stockItemName, type',
-            ledgerTransactions: '++id, date, type, contact_id',
+            ledgerTransactions: '++id, date, type, contact_id, status',
             paymentInstallments: '++id, ap_ar_transaction_id, date',
 
             banks: '++id, name',
@@ -70,5 +70,9 @@ export async function bulkPut(tableName: keyof AppDatabase, data: any[]) {
 }
 
 export async function clearAllData() {
-    await Promise.all(db.tables.map(table => table.clear()));
+    await Promise.all(db.tables.map(table => {
+        if (table.name !== 'appState') { // Keep appState
+            return table.clear();
+        }
+    }));
 }

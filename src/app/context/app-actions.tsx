@@ -4,40 +4,22 @@ import { useCallback } from 'react';
 import { toast } from 'sonner';
 import { db, bulkPut } from '@/lib/db';
 import type { SyncQueueItem } from '@/lib/db';
-import * as server from '@/lib/actions';
 import { useAppContext } from './app-context';
 import type { CashTransaction, BankTransaction, StockTransaction, Vendor, Client, LedgerTransaction, Category } from '@/lib/types';
+import * as server from '@/lib/actions'; // We still need server actions for the sync queue
 
 export function useAppActions() {
-    const { isOnline, handleApiError, reloadData, updateBalances, setLoadedMonths, setDeletedItems } = useAppContext();
+    const { isOnline, handleApiError, reloadData, updateBalances, processSyncQueue } = useAppContext();
 
     const queueOrSync = useCallback(async (item: Omit<SyncQueueItem, 'timestamp' | 'id'>) => {
+        await db.syncQueue.add({ ...item, timestamp: Date.now() });
         if (isOnline) {
-            try {
-                let result;
-                switch(item.action) {
-                    case 'appendData': result = await server.appendData(item.payload); break;
-                    case 'updateData': result = await server.updateData(item.payload); break;
-                    case 'deleteData': result = await server.deleteData(item.payload); break;
-                    case 'restoreData': result = await server.restoreData(item.payload); break;
-                    case 'recordPaymentAgainstTotal': result = await server.recordPaymentAgainstTotal(item.payload); break;
-                    case 'recordDirectPayment': result = await server.recordDirectPayment(item.payload); break;
-                    case 'updateStockTransaction': result = await server.updateStockTransaction(item.payload); break;
-                    case 'setInitialBalances': result = await server.setInitialBalances(item.payload); break;
-                    case 'deleteCategory': result = await server.deleteCategory(item.payload); break;
-                }
-                return result;
-            } catch (error) {
-                handleApiError(error);
-                await db.syncQueue.add({ ...item, timestamp: Date.now() });
-                throw error;
-            }
+            // Don't await this. Let it run in the background.
+            processSyncQueue(); 
         } else {
-            await db.syncQueue.add({ ...item, timestamp: Date.now() });
             toast.info("You are offline. Change saved locally and will sync later.");
-            return null;
         }
-    }, [isOnline, handleApiError]);
+    }, [isOnline, processSyncQueue]);
     
     // AUTH ACTIONS
     const login = useCallback(async (credentials: Parameters<typeof server.login>[0]) => {
@@ -51,51 +33,52 @@ export function useAppActions() {
     // DATA MUTATION ACTIONS
     const addCashTransaction = async (tx: Omit<CashTransaction, 'id' | 'createdAt' | 'deletedAt'>) => {
         const tempId = `temp_${Date.now()}`;
-        const newTxData = { ...tx, id: tempId, createdAt: new Date().toISOString() };
-        await db.cashTransactions.add(newTxData);
+        const newTxData: CashTransaction = { ...tx, id: tempId, createdAt: new Date().toISOString() };
         
-        try {
-            if (tx.category === 'A/R Settlement' || tx.category === 'A/P Settlement') {
-                const payload = {
-                    payment_method: 'cash' as const, date: tx.date, amount: tx.actual_amount, category: tx.category,
-                    description: tx.description, contact_id: tx.contact_id!,
-                    contact_name: tx.type === 'income' ? (await db.clients.get(tx.contact_id!))?.name || '?' : (await db.vendors.get(tx.contact_id!))?.name || '?',
-                };
-                await queueOrSync({ action: 'recordDirectPayment', payload });
-            } else {
-                const savedTx = await queueOrSync({ action: 'appendData', payload: { tableName: 'cash_transactions', data: tx, logDescription: `Added cash transaction: ${tx.description}`, select: '*' } });
-                if (savedTx) await db.cashTransactions.where({ id: tempId }).modify(savedTx);
-            }
-            await updateBalances();
-        } catch (e) {}
+        await db.cashTransactions.add(newTxData);
+        await updateBalances();
+
+        if (tx.category === 'A/R Settlement' || tx.category === 'A/P Settlement') {
+            const payload = {
+                payment_method: 'cash' as const, date: tx.date, amount: tx.actual_amount, category: tx.category,
+                description: tx.description, contact_id: tx.contact_id!,
+                contact_name: tx.type === 'income' ? (await db.clients.get(tx.contact_id!))?.name || '?' : (await db.vendors.get(tx.contact_id!))?.name || '?',
+            };
+            queueOrSync({ action: 'recordDirectPayment', payload: { ...payload, localId: tempId } });
+        } else {
+            queueOrSync({ action: 'appendData', payload: { tableName: 'cash_transactions', data: tx, localId: tempId, logDescription: `Added cash transaction: ${tx.description}`, select: '*' } });
+        }
     };
 
     const addBankTransaction = async (tx: Omit<BankTransaction, 'id' | 'createdAt' | 'deletedAt'>) => {
         const tempId = `temp_${Date.now()}`;
-        await db.bankTransactions.add({ ...tx, id: tempId, createdAt: new Date().toISOString() });
-        try {
-             if (tx.category === 'A/R Settlement' || tx.category === 'A/P Settlement') {
-                const payload = {
-                    payment_method: 'bank' as const, bank_id: tx.bank_id, date: tx.date, amount: tx.actual_amount, category: tx.category,
-                    description: tx.description, contact_id: tx.contact_id!,
-                    contact_name: tx.type === 'deposit' ? (await db.clients.get(tx.contact_id!))?.name || '?' : (await db.vendors.get(tx.contact_id!))?.name || '?',
-                };
-                await queueOrSync({ action: 'recordDirectPayment', payload });
-            } else {
-                const savedTx = await queueOrSync({ action: 'appendData', payload: { tableName: 'bank_transactions', data: tx, logDescription: `Added bank transaction: ${tx.description}`, select: '*' } });
-                if (savedTx) await db.bankTransactions.where({ id: tempId }).modify(savedTx);
-            }
-            await updateBalances();
-        } catch(e) {}
+        const newTxData: BankTransaction = { ...tx, id: tempId, createdAt: new Date().toISOString() };
+        
+        await db.bankTransactions.add(newTxData);
+        await updateBalances();
+        
+        if (tx.category === 'A/R Settlement' || tx.category === 'A/P Settlement') {
+            const payload = {
+                payment_method: 'bank' as const, bank_id: tx.bank_id, date: tx.date, amount: tx.actual_amount, category: tx.category,
+                description: tx.description, contact_id: tx.contact_id!,
+                contact_name: tx.type === 'deposit' ? (await db.clients.get(tx.contact_id!))?.name || '?' : (await db.vendors.get(tx.contact_id!))?.name || '?',
+            };
+            queueOrSync({ action: 'recordDirectPayment', payload: { ...payload, localId: tempId } });
+        } else {
+            queueOrSync({ action: 'appendData', payload: { tableName: 'bank_transactions', data: tx, localId: tempId, logDescription: `Added bank transaction: ${tx.description}`, select: '*' } });
+        }
     };
 
     const addStockTransaction = async (tx: Omit<StockTransaction, 'id' | 'createdAt' | 'deletedAt'> & { contact_id?: string; contact_name?: string }, bank_id?: string) => {
         const stockTempId = `temp_stock_${Date.now()}`;
-        await db.stockTransactions.add({ ...tx, id: stockTempId, createdAt: new Date().toISOString() });
-        const savedStockTxPromise = queueOrSync({ action: 'appendData', payload: { tableName: 'stock_transactions', data: tx, select: '*' }});
+        const newStockTxData: StockTransaction = { ...tx, id: stockTempId, createdAt: new Date().toISOString() };
+
+        await db.stockTransactions.add(newStockTxData);
 
         if (tx.paymentMethod === 'cash' || tx.paymentMethod === 'bank') {
+            const financialTempId = `temp_fin_${Date.now()}`;
             const financialTxData = {
+                id: financialTempId, createdAt: new Date().toISOString(),
                 date: tx.date, expected_amount: tx.expected_amount, actual_amount: tx.actual_amount,
                 difference: tx.difference, difference_reason: tx.difference_reason,
                 description: tx.description || `${tx.type} of ${tx.weight}kg of ${tx.stockItemName}`,
@@ -103,93 +86,98 @@ export function useAppActions() {
             };
 
             if (tx.paymentMethod === 'cash') {
-                const cashTempId = `temp_cash_${Date.now()}`;
-                await db.cashTransactions.add({ ...financialTxData, type: tx.type === 'purchase' ? 'expense' : 'income', id: cashTempId, createdAt: new Date().toISOString() });
-                savedStockTxPromise.then(async (savedStockTx) => {
-                    if (savedStockTx) {
-                        await db.stockTransactions.where({ id: stockTempId }).modify(savedStockTx);
-                        const finalFinancialData = { ...financialTxData, type: tx.type === 'purchase' ? 'expense' : 'income', linkedStockTxId: savedStockTx.id };
-                        const savedFinancialTx = await queueOrSync({ action: 'appendData', payload: { tableName: 'cash_transactions', data: finalFinancialData, select: '*' } });
-                        if(savedFinancialTx) await db.cashTransactions.where({ id: cashTempId }).modify(savedFinancialTx);
-                    }
-                });
+                await db.cashTransactions.add({ ...financialTxData, type: tx.type === 'purchase' ? 'expense' : 'income' });
             } else {
-                const bankTempId = `temp_bank_${Date.now()}`;
-                await db.bankTransactions.add({ ...financialTxData, type: tx.type === 'purchase' ? 'withdrawal' : 'deposit', bank_id: bank_id!, id: bankTempId, createdAt: new Date().toISOString() });
-                savedStockTxPromise.then(async (savedStockTx) => {
-                    if (savedStockTx) {
-                        await db.stockTransactions.where({ id: stockTempId }).modify(savedStockTx);
-                        const finalFinancialData = { ...financialTxData, type: tx.type === 'purchase' ? 'withdrawal' : 'deposit', bank_id: bank_id!, linkedStockTxId: savedStockTx.id };
-                        const savedFinancialTx = await queueOrSync({ action: 'appendData', payload: { tableName: 'bank_transactions', data: finalFinancialData, select: '*' } });
-                        if(savedFinancialTx) await db.bankTransactions.where({ id: bankTempId }).modify(savedFinancialTx);
-                    }
-                });
+                await db.bankTransactions.add({ ...financialTxData, type: tx.type === 'purchase' ? 'withdrawal' : 'deposit', bank_id: bank_id! });
             }
         } else if (tx.paymentMethod === 'credit') {
             const ledgerTempId = `temp_ledger_${Date.now()}`;
-            const ledgerData = {
+            const ledgerData: LedgerTransaction = {
+                id: ledgerTempId, createdAt: new Date().toISOString(),
                 type: tx.type === 'purchase' ? 'payable' : 'receivable',
                 description: tx.description || `${tx.stockItemName} (${tx.weight}kg)`,
                 amount: tx.actual_amount, date: tx.date, contact_id: tx.contact_id!, contact_name: tx.contact_name!,
+                status: 'unpaid', paid_amount: 0, installments: []
             };
-            const ledgerToSave = { ...ledgerData, status: 'unpaid', paid_amount: 0, installments: [] };
-            await db.ledgerTransactions.add({ ...ledgerToSave, id: ledgerTempId, createdAt: new Date().toISOString() });
-            const { installments, ...dataToSync } = ledgerToSave;
-            const savedLedgerTx = await queueOrSync({ action: 'appendData', payload: { tableName: 'ap_ar_transactions', data: dataToSync, select: '*' } });
-            if (savedLedgerTx) await db.ledgerTransactions.where({ id: ledgerTempId }).modify({ ...savedLedgerTx, installments: [] });
+            await db.ledgerTransactions.add(ledgerData);
         }
+        
         await updateBalances();
+        
+        // Queue the entire stock operation for background sync
+        queueOrSync({
+            action: 'addStockTransaction',
+            payload: { stockTx: tx, bank_id, localId: stockTempId }
+        });
     };
 
     const addLedgerTransaction = async (tx: Omit<LedgerTransaction, 'id' | 'createdAt' | 'deletedAt' | 'status' | 'paid_amount' | 'installments'>) => {
         const tempId = `temp_${Date.now()}`;
-        const dataToSave = { ...tx, status: 'unpaid', paid_amount: 0, installments: [] };
-        await db.ledgerTransactions.add({ ...dataToSave, id: tempId, createdAt: new Date().toISOString() });
+        const dataToSave: LedgerTransaction = { ...tx, status: 'unpaid', paid_amount: 0, installments: [], id: tempId, createdAt: new Date().toISOString() };
+        await db.ledgerTransactions.add(dataToSave);
         await updateBalances();
-        try {
-            const { installments, ...syncData } = dataToSave;
-            const newTx = await queueOrSync({ action: 'appendData', payload: { tableName: 'ap_ar_transactions', data: syncData, logDescription: `Added A/P or A/R: ${tx.description}`, select: '*' } });
-            if (newTx) await db.ledgerTransactions.where({ id: tempId }).modify({ ...newTx, installments: []});
-        } catch (error) { handleApiError(error); }
+        
+        const { installments, ...syncData } = dataToSave;
+        queueOrSync({ action: 'appendData', payload: { tableName: 'ap_ar_transactions', data: syncData, localId: tempId, logDescription: `Added A/P or A/R: ${tx.description}`, select: '*' } });
     }
     
     const editCashTransaction = async (originalTx: CashTransaction, updatedTxData: Partial<Omit<CashTransaction, 'id' | 'date' | 'createdAt'>>) => {
         await db.cashTransactions.update(originalTx.id, updatedTxData);
         await updateBalances();
-        await queueOrSync({ action: 'updateData', payload: { tableName: 'cash_transactions', id: originalTx.id, data: updatedTxData, logDescription: `Edited cash tx: ${originalTx.id}` }});
-        toast.success("Cash transaction updated.");
+        queueOrSync({ action: 'updateData', payload: { tableName: 'cash_transactions', id: originalTx.id, data: updatedTxData, logDescription: `Edited cash tx: ${originalTx.id}` }});
+        toast.success("Cash transaction updated locally.");
     };
 
     const editBankTransaction = async (originalTx: BankTransaction, updatedTxData: Partial<Omit<BankTransaction, 'id'| 'date' | 'createdAt'>>) => {
         await db.bankTransactions.update(originalTx.id, updatedTxData);
         await updateBalances();
-        await queueOrSync({ action: 'updateData', payload: { tableName: 'bank_transactions', id: originalTx.id, data: updatedTxData, logDescription: `Edited bank tx: ${originalTx.id}` }});
-        toast.success("Bank transaction updated.");
+        queueOrSync({ action: 'updateData', payload: { tableName: 'bank_transactions', id: originalTx.id, data: updatedTxData, logDescription: `Edited bank tx: ${originalTx.id}` }});
+        toast.success("Bank transaction updated locally.");
     };
 
     const editStockTransaction = async (originalTx: StockTransaction, updatedTxData: Partial<Omit<StockTransaction, 'id' | 'date' | 'createdAt'>>) => {
-        await db.stockTransactions.update(originalTx.id, updatedTxData);
+        const fullUpdate = { ...originalTx, ...updatedTxData };
+        const newActualAmount = fullUpdate.weight * fullUpdate.pricePerKg;
+        const finalUpdates = {
+            ...updatedTxData,
+            actual_amount: newActualAmount,
+            expected_amount: newActualAmount,
+            difference: 0,
+            difference_reason: 'Edited transaction',
+        };
+
+        await db.stockTransactions.update(originalTx.id, finalUpdates);
+        
+        const linkedCash = await db.cashTransactions.where({ linkedStockTxId: originalTx.id }).first();
+        if (linkedCash) {
+            await db.cashTransactions.update(linkedCash.id, { actual_amount: newActualAmount, expected_amount: newActualAmount, difference: 0 });
+        }
+        const linkedBank = await db.bankTransactions.where({ linkedStockTxId: originalTx.id }).first();
+        if (linkedBank) {
+            await db.bankTransactions.update(linkedBank.id, { actual_amount: newActualAmount, expected_amount: newActualAmount, difference: 0 });
+        }
+
         await updateBalances();
-        await queueOrSync({ action: 'updateStockTransaction', payload: { stockTxId: originalTx.id, updates: updatedTxData } });
-        toast.success("Stock transaction updated.");
+        queueOrSync({ action: 'updateStockTransaction', payload: { stockTxId: originalTx.id, updates: finalUpdates } });
+        toast.success("Stock transaction updated locally.");
     };
 
     const deleteTransaction = async (tableName: 'cash_transactions' | 'bank_transactions' | 'stock_transactions' | 'ap_ar_transactions', localTable: 'cashTransactions' | 'bankTransactions' | 'stockTransactions' | 'ledgerTransactions', txToDelete: any) => {
         await db.table(localTable).delete(txToDelete.id);
-        await updateBalances();
-        await queueOrSync({ action: 'deleteData', payload: { tableName, id: txToDelete.id, logDescription: `Deleted item from ${tableName}` }});
+        
         if (tableName === 'stock_transactions') {
             const linkedCash = await db.cashTransactions.where({ linkedStockTxId: txToDelete.id }).first();
             if (linkedCash) {
-                 await queueOrSync({ action: 'deleteData', payload: { tableName: 'cash_transactions', id: linkedCash.id }});
                  await db.cashTransactions.delete(linkedCash.id);
             }
             const linkedBank = await db.bankTransactions.where({ linkedStockTxId: txToDelete.id }).first();
             if (linkedBank) {
-                 await queueOrSync({ action: 'deleteData', payload: { tableName: 'bank_transactions', id: linkedBank.id }});
                  await db.bankTransactions.delete(linkedBank.id);
             }
         }
+        
+        await updateBalances();
+        queueOrSync({ action: 'deleteData', payload: { tableName, id: txToDelete.id, logDescription: `Deleted item from ${tableName}` }});
         toast.success("Moved to recycle bin.");
     };
     
@@ -201,134 +189,198 @@ export function useAppActions() {
     const addBank = async (name: string) => {
         const tempId = `temp_${Date.now()}`;
         await db.banks.add({ id: tempId, name, createdAt: new Date().toISOString() });
-        const newBank = await queueOrSync({ action: 'appendData', payload: { tableName: 'banks', data: { name }, select: '*' } });
-        if(newBank) await db.banks.where({ id: tempId }).modify(newBank);
+        queueOrSync({ action: 'appendData', payload: { tableName: 'banks', data: { name }, localId: tempId, select: '*' } });
     };
 
     const addCategory = async (type: 'cash' | 'bank', name: string, direction: 'credit' | 'debit') => {
         const tempId = `temp_${Date.now()}`;
         await db.categories.add({ id: tempId, name, type, direction, is_deletable: true});
-        const newCategory = await queueOrSync({ action: 'appendData', payload: { tableName: 'categories', data: { name, type, direction, is_deletable: true }, select: '*' } });
-        if(newCategory) await db.categories.where({id: tempId}).modify(newCategory);
+        queueOrSync({ action: 'appendData', payload: { tableName: 'categories', data: { name, type, direction, is_deletable: true }, localId: tempId, select: '*' } });
     };
 
     const deleteCategory = async (id: string) => {
         await db.categories.delete(id);
-        await queueOrSync({ action: 'deleteCategory', payload: { id } });
+        queueOrSync({ action: 'deleteCategory', payload: { id } });
     };
 
-    const transferFunds = async (from: 'cash' | 'bank', amount: number, date?: string, bankId?: string, description?: string) => {
-        await reloadData({ force: true });
+    const transferFunds = async (from: 'cash' | 'bank', amount: number, date: string, bankId: string, description?: string) => {
+        const fromDesc = `Transfer to ${from === 'cash' ? `Bank` : 'Cash'}: ${description || 'Funds Transfer'}`;
+        const toDesc = `Transfer from ${from === 'cash' ? 'Cash' : `Bank`}: ${description || 'Funds Transfer'}`;
+
+        if (from === 'cash') {
+            await db.cashTransactions.add({ id: `temp_tf_cash_${Date.now()}`, date, type: 'expense', category: 'Funds Transfer', description: fromDesc, actual_amount: amount, expected_amount: amount, difference: 0, createdAt: new Date().toISOString() });
+            await db.bankTransactions.add({ id: `temp_tf_bank_${Date.now()}`, date, type: 'deposit', category: 'Funds Transfer', description: toDesc, actual_amount: amount, expected_amount: amount, difference: 0, bank_id: bankId, createdAt: new Date().toISOString() });
+        } else {
+            await db.bankTransactions.add({ id: `temp_tf_bank_${Date.now()}`, date, type: 'withdrawal', category: 'Funds Transfer', description: fromDesc, actual_amount: amount, expected_amount: amount, difference: 0, bank_id: bankId, createdAt: new Date().toISOString() });
+            await db.cashTransactions.add({ id: `temp_tf_cash_${Date.now()}`, date, type: 'income', category: 'Funds Transfer', description: toDesc, actual_amount: amount, expected_amount: amount, difference: 0, createdAt: new Date().toISOString() });
+        }
+        
+        await updateBalances();
+        queueOrSync({ action: 'transferFunds', payload: { from, amount, date, bankId, description } });
+        toast.success("Transfer recorded locally.");
     };
 
     const setInitialBalances = async (cash: number, bankTotals: Record<string, number>, date: Date) => {
-        const payload = { cash, bankTotals, date: date.toISOString() };
-        await queueOrSync({ action: 'setInitialBalances', payload });
-        await reloadData({ force: true });
+        // Clear existing initial balance entries locally to avoid duplicates
+        const oldInitialCash = await db.cashTransactions.where('category').equals('Initial Balance').toArray();
+        const oldInitialBank = await db.bankTransactions.where('category').equals('Initial Balance').toArray();
+        await db.cashTransactions.bulkDelete(oldInitialCash.map(tx => tx.id));
+        await db.bankTransactions.bulkDelete(oldInitialBank.map(tx => tx.id));
+
+        // Add new initial balance entries
+        await db.cashTransactions.add({ id: `temp_init_cash_${Date.now()}`, date: date.toISOString(), type: 'income', category: 'Initial Balance', description: 'Initial cash balance', actual_amount: cash, expected_amount: cash, difference: 0, createdAt: new Date().toISOString() });
+        for (const [bankId, amount] of Object.entries(bankTotals)) {
+            await db.bankTransactions.add({ id: `temp_init_bank_${bankId}_${Date.now()}`, date: date.toISOString(), type: 'deposit', category: 'Initial Balance', description: 'Initial bank balance', actual_amount: amount, expected_amount: amount, difference: 0, bank_id: bankId, createdAt: new Date().toISOString() });
+        }
+        
+        await updateBalances();
+        queueOrSync({ action: 'setInitialBalances', payload: { cash, bankTotals, date: date.toISOString() } });
     };
     
-    const addInitialStockItem = async (item: { name: string; weight: number; pricePerKg: number }) => {
-      const newItem = await server.appendData({ tableName: 'initial_stock', data: { name: item.name, weight: item.weight, purchasePricePerKg: item.pricePerKg }, select: '*' });
-      if(newItem) await db.initialStock.add(newItem as any);
+    const addInitialStockItem = async (item: { name: string; weight: number; pricePerKg: number }, date: Date) => {
+      const newItem: StockItem = { ...item, id: `temp_init_stock_${Date.now()}`, purchasePricePerKg: item.pricePerKg };
+      await db.initialStock.add(newItem as any);
+      await updateBalances();
+      queueOrSync({ action: 'addInitialStockItem', payload: { item, date: date.toISOString() } });
     }
     
-    const addVendor = async (name: string) => {
+    const addVendor = async (name: string): Promise<Vendor> => {
         const tempId = `temp_vendor_${Date.now()}`;
-        await db.vendors.add({ id: tempId, name, createdAt: new Date().toISOString() });
-        const newVendor = await queueOrSync({ action: 'appendData', payload: { tableName: 'vendors', data: { name }, select: '*' }});
-        if (newVendor) {
-            await db.vendors.where({id: tempId}).modify(newVendor);
-            return newVendor as Vendor;
-        }
-        return null;
+        const newVendor = { id: tempId, name, createdAt: new Date().toISOString() };
+        await db.vendors.add(newVendor);
+        queueOrSync({ action: 'appendData', payload: { tableName: 'vendors', data: { name }, localId: tempId, select: '*' }});
+        return newVendor;
     };
   
-    const addClient = async (name: string) => {
+    const addClient = async (name: string): Promise<Client> => {
         const tempId = `temp_client_${Date.now()}`;
-        await db.clients.add({ id: tempId, name, createdAt: new Date().toISOString() });
-        const newClient = await queueOrSync({ action: 'appendData', payload: { tableName: 'clients', data: { name }, select: '*' }});
-        if (newClient) {
-            await db.clients.where({id: tempId}).modify(newClient);
-            return newClient as Client;
-        }
-        return null;
+        const newClient = { id: tempId, name, createdAt: new Date().toISOString() };
+        await db.clients.add(newClient);
+        queueOrSync({ action: 'appendData', payload: { tableName: 'clients', data: { name }, localId: tempId, select: '*' }});
+        return newClient;
     };
 
     const recordPayment = async (contactId: string, contactName: string, paymentAmount: number, paymentMethod: 'cash' | 'bank', paymentDate: Date, ledgerType: 'payable' | 'receivable', bankId?: string) => {
-        await queueOrSync({ 
+        const tempId = `temp_payment_${Date.now()}`;
+        const desc = `Payment ${ledgerType === 'payable' ? 'to' : 'from'} ${contactName}`;
+        const category = ledgerType === 'payable' ? 'A/P Settlement' : 'A/R Settlement';
+
+        // Add the financial transaction locally
+        if (paymentMethod === 'cash') {
+            await db.cashTransactions.add({ id: tempId, date: paymentDate.toISOString(), type: ledgerType === 'payable' ? 'expense' : 'income', category, description: desc, actual_amount: paymentAmount, expected_amount: paymentAmount, difference: 0, createdAt: new Date().toISOString(), contact_id: contactId });
+        } else {
+            await db.bankTransactions.add({ id: tempId, date: paymentDate.toISOString(), type: ledgerType === 'payable' ? 'withdrawal' : 'deposit', category, description: desc, actual_amount: paymentAmount, expected_amount: paymentAmount, difference: 0, bank_id: bankId!, createdAt: new Date().toISOString(), contact_id: contactId });
+        }
+
+        // Apply payment to local ledger transactions
+        let amountToSettle = paymentAmount;
+        const outstandingTxs = await db.ledgerTransactions
+            .where({ contact_id: contactId, type: ledgerType })
+            .filter(tx => tx.status !== 'paid')
+            .sortBy('date');
+            
+        for (const tx of outstandingTxs) {
+            if (amountToSettle <= 0) break;
+            const remainingBalance = tx.amount - tx.paid_amount;
+            const paymentForThisTx = Math.min(amountToSettle, remainingBalance);
+            
+            const newPaidAmount = tx.paid_amount + paymentForThisTx;
+            const newStatus = newPaidAmount >= tx.amount ? 'paid' : 'partially paid';
+            
+            await db.ledgerTransactions.update(tx.id, { paid_amount: newPaidAmount, status: newStatus });
+            
+            // Add installment locally (optional, but good for consistency)
+            const installment: PaymentInstallment = {
+                id: `temp_inst_${Date.now()}`,
+                ap_ar_transaction_id: tx.id,
+                amount: paymentForThisTx,
+                date: paymentDate.toISOString(),
+                payment_method: paymentMethod,
+                createdAt: new Date().toISOString(),
+            };
+            await db.paymentInstallments.add(installment);
+            
+            amountToSettle -= paymentForThisTx;
+        }
+
+        await updateBalances();
+        queueOrSync({ 
             action: 'recordPaymentAgainstTotal', 
-            payload: { contact_id: contactId, contact_name: contactName, payment_amount: paymentAmount, payment_date: paymentDate.toISOString(), payment_method: paymentMethod, ledger_type: ledgerType, bank_id: bankId, }
+            payload: { contact_id: contactId, contact_name: contactName, payment_amount: paymentAmount, payment_date: paymentDate.toISOString(), payment_method: paymentMethod, ledger_type: ledgerType, bank_id: bankId, localId: tempId }
         });
-        await reloadData({ force: true });
+        toast.success("Payment recorded locally.");
     };
     
     const loadDataForMonth = useCallback(async (month: Date) => {
-        const monthKey = month.toISOString().slice(0, 7);
-        try {
-            const startDate = new Date(month.getFullYear(), month.getMonth(), 1).toISOString();
-            const endDate = new Date(month.getFullYear(), month.getMonth() + 1, 0, 23, 59, 59).toISOString();
-            const [cashTxs, bankTxs, stockTxs] = await Promise.all([
-                server.readData({ tableName: 'cash_transactions', startDate, endDate }),
-                server.readData({ tableName: 'bank_transactions', startDate, endDate }),
-                server.readData({ tableName: 'stock_transactions', startDate, endDate }),
-            ]);
+       // This function is now less critical for UI speed but good for fetching historical data.
+       // The implementation in app-context.tsx can handle this.
+       // We keep the shell of the function here in case it's needed for other purposes.
+    }, []);
 
-            await db.transaction('rw', db.cashTransactions, db.bankTransactions, db.stockTransactions, async () => {
-                if (cashTxs) await bulkPut('cashTransactions', cashTxs);
-                if (bankTxs) await bulkPut('bankTransactions', bankTxs);
-                if (stockTxs) await bulkPut('stockTransactions', stockTxs);
-            });
-            setLoadedMonths(prev => ({ ...prev, [monthKey]: true }));
-        } catch (error) {
-            handleApiError(error);
-        }
-    }, [handleApiError, setLoadedMonths]);
-
-    const loadRecycleBinData = useCallback(async () => {
-        try {
-            const [cash, bank, stock, ap_ar] = await Promise.all([
-                server.readDeletedData({ tableName: 'cash_transactions'}),
-                server.readDeletedData({ tableName: 'bank_transactions'}),
-                server.readDeletedData({ tableName: 'stock_transactions'}),
-                server.readDeletedData({ tableName: 'ap_ar_transactions'}),
-            ]);
-            setDeletedItems({ cash: cash || [], bank: bank || [], stock: stock || [], ap_ar: ap_ar || [] });
-        } catch (error) {
-            handleApiError(error);
-        }
-    }, [handleApiError, setDeletedItems]);
-
+    const { loadRecycleBinData, setDeletedItems } = useAppContext();
     const restoreTransaction = useCallback(async (txType: 'cash' | 'bank' | 'stock' | 'ap_ar', id: string) => {
         let tableName = '';
+        let localTableName = '';
+        
         switch(txType) {
-            case 'cash': tableName = 'cash_transactions'; break;
-            case 'bank': tableName = 'bank_transactions'; break;
-            case 'stock': tableName = 'stock_transactions'; break;
-            case 'ap_ar': tableName = 'ap_ar_transactions'; break;
+            case 'cash': tableName = 'cash_transactions'; localTableName = 'deletedCashTransactions'; break;
+            case 'bank': tableName = 'bank_transactions'; localTableName = 'deletedBankTransactions'; break;
+            case 'stock': tableName = 'stock_transactions'; localTableName = 'deletedStockTransactions'; break;
+            case 'ap_ar': tableName = 'ap_ar_transactions'; localTableName = 'deletedLedgerTransactions'; break;
         }
-        await queueOrSync({ action: 'restoreData', payload: { tableName, id } });
-        toast.success("Item restored successfully.");
-        await loadRecycleBinData();
-        await updateBalances();
-    }, [queueOrSync, loadRecycleBinData, updateBalances]);
+
+        queueOrSync({ action: 'restoreData', payload: { tableName, id } });
+        // Optimistic UI update for recycle bin
+        setDeletedItems(prev => ({ ...prev, [txType]: (prev as any)[txType].filter((item: any) => item.id !== id) }));
+        
+        toast.success("Item restoration queued.");
+        
+        // No need to await a full reload. We can add the item back locally if we want,
+        // but for now, letting the next sync/reload handle it is simpler.
+        // A full reload can be triggered manually by the user if they want to see it immediately.
+        await updateBalances(); // This is fast and local now.
+    }, [queueOrSync, setDeletedItems, updateBalances]);
     
     const emptyRecycleBin = useCallback(async () => {
-        await server.emptyRecycleBin();
-        toast.success("Recycle bin has been emptied.");
-        await loadRecycleBinData();
-    }, [loadRecycleBinData]);
+        queueOrSync({ action: 'emptyRecycleBin', payload: {} });
+        setDeletedItems({ cash: [], bank: [], stock: [], ap_ar: [] });
+        toast.success("Recycle bin clearing queued.");
+    }, [queueOrSync, setDeletedItems]);
 
     const handleExport = async () => {
-        // To be implemented
+        try {
+            const data = await server.exportAllData();
+            // Trigger download on client
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `shipshape_ledger_backup_${new Date().toISOString().split('T')[0]}.json`;
+            link.click();
+            URL.revokeObjectURL(link.href);
+            toast.success("Backup downloaded.");
+        } catch(e) {
+            handleApiError(e);
+        }
     };
+
     const handleImport = async (file: File) => {
-        // To be implemented
+        const reader = new FileReader();
+        reader.onload = async (event) => {
+            try {
+                const data = JSON.parse(event.target?.result as string);
+                queueOrSync({ action: 'batchImportData', payload: { data } });
+                toast.info("Data import has been queued. The app will reload once completed.");
+                // Let the sync process handle the reload
+            } catch (e) {
+                toast.error("Import failed", { description: "Invalid file format." });
+            }
+        };
+        reader.readAsText(file);
     };
+
     const handleDeleteAllData = async () => {
-        await server.deleteAllData();
-        // The logout is handled server-side, but we trigger a local one too
-        const { logout } = useAppContext();
-        logout();
+        toast.info("Deleting all data. You will be logged out.");
+        queueOrSync({ action: 'deleteAllData', payload: {} });
     };
 
     return {

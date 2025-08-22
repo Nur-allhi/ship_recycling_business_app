@@ -4,13 +4,13 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useMemo } from 'react';
 import type { User, CashTransaction, BankTransaction, StockItem, StockTransaction, Vendor, Client, LedgerTransaction, Bank, Category, MonthlySnapshot } from '@/lib/types';
 import { toast } from 'sonner';
-import { readData, appendData, getBalances, logout as serverLogout } from '@/lib/actions';
+import * as server from '@/lib/actions';
 import { getSession } from '@/lib/auth';
 import { useRouter, usePathname } from 'next/navigation';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, bulkPut, clearAllData as clearLocalDb, type SyncQueueItem } from '@/lib/db';
-import { WifiOff } from 'lucide-react';
-import { useAppActions } from './app-actions';
+import { WifiOff, Wifi, RefreshCw } from 'lucide-react';
+
 
 type FontSize = 'sm' | 'base' | 'lg';
 
@@ -67,7 +67,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     isOnline: typeof navigator !== 'undefined' ? navigator.onLine : true,
   });
   const [loadedMonths, setLoadedMonths] = useState<Record<string, boolean>>({});
-  const [deletedItems, setDeletedItems] = useState({ cash: [], bank: [], stock: [], ap_ar: [] });
+  const [deletedItems, setDeletedItems] = useState<{ cash: any[], bank: any[], stock: any[], ap_ar: any[] }>({ cash: [], bank: [], stock: [], ap_ar: [] });
   
   const router = useRouter();
   const pathname = usePathname();
@@ -75,7 +75,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const liveData = useLiveDBData();
 
   const logout = useCallback(async () => {
-    await serverLogout();
+    await server.logout();
     await clearLocalDb();
     window.location.href = '/login';
   }, []);
@@ -92,24 +92,125 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [logout]);
   
   const updateBalances = useCallback(async () => {
-    try {
-      const balances = await getBalances();
-      setState(prev => ({
-        ...prev,
-        cashBalance: balances.cashBalance,
-        bankBalance: balances.bankBalance,
-        stockItems: balances.stockItems,
-        totalPayables: balances.totalPayables,
-        totalReceivables: balances.totalReceivables,
-      }));
-    } catch(e) {
-      handleApiError(e);
-    }
-  }, [handleApiError]);
+    // This is now a local-only operation for speed
+    const [
+      allCash, allBank, allLedger, allStock, allInitialStock
+    ] = await Promise.all([
+      db.cashTransactions.toArray(),
+      db.bankTransactions.toArray(),
+      db.ledgerTransactions.toArray(),
+      db.stockTransactions.toArray(),
+      db.initialStock.toArray(),
+    ]);
+
+    const cashBalance = allCash.reduce((acc, tx) => acc + (tx.type === 'income' ? tx.actual_amount : -tx.actual_amount), 0);
+    const bankBalance = allBank.reduce((acc, tx) => acc + (tx.type === 'deposit' ? tx.actual_amount : -tx.actual_amount), 0);
+    const totalPayables = allLedger.filter(tx => tx.type === 'payable').reduce((acc, tx) => acc + (tx.amount - tx.paid_amount), 0);
+    const totalReceivables = allLedger.filter(tx => tx.type === 'receivable').reduce((acc, tx) => acc + (tx.amount - tx.paid_amount), 0);
+    
+    // Recalculate stock from initial items and transactions
+    const stockPortfolio: Record<string, { weight: number; totalValue: number }> = {};
+    (allInitialStock || []).forEach(item => {
+        if (!stockPortfolio[item.name]) stockPortfolio[item.name] = { weight: 0, totalValue: 0 };
+        stockPortfolio[item.name].weight += item.weight;
+        stockPortfolio[item.name].totalValue += item.weight * item.purchasePricePerKg;
+    });
+
+    const sortedStockTxs = [...allStock].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    sortedStockTxs.forEach(tx => {
+        if (!stockPortfolio[tx.stockItemName]) stockPortfolio[tx.stockItemName] = { weight: 0, totalValue: 0 };
+        const item = stockPortfolio[tx.stockItemName];
+        const currentAvgPrice = item.weight > 0 ? item.totalValue / item.weight : 0;
+        if (tx.type === 'purchase') {
+            item.weight += tx.weight;
+            item.totalValue += tx.weight * tx.pricePerKg;
+        } else {
+            item.weight -= tx.weight;
+            item.totalValue -= tx.weight * currentAvgPrice;
+        }
+    });
+
+    const stockItems = Object.entries(stockPortfolio).map(([name, data], index) => ({
+      id: `stock-item-${index}`,
+      name,
+      weight: data.weight,
+      purchasePricePerKg: data.weight > 0 ? data.totalValue / data.weight : 0,
+    }));
+
+    setState(prev => ({
+        ...prev, cashBalance, bankBalance, totalPayables, totalReceivables, stockItems,
+    }));
+  }, []);
 
   const processSyncQueue = useCallback(async () => {
-    // This function will be implemented in app-actions.tsx
-  }, []);
+    if (state.isSyncing) return;
+    setState(prev => ({ ...prev, isSyncing: true }));
+    
+    const queue = await db.syncQueue.orderBy('timestamp').toArray();
+    if (queue.length === 0) {
+        setState(prev => ({ ...prev, isSyncing: false }));
+        return;
+    }
+    
+    toast.info(`Syncing ${queue.length} items...`);
+
+    let failedItems = 0;
+    for (const item of queue) {
+        try {
+            let result;
+            const { localId, ...payloadWithoutId } = item.payload; // Exclude localId from server payload
+
+            switch(item.action) {
+                case 'appendData':
+                    result = await server.appendData(payloadWithoutId);
+                    if (result && localId) {
+                        await db.table(payloadWithoutId.tableName.slice(0, -1) + 's').where({ id: localId }).modify({ id: result.id });
+                    }
+                    break;
+                case 'updateData': result = await server.updateData(item.payload); break;
+                case 'deleteData': result = await server.deleteData(item.payload); break;
+                case 'restoreData': result = await server.restoreData(item.payload); break;
+                case 'recordPaymentAgainstTotal': result = await server.recordPaymentAgainstTotal(item.payload); break;
+                case 'recordDirectPayment': result = await server.recordDirectPayment(item.payload); break;
+                case 'transferFunds': result = await server.transferFunds(item.payload); break;
+                case 'setInitialBalances': result = await server.setInitialBalances(item.payload); break;
+                case 'deleteCategory': result = await server.deleteCategory(item.payload); break;
+                case 'addStockTransaction': result = await server.addStockTransaction(payloadWithoutId); 
+                    if (result && localId) {
+                         await db.stockTransactions.where({ id: localId }).modify({ id: result.stockTx.id });
+                         if(result.financialTx) {
+                            const finTable = result.financialTx.bank_id ? 'bankTransactions' : 'cashTransactions';
+                            await db.table(finTable).where({ linkedStockTxId: localId }).modify({ id: result.financialTx.id, linkedStockTxId: result.stockTx.id });
+                         }
+                    }
+                    break;
+                case 'addInitialStockItem': result = await server.addInitialStockItem(item.payload); break;
+                case 'batchImportData': result = await server.batchImportData(item.payload.data); break;
+                case 'deleteAllData': result = await server.deleteAllData(); break;
+                default:
+                  console.warn(`Unknown sync action: ${item.action}`);
+            }
+
+            // If action succeeded, remove it from the queue
+            if (item.id) await db.syncQueue.delete(item.id);
+            
+        } catch (error) {
+            failedItems++;
+            handleApiError(error);
+            console.error(`Sync failed for item ${item.id} (${item.action}):`, error);
+        }
+    }
+    
+    if(failedItems > 0) {
+        toast.error(`${failedItems} sync operations failed. Check console for details.`);
+    } else {
+        toast.success("All items synced successfully!");
+        // We can do a gentle reload here if needed, but optimistic UI should be sufficient
+        // await reloadData(); // Optional: uncomment for a full refresh post-sync
+    }
+
+    setState(prev => ({ ...prev, isSyncing: false }));
+  }, [state.isSyncing, handleApiError]);
 
   const reloadData = useCallback(async (options?: { force?: boolean, needsInitialBalance?: boolean }) => {
     setState(prev => ({ ...prev, isLoading: true }));
@@ -128,16 +229,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 wastagePercentage: 0, showStockValue: false, lastSync: null
             });
              const [
-                categoriesData, vendorsData, clientsData, banksData, balances,
-                cashTxs, bankTxs, stockTxs, ledgerData, installmentsData, snapshotsData
+                categoriesData, vendorsData, clientsData, banksData,
+                cashTxs, bankTxs, stockTxs, ledgerData, installmentsData, snapshotsData, initialStockData
             ] = await Promise.all([
-                readData({ tableName: 'categories' }), readData({ tableName: 'vendors' }),
-                readData({ tableName: 'clients' }), readData({ tableName: 'banks' }),
-                getBalances(),
-                readData({ tableName: 'cash_transactions' }), readData({ tableName: 'bank_transactions' }),
-                readData({ tableName: 'stock_transactions' }), readData({ tableName: 'ap_ar_transactions' }),
-                readData({ tableName: 'payment_installments' }),
-                readData({ tableName: 'monthly_snapshots' }),
+                server.readData({ tableName: 'categories' }), server.readData({ tableName: 'vendors' }),
+                server.readData({ tableName: 'clients' }), server.readData({ tableName: 'banks' }),
+                server.readData({ tableName: 'cash_transactions' }), server.readData({ tableName: 'bank_transactions' }),
+                server.readData({ tableName: 'stock_transactions' }), server.readData({ tableName: 'ap_ar_transactions' }),
+                server.readData({ tableName: 'payment_installments' }),
+                server.readData({ tableName: 'monthly_snapshots' }),
+                server.readData({ tableName: 'initial_stock' }),
             ]);
              const ledgerTxsWithInstallments = (ledgerData || []).map((tx: any) => ({
                 ...tx,
@@ -155,35 +256,36 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 { name: 'Stock Sale', type: 'bank', direction: 'credit', is_deletable: false },
                 { name: 'Initial Balance', type: 'cash', direction: 'credit', is_deletable: false },
                 { name: 'Initial Balance', type: 'bank', direction: 'credit', is_deletable: false },
+                { name: 'Funds Transfer', type: 'cash', direction: null, is_deletable: false },
+                { name: 'Funds Transfer', type: 'bank', direction: null, is_deletable: false },
             ];
 
             for (const cat of essentialCategories) {
                 const exists = (categoriesData || []).some((c: Category) => c.name === cat.name && c.type === cat.type);
                 if (!exists) {
-                    const newCat = await appendData({ tableName: 'categories', data: cat, select: '*' });
+                    const newCat = await server.appendData({ tableName: 'categories', data: cat, select: '*' });
                     if(newCat) (categoriesData || []).push(newCat);
                 }
             }
 
             await db.transaction('rw', db.tables, async () => {
+                await clearLocalDb(); // Clear everything before a full reload
+                await db.appState.put({
+                    id: 1, user: session, fontSize: 'base', currency: 'BDT',
+                    wastagePercentage: 0, showStockValue: false, lastSync: null
+                });
                 await bulkPut('categories', categoriesData); await bulkPut('vendors', vendorsData);
                 await bulkPut('clients', clientsData); await bulkPut('banks', banksData);
                 await bulkPut('cashTransactions', cashTxs); await bulkPut('bankTransactions', bankTxs);
                 await bulkPut('stockTransactions', stockTxs); await bulkPut('ledgerTransactions', ledgerTxsWithInstallments);
-                await bulkPut('monthlySnapshots', snapshotsData);
+                await bulkPut('monthlySnapshots', snapshotsData); await bulkPut('initialStock', initialStockData);
                 await db.appState.update(1, { lastSync: new Date().toISOString() });
             });
             setLoadedMonths({});
-
-             setState(prev => ({
-                ...prev, cashBalance: balances.cashBalance, bankBalance: balances.bankBalance,
-                stockItems: balances.stockItems, totalPayables: balances.totalPayables, totalReceivables: balances.totalReceivables,
-            }));
-        } else {
-             await db.appState.update(1, { user: session });
-             await updateBalances();
-             processSyncQueue();
         }
+        
+        await updateBalances(); // Update balances from local DB after reload
+        processSyncQueue();
        
         if(options?.needsInitialBalance && session.role === 'admin') {
              setState(prev => ({...prev, isInitialBalanceDialogOpen: true }));
@@ -249,9 +351,52 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }, [pathname, liveData.user, state.isLoading, router]);
   
+  const loadRecycleBinData = useCallback(async () => {
+    if (state.isOnline) {
+      try {
+        const [cash, bank, stock, ap_ar] = await Promise.all([
+            server.readDeletedData({ tableName: 'cash_transactions'}),
+            server.readDeletedData({ tableName: 'bank_transactions'}),
+            server.readDeletedData({ tableName: 'stock_transactions'}),
+            server.readDeletedData({ tableName: 'ap_ar_transactions'}),
+        ]);
+        setDeletedItems({ cash: cash || [], bank: bank || [], stock: stock || [], ap_ar: ap_ar || [] });
+      } catch (error) {
+          handleApiError(error);
+      }
+    } else {
+      toast.error("Cannot load recycle bin data while offline.");
+    }
+  }, [handleApiError, state.isOnline]);
+
 
   const openInitialBalanceDialog = () => setState(prev => ({...prev, isInitialBalanceDialogOpen: true}));
   const closeInitialBalanceDialog = () => setState(prev => ({...prev, isInitialBalanceDialogOpen: false}));
+
+  const OnlineStatusIndicator = () => (
+    <div className="fixed bottom-4 right-4 z-50 animate-fade-in">
+        <div className="flex items-center gap-2 rounded-full bg-background px-3 py-2 text-foreground shadow-lg border">
+            {state.isOnline ? (
+                state.isSyncing ? (
+                    <>
+                        <RefreshCw className="h-5 w-5 animate-spin" />
+                        <span className="font-semibold text-sm">Syncing...</span>
+                    </>
+                ) : (
+                    <>
+                        <Wifi className="h-5 w-5 text-accent" />
+                        <span className="font-semibold text-sm">Online</span>
+                    </>
+                )
+            ) : (
+                <>
+                    <WifiOff className="h-5 w-5 text-destructive" />
+                    <span className="font-semibold text-sm">Offline</span>
+                </>
+            )}
+        </div>
+    </div>
+  );
 
   return (
     <AppContext.Provider value={{ 
@@ -270,16 +415,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         processSyncQueue,
         logout,
         openInitialBalanceDialog,
-        closeInitialBalanceDialog
+        closeInitialBalanceDialog,
+        loadRecycleBinData, // Expose this to be used by the recycle bin tab
     }}>
-      {!state.isOnline && (
-          <div className="fixed bottom-4 right-4 z-50 animate-fade-in">
-              <div className="flex items-center gap-2 rounded-full bg-destructive px-4 py-2 text-destructive-foreground shadow-lg">
-                  <WifiOff className="h-5 w-5" />
-                  <span className="font-semibold">You are offline</span>
-              </div>
-          </div>
-      )}
+      <OnlineStatusIndicator />
       {children}
     </AppContext.Provider>
   );
@@ -331,5 +470,5 @@ export function useAppContext() {
   if (context === undefined) {
     throw new Error('useAppContext must be used within an AppProvider');
   }
-  return context;
+  return { ...context, loadRecycleBinData: context.loadRecycleBinData, setDeletedItems: context.setDeletedItems };
 }
