@@ -198,11 +198,12 @@ export async function updateData(input: z.infer<typeof UpdateDataInputSchema>) {
 }
 
 const DeleteDataInputSchema = z.object({
-  tableName: z.string(),
+  tableName: z.enum(['cash_transactions', 'bank_transactions', 'stock_transactions', 'ap_ar_transactions']),
   id: z.string(),
   logDescription: z.string().optional(),
 });
 
+// This function is now ONLY for soft-deletable tables.
 export async function deleteData(input: z.infer<typeof DeleteDataInputSchema>) {
   try {
     const session = await getSession();
@@ -226,6 +227,29 @@ export async function deleteData(input: z.infer<typeof DeleteDataInputSchema>) {
     return await handleApiError(error);
   }
 }
+
+const DeleteCategoryInputSchema = z.object({
+    id: z.string(),
+});
+
+export async function deleteCategory(input: z.infer<typeof DeleteCategoryInputSchema>) {
+    try {
+        const session = await getSession();
+        if (session?.role !== 'admin') throw new Error("Only admins can delete categories.");
+        
+        const supabase = await getAuthenticatedSupabaseClient();
+        const { error } = await supabase.from('categories').delete().eq('id', input.id);
+
+        if (error) throw new Error(error.message);
+        
+        await logActivity(`Deleted category with ID: ${input.id}`);
+
+        return { success: true };
+    } catch(error) {
+        return await handleApiError(error);
+    }
+}
+
 
 const RestoreDataInputSchema = z.object({
     tableName: z.string(),

@@ -24,6 +24,7 @@ export function useAppActions() {
                     case 'recordDirectPayment': result = await server.recordDirectPayment(item.payload); break;
                     case 'updateStockTransaction': result = await server.updateStockTransaction(item.payload); break;
                     case 'setInitialBalances': result = await server.setInitialBalances(item.payload); break;
+                    case 'deleteCategory': result = await server.deleteCategory(item.payload); break;
                 }
                 return result;
             } catch (error) {
@@ -213,7 +214,7 @@ export function useAppActions() {
 
     const deleteCategory = async (id: string) => {
         await db.categories.delete(id);
-        await queueOrSync({ action: 'deleteData', payload: { tableName: 'categories', id } });
+        await queueOrSync({ action: 'deleteCategory', payload: { id } });
     };
 
     const transferFunds = async (from: 'cash' | 'bank', amount: number, date?: string, bankId?: string, description?: string) => {

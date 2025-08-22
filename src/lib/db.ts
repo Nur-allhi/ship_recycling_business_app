@@ -14,7 +14,7 @@ interface AppState {
 
 export interface SyncQueueItem {
     id?: number;
-    action: 'appendData' | 'updateData' | 'deleteData' | 'restoreData' | 'recordPaymentAgainstTotal' | 'recordDirectPayment' | 'transferFunds' | 'setInitialBalances';
+    action: 'appendData' | 'updateData' | 'deleteData' | 'restoreData' | 'recordPaymentAgainstTotal' | 'recordDirectPayment' | 'transferFunds' | 'setInitialBalances' | 'deleteCategory';
     payload: any;
     timestamp: number;
 }
