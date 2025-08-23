@@ -801,11 +801,12 @@ export async function recordAdvancePayment(input: z.infer<typeof RecordAdvancePa
     };
 
     if (payment_method === 'cash') {
-        await supabase.from('cash_transactions').insert({ ...financialTxData, type: ledger_type === 'payable' ? 'expense' : 'income' });
+        const {data: cashTx, error: cashErr} = await supabase.from('cash_transactions').insert({ ...financialTxData, type: ledger_type === 'payable' ? 'expense' : 'income' }).select().single();
+        if(cashErr) throw cashErr;
+        return {ledgerEntry, financialTx: cashTx}
     } else {
-        await supabase.from('bank_transactions').insert({ ...financialTxData, type: ledger_type === 'payable' ? 'withdrawal' : 'deposit', bank_id: bank_id! });
+        const {data: bankTx, error: bankErr} = await supabase.from('bank_transactions').insert({ ...financialTxData, type: ledger_type === 'payable' ? 'withdrawal' : 'deposit', bank_id: bank_id! }).select().single();
+        if(bankErr) throw bankErr;
+        return {ledgerEntry, financialTx: bankTx}
     }
-
-    await logActivity(`Recorded advance of ${amount} ${ledger_type === 'payable' ? 'to' : 'from'} ${contact_name}`);
-    return { success: true };
 }

@@ -361,7 +361,7 @@ export function useAppActions() {
         await updateBalances();
         queueOrSync({
             action: 'recordAdvancePayment',
-            payload: { ...payload, date: date.toISOString() }
+            payload: { ...payload, date: date.toISOString(), localFinancialId: tempFinancialId, localLedgerId: tempLedgerId }
         });
         toast.success("Advance payment recorded locally.");
     };

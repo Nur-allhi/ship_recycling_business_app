@@ -182,7 +182,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     for (const item of queue) {
         try {
             let result;
-            const { localId, ...payloadWithoutId } = item.payload; // Exclude localId from server payload
+            const { localId, localFinancialId, localLedgerId, ...payloadWithoutId } = item.payload; // Exclude localId from server payload
 
             switch(item.action) {
                 case 'appendData':
@@ -197,7 +197,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 case 'restoreData': result = await server.restoreData(item.payload); break;
                 case 'recordPaymentAgainstTotal': result = await server.recordPaymentAgainstTotal(item.payload); break;
                 case 'recordDirectPayment': result = await server.recordDirectPayment(item.payload); break;
-                case 'recordAdvancePayment': result = await server.recordAdvancePayment(item.payload); break;
+                case 'recordAdvancePayment':
+                    result = await server.recordAdvancePayment(payloadWithoutId);
+                    if(result && result.ledgerEntry && result.financialTx) {
+                        if(localLedgerId) await db.ap_ar_transactions.where({id: localLedgerId}).modify({id: result.ledgerEntry.id});
+                        const finTable = result.financialTx.bank_id ? 'bank_transactions' : 'cash_transactions';
+                        if(localFinancialId) await db.table(finTable).where({id: localFinancialId}).modify({id: result.financialTx.id, advance_id: result.ledgerEntry.id});
+                    }
+                    break;
                 case 'transferFunds': result = await server.transferFunds(item.payload); break;
                 case 'setInitialBalances': result = await server.setInitialBalances(item.payload); break;
                 case 'deleteCategory': result = await server.deleteCategory(item.payload); break;
@@ -311,6 +318,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 await bulkPut('clients', clientsData); await bulkPut('banks', banksData);
                 await bulkPut('cash_transactions', cashTxs); await bulkPut('bank_transactions', bankTxs);
                 await bulkPut('stock_transactions', stockTxs); await bulkPut('ap_ar_transactions', ledgerTxsWithInstallments);
+                await bulkPut('payment_installments', installmentsData);
                 await bulkPut('monthly_snapshots', snapshotsData); await bulkPut('initial_stock', initialStockData);
                 await db.app_state.update(1, { lastSync: new Date().toISOString() });
             });
