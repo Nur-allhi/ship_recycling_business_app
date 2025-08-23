@@ -794,7 +794,7 @@ export async function recordAdvancePayment(input: z.infer<typeof RecordAdvancePa
         description: ledgerDescription,
         category: `Advance ${ledger_type === 'payable' ? 'Payment' : 'Received'}`,
         actual_amount: amount,
-        expected_amount: amount,
+        expected_amount: amount, // For advances, expected and actual are the same.
         difference: 0,
         contact_id: contact_id,
         advance_id: ledgerEntry.id, // Link the financial tx to the advance entry
