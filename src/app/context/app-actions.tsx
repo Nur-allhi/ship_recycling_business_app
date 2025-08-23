@@ -13,10 +13,10 @@ export function useAppActions() {
     const { isOnline, handleApiError, reloadData, updateBalances, processSyncQueue, setUser, login, logout } = useAppContext();
 
     const queueOrSync = useCallback(async (item: Omit<SyncQueueItem, 'timestamp' | 'id'>) => {
-        await db.sync_queue.add({ ...item, timestamp: Date.now() });
+        const id = await db.sync_queue.add({ ...item, timestamp: Date.now() });
         if (isOnline) {
             // Don't await this. Let it run in the background.
-            processSyncQueue(); 
+            processSyncQueue(id); 
         } else {
             toast.info("You are offline. Change saved locally and will sync later.");
         }
@@ -359,11 +359,30 @@ export function useAppActions() {
         }
         
         await updateBalances();
-        queueOrSync({
-            action: 'recordAdvancePayment',
-            payload: { ...payload, date: date.toISOString(), localFinancialId: tempFinancialId, localLedgerId: tempLedgerId }
-        });
-        toast.success("Advance payment recorded locally.");
+        
+        try {
+            const result = await server.recordAdvancePayment(payload);
+            // Replace temporary records with permanent ones
+            if (result && result.ledgerEntry && result.financialTx) {
+                 await db.transaction('rw', db.ap_ar_transactions, db.cash_transactions, db.bank_transactions, async () => {
+                    await db.ap_ar_transactions.where({ id: tempLedgerId }).modify({ id: result.ledgerEntry.id });
+                    
+                    const finTable = result.financialTx.bank_id ? db.bank_transactions : db.cash_transactions;
+                    await finTable.where({ id: tempFinancialId }).modify({ id: result.financialTx.id, advance_id: result.ledgerEntry.id });
+                });
+                toast.success("Advance payment synced successfully.");
+            } else {
+                 throw new Error("Server did not return the expected data.");
+            }
+        } catch (error) {
+            handleApiError(error);
+            toast.error("Failed to sync advance payment. It remains saved locally.");
+            // If server fails, queue it up.
+            queueOrSync({
+                action: 'recordAdvancePayment',
+                payload: { ...payload, date: date.toISOString(), localFinancialId: tempFinancialId, localLedgerId: tempLedgerId }
+            });
+        }
     };
     
     const loadDataForMonth = useCallback(async (month: Date) => {

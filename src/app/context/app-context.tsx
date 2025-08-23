@@ -51,7 +51,7 @@ interface AppContextType extends AppData {
   reloadData: (options?: { force?: boolean; needsInitialBalance?: boolean }) => Promise<void>;
   updateBalances: () => Promise<void>;
   handleApiError: (error: any) => void;
-  processSyncQueue: () => Promise<void>;
+  processSyncQueue: (specificItemId?: number) => Promise<void>;
   openInitialBalanceDialog: () => void;
   closeInitialBalanceDialog: () => void;
   setLoadedMonths: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
@@ -166,29 +166,38 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }));
   }, []);
 
-  const processSyncQueue = useCallback(async () => {
-    if (state.isSyncing) return;
+  const processSyncQueue = useCallback(async (specificItemId?: number) => {
+    if (state.isSyncing && !specificItemId) return; // Don't run multiple full queues
     setState(prev => ({ ...prev, isSyncing: true }));
     
-    const queue = await db.sync_queue.orderBy('timestamp').toArray();
+    let queue: SyncQueueItem[] = [];
+    if (specificItemId) {
+        const item = await db.sync_queue.get(specificItemId);
+        if (item) queue.push(item);
+    } else {
+        queue = await db.sync_queue.orderBy('timestamp').toArray();
+    }
+    
     if (queue.length === 0) {
         setState(prev => ({ ...prev, isSyncing: false }));
         return;
     }
     
-    toast.info(`Syncing ${queue.length} items...`);
+    if(!specificItemId) toast.info(`Syncing ${queue.length} items...`);
 
     let failedItems = 0;
     for (const item of queue) {
         try {
+            // This logic is now mostly for handling actions that don't return data,
+            // or for offline queue processing. Actions like recordAdvancePayment are handled directly.
             let result;
-            const { localId, localFinancialId, localLedgerId, ...payloadWithoutId } = item.payload; // Exclude localId from server payload
+            const { localId, localFinancialId, localLedgerId, ...payloadWithoutId } = item.payload || {};
 
             switch(item.action) {
                 case 'appendData':
                     result = await server.appendData(payloadWithoutId);
                     if (result && localId) {
-                        const localTableName = payloadWithoutId.tableName; // e.g. 'cash_transactions'
+                        const localTableName = payloadWithoutId.tableName;
                         await db.table(localTableName).where({ id: localId }).modify({ id: result.id });
                     }
                     break;
@@ -237,10 +246,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         }
     }
     
-    if(failedItems > 0) {
-        toast.error(`${failedItems} sync operations failed. Check console for details.`);
-    } else {
-        toast.success("All items synced successfully!");
+    if(!specificItemId) {
+        if(failedItems > 0) {
+            toast.error(`${failedItems} sync operations failed. Check console for details.`);
+        } else {
+            toast.success("All items synced successfully!");
+        }
     }
 
     setState(prev => ({ ...prev, isSyncing: false }));
