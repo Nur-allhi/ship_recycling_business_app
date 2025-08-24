@@ -188,8 +188,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     let failedItems = 0;
     for (const item of queue) {
         try {
-            // This logic is now mostly for handling actions that don't return data,
-            // or for offline queue processing. Actions like recordAdvancePayment are handled directly.
             let result;
             const { localId, localFinancialId, localLedgerId, ...payloadWithoutId } = item.payload || {};
 
@@ -209,9 +207,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 case 'recordAdvancePayment':
                     result = await server.recordAdvancePayment(payloadWithoutId);
                     if(result && result.ledgerEntry && result.financialTx) {
-                        if(localLedgerId) await db.ap_ar_transactions.where({id: localLedgerId}).modify({id: result.ledgerEntry.id});
-                        const finTable = result.financialTx.bank_id ? 'bank_transactions' : 'cash_transactions';
-                        if(localFinancialId) await db.table(finTable).where({id: localFinancialId}).modify({id: result.financialTx.id, advance_id: result.ledgerEntry.id});
+                        await db.transaction('rw', db.ap_ar_transactions, db.cash_transactions, db.bank_transactions, async () => {
+                            if(localLedgerId) await db.ap_ar_transactions.where({id: localLedgerId}).modify({ id: result.ledgerEntry.id });
+                            const finTable = result.financialTx.bank_id ? db.bank_transactions : db.cash_transactions;
+                            if(localFinancialId) await finTable.where({id: localFinancialId}).modify({ id: result.financialTx.id, advance_id: result.ledgerEntry.id });
+                        });
                     }
                     break;
                 case 'transferFunds': result = await server.transferFunds(item.payload); break;
@@ -236,7 +236,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                   console.warn(`Unknown sync action: ${item.action}`);
             }
 
-            // If action succeeded, remove it from the queue
             if (item.id) await db.sync_queue.delete(item.id);
             
         } catch (error) {

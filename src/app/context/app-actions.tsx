@@ -360,29 +360,13 @@ export function useAppActions() {
         
         await updateBalances();
         
-        try {
-            const result = await server.recordAdvancePayment(payload);
-            // Replace temporary records with permanent ones
-            if (result && result.ledgerEntry && result.financialTx) {
-                 await db.transaction('rw', db.ap_ar_transactions, db.cash_transactions, db.bank_transactions, async () => {
-                    await db.ap_ar_transactions.where({ id: tempLedgerId }).modify({ id: result.ledgerEntry.id });
-                    
-                    const finTable = result.financialTx.bank_id ? db.bank_transactions : db.cash_transactions;
-                    await finTable.where({ id: tempFinancialId }).modify({ id: result.financialTx.id, advance_id: result.ledgerEntry.id });
-                });
-                toast.success("Advance payment synced successfully.");
-            } else {
-                 throw new Error("Server did not return the expected data.");
-            }
-        } catch (error) {
-            handleApiError(error);
-            toast.error("Failed to sync advance payment. It remains saved locally.");
-            // If server fails, queue it up.
-            queueOrSync({
-                action: 'recordAdvancePayment',
-                payload: { ...payload, date: date.toISOString(), localFinancialId: tempFinancialId, localLedgerId: tempLedgerId }
-            });
-        }
+        // Use the robust queueing mechanism instead of a direct server call
+        queueOrSync({
+            action: 'recordAdvancePayment',
+            payload: { ...payload, date: date.toISOString(), localFinancialId: tempFinancialId, localLedgerId: tempLedgerId }
+        });
+
+        toast.info("Advance payment recorded locally and queued for sync.");
     };
     
     const loadDataForMonth = useCallback(async (month: Date) => {
