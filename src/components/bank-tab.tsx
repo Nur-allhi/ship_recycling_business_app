@@ -5,7 +5,7 @@ import { useState, useMemo, useEffect, useCallback } from "react"
 import { useAppContext } from "@/app/context/app-context"
 import { useAppActions } from "@/app/context/app-actions"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import {
   Sheet,
   SheetContent,
@@ -25,7 +25,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { ArrowUpCircle, ArrowDownCircle, ArrowRightLeft, Pencil, History, Trash2, CheckSquare, ChevronLeft, ChevronRight, Eye, EyeOff, ArrowUpDown, Loader2, DollarSign } from "lucide-react"
+import { ArrowRightLeft, Pencil, History, Trash2, CheckSquare, ChevronLeft, ChevronRight, Eye, EyeOff, ArrowUpDown, Loader2 } from "lucide-react"
 import type { BankTransaction, MonthlySnapshot } from "@/lib/types"
 import { EditTransactionSheet } from "./edit-transaction-sheet"
 import { DeleteConfirmationDialog } from "./delete-confirmation-dialog"
@@ -36,11 +36,11 @@ import { useIsMobile } from "@/hooks/use-mobile"
 import { Badge } from "./ui/badge"
 import * as server from "@/lib/actions";
 
-type SortKey = keyof BankTransaction | null;
+type SortKey = keyof BankTransaction | 'debit' | 'credit' | null;
 type SortDirection = 'asc' | 'desc';
 
 export function BankTab() {
-  const { bankTransactions, currency, user, banks, isLoading, handleApiError } = useAppContext()
+  const { bankBalance, bankTransactions, currency, user, banks, isLoading, handleApiError } = useAppContext()
   const { transferFunds, deleteBankTransaction, deleteMultipleBankTransactions } = useAppActions();
   const [isTransferSheetOpen, setIsTransferSheetOpen] = useState(false)
   const [editSheetState, setEditSheetState] = useState<{isOpen: boolean, transaction: BankTransaction | null}>({ isOpen: false, transaction: null});
@@ -48,8 +48,6 @@ export function BankTab() {
   const [selectedTxs, setSelectedTxs] = useState<BankTransaction[]>([]);
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [currentMonth, setCurrentMonth] = useState(new Date());
-  const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(10);
   const [showActions, setShowActions] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey>('date');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
@@ -101,9 +99,8 @@ export function BankTab() {
     })
   }, [filteredByBank, currentMonth]);
   
-  const runningBalances = useMemo(() => {
-    const balances: { [key: string]: number } = {};
-    if (!monthlySnapshot || !bankTransactions) return balances;
+  const transactionsWithBalances = useMemo(() => {
+    if (!monthlySnapshot) return [];
 
     let openingBalance = 0;
     if (selectedBankId === 'all') {
@@ -120,25 +117,37 @@ export function BankTab() {
     });
 
     let currentBalance = openingBalance;
-    for (const tx of txsInMonthForCalc) {
+    return txsInMonthForCalc.map(tx => {
         currentBalance += (tx.type === 'deposit' ? tx.actual_amount : -tx.actual_amount);
-        balances[tx.id] = currentBalance;
-    }
-
-    return balances;
-  }, [monthlySnapshot, bankTransactions, filteredByMonth, selectedBankId]);
+        return { ...tx, balance: currentBalance };
+    });
+  }, [monthlySnapshot, filteredByMonth, selectedBankId]);
 
   const sortedTransactions = useMemo(() => {
-    return [...filteredByMonth].sort((a, b) => {
-        if (sortKey === 'date' || !sortKey) {
-            const dateComparison = new Date(b.date).getTime() - new Date(a.date).getTime();
-            if (dateComparison !== 0) return dateComparison;
-            return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    return [...transactionsWithBalances].sort((a, b) => {
+        let aValue: any;
+        let bValue: any;
+
+        if (sortKey === 'debit') {
+            aValue = a.type === 'withdrawal' ? a.actual_amount : 0;
+            bValue = b.type === 'withdrawal' ? b.actual_amount : 0;
+        } else if (sortKey === 'credit') {
+            aValue = a.type === 'deposit' ? a.actual_amount : 0;
+            bValue = b.type === 'deposit' ? b.actual_amount : 0;
+        } else if(sortKey === 'date') {
+             const dateA = new Date(a.date).getTime();
+             const dateB = new Date(b.date).getTime();
+             if(dateA !== dateB) return sortDirection === 'desc' ? dateB - dateA : dateA - dateB;
+             return sortDirection === 'desc' 
+                ? new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime() 
+                : new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+        } else if (sortKey) {
+            aValue = a[sortKey as keyof BankTransaction];
+            bValue = b[sortKey as keyof BankTransaction];
+        } else {
+            return 0;
         }
         
-        const aValue = a[sortKey as keyof BankTransaction];
-        const bValue = b[sortKey as keyof BankTransaction];
-
         let result = 0;
         if (typeof aValue === 'string' && typeof bValue === 'string') {
             result = aValue.localeCompare(bValue);
@@ -148,15 +157,7 @@ export function BankTab() {
         
         return sortDirection === 'desc' ? -result : result;
     });
-  }, [filteredByMonth, sortKey, sortDirection]);
-
-  const paginatedTransactions = useMemo(() => {
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    return sortedTransactions.slice(startIndex, startIndex + itemsPerPage);
-  }, [sortedTransactions, currentPage, itemsPerPage]);
-
-  const totalPages = Math.ceil(sortedTransactions.length / itemsPerPage);
-
+  }, [transactionsWithBalances, sortKey, sortDirection]);
 
   const handleEditClick = (tx: BankTransaction) => {
     setEditSheetState({ isOpen: true, transaction: tx });
@@ -183,6 +184,7 @@ export function BankTab() {
   };
 
   const formatCurrency = (amount: number) => {
+    if (amount === 0) return '-';
     if (currency === 'BDT') {
       return `৳ ${new Intl.NumberFormat('en-US').format(amount)}`;
     }
@@ -202,7 +204,7 @@ export function BankTab() {
   
   const handleSelectAll = (checked: boolean) => {
       if (checked) {
-          setSelectedTxs(paginatedTransactions);
+          setSelectedTxs(sortedTransactions);
       } else {
           setSelectedTxs([]);
       }
@@ -223,16 +225,14 @@ export function BankTab() {
   
   const goToPreviousMonth = () => {
     setCurrentMonth(subMonths(currentMonth, 1));
-    setCurrentPage(1);
   }
   const goToNextMonth = () => {
     setCurrentMonth(addMonths(currentMonth, 1));
-    setCurrentPage(1);
   }
   
   const renderSortArrow = (key: SortKey) => {
     if (sortKey !== key) return <ArrowUpDown className="ml-2 h-4 w-4 opacity-50" />;
-    return sortDirection === 'desc' ? <ArrowDownCircle className="ml-2 h-4 w-4" /> : <ArrowUpCircle className="ml-2 h-4 w-4" />;
+    return sortDirection === 'desc' ? '▼' : '▲';
   };
   
   const selectedTxIds = useMemo(() => selectedTxs.map(tx => tx.id), [selectedTxs]);
@@ -242,11 +242,14 @@ export function BankTab() {
       ...(banks || []).map(bank => ({ value: bank.id, label: bank.name }))
   ], [banks]);
   
-  const itemsPerPageItems = useMemo(() => [
-      { value: '10', label: '10 / page' },
-      { value: '20', label: '20 / page' },
-      { value: '30', label: '30 / page' },
-  ], []);
+  const displayBalance = useMemo(() => {
+    if (selectedBankId === 'all') {
+      return bankBalance;
+    }
+    return bankTransactions
+        .filter(tx => tx.bank_id === selectedBankId)
+        .reduce((acc, tx) => acc + (tx.type === 'deposit' ? tx.actual_amount : -tx.actual_amount), 0);
+  }, [bankBalance, bankTransactions, selectedBankId]);
 
   const renderDesktopView = () => (
     <div className="overflow-x-auto">
@@ -257,7 +260,7 @@ export function BankTab() {
               <TableHead className="w-[50px] text-center">
                   <Checkbox 
                       onCheckedChange={(checked) => handleSelectAll(Boolean(checked))}
-                      checked={selectedTxs.length === paginatedTransactions.length && paginatedTransactions.length > 0}
+                      checked={selectedTxs.length === sortedTransactions.length && sortedTransactions.length > 0}
                       aria-label="Select all rows"
                   />
               </TableHead>
@@ -276,18 +279,21 @@ export function BankTab() {
                     <Button variant="ghost" onClick={() => handleSort('bank_id')}>Bank {renderSortArrow('bank_id')}</Button>
                 </TableHead>
             )}
-            <TableHead className="text-center">
-                 <Button variant="ghost" onClick={() => handleSort('actual_amount')}>Amount {renderSortArrow('actual_amount')}</Button>
+            <TableHead className="text-right">
+                 <Button variant="ghost" onClick={() => handleSort('debit')}>Debit {renderSortArrow('debit')}</Button>
             </TableHead>
-            <TableHead className="text-center">Balance</TableHead>
+            <TableHead className="text-right">
+                 <Button variant="ghost" onClick={() => handleSort('credit')}>Credit {renderSortArrow('credit')}</Button>
+            </TableHead>
+            <TableHead className="text-right">Balance</TableHead>
             {showActions && <TableHead className="text-center">Actions</TableHead>}
             </TableRow>
         </TableHeader>
         <TableBody>
             {isLoading || isSnapshotLoading ? (
-              <TableRow><TableCell colSpan={isSelectionMode ? 8 : 7} className="h-24 text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin" /></TableCell></TableRow>
-            ) : paginatedTransactions.length > 0 ? (
-            paginatedTransactions.map((tx: BankTransaction) => (
+              <TableRow><TableCell colSpan={isSelectionMode ? 9 : 8} className="h-24 text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin" /></TableCell></TableRow>
+            ) : sortedTransactions.length > 0 ? (
+            sortedTransactions.map((tx: any) => (
                 <TableRow key={tx.id} data-state={selectedTxIds.includes(tx.id) && "selected"}>
                 {isSelectionMode && (
                   <TableCell className="text-center">
@@ -322,13 +328,9 @@ export function BankTab() {
                         {(banks || []).find(b => b.id === tx.bank_id)?.name || 'N/A'}
                     </TableCell>
                 )}
-                <TableCell className={`text-center font-semibold font-mono ${tx.type === 'deposit' ? 'text-accent' : 'text-destructive'}`}>
-                    <div className="flex items-center justify-center gap-2">
-                    {tx.type === 'deposit' ? <ArrowUpCircle /> : <ArrowDownCircle />}
-                    {formatCurrency(tx.actual_amount)}
-                    </div>
-                </TableCell>
-                <TableCell className="text-center font-mono">{formatCurrency(runningBalances[tx.id] || 0)}</TableCell>
+                <TableCell className="text-right font-mono text-destructive">{formatCurrency(tx.type === 'withdrawal' ? tx.actual_amount : 0)}</TableCell>
+                <TableCell className="text-right font-mono text-accent">{formatCurrency(tx.type === 'deposit' ? tx.actual_amount : 0)}</TableCell>
+                <TableCell className="text-right font-mono font-semibold">{formatCurrency(tx.balance)}</TableCell>
                 {showActions && (
                   <TableCell className="text-center">
                       <div className="flex items-center justify-center gap-2">
@@ -347,7 +349,7 @@ export function BankTab() {
             ))
             ) : (
             <TableRow>
-                <TableCell colSpan={isSelectionMode ? (showActions ? 9 : 8) : (showActions ? 8 : 7)} className="text-center h-24">No bank transactions found for {format(currentMonth, 'MMMM yyyy')}.</TableCell>
+                <TableCell colSpan={isSelectionMode ? (showActions ? 10 : 9) : (showActions ? 9 : 8)} className="text-center h-24">No bank transactions found for {format(currentMonth, 'MMMM yyyy')}.</TableCell>
             </TableRow>
             )}
         </TableBody>
@@ -359,8 +361,8 @@ export function BankTab() {
     <div className="space-y-4">
       {isLoading ? (
         <div className="flex justify-center items-center h-24"><Loader2 className="h-6 w-6 animate-spin" /></div>
-      ) : paginatedTransactions.length > 0 ? (
-        paginatedTransactions.map((tx: BankTransaction) => (
+      ) : sortedTransactions.length > 0 ? (
+        sortedTransactions.map((tx: BankTransaction) => (
           <Card key={tx.id} className="relative animate-fade-in">
              {isSelectionMode && (
                 <Checkbox 
@@ -432,7 +434,7 @@ export function BankTab() {
                 <div className="flex-1">
                     <CardTitle>Bank Ledger</CardTitle>
                     <CardDescription>
-                        View your bank account transactions.
+                        View your bank account transactions. Current balance: <span className="font-bold text-primary">{formatCurrency(displayBalance)}</span>
                     </CardDescription>
                 </div>
                 <div className="flex items-center flex-wrap gap-2 justify-center self-stretch sm:self-center">
@@ -517,27 +519,6 @@ export function BankTab() {
         <CardContent>
           {isMobile ? renderMobileView() : renderDesktopView()}
         </CardContent>
-        {totalPages > 1 && (
-          <CardFooter className="flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div className="text-sm text-muted-foreground">
-              Showing page {currentPage} of {totalPages}
-            </div>
-            <div className="flex items-center gap-2">
-               <ResponsiveSelect
-                value={String(itemsPerPage)} 
-                onValueChange={(value) => { setItemsPerPage(Number(value)); setCurrentPage(1); }}
-                title="Records per page"
-                items={itemsPerPageItems}
-               />
-              <Button variant="outline" size="sm" onClick={() => setCurrentPage(prev => prev - 1)} disabled={currentPage === 1}>
-                Previous
-              </Button>
-              <Button variant="outline" size="sm" onClick={() => setCurrentPage(prev => prev + 1)} disabled={currentPage === totalPages}>
-                Next
-              </Button>
-            </div>
-          </CardFooter>
-        )}
       </Card>
       {isAdmin && editSheetState.transaction && (
         <EditTransactionSheet 
@@ -556,7 +537,3 @@ export function BankTab() {
     </>
   )
 }
-
-    
-
-    
