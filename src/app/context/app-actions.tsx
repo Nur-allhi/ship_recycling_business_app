@@ -344,8 +344,8 @@ export function useAppActions() {
             date: date.toISOString(),
             description: ledgerDescription,
             category: `Advance ${ledger_type === 'payable' ? 'Payment' : 'Received'}`,
-            actual_amount: amount,
             expected_amount: amount,
+            actual_amount: amount,
             difference: 0,
             contact_id: contact_id,
             advance_id: tempLedgerId,
@@ -360,7 +360,6 @@ export function useAppActions() {
         
         await updateBalances();
         
-        // Use the robust queueing mechanism instead of a direct server call
         queueOrSync({
             action: 'recordAdvancePayment',
             payload: { ...payload, date: date.toISOString(), localFinancialId: tempFinancialId, localLedgerId: tempLedgerId }
