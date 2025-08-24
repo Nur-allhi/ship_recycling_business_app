@@ -92,48 +92,43 @@ export function BankTab() {
     }
   };
 
-  const sortedTransactions = useMemo(() => {
-    if (!sortKey) return filteredByBank;
-
-    return [...filteredByBank].sort((a, b) => {
-      const aValue = a[sortKey];
-      const bValue = b[sortKey];
-      
-      let result = 0;
-      if (typeof aValue === 'string' && typeof bValue === 'string') {
-        result = aValue.localeCompare(bValue);
-      } else if (typeof aValue === 'number' && typeof bValue === 'number') {
-        result = aValue - bValue;
-      } else if (sortKey === 'date') {
-        const dateA = new Date(a.date).getTime();
-        const dateB = new Date(b.date).getTime();
-        if (dateA !== dateB) {
-            result = dateA - dateB;
-        } else {
-            // If dates are the same, sort by creation time
-            result = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
-        }
-      }
-
-      return sortDirection === 'asc' ? result : -result;
-    });
-  }, [filteredByBank, sortKey, sortDirection]);
-
   const filteredByMonth = useMemo(() => {
     const start = startOfMonth(currentMonth);
     const end = endOfMonth(currentMonth);
-    return sortedTransactions.filter(tx => {
+    return filteredByBank.filter(tx => {
         const txDate = new Date(tx.date);
         return txDate >= start && txDate <= end;
     })
-  }, [sortedTransactions, currentMonth]);
+  }, [filteredByBank, currentMonth]);
+
+  const sortedTransactions = useMemo(() => {
+    return [...filteredByMonth].sort((a, b) => {
+        const aValue = a[sortKey as keyof BankTransaction];
+        const bValue = b[sortKey as keyof BankTransaction];
+
+        if (sortKey === 'date') {
+            const dateComparison = new Date(b.date).getTime() - new Date(a.date).getTime();
+            if (dateComparison !== 0) return dateComparison;
+            return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+        }
+
+        let result = 0;
+        if (typeof aValue === 'string' && typeof bValue === 'string') {
+            result = aValue.localeCompare(bValue);
+        } else if (typeof aValue === 'number' && typeof bValue === 'number') {
+            result = aValue - bValue;
+        }
+        
+        return sortDirection === 'desc' ? -result : result;
+    });
+  }, [filteredByMonth, sortKey, sortDirection]);
 
   const paginatedTransactions = useMemo(() => {
     const startIndex = (currentPage - 1) * itemsPerPage;
-    return filteredByMonth.slice(startIndex, startIndex + itemsPerPage);
-  }, [filteredByMonth, currentPage, itemsPerPage]);
+    return sortedTransactions.slice(startIndex, startIndex + itemsPerPage);
+  }, [sortedTransactions, currentPage, itemsPerPage]);
 
-  const totalPages = Math.ceil(filteredByMonth.length / itemsPerPage);
+  const totalPages = Math.ceil(sortedTransactions.length / itemsPerPage);
 
   const runningBalances = useMemo(() => {
     const balances: { [key: string]: number } = {};
@@ -146,19 +141,12 @@ export function BankTab() {
         openingBalance = monthlySnapshot.bank_balances?.[selectedBankId] || 0;
     }
 
-    const txsInMonth = bankTransactions
-      .filter(tx => {
-        const txDate = new Date(tx.date);
-        const monthStart = startOfMonth(currentMonth);
-        const monthEnd = endOfMonth(currentMonth);
-        return txDate >= monthStart && txDate <= monthEnd && (selectedBankId === 'all' || tx.bank_id === selectedBankId);
-      })
-      .sort((a, b) => {
+    const txsInMonth = filteredByMonth.sort((a, b) => {
         const dateA = new Date(a.date).getTime();
         const dateB = new Date(b.date).getTime();
         if(dateA !== dateB) return dateA - dateB;
         return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
-      });
+    });
 
     let currentBalance = openingBalance;
     for (const tx of txsInMonth) {
@@ -167,7 +155,7 @@ export function BankTab() {
     }
 
     return balances;
-  }, [monthlySnapshot, bankTransactions, currentMonth, selectedBankId]);
+  }, [monthlySnapshot, bankTransactions, filteredByMonth, selectedBankId]);
 
 
   const handleEditClick = (tx: BankTransaction) => {
