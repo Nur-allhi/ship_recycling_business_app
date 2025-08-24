@@ -87,17 +87,39 @@ export function CashTab() {
         return txDate >= start && txDate <= end;
     })
   }, [cashTransactions, currentMonth]);
+  
+  const runningBalances = useMemo(() => {
+    const balances: { [key: string]: number } = {};
+    if (!monthlySnapshot || !cashTransactions) return balances;
+
+    const openingBalance = monthlySnapshot.cash_balance;
+
+    const txsInMonthForCalc = [...filteredByMonth].sort((a, b) => {
+        const dateA = new Date(a.date).getTime();
+        const dateB = new Date(b.date).getTime();
+        if(dateA !== dateB) return dateA - dateB;
+        return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+    });
+
+    let currentBalance = openingBalance;
+    for (const tx of txsInMonthForCalc) {
+        currentBalance += (tx.type === 'income' ? tx.actual_amount : -tx.actual_amount);
+        balances[tx.id] = currentBalance;
+    }
+    
+    return balances;
+  }, [monthlySnapshot, cashTransactions, filteredByMonth]);
 
   const sortedTransactions = useMemo(() => {
     return [...filteredByMonth].sort((a, b) => {
-        const aValue = a[sortKey as keyof CashTransaction];
-        const bValue = b[sortKey as keyof CashTransaction];
-
-        if (sortKey === 'date') {
+        if (sortKey === 'date' || !sortKey) {
             const dateComparison = new Date(b.date).getTime() - new Date(a.date).getTime();
             if (dateComparison !== 0) return dateComparison;
             return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
         }
+
+        const aValue = a[sortKey as keyof CashTransaction];
+        const bValue = b[sortKey as keyof CashTransaction];
 
         let result = 0;
         if (typeof aValue === 'string' && typeof bValue === 'string') {
@@ -116,28 +138,6 @@ export function CashTab() {
   }, [sortedTransactions, currentPage, itemsPerPage]);
 
   const totalPages = Math.ceil(sortedTransactions.length / itemsPerPage);
-
-  const runningBalances = useMemo(() => {
-    const balances: { [key: string]: number } = {};
-    if (!monthlySnapshot || !cashTransactions) return balances;
-
-    const openingBalance = monthlySnapshot.cash_balance;
-
-    const txsInMonth = filteredByMonth.sort((a, b) => {
-        const dateA = new Date(a.date).getTime();
-        const dateB = new Date(b.date).getTime();
-        if(dateA !== dateB) return dateA - dateB;
-        return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
-    });
-
-    let currentBalance = openingBalance;
-    for (const tx of txsInMonth) {
-        currentBalance += (tx.type === 'income' ? tx.actual_amount : -tx.actual_amount);
-        balances[tx.id] = currentBalance;
-    }
-    
-    return balances;
-  }, [monthlySnapshot, cashTransactions, filteredByMonth]);
 
 
   const handleEditClick = (tx: CashTransaction) => {
@@ -509,5 +509,7 @@ export function CashTab() {
     </>
   )
 }
+
+    
 
     

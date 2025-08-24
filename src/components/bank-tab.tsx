@@ -100,17 +100,44 @@ export function BankTab() {
         return txDate >= start && txDate <= end;
     })
   }, [filteredByBank, currentMonth]);
+  
+  const runningBalances = useMemo(() => {
+    const balances: { [key: string]: number } = {};
+    if (!monthlySnapshot || !bankTransactions) return balances;
+
+    let openingBalance = 0;
+    if (selectedBankId === 'all') {
+        openingBalance = Object.values(monthlySnapshot.bank_balances || {}).reduce((sum, b) => sum + b, 0);
+    } else {
+        openingBalance = monthlySnapshot.bank_balances?.[selectedBankId] || 0;
+    }
+
+    const txsInMonthForCalc = [...filteredByMonth].sort((a, b) => {
+        const dateA = new Date(a.date).getTime();
+        const dateB = new Date(b.date).getTime();
+        if(dateA !== dateB) return dateA - dateB;
+        return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+    });
+
+    let currentBalance = openingBalance;
+    for (const tx of txsInMonthForCalc) {
+        currentBalance += (tx.type === 'deposit' ? tx.actual_amount : -tx.actual_amount);
+        balances[tx.id] = currentBalance;
+    }
+
+    return balances;
+  }, [monthlySnapshot, bankTransactions, filteredByMonth, selectedBankId]);
 
   const sortedTransactions = useMemo(() => {
     return [...filteredByMonth].sort((a, b) => {
-        const aValue = a[sortKey as keyof BankTransaction];
-        const bValue = b[sortKey as keyof BankTransaction];
-
-        if (sortKey === 'date') {
+        if (sortKey === 'date' || !sortKey) {
             const dateComparison = new Date(b.date).getTime() - new Date(a.date).getTime();
             if (dateComparison !== 0) return dateComparison;
             return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
         }
+        
+        const aValue = a[sortKey as keyof BankTransaction];
+        const bValue = b[sortKey as keyof BankTransaction];
 
         let result = 0;
         if (typeof aValue === 'string' && typeof bValue === 'string') {
@@ -129,33 +156,6 @@ export function BankTab() {
   }, [sortedTransactions, currentPage, itemsPerPage]);
 
   const totalPages = Math.ceil(sortedTransactions.length / itemsPerPage);
-
-  const runningBalances = useMemo(() => {
-    const balances: { [key: string]: number } = {};
-    if (!monthlySnapshot || !bankTransactions) return balances;
-
-    let openingBalance = 0;
-    if (selectedBankId === 'all') {
-        openingBalance = Object.values(monthlySnapshot.bank_balances || {}).reduce((sum, b) => sum + b, 0);
-    } else {
-        openingBalance = monthlySnapshot.bank_balances?.[selectedBankId] || 0;
-    }
-
-    const txsInMonth = filteredByMonth.sort((a, b) => {
-        const dateA = new Date(a.date).getTime();
-        const dateB = new Date(b.date).getTime();
-        if(dateA !== dateB) return dateA - dateB;
-        return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
-    });
-
-    let currentBalance = openingBalance;
-    for (const tx of txsInMonth) {
-        currentBalance += (tx.type === 'deposit' ? tx.actual_amount : -tx.actual_amount);
-        balances[tx.id] = currentBalance;
-    }
-
-    return balances;
-  }, [monthlySnapshot, bankTransactions, filteredByMonth, selectedBankId]);
 
 
   const handleEditClick = (tx: BankTransaction) => {
@@ -556,5 +556,7 @@ export function BankTab() {
     </>
   )
 }
+
+    
 
     
