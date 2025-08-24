@@ -78,6 +78,7 @@ export function useAppActions() {
                 difference: tx.difference, difference_reason: tx.difference_reason,
                 description: tx.description || `${tx.type} of ${tx.weight}kg of ${tx.stockItemName}`,
                 category: tx.type === 'purchase' ? 'Stock Purchase' : 'Stock Sale', linkedStockTxId: stockTempId,
+                contact_id: tx.contact_id, // Pass contact_id here
             };
 
             if (tx.paymentMethod === 'cash') {
@@ -349,7 +350,7 @@ export function useAppActions() {
             difference: 0,
             advance_id: tempLedgerId,
             createdAt: new Date().toISOString(),
-            contact_id: contact_id, // Add contact_id here
+            contact_id: contact_id,
         };
 
         if (payment_method === 'cash') {

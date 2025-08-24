@@ -69,13 +69,12 @@ const stockSchema = z.object({
     if (data.paymentMethod === 'bank' && !data.bank_id) {
         ctx.addIssue({ code: 'custom', message: 'Bank account is required.', path: ['bank_id'] });
     }
-    if (data.paymentMethod === 'credit') {
-        if (!data.contact_id) {
-            ctx.addIssue({ code: 'custom', message: 'A contact is required for credit transactions.', path: ['contact_id'] });
-        }
-        if (data.contact_id === 'new' && (!data.newContact || data.newContact.trim().length === 0)) {
-            ctx.addIssue({ code: 'custom', message: 'New contact name is required.', path: ['newContact'] });
-        }
+    // For all stock transactions, a contact is now implicitly required
+    if (!data.contact_id) {
+        ctx.addIssue({ code: 'custom', message: 'A contact is required for stock transactions.', path: ['contact_id'] });
+    }
+    if (data.contact_id === 'new' && (!data.newContact || data.newContact.trim().length === 0)) {
+        ctx.addIssue({ code: 'custom', message: 'New contact name is required.', path: ['newContact'] });
     }
 });
 
@@ -269,19 +268,17 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
             case 'stock':
                 let stockContactId: string | undefined;
                 let stockContactName: string | undefined;
-                if (data.paymentMethod === 'credit') {
-                    if (data.contact_id === 'new') {
-                        const newContact = data.stockType === 'purchase' ? await addVendor(data.newContact!) : await addClient(data.newContact!);
-                        if (!newContact) throw new Error(`Failed to create new ${data.stockType === 'purchase' ? 'vendor' : 'client'}.`);
-                        stockContactId = newContact.id;
-                        stockContactName = newContact.name;
-                    } else {
-                        stockContactId = data.contact_id;
-                        const contactList = data.stockType === 'purchase' ? vendors : clients;
-                        stockContactName = (contactList || []).find(c => c.id === stockContactId)?.name;
-                    }
-                    if (!stockContactId) throw new Error("Contact ID is required for credit transaction.");
+                if (data.contact_id === 'new') {
+                    const newContact = data.stockType === 'purchase' ? await addVendor(data.newContact!) : await addClient(data.newContact!);
+                    if (!newContact) throw new Error(`Failed to create new ${data.stockType === 'purchase' ? 'vendor' : 'client'}.`);
+                    stockContactId = newContact.id;
+                    stockContactName = newContact.name;
+                } else {
+                    stockContactId = data.contact_id;
+                    const contactList = data.stockType === 'purchase' ? vendors : clients;
+                    stockContactName = (contactList || []).find(c => c.id === stockContactId)?.name;
                 }
+                if (!stockContactId) throw new Error("Contact ID is required for stock transaction.");
 
                 await addStockTransaction({
                     type: data.stockType!,
@@ -341,7 +338,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
     }
   };
 
-  const stockCreditContactType = stockType === 'purchase' ? 'Vendor' : 'Client';
+  const stockContactType = stockType === 'purchase' ? 'Vendor' : 'Client';
   const settlementContactType = cashCategoryName === 'A/P Settlement' || bankCategoryName === 'A/P Settlement' ? 'Vendor' : 'Client';
   const settlementContacts = settlementContactType === 'Vendor' ? vendors : clients;
   
@@ -358,6 +355,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
     ...(clients || []).map(c => ({ value: c.id, label: c.name })), 
     { value: 'new', label: <span className="flex items-center gap-2"><Plus className="h-4 w-4"/>Add New</span>}
   ], [clients]);
+  const currentStockContactItems = stockType === 'purchase' ? vendorContactItems : clientContactItems;
   const currentLedgerContactItems = ledgerType === 'payable' ? vendorContactItems : clientContactItems;
   const currentLedgerContactType = ledgerType === 'payable' ? 'Vendor' : 'Client';
 
@@ -602,6 +600,36 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                         />
                         {errors.stockType && <p className="text-sm text-destructive">{(errors.stockType as any).message}</p>}
                     </div>
+                    {stockType && (
+                        <div className="space-y-2 animate-fade-in">
+                            <Label>{stockContactType}</Label>
+                            <Controller
+                                control={control}
+                                name="contact_id"
+                                render={({ field }) => (
+                                    <ResponsiveSelect
+                                        onValueChange={field.onChange}
+                                        value={field.value}
+                                        title={`Select a ${stockContactType}`}
+                                        placeholder={`Select a ${stockContactType}`}
+                                        items={currentStockContactItems}
+                                        className="border-2"
+                                    />
+                                )}
+                            />
+                            {errors.contact_id && <p className="text-sm text-destructive">{(errors.contact_id as any).message}</p>}
+                            
+                            {contact_id === 'new' && (
+                                <div className="flex items-end gap-2 pt-2 animate-fade-in">
+                                    <div className="flex-grow space-y-1">
+                                        <Label htmlFor="newContact">New {stockContactType} Name</Label>
+                                        <Input {...register('newContact')} placeholder={`Enter new ${stockContactType.toLowerCase()} name`} className="border-2"/>
+                                    </div>
+                                </div>
+                            )}
+                            {errors.newContact && <p className="text-sm text-destructive">{(errors.newContact as any).message}</p>}
+                        </div>
+                    )}
                     <div className="space-y-2">
                         <Label>Item Name</Label>
                         {stockType === 'purchase' ? (
@@ -712,37 +740,6 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                                     This will create a new item in your Accounts {stockType === 'purchase' ? 'Payable' : 'Receivable'} ledger.
                                 </AlertDescription>
                             </Alert>
-                            <Label>{stockCreditContactType}</Label>
-                            <Controller
-                                control={control}
-                                name="contact_id"
-                                render={({ field }) => (
-                                    <ResponsiveSelect 
-                                        onValueChange={field.onChange} 
-                                        value={field.value}
-                                        title={`Select a ${stockCreditContactType}`}
-                                        placeholder={`Select a ${stockCreditContactType}`}
-                                        items={
-                                            [
-                                                ...(stockType === 'purchase' ? (vendors || []) : (clients || [])).map(c => ({ value: c.id, label: c.name })),
-                                                { value: 'new', label: <span className="flex items-center gap-2"><Plus className="h-4 w-4"/>Add New</span>}
-                                            ]
-                                        }
-                                        className="border-2"
-                                    />
-                                )}
-                            />
-                            {errors.contact_id && <p className="text-sm text-destructive">{(errors.contact_id as any).message}</p>}
-                        
-                            {contact_id === 'new' && (
-                                <div className="flex items-end gap-2 pt-2 animate-fade-in">
-                                    <div className="flex-grow space-y-1">
-                                        <Label htmlFor="newContact">New {stockCreditContactType} Name</Label>
-                                        <Input {...register('newContact')} placeholder={`Enter new ${stockCreditContactType.toLowerCase()} name`} className="border-2"/>
-                                    </div>
-                                </div>
-                            )}
-                            {errors.newContact && <p className="text-sm text-destructive">{(errors.newContact as any).message}</p>}
                         </div>
                     )}
                     <div className="space-y-2">

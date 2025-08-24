@@ -585,6 +585,7 @@ export async function addStockTransaction(input: z.infer<typeof AddStockTransact
             difference: stockTx.difference, difference_reason: stockTx.difference_reason,
             description: stockTx.description || `${stockTx.type} of ${stockTx.weight}kg of ${stockTx.stockItemName}`,
             category: stockTx.type === 'purchase' ? 'Stock Purchase' : 'Stock Sale', linkedStockTxId: savedStockTx.id,
+            contact_id: stockTx.contact_id // This is the key addition
         };
         const tableName = stockTx.paymentMethod === 'cash' ? 'cash_transactions' : 'bank_transactions';
         const type = stockTx.paymentMethod === 'cash' ? (stockTx.type === 'purchase' ? 'expense' : 'income') : (stockTx.type === 'purchase' ? 'withdrawal' : 'deposit');
@@ -794,7 +795,7 @@ export async function recordAdvancePayment(input: z.infer<typeof RecordAdvancePa
         actual_amount: amount,
         difference: 0,
         advance_id: ledgerEntry.id,
-        contact_id: contact_id, // Add contact_id here
+        contact_id: contact_id,
     };
 
     if (payment_method === 'cash') {
