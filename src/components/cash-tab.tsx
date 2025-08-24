@@ -72,7 +72,7 @@ export function CashTab() {
       setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
     } else {
       setSortKey(key);
-      setDirection('desc');
+      setSortDirection('desc');
     }
   };
 
@@ -98,10 +98,13 @@ export function CashTab() {
     });
 
     let currentBalance = openingBalance;
-    return txsInMonthForCalc.map(tx => {
+    const balancesMap = new Map<string, number>();
+    for (const tx of txsInMonthForCalc) {
         currentBalance += (tx.type === 'income' ? tx.actual_amount : -tx.actual_amount);
-        return { ...tx, balance: currentBalance };
-    });
+        balancesMap.set(tx.id, currentBalance);
+    }
+    
+    return filteredByMonth.map(tx => ({...tx, balance: balancesMap.get(tx.id) || 0}));
   }, [monthlySnapshot, filteredByMonth]);
 
   const sortedTransactions = useMemo(() => {
@@ -480,3 +483,5 @@ export function CashTab() {
     </>
   )
 }
+
+    
