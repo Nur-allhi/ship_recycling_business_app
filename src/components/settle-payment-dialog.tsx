@@ -27,6 +27,14 @@ import { Input } from './ui/input';
 import { ResponsiveSelect } from './ui/responsive-select';
 import { useState } from 'react';
 
+// Helper to format date as YYYY-MM-DD string, preserving the local date
+const toYYYYMMDD = (date: Date) => {
+    const d = new Date(date);
+    // Adjust for timezone offset to prevent the date from changing
+    d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+    return d.toISOString().split('T')[0];
+};
+
 interface AggregatedContact {
     contact_id: string;
     contact_name: string;

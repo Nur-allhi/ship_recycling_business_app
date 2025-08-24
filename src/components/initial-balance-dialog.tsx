@@ -120,6 +120,7 @@ export function InitialBalanceDialog({ isOpen }: InitialBalanceDialogProps) {
         }
 
         toast.success("Initial Balances Set", { description: "Your initial financial and stock balances have been saved." });
+        closeInitialBalanceDialog();
         
     } catch(e: any) {
         toast.error("Failed to Save", { description: e.message || "An unknown error occurred." });

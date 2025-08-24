@@ -24,6 +24,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Alert, AlertTitle, AlertDescription } from './ui/alert';
 import { useIsMobile } from '@/hooks/use-mobile';
 
+// Helper to format date as YYYY-MM-DD string, preserving the local date
+const toYYYYMMDD = (date: Date) => {
+    const d = new Date(date);
+    // Adjust for timezone offset to prevent the date from changing
+    d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+    return d.toISOString().split('T')[0];
+};
 
 const baseSchema = z.object({
     date: z.date({ required_error: "Date is required." }),
@@ -225,7 +232,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
   }, [stockType, ledgerType, cashCategoryName, bankCategoryName, setValue]);
 
   const onSubmit = async (data: any) => {
-    const transactionDate = data.date.toISOString();
+    const transactionDate = toYYYYMMDD(data.date);
     try {
         let finalExpectedAmount = showAdvancedFields ? data.expected_amount : data.amount;
         let finalActualAmount = showAdvancedFields ? data.actual_amount : data.amount;

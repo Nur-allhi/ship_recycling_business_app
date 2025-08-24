@@ -9,6 +9,14 @@ import type { CashTransaction, BankTransaction, StockTransaction, Vendor, Client
 import * as server from '@/lib/actions'; 
 import { login as serverLogin, logout as serverLogout } from '@/app/auth/actions';
 
+// Helper to format date as YYYY-MM-DD string, preserving the local date
+const toYYYYMMDD = (date: Date) => {
+    const d = new Date(date);
+    // Adjust for timezone offset to prevent the date from changing
+    d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+    return d.toISOString().split('T')[0];
+};
+
 export function useAppActions() {
     const { isOnline, handleApiError, reloadData, updateBalances, processSyncQueue, setUser, login, logout } = useAppContext();
 
@@ -217,6 +225,7 @@ export function useAppActions() {
     };
 
     const setInitialBalances = async (cash: number, bankTotals: Record<string, number>, date: Date) => {
+        const isoDate = toYYYYMMDD(date);
         // Clear existing initial balance entries locally to avoid duplicates
         const oldInitialCash = await db.cash_transactions.where('category').equals('Initial Balance').toArray();
         const oldInitialBank = await db.bank_transactions.where('category').equals('Initial Balance').toArray();
@@ -224,13 +233,13 @@ export function useAppActions() {
         await db.bank_transactions.bulkDelete(oldInitialBank.map(tx => tx.id));
 
         // Add new initial balance entries
-        await db.cash_transactions.add({ id: `temp_init_cash_${Date.now()}`, date: date.toISOString(), type: 'income', category: 'Initial Balance', description: 'Initial cash balance', actual_amount: cash, expected_amount: cash, difference: 0, createdAt: new Date().toISOString() });
+        await db.cash_transactions.add({ id: `temp_init_cash_${Date.now()}`, date: isoDate, type: 'income', category: 'Initial Balance', description: 'Initial cash balance', actual_amount: cash, expected_amount: cash, difference: 0, createdAt: new Date().toISOString() });
         for (const [bankId, amount] of Object.entries(bankTotals)) {
-            await db.bank_transactions.add({ id: `temp_init_bank_${bankId}_${Date.now()}`, date: date.toISOString(), type: 'deposit', category: 'Initial Balance', description: 'Initial bank balance', actual_amount: amount, expected_amount: amount, difference: 0, bank_id: bankId, createdAt: new Date().toISOString() });
+            await db.bank_transactions.add({ id: `temp_init_bank_${bankId}_${Date.now()}`, date: isoDate, type: 'deposit', category: 'Initial Balance', description: 'Initial bank balance', actual_amount: amount, expected_amount: amount, difference: 0, bank_id: bankId, createdAt: new Date().toISOString() });
         }
         
         await updateBalances();
-        queueOrSync({ action: 'setInitialBalances', payload: { cash, bankTotals, date: date.toISOString() } });
+        queueOrSync({ action: 'setInitialBalances', payload: { cash, bankTotals, date: isoDate } });
     };
     
     const addInitialStockItem = async (item: { name: string; weight: number; pricePerKg: number }) => {
@@ -270,12 +279,13 @@ export function useAppActions() {
         const tempId = `temp_payment_${Date.now()}`;
         const desc = `Payment ${ledgerType === 'payable' ? 'to' : 'from'} ${contactName}`;
         const category = ledgerType === 'payable' ? 'A/P Settlement' : 'A/R Settlement';
+        const isoDate = toYYYYMMDD(paymentDate);
 
         // Add the financial transaction locally
         if (paymentMethod === 'cash') {
-            await db.cash_transactions.add({ id: tempId, date: paymentDate.toISOString(), type: ledgerType === 'payable' ? 'expense' : 'income', category, description: desc, actual_amount: paymentAmount, expected_amount: paymentAmount, difference: 0, createdAt: new Date().toISOString(), contact_id: contactId });
+            await db.cash_transactions.add({ id: tempId, date: isoDate, type: ledgerType === 'payable' ? 'expense' : 'income', category, description: desc, actual_amount: paymentAmount, expected_amount: paymentAmount, difference: 0, createdAt: new Date().toISOString(), contact_id: contactId });
         } else {
-            await db.bank_transactions.add({ id: tempId, date: paymentDate.toISOString(), type: ledgerType === 'payable' ? 'withdrawal' : 'deposit', category, description: desc, actual_amount: paymentAmount, expected_amount: paymentAmount, difference: 0, bank_id: bankId!, createdAt: new Date().toISOString(), contact_id: contactId });
+            await db.bank_transactions.add({ id: tempId, date: isoDate, type: ledgerType === 'payable' ? 'withdrawal' : 'deposit', category, description: desc, actual_amount: paymentAmount, expected_amount: paymentAmount, difference: 0, bank_id: bankId!, createdAt: new Date().toISOString(), contact_id: contactId });
         }
 
         // Apply payment to local ledger transactions
@@ -300,7 +310,7 @@ export function useAppActions() {
                 id: `temp_inst_${Date.now()}`,
                 ap_ar_transaction_id: tx.id,
                 amount: paymentForThisTx,
-                date: paymentDate.toISOString(),
+                date: isoDate,
                 payment_method: paymentMethod,
                 createdAt: new Date().toISOString(),
             };
@@ -312,13 +322,14 @@ export function useAppActions() {
         await updateBalances();
         queueOrSync({ 
             action: 'recordPaymentAgainstTotal', 
-            payload: { contact_id: contactId, contact_name: contactName, payment_amount: paymentAmount, payment_date: paymentDate.toISOString(), payment_method: paymentMethod, ledger_type: ledgerType, bank_id: bankId, localId: tempId }
+            payload: { contact_id: contactId, contact_name: contactName, payment_amount: paymentAmount, payment_date: isoDate, payment_method: paymentMethod, ledger_type: ledgerType, bank_id: bankId, localId: tempId }
         });
         toast.success("Payment recorded locally.");
     };
 
     const recordAdvancePayment = async (payload: { contact_id: string, contact_name: string, amount: number, date: Date, payment_method: 'cash' | 'bank', ledger_type: 'payable' | 'receivable', bank_id?: string, description?: string }) => {
         const { contact_id, contact_name, amount, date, payment_method, ledger_type, bank_id, description } = payload;
+        const isoDate = toYYYYMMDD(date);
         
         const tempLedgerId = `temp_adv_ledger_${Date.now()}`;
         const tempFinancialId = `temp_adv_fin_${Date.now()}`;
@@ -327,7 +338,7 @@ export function useAppActions() {
         // Create the advance entry in the local ledger. Amount is negative.
         const advanceLedgerEntry: LedgerTransaction = {
             id: tempLedgerId,
-            date: date.toISOString(),
+            date: isoDate,
             type: 'advance',
             description: ledgerDescription,
             amount: -amount,
@@ -342,7 +353,7 @@ export function useAppActions() {
         // Create the corresponding financial transaction
         const financialTxData = {
             id: tempFinancialId,
-            date: date.toISOString(),
+            date: isoDate,
             description: ledgerDescription,
             category: `Advance ${ledger_type === 'payable' ? 'Payment' : 'Received'}`,
             expected_amount: amount,
@@ -364,7 +375,7 @@ export function useAppActions() {
         // Queue the entire operation for the server
         queueOrSync({
             action: 'recordAdvancePayment',
-            payload: { ...payload, date: date.toISOString(), localLedgerId: tempLedgerId, localFinancialId: tempFinancialId }
+            payload: { ...payload, date: isoDate, localLedgerId: tempLedgerId, localFinancialId: tempFinancialId }
         });
         
         toast.success("Advance payment recorded locally and will sync to the server.");
