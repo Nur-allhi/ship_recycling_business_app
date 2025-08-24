@@ -785,8 +785,8 @@ export async function recordAdvancePayment(input: z.infer<typeof RecordAdvancePa
             .single();
         
         if (ledgerError) {
-             console.log('DETAILED SUPABASE ERROR (Ledger):', ledgerError);
-             throw ledgerError;
+             console.error('DETAILED SUPABASE ERROR (Ledger):', ledgerError);
+             throw new Error(ledgerError.message);
         }
         if (!ledgerEntry) throw new Error("Failed to create ledger entry for advance.");
 
@@ -804,20 +804,21 @@ export async function recordAdvancePayment(input: z.infer<typeof RecordAdvancePa
         if (payment_method === 'cash') {
             const {data: cashTx, error: cashErr} = await supabase.from('cash_transactions').insert({ ...financialTxData, type: ledger_type === 'payable' ? 'expense' : 'income' }).select().single();
             if(cashErr) {
-                console.log('DETAILED SUPABASE ERROR (Cash):', cashErr);
-                throw cashErr;
+                console.error('DETAILED SUPABASE ERROR (Cash):', cashErr);
+                throw new Error(cashErr.message);
             }
             return {ledgerEntry, financialTx: cashTx}
         } else {
             const {data: bankTx, error: bankErr} = await supabase.from('bank_transactions').insert({ ...financialTxData, type: ledger_type === 'payable' ? 'withdrawal' : 'deposit', bank_id: bank_id! }).select().single();
             if(bankErr) {
-                console.log('DETAILED SUPABASE ERROR (Bank):', bankErr);
-                throw bankErr;
+                console.error('DETAILED SUPABASE ERROR (Bank):', bankErr);
+                throw new Error(bankErr.message);
             }
             return {ledgerEntry, financialTx: bankTx}
         }
-    } catch(error) {
-        console.log('Error in recordAdvancePayment top-level catch:', error);
-        throw error;
+    } catch(error: any) {
+        console.error('Error in recordAdvancePayment top-level catch:', error);
+        // Re-throw the specific error message to be caught by the client
+        throw new Error(error.message);
     }
 }
