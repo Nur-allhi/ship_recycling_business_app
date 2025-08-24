@@ -759,66 +759,50 @@ const RecordAdvancePaymentSchema = z.object({
 });
 
 export async function recordAdvancePayment(input: z.infer<typeof RecordAdvancePaymentSchema>) {
-    try {
-        const session = await getSession();
-        if (!session || session.role !== 'admin') throw new Error("Only admins can record advance payments.");
-        const supabase = await getAuthenticatedSupabaseClient();
+    const session = await getSession();
+    if (!session || session.role !== 'admin') throw new Error("Only admins can record advance payments.");
+    const supabase = await getAuthenticatedSupabaseClient();
 
-        const { contact_id, contact_name, amount, date, payment_method, ledger_type, bank_id, description } = input;
+    const { contact_id, contact_name, amount, date, payment_method, ledger_type, bank_id, description } = input;
 
-        const ledgerAmount = -amount;
-        const ledgerDescription = description || `Advance ${ledger_type === 'payable' ? 'to' : 'from'} ${contact_name}`;
+    const ledgerAmount = -amount;
+    const ledgerDescription = description || `Advance ${ledger_type === 'payable' ? 'to' : 'from'} ${contact_name}`;
 
-        const { data: ledgerEntry, error: ledgerError } = await supabase
-            .from('ap_ar_transactions')
-            .insert({
-                type: 'advance',
-                date: date,
-                description: ledgerDescription,
-                amount: ledgerAmount,
-                paid_amount: 0,
-                status: 'paid', 
-                contact_id: contact_id,
-                contact_name: contact_name,
-            })
-            .select()
-            .single();
-        
-        if (ledgerError) {
-             console.error('DETAILED SUPABASE ERROR (Ledger):', ledgerError);
-             throw new Error(ledgerError.message);
-        }
-        if (!ledgerEntry) throw new Error("Failed to create ledger entry for advance.");
-
-        const financialTxData = {
+    const { data: ledgerEntry, error: ledgerError } = await supabase
+        .from('ap_ar_transactions')
+        .insert({
+            type: 'advance',
             date: date,
             description: ledgerDescription,
-            category: `Advance ${ledger_type === 'payable' ? 'Payment' : 'Received'}`,
-            expected_amount: amount,
-            actual_amount: amount,
-            difference: 0,
+            amount: ledgerAmount,
+            paid_amount: 0,
+            status: 'paid', 
             contact_id: contact_id,
-            advance_id: ledgerEntry.id,
-        };
+            contact_name: contact_name,
+        })
+        .select()
+        .single();
+    
+    if (ledgerError) throw new Error(ledgerError.message);
+    if (!ledgerEntry) throw new Error("Failed to create ledger entry for advance.");
 
-        if (payment_method === 'cash') {
-            const {data: cashTx, error: cashErr} = await supabase.from('cash_transactions').insert({ ...financialTxData, type: ledger_type === 'payable' ? 'expense' : 'income' }).select().single();
-            if(cashErr) {
-                console.error('DETAILED SUPABASE ERROR (Cash):', cashErr);
-                throw new Error(cashErr.message);
-            }
-            return {ledgerEntry, financialTx: cashTx}
-        } else {
-            const {data: bankTx, error: bankErr} = await supabase.from('bank_transactions').insert({ ...financialTxData, type: ledger_type === 'payable' ? 'withdrawal' : 'deposit', bank_id: bank_id! }).select().single();
-            if(bankErr) {
-                console.error('DETAILED SUPABASE ERROR (Bank):', bankErr);
-                throw new Error(bankErr.message);
-            }
-            return {ledgerEntry, financialTx: bankTx}
-        }
-    } catch(error: any) {
-        console.error('Error in recordAdvancePayment top-level catch:', error);
-        // Re-throw the specific error message to be caught by the client
-        throw new Error(error.message);
+    const financialTxData = {
+        date: date,
+        description: ledgerDescription,
+        category: `Advance ${ledger_type === 'payable' ? 'Payment' : 'Received'}`,
+        expected_amount: amount,
+        actual_amount: amount,
+        difference: 0,
+        advance_id: ledgerEntry.id,
+    };
+
+    if (payment_method === 'cash') {
+        const {data: cashTx, error: cashErr} = await supabase.from('cash_transactions').insert({ ...financialTxData, type: ledger_type === 'payable' ? 'expense' : 'income' }).select().single();
+        if(cashErr) throw new Error(cashErr.message);
+        return {ledgerEntry, financialTx: cashTx}
+    } else {
+        const {data: bankTx, error: bankErr} = await supabase.from('bank_transactions').insert({ ...financialTxData, type: ledger_type === 'payable' ? 'withdrawal' : 'deposit', bank_id: bank_id! }).select().single();
+        if(bankErr) throw new Error(bankErr.message);
+        return {ledgerEntry, financialTx: bankTx}
     }
 }

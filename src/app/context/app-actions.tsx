@@ -317,76 +317,55 @@ export function useAppActions() {
     };
 
     const recordAdvancePayment = async (payload: { contact_id: string, contact_name: string, amount: number, date: Date, payment_method: 'cash' | 'bank', ledger_type: 'payable' | 'receivable', bank_id?: string, description?: string }) => {
-        try {
-            const { contact_id, contact_name, amount, date, payment_method, ledger_type, bank_id, description } = payload;
-            
-            const tempLedgerId = `temp_adv_ledger_${Date.now()}`;
-            const tempFinancialId = `temp_adv_fin_${Date.now()}`;
-            const ledgerDescription = description || `Advance ${ledger_type === 'payable' ? 'to' : 'from'} ${contact_name}`;
+        const { contact_id, contact_name, amount, date, payment_method, ledger_type, bank_id, description } = payload;
+        
+        const tempLedgerId = `temp_adv_ledger_${Date.now()}`;
+        const tempFinancialId = `temp_adv_fin_${Date.now()}`;
+        const ledgerDescription = description || `Advance ${ledger_type === 'payable' ? 'to' : 'from'} ${contact_name}`;
 
-            // Create the advance entry in the local ledger. Amount is negative.
-            const advanceLedgerEntry: LedgerTransaction = {
-                id: tempLedgerId,
-                date: date.toISOString(),
-                type: 'advance',
-                description: ledgerDescription,
-                amount: -amount,
-                paid_amount: 0,
-                status: 'paid',
-                contact_id: contact_id,
-                contact_name: contact_name,
-                installments: []
-            };
-            await db.ap_ar_transactions.add(advanceLedgerEntry);
+        // Create the advance entry in the local ledger. Amount is negative.
+        const advanceLedgerEntry: LedgerTransaction = {
+            id: tempLedgerId,
+            date: date.toISOString(),
+            type: 'advance',
+            description: ledgerDescription,
+            amount: -amount,
+            paid_amount: 0,
+            status: 'paid',
+            contact_id: contact_id,
+            contact_name: contact_name,
+            installments: []
+        };
+        await db.ap_ar_transactions.add(advanceLedgerEntry);
 
-            // Create the corresponding financial transaction
-            const financialTxData = {
-                id: tempFinancialId,
-                date: date.toISOString(),
-                description: ledgerDescription,
-                category: `Advance ${ledger_type === 'payable' ? 'Payment' : 'Received'}`,
-                expected_amount: amount,
-                actual_amount: amount,
-                difference: 0,
-                contact_id: contact_id,
-                advance_id: tempLedgerId,
-                createdAt: new Date().toISOString()
-            };
+        // Create the corresponding financial transaction
+        const financialTxData = {
+            id: tempFinancialId,
+            date: date.toISOString(),
+            description: ledgerDescription,
+            category: `Advance ${ledger_type === 'payable' ? 'Payment' : 'Received'}`,
+            expected_amount: amount,
+            actual_amount: amount,
+            difference: 0,
+            advance_id: tempLedgerId,
+            createdAt: new Date().toISOString()
+        };
 
-            if (payment_method === 'cash') {
-                await db.cash_transactions.add({ ...financialTxData, type: ledger_type === 'payable' ? 'expense' : 'income' });
-            } else {
-                await db.bank_transactions.add({ ...financialTxData, type: ledger_type === 'payable' ? 'withdrawal' : 'deposit', bank_id: bank_id! });
-            }
-            
-            await updateBalances();
-            
-            // DIAGNOSTIC CHANGE: Awaiting the server call to catch the error
-            const result = await server.recordAdvancePayment({ ...payload, date: date.toISOString() });
-            
-            // If successful, update local records with permanent IDs
-            await db.transaction('rw', db.ap_ar_transactions, db.cash_transactions, db.bank_transactions, async () => {
-                if (result.ledgerEntry) {
-                    await db.ap_ar_transactions.where({id: tempLedgerId}).modify({ id: result.ledgerEntry.id });
-                }
-                if (result.financialTx) {
-                    const finTable = result.financialTx.bank_id ? db.bank_transactions : db.cash_transactions;
-                    await finTable.where({id: tempFinancialId}).modify({ id: result.financialTx.id, advance_id: result.ledgerEntry.id });
-                }
-            });
-            
-            toast.success("Advance payment recorded successfully.");
-
-        } catch (error: any) {
-            // DIAGNOSTIC CHANGE: Display the detailed error from the server
-            toast.error("Failed to Record Advance", {
-              description: `Error: ${error.message}`,
-              duration: 10000, // Keep the error on screen longer
-            });
-            // Also log to console for good measure
-            console.error("Caught advance payment error on client:", error);
-            // We don't queueOrSync on failure, we show the error to the user.
+        if (payment_method === 'cash') {
+            await db.cash_transactions.add({ ...financialTxData, type: ledger_type === 'payable' ? 'expense' : 'income' });
+        } else {
+            await db.bank_transactions.add({ ...financialTxData, type: ledger_type === 'payable' ? 'withdrawal' : 'deposit', bank_id: bank_id! });
         }
+        
+        await updateBalances();
+        
+        // Queue the entire operation for the server
+        queueOrSync({
+            action: 'recordAdvancePayment',
+            payload: { ...payload, date: date.toISOString(), localLedgerId: tempLedgerId, localFinancialId: tempFinancialId }
+        });
+        
+        toast.success("Advance payment recorded locally and will sync to the server.");
     };
     
     const loadDataForMonth = useCallback(async (month: Date) => {
