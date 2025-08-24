@@ -759,54 +759,65 @@ const RecordAdvancePaymentSchema = z.object({
 });
 
 export async function recordAdvancePayment(input: z.infer<typeof RecordAdvancePaymentSchema>) {
-    const session = await getSession();
-    if (!session || session.role !== 'admin') throw new Error("Only admins can record advance payments.");
-    const supabase = await getAuthenticatedSupabaseClient();
+    try {
+        const session = await getSession();
+        if (!session || session.role !== 'admin') throw new Error("Only admins can record advance payments.");
+        const supabase = await getAuthenticatedSupabaseClient();
 
-    const { contact_id, contact_name, amount, date, payment_method, ledger_type, bank_id, description } = input;
+        const { contact_id, contact_name, amount, date, payment_method, ledger_type, bank_id, description } = input;
 
-    // The amount is stored as negative in the ledger to represent a credit/advance
-    const ledgerAmount = -amount;
-    const ledgerDescription = description || `Advance ${ledger_type === 'payable' ? 'to' : 'from'} ${contact_name}`;
+        const ledgerAmount = -amount;
+        const ledgerDescription = description || `Advance ${ledger_type === 'payable' ? 'to' : 'from'} ${contact_name}`;
 
-    // 1. Create the advance entry in the ledger
-    const { data: ledgerEntry, error: ledgerError } = await supabase
-        .from('ap_ar_transactions')
-        .insert({
-            type: 'advance',
+        const { data: ledgerEntry, error: ledgerError } = await supabase
+            .from('ap_ar_transactions')
+            .insert({
+                type: 'advance',
+                date: date,
+                description: ledgerDescription,
+                amount: ledgerAmount,
+                paid_amount: 0,
+                status: 'paid', 
+                contact_id: contact_id,
+                contact_name: contact_name,
+            })
+            .select()
+            .single();
+        
+        if (ledgerError) {
+             console.log('DETAILED SUPABASE ERROR (Ledger):', ledgerError);
+             throw ledgerError;
+        }
+        if (!ledgerEntry) throw new Error("Failed to create ledger entry for advance.");
+
+        const financialTxData = {
             date: date,
             description: ledgerDescription,
-            amount: ledgerAmount,
-            paid_amount: 0,
-            status: 'paid', // An advance is technically a "paid" liability on your part
+            category: `Advance ${ledger_type === 'payable' ? 'Payment' : 'Received'}`,
+            expected_amount: amount,
+            actual_amount: amount,
+            difference: 0,
             contact_id: contact_id,
-            contact_name: contact_name,
-        })
-        .select()
-        .single();
-    
-    if (ledgerError) throw ledgerError;
-    if (!ledgerEntry) throw new Error("Failed to create ledger entry for advance.");
+            advance_id: ledgerEntry.id,
+        };
 
-    // 2. Create the corresponding financial transaction
-    const financialTxData = {
-        date: date,
-        description: ledgerDescription,
-        category: `Advance ${ledger_type === 'payable' ? 'Payment' : 'Received'}`,
-        expected_amount: amount,
-        actual_amount: amount,
-        difference: 0,
-        contact_id: contact_id,
-        advance_id: ledgerEntry.id,
-    };
-
-    if (payment_method === 'cash') {
-        const {data: cashTx, error: cashErr} = await supabase.from('cash_transactions').insert({ ...financialTxData, type: ledger_type === 'payable' ? 'expense' : 'income' }).select().single();
-        if(cashErr) throw cashErr;
-        return {ledgerEntry, financialTx: cashTx}
-    } else {
-        const {data: bankTx, error: bankErr} = await supabase.from('bank_transactions').insert({ ...financialTxData, type: ledger_type === 'payable' ? 'withdrawal' : 'deposit', bank_id: bank_id! }).select().single();
-        if(bankErr) throw bankErr;
-        return {ledgerEntry, financialTx: bankTx}
+        if (payment_method === 'cash') {
+            const {data: cashTx, error: cashErr} = await supabase.from('cash_transactions').insert({ ...financialTxData, type: ledger_type === 'payable' ? 'expense' : 'income' }).select().single();
+            if(cashErr) {
+                console.log('DETAILED SUPABASE ERROR (Cash):', cashErr);
+                throw cashErr;
+            }
+            return {ledgerEntry, financialTx: cashTx}
+        } else {
+            const {data: bankTx, error: bankErr} = await supabase.from('bank_transactions').insert({ ...financialTxData, type: ledger_type === 'payable' ? 'withdrawal' : 'deposit', bank_id: bank_id! }).select().single();
+            if(bankErr) {
+                console.log('DETAILED SUPABASE ERROR (Bank):', bankErr);
+                throw bankErr;
+            }
+            return {ledgerEntry, financialTx: bankTx}
+        }
+    } catch(error) {
+        console.log('Error in recordAdvancePayment top-level catch:', error);
+        throw error;
     }
 }
