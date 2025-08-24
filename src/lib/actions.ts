@@ -5,7 +5,9 @@ import { createClient } from '@supabase/supabase-js';
 import { cookies } from 'next/headers';
 import { z } from 'zod';
 import { getSession } from '@/app/auth/actions';
-import { startOfMonth, subMonths } from 'date-fns';
+import { startOfMonth, subMonths, endOfMonth } from 'date-fns';
+import type { MonthlySnapshot } from '@/lib/types';
+
 
 // Helper function to create a Supabase client.
 const createSupabaseClient = (serviceRole = false) => {
@@ -807,4 +809,112 @@ export async function recordAdvancePayment(input: z.infer<typeof RecordAdvancePa
         if(bankErr) throw new Error(bankErr.message);
         return {ledgerEntry, financialTx: bankTx}
     }
+}
+
+
+const toYYYYMMDD = (date: Date) => {
+    const d = new Date(date);
+    d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+    return d.toISOString().split('T')[0];
+};
+
+export async function getOrCreateSnapshot(date: string): Promise<MonthlySnapshot | null> {
+    const session = await getSession();
+    if (!session) return null;
+    const supabase = await getAuthenticatedSupabaseClient();
+    
+    const snapshotDate = toYYYYMMDD(startOfMonth(new Date(date)));
+
+    // 1. Check if a snapshot already exists
+    const { data: existingSnapshot } = await supabase
+        .from('monthly_snapshots')
+        .select('*')
+        .eq('snapshot_date', snapshotDate)
+        .maybeSingle();
+
+    if (existingSnapshot) {
+        return existingSnapshot;
+    }
+    
+    if (session.role !== 'admin') {
+        // Non-admins can't create snapshots, so if it doesn't exist, we can't proceed.
+        return null;
+    }
+
+    // 2. If it doesn't exist, create it.
+    const calculationEndDate = toYYYYMMDD(endOfMonth(subMonths(new Date(snapshotDate), 1)));
+    
+    // Calculate balances up to the end of the previous month
+    const [cashTxs, bankTxs, ledgerTxs, stockTxs, initialStock] = await Promise.all([
+        readData({ tableName: 'cash_transactions', endDate: calculationEndDate }),
+        readData({ tableName: 'bank_transactions', endDate: calculationEndDate }),
+        readData({ tableName: 'ap_ar_transactions', endDate: calculationEndDate }),
+        readData({ tableName: 'stock_transactions', endDate: calculationEndDate }),
+        readData({ tableName: 'initial_stock' }),
+    ]);
+
+    // Calculate Cash Balance
+    const cash_balance = (cashTxs || []).reduce((acc, tx) => acc + (tx.type === 'income' ? tx.actual_amount : -tx.actual_amount), 0);
+
+    // Calculate Bank Balances
+    const bank_balances: Record<string, number> = {};
+    (bankTxs || []).forEach(tx => {
+        if (!bank_balances[tx.bank_id]) bank_balances[tx.bank_id] = 0;
+        bank_balances[tx.bank_id] += (tx.type === 'deposit' ? tx.actual_amount : -tx.actual_amount);
+    });
+
+    // Calculate A/R and A/P
+    const total_receivables = (ledgerTxs || []).filter(tx => tx.type === 'receivable').reduce((acc, tx) => acc + (tx.amount - tx.paid_amount), 0);
+    const total_payables = (ledgerTxs || []).filter(tx => tx.type === 'payable').reduce((acc, tx) => acc + (tx.amount - tx.paid_amount), 0);
+    
+    // Calculate Stock
+    const stockPortfolio: Record<string, { weight: number, totalValue: number }> = {};
+    (initialStock || []).forEach(item => {
+        if (!stockPortfolio[item.name]) stockPortfolio[item.name] = { weight: 0, totalValue: 0 };
+        stockPortfolio[item.name].weight += item.weight;
+        stockPortfolio[item.name].totalValue += item.weight * item.purchasePricePerKg;
+    });
+
+    (stockTxs || []).forEach(tx => {
+        if (!stockPortfolio[tx.stockItemName]) stockPortfolio[tx.stockItemName] = { weight: 0, totalValue: 0 };
+        const item = stockPortfolio[tx.stockItemName];
+        const currentAvgPrice = item.weight > 0 ? item.totalValue / item.weight : 0;
+        if (tx.type === 'purchase') {
+            item.weight += tx.weight;
+            item.totalValue += tx.weight * tx.pricePerKg;
+        } else {
+            item.weight -= tx.weight;
+            item.totalValue -= tx.weight * currentAvgPrice;
+        }
+    });
+
+    const stock_items: Record<string, { weight: number; value: number }> = {};
+     Object.entries(stockPortfolio).forEach(([name, data]) => {
+        stock_items[name] = { weight: data.weight, value: data.totalValue };
+    });
+
+    // Create the new snapshot
+    const newSnapshot: Omit<MonthlySnapshot, 'id' | 'created_at'> = {
+        snapshot_date: snapshotDate,
+        cash_balance,
+        bank_balances,
+        stock_items,
+        total_receivables,
+        total_payables,
+    };
+
+    const { data: savedSnapshot, error } = await supabase
+        .from('monthly_snapshots')
+        .insert(newSnapshot)
+        .select()
+        .single();
+    
+    if (error) {
+        console.error("Failed to create snapshot:", error);
+        return null;
+    }
+
+    await logActivity(`Generated monthly snapshot for ${snapshotDate}`);
+
+    return savedSnapshot;
 }

@@ -1,7 +1,7 @@
 
 "use client"
 
-import { useState, useMemo, useEffect } from "react"
+import { useState, useMemo, useEffect, useCallback } from "react"
 import { useAppContext } from "@/app/context/app-context"
 import { useAppActions } from "@/app/context/app-actions"
 import { Button } from "@/components/ui/button"
@@ -26,20 +26,21 @@ import {
 } from "@/components/ui/table"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { ArrowUpCircle, ArrowDownCircle, ArrowRightLeft, Pencil, History, Trash2, CheckSquare, ChevronLeft, ChevronRight, Eye, EyeOff, ArrowUpDown, Loader2, DollarSign } from "lucide-react"
-import type { BankTransaction } from "@/lib/types"
+import type { BankTransaction, MonthlySnapshot } from "@/lib/types"
 import { EditTransactionSheet } from "./edit-transaction-sheet"
 import { DeleteConfirmationDialog } from "./delete-confirmation-dialog"
 import { Checkbox } from "./ui/checkbox"
-import { format, subMonths, addMonths } from "date-fns"
+import { format, subMonths, addMonths, startOfMonth, endOfMonth } from "date-fns"
 import { ResponsiveSelect } from "@/components/ui/responsive-select"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { Badge } from "./ui/badge"
+import * as server from "@/lib/actions";
 
 type SortKey = keyof BankTransaction | null;
 type SortDirection = 'asc' | 'desc';
 
 export function BankTab() {
-  const { bankTransactions, currency, user, banks, isLoading } = useAppContext()
+  const { bankTransactions, currency, user, banks, isLoading, handleApiError } = useAppContext()
   const { transferFunds, deleteBankTransaction, deleteMultipleBankTransactions } = useAppActions();
   const [isTransferSheetOpen, setIsTransferSheetOpen] = useState(false)
   const [editSheetState, setEditSheetState] = useState<{isOpen: boolean, transaction: BankTransaction | null}>({ isOpen: false, transaction: null});
@@ -54,8 +55,27 @@ export function BankTab() {
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [selectedBankId, setSelectedBankId] = useState<string | 'all'>('all');
   const [selectedTransferBankId, setSelectedTransferBankId] = useState<string | undefined>(banks.length > 0 ? banks[0].id : undefined);
+  const [monthlySnapshot, setMonthlySnapshot] = useState<MonthlySnapshot | null>(null);
+  const [isSnapshotLoading, setIsSnapshotLoading] = useState(true);
   const isMobile = useIsMobile();
   const isAdmin = user?.role === 'admin';
+
+  const fetchSnapshot = useCallback(async () => {
+    setIsSnapshotLoading(true);
+    try {
+        const snapshot = await server.getOrCreateSnapshot(currentMonth.toISOString());
+        setMonthlySnapshot(snapshot);
+    } catch(e) {
+        handleApiError(e);
+        setMonthlySnapshot(null);
+    } finally {
+        setIsSnapshotLoading(false);
+    }
+  }, [currentMonth, handleApiError]);
+
+  useEffect(() => {
+    fetchSnapshot();
+  }, [fetchSnapshot]);
 
   const filteredByBank = useMemo(() => {
     if (!bankTransactions) return [];
@@ -93,9 +113,11 @@ export function BankTab() {
   }, [filteredByBank, sortKey, sortDirection]);
 
   const filteredByMonth = useMemo(() => {
+    const start = startOfMonth(currentMonth);
+    const end = endOfMonth(currentMonth);
     return sortedTransactions.filter(tx => {
         const txDate = new Date(tx.date);
-        return txDate.getFullYear() === currentMonth.getFullYear() && txDate.getMonth() === currentMonth.getMonth();
+        return txDate >= start && txDate <= end;
     })
   }, [sortedTransactions, currentMonth]);
 
@@ -108,22 +130,51 @@ export function BankTab() {
 
   const runningBalances = useMemo(() => {
     const balances: { [key: string]: number } = {};
-    if (paginatedTransactions.length === 0 || !bankTransactions) return balances;
+    if (!monthlySnapshot) return balances;
 
-    const sortedForBalance = [...paginatedTransactions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    
-    const allRelevantTxs = bankTransactions.filter(tx => selectedBankId === 'all' || tx.bank_id === selectedBankId);
-    const allTxsUpToLatest = allRelevantTxs.filter(tx => new Date(tx.date) <= new Date(sortedForBalance[0].date));
-    
-    let currentBalance = allTxsUpToLatest.reduce((acc, tx) => acc + (tx.type === 'deposit' ? tx.actual_amount : -tx.actual_amount), 0);
+    let balance = 0;
+    if (selectedBankId === 'all') {
+        balance = Object.values(monthlySnapshot.bank_balances || {}).reduce((sum, b) => sum + b, 0);
+    } else {
+        balance = monthlySnapshot.bank_balances?.[selectedBankId] || 0;
+    }
 
-    sortedForBalance.forEach(tx => {
-        balances[tx.id] = currentBalance;
-        currentBalance -= (tx.type === 'deposit' ? tx.actual_amount : -tx.actual_amount);
+    const txsInMonthForBank = bankTransactions
+      .filter(tx => {
+        const txDate = new Date(tx.date);
+        return txDate.getFullYear() === currentMonth.getFullYear() && txDate.getMonth() === currentMonth.getMonth() && (selectedBankId === 'all' || tx.bank_id === selectedBankId);
+      })
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+    txsInMonthForBank.forEach(tx => {
+      balance += (tx.type === 'deposit' ? tx.actual_amount : -tx.actual_amount);
+      balances[tx.id] = balance;
     });
+    
+    // Now reverse-calculate for the paginated view
+    if (paginatedTransactions.length > 0) {
+      const lastTxInPageId = paginatedTransactions[paginatedTransactions.length - 1].id;
+      let lastBalance = balances[lastTxInPageId];
+      if (lastBalance === undefined) { // Recalculate if not found
+          let runningBalance = (selectedBankId === 'all') ? Object.values(monthlySnapshot.bank_balances || {}).reduce((sum, b) => sum + b, 0) : (monthlySnapshot.bank_balances?.[selectedBankId] || 0);
+          for(const tx of txsInMonthForBank) {
+              runningBalance += (tx.type === 'deposit' ? tx.actual_amount : -tx.actual_amount);
+              if (tx.id === lastTxInPageId) {
+                  lastBalance = runningBalance;
+                  break;
+              }
+          }
+      }
+
+      for (let i = paginatedTransactions.length - 1; i >= 0; i--) {
+        const tx = paginatedTransactions[i];
+        balances[tx.id] = lastBalance;
+        lastBalance -= (tx.type === 'deposit' ? tx.actual_amount : -tx.actual_amount);
+      }
+    }
 
     return balances;
-  }, [paginatedTransactions, bankTransactions, selectedBankId]);
+  }, [paginatedTransactions, monthlySnapshot, bankTransactions, currentMonth, selectedBankId]);
 
 
   const handleEditClick = (tx: BankTransaction) => {
@@ -163,7 +214,7 @@ export function BankTab() {
     const amount = parseFloat(formData.get('amount') as string);
     const description = formData.get('description') as string;
     if (amount > 0 && selectedTransferBankId) {
-      transferFunds('bank', amount, new Date().toISOString(), selectedTransferBankId, description);
+      transferFunds('bank', amount, new Date().toISOString().split('T')[0], selectedTransferBankId, description);
       setIsTransferSheetOpen(false)
     }
   }
@@ -252,7 +303,7 @@ export function BankTab() {
             </TableRow>
         </TableHeader>
         <TableBody>
-            {isLoading ? (
+            {isLoading || isSnapshotLoading ? (
               <TableRow><TableCell colSpan={isSelectionMode ? 8 : 7} className="h-24 text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin" /></TableCell></TableRow>
             ) : paginatedTransactions.length > 0 ? (
             paginatedTransactions.map((tx: BankTransaction) => (

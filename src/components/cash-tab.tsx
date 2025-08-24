@@ -1,7 +1,7 @@
 
 "use client"
 
-import { useState, useMemo, useEffect } from "react"
+import { useState, useMemo, useEffect, useCallback } from "react"
 import { useAppContext } from "@/app/context/app-context"
 import { useAppActions } from "@/app/context/app-actions"
 import { Button } from "@/components/ui/button"
@@ -18,21 +18,22 @@ import {
 } from "@/components/ui/table"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { ArrowUpCircle, ArrowDownCircle, ArrowRightLeft, Pencil, History, Trash2, CheckSquare, ChevronLeft, ChevronRight, Eye, EyeOff, ArrowUpDown, Loader2 } from "lucide-react"
-import type { CashTransaction } from "@/lib/types"
+import type { CashTransaction, MonthlySnapshot } from "@/lib/types"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetTrigger } from "@/components/ui/sheet"
 import { EditTransactionSheet } from "./edit-transaction-sheet"
 import { DeleteConfirmationDialog } from "./delete-confirmation-dialog"
 import { Checkbox } from "./ui/checkbox"
-import { format, subMonths, addMonths } from "date-fns"
+import { format, subMonths, addMonths, startOfMonth, endOfMonth } from "date-fns"
 import { ResponsiveSelect } from "@/components/ui/responsive-select"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { Badge } from "./ui/badge"
+import * as server from "@/lib/actions";
 
 type SortKey = keyof CashTransaction | null;
 type SortDirection = 'asc' | 'desc';
 
 export function CashTab() {
-  const { cashTransactions, currency, user, banks, isLoading } = useAppContext()
+  const { cashTransactions, currency, user, banks, isLoading, handleApiError } = useAppContext()
   const { transferFunds, deleteCashTransaction, deleteMultipleCashTransactions } = useAppActions();
   const [isTransferSheetOpen, setIsTransferSheetOpen] = useState(false)
   const [editSheetState, setEditSheetState] = useState<{isOpen: boolean, transaction: CashTransaction | null}>({ isOpen: false, transaction: null});
@@ -46,8 +47,27 @@ export function CashTab() {
   const [sortKey, setSortKey] = useState<SortKey>('date');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [selectedTransferBankId, setSelectedTransferBankId] = useState<string | undefined>(banks.length > 0 ? banks[0].id : undefined);
+  const [monthlySnapshot, setMonthlySnapshot] = useState<MonthlySnapshot | null>(null);
+  const [isSnapshotLoading, setIsSnapshotLoading] = useState(true);
   const isMobile = useIsMobile();
   const isAdmin = user?.role === 'admin';
+
+  const fetchSnapshot = useCallback(async () => {
+    setIsSnapshotLoading(true);
+    try {
+        const snapshot = await server.getOrCreateSnapshot(currentMonth.toISOString());
+        setMonthlySnapshot(snapshot);
+    } catch(e) {
+        handleApiError(e);
+        setMonthlySnapshot(null);
+    } finally {
+        setIsSnapshotLoading(false);
+    }
+  }, [currentMonth, handleApiError]);
+
+  useEffect(() => {
+    fetchSnapshot();
+  }, [fetchSnapshot]);
 
   const handleSort = (key: SortKey) => {
     if (sortKey === key) {
@@ -79,9 +99,11 @@ export function CashTab() {
   }, [cashTransactions, sortKey, sortDirection]);
 
   const filteredByMonth = useMemo(() => {
+    const start = startOfMonth(currentMonth);
+    const end = endOfMonth(currentMonth);
     return sortedTransactions.filter(tx => {
         const txDate = new Date(tx.date);
-        return txDate.getFullYear() === currentMonth.getFullYear() && txDate.getMonth() === currentMonth.getMonth();
+        return txDate >= start && txDate <= end;
     })
   }, [sortedTransactions, currentMonth]);
 
@@ -94,26 +116,39 @@ export function CashTab() {
 
   const runningBalances = useMemo(() => {
     const balances: { [key: string]: number } = {};
-    if (paginatedTransactions.length === 0) return balances;
+    if (!monthlySnapshot) return balances;
 
-    // Correctly sort transactions from newest to oldest for running balance calculation
-    const sortedForBalance = [...paginatedTransactions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    
-    // Find the latest transaction's full-history balance
-    // This requires a one-time calculation over all transactions up to the newest one in the current view
-    const latestTxId = sortedForBalance[0].id;
-    const allTxsUpToLatest = (cashTransactions || []).filter(tx => new Date(tx.date) <= new Date(sortedForBalance[0].date));
-    let currentBalance = allTxsUpToLatest.reduce((acc, tx) => acc + (tx.type === 'income' ? tx.actual_amount : -tx.actual_amount), 0);
-    
-    // Calculate running balance for the visible page
-    sortedForBalance.forEach(tx => {
-        balances[tx.id] = currentBalance;
-        // Adjust balance for the next older transaction
-        currentBalance -= (tx.type === 'income' ? tx.actual_amount : -tx.actual_amount);
+    // Start with the opening balance from the snapshot
+    let balance = monthlySnapshot.cash_balance;
+
+    // Get all transactions for the current month and sort them chronologically
+    const txsInMonth = cashTransactions
+      .filter(tx => {
+        const txDate = new Date(tx.date);
+        return txDate.getFullYear() === currentMonth.getFullYear() && txDate.getMonth() === currentMonth.getMonth();
+      })
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+    // Calculate balances for all transactions in the month
+    txsInMonth.forEach(tx => {
+      balance += (tx.type === 'income' ? tx.actual_amount : -tx.actual_amount);
+      balances[tx.id] = balance;
     });
 
+    // To display correctly on the page (newest first), we now reverse-calculate from the last transaction on the page
+    if (paginatedTransactions.length > 0) {
+      const lastTxInPageId = paginatedTransactions[paginatedTransactions.length - 1].id;
+      let lastBalance = balances[lastTxInPageId];
+
+      for (let i = paginatedTransactions.length - 1; i >= 0; i--) {
+        const tx = paginatedTransactions[i];
+        balances[tx.id] = lastBalance;
+        lastBalance -= (tx.type === 'income' ? tx.actual_amount : -tx.actual_amount);
+      }
+    }
+    
     return balances;
-  }, [paginatedTransactions, cashTransactions]);
+  }, [paginatedTransactions, monthlySnapshot, cashTransactions, currentMonth]);
 
 
   const handleEditClick = (tx: CashTransaction) => {
@@ -153,7 +188,7 @@ export function CashTab() {
     const amount = parseFloat(formData.get('amount') as string);
     const description = formData.get('description') as string;
     if (amount > 0 && selectedTransferBankId) {
-      transferFunds('cash', amount, new Date().toISOString(), selectedTransferBankId, description);
+      transferFunds('cash', amount, new Date().toISOString().split('T')[0], selectedTransferBankId, description);
       setIsTransferSheetOpen(false)
     }
   }
@@ -232,7 +267,7 @@ export function CashTab() {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {isLoading ? (
+          {isLoading || isSnapshotLoading ? (
             <TableRow><TableCell colSpan={isSelectionMode ? 7 : 6} className="h-24 text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin" /></TableCell></TableRow>
           ) : paginatedTransactions.length > 0 ? (
             paginatedTransactions.map((tx: CashTransaction) => (
