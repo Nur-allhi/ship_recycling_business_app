@@ -794,6 +794,7 @@ export async function recordAdvancePayment(input: z.infer<typeof RecordAdvancePa
         actual_amount: amount,
         difference: 0,
         advance_id: ledgerEntry.id,
+        contact_id: contact_id, // Add contact_id here
     };
 
     if (payment_method === 'cash') {

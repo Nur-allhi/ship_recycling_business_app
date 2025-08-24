@@ -348,7 +348,8 @@ export function useAppActions() {
             actual_amount: amount,
             difference: 0,
             advance_id: tempLedgerId,
-            createdAt: new Date().toISOString()
+            createdAt: new Date().toISOString(),
+            contact_id: contact_id, // Add contact_id here
         };
 
         if (payment_method === 'cash') {

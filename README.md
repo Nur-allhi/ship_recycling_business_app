@@ -238,8 +238,8 @@ UPDATE bank_transactions SET expected_amount = actual_amount WHERE expected_amou
 UPDATE stock_transactions SET expected_amount = (weight * "pricePerKg"), actual_amount = (weight * "pricePerKg") WHERE expected_amount = 0;
 ```
 
-### 4.6. Advance Payments
-Adds support for tracking advance payments to/from contacts.
+### 4.6. Advance Payments & Contact Linking
+Adds support for tracking advance payments and links financial transactions to contacts.
 
 ```sql
 -- Add a new 'advance' type to the ledger transaction types
@@ -250,4 +250,8 @@ CHECK (type IN ('payable', 'receivable', 'advance'));
 -- Add a column to link financial transactions to advance ledger entries
 ALTER TABLE cash_transactions ADD COLUMN IF NOT EXISTS advance_id UUID REFERENCES ap_ar_transactions(id) ON DELETE SET NULL;
 ALTER TABLE bank_transactions ADD COLUMN IF NOT EXISTS advance_id UUID REFERENCES ap_ar_transactions(id) ON DELETE SET NULL;
+
+-- Add a column to link financial transactions directly to contacts (vendors or clients)
+ALTER TABLE cash_transactions ADD COLUMN IF NOT EXISTS contact_id UUID;
+ALTER TABLE bank_transactions ADD COLUMN IF NOT EXISTS contact_id UUID;
 ```

@@ -13,11 +13,11 @@ export interface Transaction {
   linkedStockTxId?: string;
   createdAt: string;
   advance_id?: string | null;
+  contact_id?: string | null;
 }
 
 export interface CashTransaction extends Transaction {
   type: 'income' | 'expense';
-  contact_id?: string;
 }
 
 export interface Bank {
@@ -29,7 +29,6 @@ export interface Bank {
 export interface BankTransaction extends Transaction {
   type: 'deposit' | 'withdrawal';
   bank_id: string;
-  contact_id?: string;
 }
 
 export interface StockItem {
@@ -137,5 +136,6 @@ export interface MonthlySnapshot {
 
 
     
+
 
 
