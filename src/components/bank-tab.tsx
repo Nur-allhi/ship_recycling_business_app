@@ -105,7 +105,14 @@ export function BankTab() {
       } else if (typeof aValue === 'number' && typeof bValue === 'number') {
         result = aValue - bValue;
       } else if (sortKey === 'date') {
-        result = new Date(a.date).getTime() - new Date(b.date).getTime();
+        const dateA = new Date(a.date).getTime();
+        const dateB = new Date(b.date).getTime();
+        if (dateA !== dateB) {
+            result = dateA - dateB;
+        } else {
+            // If dates are the same, sort by creation time
+            result = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+        }
       }
 
       return sortDirection === 'asc' ? result : -result;
@@ -130,51 +137,37 @@ export function BankTab() {
 
   const runningBalances = useMemo(() => {
     const balances: { [key: string]: number } = {};
-    if (!monthlySnapshot) return balances;
+    if (!monthlySnapshot || !bankTransactions) return balances;
 
-    let balance = 0;
+    let openingBalance = 0;
     if (selectedBankId === 'all') {
-        balance = Object.values(monthlySnapshot.bank_balances || {}).reduce((sum, b) => sum + b, 0);
+        openingBalance = Object.values(monthlySnapshot.bank_balances || {}).reduce((sum, b) => sum + b, 0);
     } else {
-        balance = monthlySnapshot.bank_balances?.[selectedBankId] || 0;
+        openingBalance = monthlySnapshot.bank_balances?.[selectedBankId] || 0;
     }
 
-    const txsInMonthForBank = bankTransactions
+    const txsInMonth = bankTransactions
       .filter(tx => {
         const txDate = new Date(tx.date);
-        return txDate.getFullYear() === currentMonth.getFullYear() && txDate.getMonth() === currentMonth.getMonth() && (selectedBankId === 'all' || tx.bank_id === selectedBankId);
+        const monthStart = startOfMonth(currentMonth);
+        const monthEnd = endOfMonth(currentMonth);
+        return txDate >= monthStart && txDate <= monthEnd && (selectedBankId === 'all' || tx.bank_id === selectedBankId);
       })
-      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+      .sort((a, b) => {
+        const dateA = new Date(a.date).getTime();
+        const dateB = new Date(b.date).getTime();
+        if(dateA !== dateB) return dateA - dateB;
+        return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+      });
 
-    txsInMonthForBank.forEach(tx => {
-      balance += (tx.type === 'deposit' ? tx.actual_amount : -tx.actual_amount);
-      balances[tx.id] = balance;
-    });
-    
-    // Now reverse-calculate for the paginated view
-    if (paginatedTransactions.length > 0) {
-      const lastTxInPageId = paginatedTransactions[paginatedTransactions.length - 1].id;
-      let lastBalance = balances[lastTxInPageId];
-      if (lastBalance === undefined) { // Recalculate if not found
-          let runningBalance = (selectedBankId === 'all') ? Object.values(monthlySnapshot.bank_balances || {}).reduce((sum, b) => sum + b, 0) : (monthlySnapshot.bank_balances?.[selectedBankId] || 0);
-          for(const tx of txsInMonthForBank) {
-              runningBalance += (tx.type === 'deposit' ? tx.actual_amount : -tx.actual_amount);
-              if (tx.id === lastTxInPageId) {
-                  lastBalance = runningBalance;
-                  break;
-              }
-          }
-      }
-
-      for (let i = paginatedTransactions.length - 1; i >= 0; i--) {
-        const tx = paginatedTransactions[i];
-        balances[tx.id] = lastBalance;
-        lastBalance -= (tx.type === 'deposit' ? tx.actual_amount : -tx.actual_amount);
-      }
+    let currentBalance = openingBalance;
+    for (const tx of txsInMonth) {
+        currentBalance += (tx.type === 'deposit' ? tx.actual_amount : -tx.actual_amount);
+        balances[tx.id] = currentBalance;
     }
 
     return balances;
-  }, [paginatedTransactions, monthlySnapshot, bankTransactions, currentMonth, selectedBankId]);
+  }, [monthlySnapshot, bankTransactions, currentMonth, selectedBankId]);
 
 
   const handleEditClick = (tx: BankTransaction) => {
@@ -575,3 +568,5 @@ export function BankTab() {
     </>
   )
 }
+
+    

@@ -91,7 +91,14 @@ export function CashTab() {
       } else if (typeof aValue === 'number' && typeof bValue === 'number') {
         result = aValue - bValue;
       } else if (sortKey === 'date') {
-        result = new Date(a.date).getTime() - new Date(b.date).getTime();
+        const dateA = new Date(a.date).getTime();
+        const dateB = new Date(b.date).getTime();
+        if (dateA !== dateB) {
+            result = dateA - dateB;
+        } else {
+            // If dates are the same, sort by creation time
+            result = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+        }
       }
 
       return sortDirection === 'asc' ? result : -result;
@@ -116,39 +123,32 @@ export function CashTab() {
 
   const runningBalances = useMemo(() => {
     const balances: { [key: string]: number } = {};
-    if (!monthlySnapshot) return balances;
+    if (!monthlySnapshot || !cashTransactions) return balances;
 
-    // Start with the opening balance from the snapshot
-    let balance = monthlySnapshot.cash_balance;
+    const openingBalance = monthlySnapshot.cash_balance;
 
-    // Get all transactions for the current month and sort them chronologically
     const txsInMonth = cashTransactions
       .filter(tx => {
         const txDate = new Date(tx.date);
-        return txDate.getFullYear() === currentMonth.getFullYear() && txDate.getMonth() === currentMonth.getMonth();
+        const monthStart = startOfMonth(currentMonth);
+        const monthEnd = endOfMonth(currentMonth);
+        return txDate >= monthStart && txDate <= monthEnd;
       })
-      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+      .sort((a, b) => {
+          const dateA = new Date(a.date).getTime();
+          const dateB = new Date(b.date).getTime();
+          if(dateA !== dateB) return dateA - dateB;
+          return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+      });
 
-    // Calculate balances for all transactions in the month
-    txsInMonth.forEach(tx => {
-      balance += (tx.type === 'income' ? tx.actual_amount : -tx.actual_amount);
-      balances[tx.id] = balance;
-    });
-
-    // To display correctly on the page (newest first), we now reverse-calculate from the last transaction on the page
-    if (paginatedTransactions.length > 0) {
-      const lastTxInPageId = paginatedTransactions[paginatedTransactions.length - 1].id;
-      let lastBalance = balances[lastTxInPageId];
-
-      for (let i = paginatedTransactions.length - 1; i >= 0; i--) {
-        const tx = paginatedTransactions[i];
-        balances[tx.id] = lastBalance;
-        lastBalance -= (tx.type === 'income' ? tx.actual_amount : -tx.actual_amount);
-      }
+    let currentBalance = openingBalance;
+    for (const tx of txsInMonth) {
+        currentBalance += (tx.type === 'income' ? tx.actual_amount : -tx.actual_amount);
+        balances[tx.id] = currentBalance;
     }
     
     return balances;
-  }, [paginatedTransactions, monthlySnapshot, cashTransactions, currentMonth]);
+  }, [monthlySnapshot, cashTransactions, currentMonth]);
 
 
   const handleEditClick = (tx: CashTransaction) => {
@@ -520,3 +520,5 @@ export function CashTab() {
     </>
   )
 }
+
+    
