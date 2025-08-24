@@ -13,7 +13,7 @@ import { Label } from '@/components/ui/label';
 import { ResponsiveSelect } from '@/components/ui/responsive-select';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { toast } from 'sonner';
-import { CalendarIcon, Plus, PlusCircle, Wallet, Landmark, Boxes, ArrowRightLeft, UserPlus, Loader2, Settings2 } from 'lucide-react';
+import { CalendarIcon, Plus, PlusCircle, Wallet, Landmark, Boxes, ArrowRightLeft, UserPlus, Loader2, Settings2, Link } from 'lucide-react';
 import { DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
@@ -23,14 +23,6 @@ import { Separator } from './ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Alert, AlertTitle, AlertDescription } from './ui/alert';
 import { useIsMobile } from '@/hooks/use-mobile';
-
-// Helper to format date as YYYY-MM-DD string, preserving the local date
-const toYYYYMMDD = (date: Date) => {
-    const d = new Date(date);
-    // Adjust for timezone offset to prevent the date from changing
-    d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
-    return d.toISOString().split('T')[0];
-};
 
 const baseSchema = z.object({
     date: z.date({ required_error: "Date is required." }),
@@ -76,9 +68,9 @@ const stockSchema = z.object({
     if (data.paymentMethod === 'bank' && !data.bank_id) {
         ctx.addIssue({ code: 'custom', message: 'Bank account is required.', path: ['bank_id'] });
     }
-    // For all stock transactions, a contact is now implicitly required
-    if (!data.contact_id) {
-        ctx.addIssue({ code: 'custom', message: 'A contact is required for stock transactions.', path: ['contact_id'] });
+    // A contact is now only required for credit transactions
+    if (data.paymentMethod === 'credit' && !data.contact_id) {
+        ctx.addIssue({ code: 'custom', message: 'A contact is required for credit transactions.', path: ['contact_id'] });
     }
     if (data.contact_id === 'new' && (!data.newContact || data.newContact.trim().length === 0)) {
         ctx.addIssue({ code: 'custom', message: 'New contact name is required.', path: ['newContact'] });
@@ -132,6 +124,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
   const [isCashSettlement, setIsCashSettlement] = useState(false);
   const [isBankSettlement, setIsBankSettlement] = useState(false);
   const [showAdvancedFields, setShowAdvancedFields] = useState(false);
+  const [showStockContact, setShowStockContact] = useState(false);
 
   
   const { 
@@ -224,6 +217,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
     setIsCashSettlement(false);
     setIsBankSettlement(false);
     setShowAdvancedFields(false);
+    setShowStockContact(false);
   }, [transactionType, reset]);
   
   useEffect(() => {
@@ -231,8 +225,15 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
     setValue('newContact', '');
   }, [stockType, ledgerType, cashCategoryName, bankCategoryName, setValue]);
 
+  // Logic to show/hide the contact dropdown for stock transactions
+  useEffect(() => {
+    if (stockPaymentMethod === 'credit') {
+        setShowStockContact(true);
+    }
+  }, [stockPaymentMethod]);
+
   const onSubmit = async (data: any) => {
-    const transactionDate = toYYYYMMDD(data.date);
+    const transactionDate = format(data.date, 'yyyy-MM-dd');
     try {
         let finalExpectedAmount = showAdvancedFields ? data.expected_amount : data.amount;
         let finalActualAmount = showAdvancedFields ? data.actual_amount : data.amount;
@@ -280,13 +281,12 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                     if (!newContact) throw new Error(`Failed to create new ${data.stockType === 'purchase' ? 'vendor' : 'client'}.`);
                     stockContactId = newContact.id;
                     stockContactName = newContact.name;
-                } else {
+                } else if (data.contact_id) {
                     stockContactId = data.contact_id;
                     const contactList = data.stockType === 'purchase' ? vendors : clients;
                     stockContactName = (contactList || []).find(c => c.id === stockContactId)?.name;
                 }
-                if (!stockContactId) throw new Error("Contact ID is required for stock transaction.");
-
+                
                 await addStockTransaction({
                     type: data.stockType!,
                     stockItemName: data.stockItemName!,
@@ -607,36 +607,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                         />
                         {errors.stockType && <p className="text-sm text-destructive">{(errors.stockType as any).message}</p>}
                     </div>
-                    {stockType && (
-                        <div className="space-y-2 animate-fade-in">
-                            <Label>{stockContactType}</Label>
-                            <Controller
-                                control={control}
-                                name="contact_id"
-                                render={({ field }) => (
-                                    <ResponsiveSelect
-                                        onValueChange={field.onChange}
-                                        value={field.value}
-                                        title={`Select a ${stockContactType}`}
-                                        placeholder={`Select a ${stockContactType}`}
-                                        items={currentStockContactItems}
-                                        className="border-2"
-                                    />
-                                )}
-                            />
-                            {errors.contact_id && <p className="text-sm text-destructive">{(errors.contact_id as any).message}</p>}
-                            
-                            {contact_id === 'new' && (
-                                <div className="flex items-end gap-2 pt-2 animate-fade-in">
-                                    <div className="flex-grow space-y-1">
-                                        <Label htmlFor="newContact">New {stockContactType} Name</Label>
-                                        <Input {...register('newContact')} placeholder={`Enter new ${stockContactType.toLowerCase()} name`} className="border-2"/>
-                                    </div>
-                                </div>
-                            )}
-                            {errors.newContact && <p className="text-sm text-destructive">{(errors.newContact as any).message}</p>}
-                        </div>
-                    )}
+                    
                     <div className="space-y-2">
                         <Label>Item Name</Label>
                         {stockType === 'purchase' ? (
@@ -708,7 +679,46 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                         />
                         {errors.paymentMethod && <p className="text-sm text-destructive">{(errors.paymentMethod as any).message}</p>}
                     </div>
-                     {stockPaymentMethod !== 'credit' && (
+
+                    {stockType && (showStockContact || stockPaymentMethod === 'credit') ? (
+                         <div className="space-y-2 animate-fade-in">
+                            <Label>{stockContactType}</Label>
+                            <Controller
+                                control={control}
+                                name="contact_id"
+                                render={({ field }) => (
+                                    <ResponsiveSelect
+                                        onValueChange={field.onChange}
+                                        value={field.value}
+                                        title={`Select a ${stockContactType}`}
+                                        placeholder={`Select a ${stockContactType}`}
+                                        items={currentStockContactItems}
+                                        className="border-2"
+                                    />
+                                )}
+                            />
+                            {errors.contact_id && <p className="text-sm text-destructive">{(errors.contact_id as any).message}</p>}
+                            
+                            {contact_id === 'new' && (
+                                <div className="flex items-end gap-2 pt-2 animate-fade-in">
+                                    <div className="flex-grow space-y-1">
+                                        <Label htmlFor="newContact">New {stockContactType} Name</Label>
+                                        <Input {...register('newContact')} placeholder={`Enter new ${stockContactType.toLowerCase()} name`} className="border-2"/>
+                                    </div>
+                                </div>
+                            )}
+                            {errors.newContact && <p className="text-sm text-destructive">{(errors.newContact as any).message}</p>}
+                        </div>
+                    ) : stockType && (
+                        <div className="pt-2">
+                           <Button type="button" variant="link" size="sm" className="p-0 h-auto" onClick={() => setShowStockContact(true)}>
+                               <Link className="mr-2 h-4 w-4"/>
+                               Link to a {stockContactType} (Optional)
+                           </Button>
+                        </div>
+                    )}
+
+                    {stockPaymentMethod !== 'credit' && (
                         <div className="space-y-2">
                             <div className="flex items-center justify-between">
                                 <Label htmlFor="actual_amount">Amount Paid/Received</Label>
