@@ -738,16 +738,22 @@ export async function transferFunds(input: z.infer<typeof TransferFundsSchema>) 
 
     const commonData = { date: input.date, actual_amount: input.amount, expected_amount: input.amount, difference: 0, category: 'Funds Transfer' };
 
+    let cashTxId, bankTxId;
+
     if (input.from === 'cash') {
-        await supabase.from('cash_transactions').insert({ ...commonData, type: 'expense', description: fromDesc });
-        await supabase.from('bank_transactions').insert({ ...commonData, type: 'deposit', description: toDesc, bank_id: input.bankId });
+        const { data: cashTx } = await supabase.from('cash_transactions').insert({ ...commonData, type: 'expense', description: fromDesc }).select('id').single();
+        cashTxId = cashTx?.id;
+        const { data: bankTx } = await supabase.from('bank_transactions').insert({ ...commonData, type: 'deposit', description: toDesc, bank_id: input.bankId }).select('id').single();
+        bankTxId = bankTx?.id;
     } else {
-        await supabase.from('bank_transactions').insert({ ...commonData, type: 'withdrawal', description: fromDesc, bank_id: input.bankId });
-        await supabase.from('cash_transactions').insert({ ...commonData, type: 'income', description: toDesc });
+        const { data: bankTx } = await supabase.from('bank_transactions').insert({ ...commonData, type: 'withdrawal', description: fromDesc, bank_id: input.bankId }).select('id').single();
+        bankTxId = bankTx?.id;
+        const { data: cashTx } = await supabase.from('cash_transactions').insert({ ...commonData, type: 'income', description: toDesc }).select('id').single();
+        cashTxId = cashTx?.id;
     }
     
     await logActivity(`Transferred ${input.amount} from ${input.from}`);
-    return { success: true };
+    return { success: true, cashTxId, bankTxId };
 }
 
 const RecordAdvancePaymentSchema = z.object({

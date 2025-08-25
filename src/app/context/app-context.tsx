@@ -189,7 +189,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     for (const item of queue) {
         try {
             let result;
-            const { localId, localFinancialId, localLedgerId, ...payloadWithoutId } = item.payload || {};
+            const { localId, localFinancialId, localLedgerId, localCashId, localBankId, ...payloadWithoutId } = item.payload || {};
 
             switch(item.action) {
                 case 'appendData':
@@ -214,7 +214,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                         });
                     }
                     break;
-                case 'transferFunds': result = await server.transferFunds(item.payload); break;
+                case 'transferFunds': 
+                    result = await server.transferFunds(payloadWithoutId); 
+                    if(result && localCashId && localBankId) {
+                        await db.cash_transactions.where({id: localCashId}).modify({ id: result.cashTxId });
+                        await db.bank_transactions.where({id: localBankId}).modify({ id: result.bankTxId });
+                    }
+                    break;
                 case 'setInitialBalances': result = await server.setInitialBalances(item.payload); break;
                 case 'deleteCategory': result = await server.deleteCategory(item.payload); break;
                 case 'addStockTransaction': result = await server.addStockTransaction(payloadWithoutId); 

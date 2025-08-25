@@ -35,7 +35,7 @@ export function useAppActions() {
 
     // DATA MUTATION ACTIONS
     const addCashTransaction = async (tx: Omit<CashTransaction, 'id' | 'createdAt' | 'deletedAt'>) => {
-        const tempId = `temp_${Date.now()}`;
+        const tempId = `temp_cash_${Date.now()}`;
         const newTxData: CashTransaction = { ...tx, id: tempId, createdAt: new Date().toISOString() };
         
         await db.cash_transactions.add(newTxData);
@@ -54,7 +54,7 @@ export function useAppActions() {
     };
 
     const addBankTransaction = async (tx: Omit<BankTransaction, 'id' | 'createdAt' | 'deletedAt'>) => {
-        const tempId = `temp_${Date.now()}`;
+        const tempId = `temp_bank_${Date.now()}`;
         const newTxData: BankTransaction = { ...tx, id: tempId, createdAt: new Date().toISOString() };
         
         await db.bank_transactions.add(newTxData);
@@ -116,7 +116,7 @@ export function useAppActions() {
     };
 
     const addLedgerTransaction = async (tx: Omit<LedgerTransaction, 'id' | 'deletedAt' | 'status' | 'paid_amount' | 'installments'>) => {
-        const tempId = `temp_${Date.now()}`;
+        const tempId = `temp_ledger_${Date.now()}`;
         const dataToSave: LedgerTransaction = { ...tx, status: 'unpaid', paid_amount: 0, installments: [], id: tempId };
         await db.ap_ar_transactions.add(dataToSave);
         await updateBalances();
@@ -167,7 +167,24 @@ export function useAppActions() {
     };
 
     const deleteTransaction = async (tableName: 'cash_transactions' | 'bank_transactions' | 'stock_transactions' | 'ap_ar_transactions', txToDelete: any) => {
+        const isTemporary = txToDelete.id.startsWith('temp_');
+        
+        // Always delete from the local DB immediately for instant UI feedback
         await db.table(tableName).delete(txToDelete.id);
+
+        if (isTemporary) {
+            // If the item was temporary, it only existed locally and in the sync queue.
+            // Find the original 'add' action in the queue and delete it.
+            const queueItemToDelete = await db.sync_queue.where('payload.localId').equals(txToDelete.id).first();
+            if (queueItemToDelete && queueItemToDelete.id) {
+                await db.sync_queue.delete(queueItemToDelete.id);
+                toast.success("Unsynced transaction removed.");
+            }
+        } else {
+            // If it's a synced item, queue a delete action for the server.
+            queueOrSync({ action: 'deleteData', payload: { tableName, id: txToDelete.id, logDescription: `Deleted item from ${tableName}` }});
+            toast.success("Moved to recycle bin.");
+        }
         
         if (tableName === 'stock_transactions') {
             const linkedCash = await db.cash_transactions.where({ linkedStockTxId: txToDelete.id }).first();
@@ -181,8 +198,6 @@ export function useAppActions() {
         }
         
         await updateBalances();
-        queueOrSync({ action: 'deleteData', payload: { tableName, id: txToDelete.id, logDescription: `Deleted item from ${tableName}` }});
-        toast.success("Moved to recycle bin.");
     };
     
     const setFontSize = (size: 'sm' | 'base' | 'lg') => db.app_state.update(1, { fontSize: size });
@@ -210,17 +225,19 @@ export function useAppActions() {
     const transferFunds = async (from: 'cash' | 'bank', amount: number, date: string, bankId: string, description?: string) => {
         const fromDesc = `Transfer to ${from === 'cash' ? `Bank` : 'Cash'}: ${description || 'Funds Transfer'}`;
         const toDesc = `Transfer from ${from === 'cash' ? 'Cash' : `Bank`}: ${description || 'Funds Transfer'}`;
+        const tempCashId = `temp_tf_cash_${Date.now()}`;
+        const tempBankId = `temp_tf_bank_${Date.now()}`;
 
         if (from === 'cash') {
-            await db.cash_transactions.add({ id: `temp_tf_cash_${Date.now()}`, date, type: 'expense', category: 'Funds Transfer', description: fromDesc, actual_amount: amount, expected_amount: amount, difference: 0, createdAt: new Date().toISOString() });
-            await db.bank_transactions.add({ id: `temp_tf_bank_${Date.now()}`, date, type: 'deposit', category: 'Funds Transfer', description: toDesc, actual_amount: amount, expected_amount: amount, difference: 0, bank_id: bankId, createdAt: new Date().toISOString() });
+            await db.cash_transactions.add({ id: tempCashId, date, type: 'expense', category: 'Funds Transfer', description: fromDesc, actual_amount: amount, expected_amount: amount, difference: 0, createdAt: new Date().toISOString() });
+            await db.bank_transactions.add({ id: tempBankId, date, type: 'deposit', category: 'Funds Transfer', description: toDesc, actual_amount: amount, expected_amount: amount, difference: 0, bank_id: bankId, createdAt: new Date().toISOString() });
         } else {
-            await db.bank_transactions.add({ id: `temp_tf_bank_${Date.now()}`, date, type: 'withdrawal', category: 'Funds Transfer', description: fromDesc, actual_amount: amount, expected_amount: amount, difference: 0, bank_id: bankId, createdAt: new Date().toISOString() });
-            await db.cash_transactions.add({ id: `temp_tf_cash_${Date.now()}`, date, type: 'income', category: 'Funds Transfer', description: toDesc, actual_amount: amount, expected_amount: amount, difference: 0, createdAt: new Date().toISOString() });
+            await db.bank_transactions.add({ id: tempBankId, date, type: 'withdrawal', category: 'Funds Transfer', description: fromDesc, actual_amount: amount, expected_amount: amount, difference: 0, bank_id: bankId, createdAt: new Date().toISOString() });
+            await db.cash_transactions.add({ id: tempCashId, date, type: 'income', category: 'Funds Transfer', description: toDesc, actual_amount: amount, expected_amount: amount, difference: 0, createdAt: new Date().toISOString() });
         }
         
         await updateBalances();
-        queueOrSync({ action: 'transferFunds', payload: { from, amount, date, bankId, description } });
+        queueOrSync({ action: 'transferFunds', payload: { from, amount, date, bankId, description, localCashId: tempCashId, localBankId: tempBankId } });
         toast.success("Transfer recorded locally.");
     };
 

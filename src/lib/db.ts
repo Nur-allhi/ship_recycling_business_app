@@ -52,7 +52,7 @@ export class AppDatabase extends Dexie {
             clients: '++id, name',
             initial_stock: '++id, name',
             monthly_snapshots: '++id, snapshot_date',
-            sync_queue: '++id, timestamp',
+            sync_queue: '++id, timestamp, payload.localId',
         });
     }
 }
