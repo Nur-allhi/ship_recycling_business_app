@@ -23,6 +23,7 @@ import { Separator } from './ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Alert, AlertTitle, AlertDescription } from './ui/alert';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { Checkbox } from './ui/checkbox';
 
 const baseSchema = z.object({
     date: z.date({ required_error: "Date is required." }),
@@ -36,6 +37,7 @@ const cashSchema = baseSchema.extend({
     expected_amount: z.coerce.number().optional(),
     actual_amount: z.coerce.number().optional(),
     difference_reason: z.string().optional(),
+    payLater: z.boolean().optional(),
 });
 
 const bankSchema = baseSchema.extend({
@@ -46,6 +48,7 @@ const bankSchema = baseSchema.extend({
     expected_amount: z.coerce.number().optional(),
     actual_amount: z.coerce.number().optional(),
     difference_reason: z.string().optional(),
+    payLater: z.boolean().optional(),
 });
 
 
@@ -147,12 +150,24 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
     currency,
   } = useAppContext();
   
-  const currentSchema = formSchemas[transactionType];
+  const currentSchema = useMemo(() => {
+    let schema = formSchemas[transactionType];
+    if (transactionType === 'cash' || transactionType === 'bank') {
+        schema = schema.superRefine((data: any, ctx) => {
+            if (data.payLater && !data.contact_id) {
+                ctx.addIssue({ code: 'custom', message: 'A vendor is required for pay later transactions.', path: ['contact_id'] });
+            }
+        });
+    }
+    return schema;
+  }, [transactionType]);
+
 
   const { register, handleSubmit, control, reset, setValue, watch, formState: { errors, isSubmitting } } = useForm({
     resolver: zodResolver(currentSchema),
     defaultValues: {
         date: new Date(),
+        payLater: false,
     }
   });
   
@@ -169,7 +184,10 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
   const [isNewStockItem, setIsNewStockItem] = useState(false);
   const weight = useWatch({ control, name: 'weight' });
   const pricePerKg = useWatch({ control, name: 'pricePerKg' });
-
+  const payLater = watch('payLater');
+  const cashCategoryInfo = useMemo(() => (cashCategories || []).find(c => c.name === cashCategoryName), [cashCategories, cashCategoryName]);
+  const bankCategoryInfo = useMemo(() => (bankCategories || []).find(c => c.name === bankCategoryName), [bankCategories, bankCategoryName]);
+  const isExpense = (transactionType === 'cash' && cashCategoryInfo?.direction === 'debit') || (transactionType === 'bank' && bankCategoryInfo?.direction === 'debit');
 
   useEffect(() => {
     // When the user is in simple mode, keep both amounts in sync
@@ -212,6 +230,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
   useEffect(() => {
     reset({
         date: new Date(),
+        payLater: false,
     });
     setIsNewStockItem(false);
     setIsCashSettlement(false);
@@ -239,104 +258,117 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
         let finalActualAmount = showAdvancedFields ? data.actual_amount : data.amount;
         let finalDifference = finalActualAmount - finalExpectedAmount;
         
-        switch(transactionType) {
-            case 'cash': {
-                const categoryInfo = (cashCategories || []).find(c => c.name === data.category);
-                if (!categoryInfo) throw new Error("Category information not found.");
-                await addCashTransaction({
-                    type: categoryInfo.direction === 'credit' ? 'income' : 'expense',
-                    expected_amount: finalExpectedAmount,
-                    actual_amount: finalActualAmount,
-                    difference: finalDifference,
-                    difference_reason: data.difference_reason,
-                    description: data.description!,
-                    category: data.category!,
-                    date: transactionDate,
-                    contact_id: data.contact_id,
-                });
-                break;
-            }
-            case 'bank': {
-                 const categoryInfo = (bankCategories || []).find(c => c.name === data.category);
-                 if (!categoryInfo) throw new Error("Category information not found.");
-                 await addBankTransaction({
-                    type: categoryInfo.direction === 'credit' ? 'deposit' : 'withdrawal',
-                    expected_amount: finalExpectedAmount,
-                    actual_amount: finalActualAmount,
-                    difference: finalDifference,
-                    difference_reason: data.difference_reason,
-                    description: data.description!,
-                    category: data.category!,
-                    date: transactionDate,
-                    bank_id: data.bank_id!,
-                    contact_id: data.contact_id,
-                 });
-                break;
-            }
-            case 'stock':
-                let stockContactId: string | undefined;
-                let stockContactName: string | undefined;
-                if (data.contact_id === 'new') {
-                    const newContact = data.stockType === 'purchase' ? await addVendor(data.newContact!) : await addClient(data.newContact!);
-                    if (!newContact) throw new Error(`Failed to create new ${data.stockType === 'purchase' ? 'vendor' : 'client'}.`);
-                    stockContactId = newContact.id;
-                    stockContactName = newContact.name;
-                } else if (data.contact_id) {
-                    stockContactId = data.contact_id;
-                    const contactList = data.stockType === 'purchase' ? vendors : clients;
-                    stockContactName = (contactList || []).find(c => c.id === stockContactId)?.name;
-                }
-                
-                await addStockTransaction({
-                    type: data.stockType!,
-                    stockItemName: data.stockItemName!,
-                    weight: data.weight!,
-                    pricePerKg: data.pricePerKg!,
-                    paymentMethod: data.paymentMethod!,
-                    description: data.description,
-                    date: transactionDate,
-                    expected_amount: data.expected_amount,
-                    actual_amount: data.actual_amount,
-                    difference: data.actual_amount - data.expected_amount,
-                    difference_reason: data.difference_reason,
-                    contact_id: stockContactId,
-                    contact_name: stockContactName,
-                }, data.bank_id);
-                break;
-            case 'transfer':
-                const bankId = data.transferFrom === 'cash' ? data.transferToBankId : data.transferFromBankId;
-                if (!bankId) throw new Error("A bank account must be selected for the transfer.");
-                await transferFunds(data.transferFrom!, data.amount!, transactionDate, bankId, data.description);
-                break;
-            case 'ap_ar':
-                let ledgerContactId: string | undefined;
-                let ledgerContactName: string | undefined;
-                const contactType = data.ledgerType === 'payable' ? 'vendor' : 'client';
-                const contactList = data.ledgerType === 'payable' ? vendors : clients;
+        // Handle "Pay Later" for cash/bank expenses
+        if ((transactionType === 'cash' || transactionType === 'bank') && data.payLater) {
+            const contact = (vendors || []).find(v => v.id === data.contact_id);
+            if (!contact) throw new Error("Vendor not found for pay later transaction.");
 
-                if (data.contact_id === 'new') {
-                    const newContact = await (data.ledgerType === 'payable' ? addVendor(data.newContact!) : await addClient(data.newContact!));
-                    if (!newContact) throw new Error(`Failed to create new ${contactType}.`);
-                    ledgerContactId = newContact.id;
-                    ledgerContactName = newContact.name;
-                } else {
-                    ledgerContactId = data.contact_id;
-                    ledgerContactName = (contactList || []).find(c => c.id === ledgerContactId)?.name;
+            await addLedgerTransaction({
+                type: 'payable',
+                description: data.description!,
+                amount: data.amount!,
+                date: transactionDate,
+                contact_id: data.contact_id!,
+                contact_name: contact.name,
+            });
+        } else {
+            switch(transactionType) {
+                case 'cash': {
+                    if (!cashCategoryInfo) throw new Error("Category information not found.");
+                    await addCashTransaction({
+                        type: cashCategoryInfo.direction === 'credit' ? 'income' : 'expense',
+                        expected_amount: finalExpectedAmount,
+                        actual_amount: finalActualAmount,
+                        difference: finalDifference,
+                        difference_reason: data.difference_reason,
+                        description: data.description!,
+                        category: data.category!,
+                        date: transactionDate,
+                        contact_id: data.contact_id,
+                    });
+                    break;
                 }
-                
-                if(!ledgerContactId || !ledgerContactName) {
-                    throw new Error("A contact is required for this transaction.");
+                case 'bank': {
+                     if (!bankCategoryInfo) throw new Error("Category information not found.");
+                     await addBankTransaction({
+                        type: bankCategoryInfo.direction === 'credit' ? 'deposit' : 'withdrawal',
+                        expected_amount: finalExpectedAmount,
+                        actual_amount: finalActualAmount,
+                        difference: finalDifference,
+                        difference_reason: data.difference_reason,
+                        description: data.description!,
+                        category: data.category!,
+                        date: transactionDate,
+                        bank_id: data.bank_id!,
+                        contact_id: data.contact_id,
+                     });
+                    break;
                 }
+                case 'stock':
+                    let stockContactId: string | undefined;
+                    let stockContactName: string | undefined;
+                    if (data.contact_id === 'new') {
+                        const newContact = data.stockType === 'purchase' ? await addVendor(data.newContact!) : await addClient(data.newContact!);
+                        if (!newContact) throw new Error(`Failed to create new ${data.stockType === 'purchase' ? 'vendor' : 'client'}.`);
+                        stockContactId = newContact.id;
+                        stockContactName = newContact.name;
+                    } else if (data.contact_id) {
+                        stockContactId = data.contact_id;
+                        const contactList = data.stockType === 'purchase' ? vendors : clients;
+                        stockContactName = (contactList || []).find(c => c.id === stockContactId)?.name;
+                    }
+                    
+                    await addStockTransaction({
+                        type: data.stockType!,
+                        stockItemName: data.stockItemName!,
+                        weight: data.weight!,
+                        pricePerKg: data.pricePerKg!,
+                        paymentMethod: data.paymentMethod!,
+                        description: data.description,
+                        date: transactionDate,
+                        expected_amount: data.expected_amount,
+                        actual_amount: data.actual_amount,
+                        difference: data.actual_amount - data.expected_amount,
+                        difference_reason: data.difference_reason,
+                        contact_id: stockContactId,
+                        contact_name: stockContactName,
+                    }, data.bank_id);
+                    break;
+                case 'transfer':
+                    const bankId = data.transferFrom === 'cash' ? data.transferToBankId : data.transferFromBankId;
+                    if (!bankId) throw new Error("A bank account must be selected for the transfer.");
+                    await transferFunds(data.transferFrom!, data.amount!, transactionDate, bankId, data.description);
+                    break;
+                case 'ap_ar':
+                    let ledgerContactId: string | undefined;
+                    let ledgerContactName: string | undefined;
+                    const contactType = data.ledgerType === 'payable' ? 'vendor' : 'client';
+                    const contactList = data.ledgerType === 'payable' ? vendors : clients;
 
-                await addLedgerTransaction({
-                    type: data.ledgerType!,
-                    description: data.description!,
-                    amount: data.amount!,
-                    date: transactionDate,
-                    contact_id: ledgerContactId,
-                    contact_name: ledgerContactName,
-                });
-                break;
+                    if (data.contact_id === 'new') {
+                        const newContact = await (data.ledgerType === 'payable' ? addVendor(data.newContact!) : await addClient(data.newContact!));
+                        if (!newContact) throw new Error(`Failed to create new ${contactType}.`);
+                        ledgerContactId = newContact.id;
+                        ledgerContactName = newContact.name;
+                    } else {
+                        ledgerContactId = data.contact_id;
+                        ledgerContactName = (contactList || []).find(c => c.id === ledgerContactId)?.name;
+                    }
+                    
+                    if(!ledgerContactId || !ledgerContactName) {
+                        throw new Error("A contact is required for this transaction.");
+                    }
+
+                    await addLedgerTransaction({
+                        type: data.ledgerType!,
+                        description: data.description!,
+                        amount: data.amount!,
+                        date: transactionDate,
+                        contact_id: ledgerContactId,
+                        contact_name: ledgerContactName,
+                    });
+                    break;
+            }
         }
         toast.success("Transaction Added", { description: "Your transaction has been successfully recorded." });
         setDialogOpen(false);
@@ -480,6 +512,51 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
         {errors.contact_id && <p className="text-sm text-destructive">{(errors.contact_id as any).message}</p>}
     </div>
   );
+  
+  const payLaterFields = (
+    <>
+       <div className="flex items-center space-x-2 pt-2">
+         <Controller
+            control={control}
+            name="payLater"
+            render={({ field }) => (
+                <Checkbox
+                    id="payLater"
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                    disabled={!isExpense}
+                />
+             )}
+        />
+        <label
+            htmlFor="payLater"
+            className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+        >
+            Pay Later (Create Payable)
+        </label>
+       </div>
+       {payLater && isExpense && (
+         <div className="space-y-2 animate-fade-in pt-2">
+            <Label>Vendor</Label>
+            <Controller
+                control={control}
+                name="contact_id"
+                render={({ field }) => (
+                    <ResponsiveSelect 
+                        onValueChange={field.onChange} 
+                        value={field.value}
+                        title="Select a Vendor"
+                        placeholder="Select a Vendor"
+                        items={vendorContactItems}
+                        className="border-2"
+                    />
+                )}
+            />
+            {errors.contact_id && <p className="text-sm text-destructive">{(errors.contact_id as any).message}</p>}
+        </div>
+       )}
+    </>
+  );
 
   return (
     <>
@@ -531,13 +608,20 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                         />
                         {errors.category && <p className="text-sm text-destructive">{(errors.category as any).message}</p>}
                     </div>
-                    {isCashSettlement && settlementContactFields}
+                    {isCashSettlement ? settlementContactFields : payLaterFields}
                     <div className="space-y-2">
                         <Label htmlFor="description-cash">Description</Label>
                         <Input id="description-cash" {...register('description')} placeholder="e.g., Weekly groceries" className="border-2"/>
                         {errors.description && <p className="text-sm text-destructive">{(errors.description as any).message}</p>}
                     </div>
-                    {renderDiscrepancyFields()}
+                    {!payLater && renderDiscrepancyFields()}
+                    {payLater && (
+                        <div className="space-y-2">
+                            <Label htmlFor="amount">Amount</Label>
+                            <Input id="amount" type="number" step="0.01" {...register('amount')} placeholder="e.g., 1000.00" className="border-2"/>
+                            {errors.amount && <p className="text-sm text-destructive">{(errors.amount as any).message}</p>}
+                        </div>
+                    )}
                   </div>
               )}
 
@@ -580,13 +664,20 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                         />
                         {errors.category && <p className="text-sm text-destructive">{(errors.category as any).message}</p>}
                     </div>
-                    {isBankSettlement && settlementContactFields}
+                    {isBankSettlement ? settlementContactFields : payLaterFields}
                     <div className="space-y-2">
                         <Label htmlFor="description-bank">Description</Label>
                         <Input id="description-bank" {...register('description')} placeholder="e.g., Monthly salary" className="border-2"/>
                         {errors.description && <p className="text-sm text-destructive">{(errors.description as any).message}</p>}
                     </div>
-                    {renderDiscrepancyFields()}
+                     {!payLater && renderDiscrepancyFields()}
+                     {payLater && (
+                        <div className="space-y-2">
+                            <Label htmlFor="amount">Amount</Label>
+                            <Input id="amount" type="number" step="0.01" {...register('amount')} placeholder="e.g., 1000.00" className="border-2"/>
+                            {errors.amount && <p className="text-sm text-destructive">{(errors.amount as any).message}</p>}
+                        </div>
+                    )}
                   </div>
               )}
               
