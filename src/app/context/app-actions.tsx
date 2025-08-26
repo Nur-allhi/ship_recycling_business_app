@@ -293,16 +293,16 @@ export function useAppActions() {
     };
 
     const recordPayment = async (contactId: string, contactName: string, paymentAmount: number, paymentMethod: 'cash' | 'bank', paymentDate: Date, ledgerType: 'payable' | 'receivable', bankId?: string) => {
-        const tempId = `temp_payment_${Date.now()}`;
+        const tempFinancialId = `temp_payment_fin_${Date.now()}`;
         const desc = `Payment ${ledgerType === 'payable' ? 'to' : 'from'} ${contactName}`;
         const category = ledgerType === 'payable' ? 'A/P Settlement' : 'A/R Settlement';
         const isoDate = toYYYYMMDD(paymentDate);
 
         // Add the financial transaction locally
         if (paymentMethod === 'cash') {
-            await db.cash_transactions.add({ id: tempId, date: isoDate, type: ledgerType === 'payable' ? 'expense' : 'income', category, description: desc, actual_amount: paymentAmount, expected_amount: paymentAmount, difference: 0, createdAt: new Date().toISOString(), contact_id: contactId });
+            await db.cash_transactions.add({ id: tempFinancialId, date: isoDate, type: ledgerType === 'payable' ? 'expense' : 'income', category, description: desc, actual_amount: paymentAmount, expected_amount: paymentAmount, difference: 0, createdAt: new Date().toISOString(), contact_id: contactId });
         } else {
-            await db.bank_transactions.add({ id: tempId, date: isoDate, type: ledgerType === 'payable' ? 'withdrawal' : 'deposit', category, description: desc, actual_amount: paymentAmount, expected_amount: paymentAmount, difference: 0, bank_id: bankId!, createdAt: new Date().toISOString(), contact_id: contactId });
+            await db.bank_transactions.add({ id: tempFinancialId, date: isoDate, type: ledgerType === 'payable' ? 'withdrawal' : 'deposit', category, description: desc, actual_amount: paymentAmount, expected_amount: paymentAmount, difference: 0, bank_id: bankId!, createdAt: new Date().toISOString(), contact_id: contactId });
         }
 
         // Apply payment to local ledger transactions
@@ -339,7 +339,7 @@ export function useAppActions() {
         await updateBalances();
         queueOrSync({ 
             action: 'recordPaymentAgainstTotal', 
-            payload: { contact_id: contactId, contact_name: contactName, payment_amount: paymentAmount, payment_date: isoDate, payment_method: paymentMethod, ledger_type: ledgerType, bank_id: bankId, localId: tempId }
+            payload: { contact_id: contactId, contact_name: contactName, payment_amount: paymentAmount, payment_date: isoDate, payment_method: paymentMethod, ledger_type: ledgerType, bank_id: bankId, localFinancialId: tempFinancialId, description: desc }
         });
         toast.success("Payment recorded locally.");
     };

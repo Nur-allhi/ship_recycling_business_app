@@ -202,7 +202,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 case 'updateData': result = await server.updateData(item.payload); break;
                 case 'deleteData': result = await server.deleteData(item.payload); break;
                 case 'restoreData': result = await server.restoreData(item.payload); break;
-                case 'recordPaymentAgainstTotal': result = await server.recordPaymentAgainstTotal(item.payload); break;
+                case 'recordPaymentAgainstTotal': 
+                    result = await server.recordPaymentAgainstTotal(payloadWithoutId); 
+                    if(result && result.financialTxId && localFinancialId) {
+                        const table = payloadWithoutId.payment_method === 'cash' ? db.cash_transactions : db.bank_transactions;
+                        await table.where({id: localFinancialId}).modify({id: result.financialTxId});
+                    }
+                    break;
                 case 'recordDirectPayment': result = await server.recordDirectPayment(item.payload); break;
                 case 'recordAdvancePayment':
                     result = await server.recordAdvancePayment(payloadWithoutId);

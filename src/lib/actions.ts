@@ -501,6 +501,7 @@ const RecordPaymentAgainstTotalInputSchema = z.object({
     payment_method: z.enum(['cash', 'bank']),
     ledger_type: z.enum(['payable', 'receivable']),
     bank_id: z.string().optional(),
+    description: z.string(),
 });
 
 
@@ -511,15 +512,43 @@ export async function recordPaymentAgainstTotal(input: z.infer<typeof RecordPaym
     const supabase = await getAuthenticatedSupabaseClient();
     
     try {
+        // Create the corresponding cash or bank transaction on the server
+        const financialTxData = {
+            date: input.payment_date,
+            description: input.description,
+            category: input.ledger_type === 'payable' ? 'A/P Settlement' : 'A/R Settlement',
+            expected_amount: input.payment_amount,
+            actual_amount: input.payment_amount,
+            difference: 0,
+            contact_id: input.contact_id,
+        };
+
+        let financialTxId: string;
+
+        if (input.payment_method === 'cash') {
+            const { data: tx, error } = await supabase.from('cash_transactions').insert({
+                ...financialTxData,
+                type: input.ledger_type === 'payable' ? 'expense' : 'income'
+            }).select('id').single();
+            if (error) throw error;
+            financialTxId = tx.id;
+        } else {
+            const { data: tx, error } = await supabase.from('bank_transactions').insert({
+                ...financialTxData,
+                type: input.ledger_type === 'payable' ? 'withdrawal' : 'deposit',
+                bank_id: input.bank_id!
+            }).select('id').single();
+            if (error) throw error;
+            financialTxId = tx.id;
+        }
+        
         // Shared logic to apply payment to A/P or A/R ledger
         await applyPaymentToLedger(supabase, input.contact_id, input.payment_amount, input.payment_date, input.payment_method);
-        
-        // No need to create financial transaction here, it's created optimistically on the client
         
         const logDescription = `Recorded payment of ${input.payment_amount} ${input.ledger_type === 'payable' ? 'to' : 'from'} ${input.contact_name} via ${input.payment_method}`;
         await logActivity(logDescription);
 
-        return { success: true };
+        return { success: true, financialTxId };
 
     } catch (error: any) {
         console.error("Error recording payment:", error);
