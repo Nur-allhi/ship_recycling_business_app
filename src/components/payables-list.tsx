@@ -13,6 +13,7 @@ import { RecordAdvanceDialog } from "./record-advance-dialog";
 import { Progress } from "./ui/progress";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./ui/tooltip";
+import { ContactHistoryDialog } from "./contact-history-dialog";
 
 interface AggregatedContact {
     contact_id: string;
@@ -28,6 +29,7 @@ export function PayablesList() {
     const { ledgerTransactions, currency, user, vendors } = useAppContext();
     const [settleDialogState, setSettleDialogState] = useState<{isOpen: boolean, contact: AggregatedContact | null}>({isOpen: false, contact: null});
     const [advanceDialogState, setAdvanceDialogState] = useState<{isOpen: boolean, contact: AggregatedContact | null, ledgerType: 'payable' | 'receivable' | null}>({isOpen: false, contact: null, ledgerType: null});
+    const [historyDialogState, setHistoryDialogState] = useState<{isOpen: boolean, contact: AggregatedContact | null}>({isOpen: false, contact: null});
     const isMobile = useIsMobile();
     const isAdmin = user?.role === 'admin';
 
@@ -93,6 +95,10 @@ export function PayablesList() {
     const handleAdvanceClick = (contact: AggregatedContact) => {
         setAdvanceDialogState({ isOpen: true, contact, ledgerType: 'payable' });
     }
+    
+    const handleHistoryClick = (contact: AggregatedContact) => {
+        setHistoryDialogState({ isOpen: true, contact });
+    }
 
     const renderDesktopView = () => (
         <div className="overflow-x-auto">
@@ -112,7 +118,9 @@ export function PayablesList() {
                             return (
                             <TableRow key={contact.contact_id}>
                                 <TableCell className="font-medium">
-                                    <div>{contact.contact_name}</div>
+                                    <div className="cursor-pointer hover:underline" onClick={() => handleHistoryClick(contact)}>
+                                        {contact.contact_name}
+                                    </div>
                                     <div className="flex items-center gap-2 mt-1">
                                         <Progress value={progress} className="h-2 w-24" />
                                         <span className="text-xs text-muted-foreground font-mono">{progress.toFixed(0)}%</span>
@@ -173,7 +181,9 @@ export function PayablesList() {
                             <CardContent className="p-4 space-y-3">
                                 <div className="flex justify-between items-start">
                                     <div>
-                                        <div className="font-semibold">{contact.contact_name}</div>
+                                        <div className="font-semibold cursor-pointer hover:underline" onClick={() => handleHistoryClick(contact)}>
+                                            {contact.contact_name}
+                                        </div>
                                         <div className="text-sm text-muted-foreground">Balance</div>
                                     </div>
                                     <div className="text-right">
@@ -240,6 +250,14 @@ export function PayablesList() {
                     setIsOpen={(isOpen) => setAdvanceDialogState({ isOpen, contact: null, ledgerType: null })}
                     contact={advanceDialogState.contact}
                     ledgerType={advanceDialogState.ledgerType!}
+                />
+            )}
+            {historyDialogState.contact && (
+                 <ContactHistoryDialog 
+                    isOpen={historyDialogState.isOpen}
+                    setIsOpen={(isOpen) => setHistoryDialogState({ isOpen, contact: null })}
+                    contact={historyDialogState.contact}
+                    contactType="vendor"
                 />
             )}
         </>
