@@ -255,3 +255,19 @@ ALTER TABLE bank_transactions ADD COLUMN IF NOT EXISTS advance_id UUID REFERENCE
 ALTER TABLE cash_transactions ADD COLUMN IF NOT EXISTS contact_id UUID;
 ALTER TABLE bank_transactions ADD COLUMN IF NOT EXISTS contact_id UUID;
 ```
+
+### 4.7. Empty Recycle Bin Stored Procedure
+This adds a stored procedure to permanently delete items from the recycle bin, bypassing RLS policies that might interfere.
+
+```sql
+-- Create the stored procedure to empty the recycle bin
+CREATE OR REPLACE FUNCTION permanently_empty_recycle_bin()
+RETURNS void AS $$
+BEGIN
+    DELETE FROM cash_transactions WHERE "deletedAt" IS NOT NULL;
+    DELETE FROM bank_transactions WHERE "deletedAt" IS NOT NULL;
+    DELETE FROM stock_transactions WHERE "deletedAt" IS NOT NULL;
+    DELETE FROM ap_ar_transactions WHERE "deletedAt" IS NOT NULL;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+```

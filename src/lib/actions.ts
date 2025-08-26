@@ -287,18 +287,13 @@ export async function emptyRecycleBin() {
         if (session?.role !== 'admin') throw new Error("Only admins can empty the recycle bin.");
 
         const supabase = await getAuthenticatedSupabaseClient();
-        const tablesToClear = ['cash_transactions', 'bank_transactions', 'stock_transactions', 'ap_ar_transactions'];
+        
+        // Call the new stored procedure
+        const { error } = await supabase.rpc('permanently_empty_recycle_bin');
 
-        for (const tableName of tablesToClear) {
-            const { error } = await supabase
-                .from(tableName)
-                .delete()
-                .not('deletedAt', 'is', null);
-
-            if (error && error.code !== '42P01') {
-                // If table doesn't exist, it's fine. Otherwise, throw.
-                throw new Error(`Failed to empty recycle bin for ${tableName}: ${error.message}`);
-            }
+        if (error) {
+            console.error("Error calling empty recycle bin RPC:", error);
+            throw new Error(`Failed to empty recycle bin: ${error.message}`);
         }
         
         await logActivity("Emptied the recycle bin.");
