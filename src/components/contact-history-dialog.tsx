@@ -44,11 +44,11 @@ export function ContactHistoryDialog({ isOpen, setIsOpen, contact, contactType }
   }, [ledgerTransactions, contact.id]);
 
   const combinedHistory = useMemo(() => {
-    const history: (LedgerTransaction | (PaymentInstallment & { originalDescription: string }))[] = [];
+    const history: (LedgerTransaction | (PaymentInstallment & { originalDescription: string, isSettlement: true }))[] = [];
     transactions.forEach(tx => {
         history.push(tx);
         (tx.installments || []).forEach(inst => {
-            history.push({ ...inst, originalDescription: tx.description });
+            history.push({ ...inst, originalDescription: tx.description, isSettlement: true });
         });
     });
     return history.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
@@ -109,7 +109,11 @@ export function ContactHistoryDialog({ isOpen, setIsOpen, contact, contactType }
         let credit = 0;
         let description = '';
 
-        if ('type' in item) { // LedgerTransaction
+        if ('isSettlement' in item) { // PaymentInstallment
+             credit = item.amount;
+             runningBalance -= credit;
+             description = `Payment for: ${item.originalDescription}`;
+        } else { // LedgerTransaction
             if(item.type === 'advance') {
                 credit = Math.abs(item.amount);
                 runningBalance -= credit;
@@ -118,10 +122,6 @@ export function ContactHistoryDialog({ isOpen, setIsOpen, contact, contactType }
                 runningBalance += item.amount;
             }
             description = item.description;
-        } else { // PaymentInstallment
-            credit = item.amount;
-            runningBalance -= credit;
-            description = `Payment for: ${item.originalDescription}`;
         }
 
         return [
@@ -225,22 +225,27 @@ export function ContactHistoryDialog({ isOpen, setIsOpen, contact, contactType }
                             let credit = 0;
                             let description = '';
                             let isInstallment = false;
-
-                            if ('type' in item) { // LedgerTransaction
+                            
+                            if ('isSettlement' in item) { // This is a PaymentInstallment
+                                credit = item.amount;
+                                balance -= credit;
+                                description = item.originalDescription;
+                                isInstallment = true;
+                            } else { // This is a LedgerTransaction
                                 if (item.type === 'advance') {
                                     credit = Math.abs(item.amount);
                                     balance -= credit;
                                 } else {
                                     debit = item.amount;
-                                    balance += item.amount;
+                                    balance += debit;
                                 }
                                 description = item.description;
-                            } else { // PaymentInstallment
-                                credit = item.amount;
-                                balance -= item.amount;
-                                description = item.originalDescription;
-                                isInstallment = true;
                             }
+                            
+                            // A payment installment row should only show credit.
+                            // A main transaction row should only show debit.
+                            if (isInstallment) debit = 0;
+                            else if (item.type !== 'advance') credit = 0;
 
                             return (
                                 <TableRow key={'id' in item ? item.id : item.createdAt}>
@@ -253,7 +258,7 @@ export function ContactHistoryDialog({ isOpen, setIsOpen, contact, contactType }
                                                 <span>{description}</span>
                                             </div>
                                         ) : (
-                                           <span className={item.type === 'advance' ? 'text-blue-600' : ''}>{description}</span>
+                                           <span className={'type' in item && item.type === 'advance' ? 'text-blue-600' : ''}>{description}</span>
                                         )}
                                     </TableCell>
                                     <TableCell className="text-right font-mono">{debit > 0 ? formatCurrency(debit) : '-'}</TableCell>
@@ -297,3 +302,4 @@ export function ContactHistoryDialog({ isOpen, setIsOpen, contact, contactType }
     </Dialog>
   );
 }
+
