@@ -12,7 +12,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter as TableFoot } from "./ui/table";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
 import { Badge } from "./ui/badge";
 import { format } from "date-fns";
 import { Button } from "./ui/button";
@@ -34,6 +34,11 @@ declare module 'jspdf' {
     }
 }
 
+// Type guard to check if an item is a PaymentInstallment
+const isPaymentInstallment = (item: any): item is PaymentInstallment & { originalDescription: string, isSettlement: true } => {
+    return 'isSettlement' in item;
+};
+
 export function ContactHistoryDialog({ isOpen, setIsOpen, contact, contactType }: ContactHistoryDialogProps) {
   const { ledgerTransactions, currency } = useAppContext();
 
@@ -47,11 +52,22 @@ export function ContactHistoryDialog({ isOpen, setIsOpen, contact, contactType }
     const history: (LedgerTransaction | (PaymentInstallment & { originalDescription: string, isSettlement: true }))[] = [];
     transactions.forEach(tx => {
         history.push(tx);
-        (tx.installments || []).forEach(inst => {
-            history.push({ ...inst, originalDescription: tx.description, isSettlement: true });
-        });
+        // Ensure installments is an array before trying to iterate
+        if (Array.isArray(tx.installments)) {
+            tx.installments.forEach(inst => {
+                history.push({ ...inst, originalDescription: tx.description, isSettlement: true });
+            });
+        }
     });
-    return history.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    return history.sort((a, b) => {
+        const dateA = new Date(a.date).getTime();
+        const dateB = new Date(b.date).getTime();
+        if (dateA !== dateB) return dateA - dateB;
+        // If dates are the same, settlements should come after the charge
+        if(isPaymentInstallment(a) && !isPaymentInstallment(b)) return 1;
+        if(!isPaymentInstallment(a) && isPaymentInstallment(b)) return -1;
+        return 0;
+    });
   }, [transactions]);
 
 
@@ -109,7 +125,7 @@ export function ContactHistoryDialog({ isOpen, setIsOpen, contact, contactType }
         let credit = 0;
         let description = '';
 
-        if ('isSettlement' in item) { // PaymentInstallment
+        if (isPaymentInstallment(item)) { // PaymentInstallment
              credit = item.amount;
              runningBalance -= credit;
              description = `Payment for: ${item.originalDescription}`;
@@ -206,7 +222,23 @@ export function ContactHistoryDialog({ isOpen, setIsOpen, contact, contactType }
             A complete record of all transactions with this {contactType}.
           </DialogDescription>
         </DialogHeader>
-        <div className="max-h-[60vh] overflow-y-auto pr-4">
+
+        <div className="grid grid-cols-3 gap-4 my-4 p-4 rounded-lg bg-muted/50">
+            <div className="text-center">
+                <p className="text-sm text-muted-foreground">Total Debit</p>
+                <p className="text-xl font-bold font-mono">{formatCurrency(totalDebit)}</p>
+            </div>
+             <div className="text-center">
+                <p className="text-sm text-muted-foreground">Total Credit</p>
+                <p className="text-xl font-bold font-mono text-green-600">{formatCurrency(totalCredit)}</p>
+            </div>
+             <div className="text-center">
+                <p className="text-sm text-muted-foreground">Balance Due</p>
+                <p className="text-xl font-bold font-mono text-destructive">{formatCurrency(finalBalance)}</p>
+            </div>
+        </div>
+
+        <div className="max-h-[50vh] overflow-y-auto pr-4">
             <Table>
                 <TableHeader>
                     <TableRow>
@@ -220,18 +252,16 @@ export function ContactHistoryDialog({ isOpen, setIsOpen, contact, contactType }
                 <TableBody>
                     {combinedHistory.length > 0 ? (() => {
                         let balance = 0;
-                        return combinedHistory.map(item => {
+                        return combinedHistory.map((item, index) => {
                             let debit = 0;
                             let credit = 0;
                             let description = '';
-                            let isInstallment = false;
                             
-                            if ('isSettlement' in item) { // This is a PaymentInstallment
+                            if (isPaymentInstallment(item)) {
                                 credit = item.amount;
                                 balance -= credit;
                                 description = item.originalDescription;
-                                isInstallment = true;
-                            } else { // This is a LedgerTransaction
+                            } else { // LedgerTransaction
                                 if (item.type === 'advance') {
                                     credit = Math.abs(item.amount);
                                     balance -= credit;
@@ -241,24 +271,19 @@ export function ContactHistoryDialog({ isOpen, setIsOpen, contact, contactType }
                                 }
                                 description = item.description;
                             }
-                            
-                            // A payment installment row should only show credit.
-                            // A main transaction row should only show debit.
-                            if (isInstallment) debit = 0;
-                            else if (item.type !== 'advance') credit = 0;
 
                             return (
-                                <TableRow key={'id' in item ? item.id : item.createdAt}>
+                                <TableRow key={('id' in item ? item.id : item.createdAt) + index}>
                                     <TableCell className="font-mono">{format(new Date(item.date), 'dd-MM-yy')}</TableCell>
                                     <TableCell>
-                                        {isInstallment ? (
+                                        {isPaymentInstallment(item) ? (
                                             <div className="flex items-center gap-2 text-sm">
                                                 <ArrowRight className="h-4 w-4 text-green-500"/>
-                                                <span className="text-muted-foreground">Payment for:</span>
-                                                <span>{description}</span>
+                                                <span className="text-muted-foreground italic">Payment for:</span>
+                                                <span className="italic">{description}</span>
                                             </div>
                                         ) : (
-                                           <span className={'type' in item && item.type === 'advance' ? 'text-blue-600' : ''}>{description}</span>
+                                           <span className={('type' in item && item.type === 'advance') ? 'text-blue-600' : ''}>{description}</span>
                                         )}
                                     </TableCell>
                                     <TableCell className="text-right font-mono">{debit > 0 ? formatCurrency(debit) : '-'}</TableCell>
@@ -273,22 +298,6 @@ export function ContactHistoryDialog({ isOpen, setIsOpen, contact, contactType }
                         </TableRow>
                     )}
                 </TableBody>
-                 {transactions.length > 0 && (
-                    <TableFoot>
-                        <TableRow>
-                            <TableCell colSpan={4} className="text-right font-bold">Total Debit</TableCell>
-                            <TableCell className="text-right font-bold font-mono">{formatCurrency(totalDebit)}</TableCell>
-                        </TableRow>
-                        <TableRow>
-                            <TableCell colSpan={4} className="text-right font-bold">Total Credit</TableCell>
-                            <TableCell className="text-right font-mono text-green-600">{formatCurrency(totalCredit)}</TableCell>
-                        </TableRow>
-                        <TableRow className="bg-muted/50">
-                            <TableCell colSpan={4} className="text-right font-bold text-lg">Balance Due</TableCell>
-                            <TableCell className="text-right font-bold font-mono text-lg">{formatCurrency(finalBalance)}</TableCell>
-                        </TableRow>
-                    </TableFoot>
-                 )}
             </Table>
         </div>
         <DialogFooter>
@@ -302,4 +311,3 @@ export function ContactHistoryDialog({ isOpen, setIsOpen, contact, contactType }
     </Dialog>
   );
 }
-
