@@ -121,7 +121,7 @@ export function useAppActions() {
         await db.ap_ar_transactions.add(dataToSave);
         await updateBalances();
         
-        const { installments, ...syncData } = dataToSave;
+        const { installments, id, ...syncData } = dataToSave;
         queueOrSync({ action: 'appendData', payload: { tableName: 'ap_ar_transactions', data: syncData, localId: tempId, logDescription: `Added A/P or A/R: ${tx.description}`, select: '*' } });
     }
     
