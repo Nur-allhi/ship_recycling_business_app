@@ -59,8 +59,12 @@ export function ContactHistoryDialog({ isOpen, setIsOpen, contact, contactType }
     let debit = 0;
     let credit = 0;
     transactions.forEach(tx => {
-        debit += tx.amount;
-        credit += tx.paid_amount;
+        if (tx.type === 'advance') {
+            credit += Math.abs(tx.amount);
+        } else {
+            debit += tx.amount;
+            credit += tx.paid_amount;
+        }
     });
     return { totalDebit: debit, totalCredit: credit, finalBalance: debit - credit };
   }, [transactions]);
@@ -106,12 +110,17 @@ export function ContactHistoryDialog({ isOpen, setIsOpen, contact, contactType }
         let description = '';
 
         if ('type' in item) { // LedgerTransaction
-            debit = item.amount;
-            runningBalance += item.amount;
+            if(item.type === 'advance') {
+                credit = Math.abs(item.amount);
+                runningBalance -= credit;
+            } else {
+                debit = item.amount;
+                runningBalance += item.amount;
+            }
             description = item.description;
         } else { // PaymentInstallment
             credit = item.amount;
-            runningBalance -= item.amount;
+            runningBalance -= credit;
             description = `Payment for: ${item.originalDescription}`;
         }
 
@@ -218,8 +227,13 @@ export function ContactHistoryDialog({ isOpen, setIsOpen, contact, contactType }
                             let isInstallment = false;
 
                             if ('type' in item) { // LedgerTransaction
-                                debit = item.amount;
-                                balance += item.amount;
+                                if (item.type === 'advance') {
+                                    credit = Math.abs(item.amount);
+                                    balance -= credit;
+                                } else {
+                                    debit = item.amount;
+                                    balance += item.amount;
+                                }
                                 description = item.description;
                             } else { // PaymentInstallment
                                 credit = item.amount;
@@ -232,14 +246,15 @@ export function ContactHistoryDialog({ isOpen, setIsOpen, contact, contactType }
                                 <TableRow key={'id' in item ? item.id : item.createdAt}>
                                     <TableCell className="font-mono">{format(new Date(item.date), 'dd-MM-yy')}</TableCell>
                                     <TableCell>
-                                        {isInstallment && (
+                                        {isInstallment ? (
                                             <div className="flex items-center gap-2 text-sm">
                                                 <ArrowRight className="h-4 w-4 text-green-500"/>
                                                 <span className="text-muted-foreground">Payment for:</span>
                                                 <span>{description}</span>
                                             </div>
+                                        ) : (
+                                           <span className={item.type === 'advance' ? 'text-blue-600' : ''}>{description}</span>
                                         )}
-                                        {!isInstallment && <span>{description}</span>}
                                     </TableCell>
                                     <TableCell className="text-right font-mono">{debit > 0 ? formatCurrency(debit) : '-'}</TableCell>
                                     <TableCell className="text-right font-mono text-green-600">{credit > 0 ? formatCurrency(credit) : '-'}</TableCell>
@@ -261,7 +276,7 @@ export function ContactHistoryDialog({ isOpen, setIsOpen, contact, contactType }
                         </TableRow>
                         <TableRow>
                             <TableCell colSpan={4} className="text-right font-bold">Total Credit</TableCell>
-                            <TableCell className="text-right font-mono">{formatCurrency(totalCredit)}</TableCell>
+                            <TableCell className="text-right font-mono text-green-600">{formatCurrency(totalCredit)}</TableCell>
                         </TableRow>
                         <TableRow className="bg-muted/50">
                             <TableCell colSpan={4} className="text-right font-bold text-lg">Balance Due</TableCell>

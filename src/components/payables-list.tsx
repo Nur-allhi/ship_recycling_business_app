@@ -97,7 +97,10 @@ export function PayablesList() {
     }
     
     const handleHistoryClick = (contact: AggregatedContact) => {
-        setHistoryDialogState({ isOpen: true, contact });
+        const fullContact = vendors.find(v => v.id === contact.contact_id);
+        if (fullContact) {
+            setHistoryDialogState({ isOpen: true, contact: fullContact as any });
+        }
     }
 
     const renderDesktopView = () => (
@@ -107,7 +110,7 @@ export function PayablesList() {
                     <TableRow>
                         <TableHead>Vendor</TableHead>
                         <TableHead className="text-right">Balance</TableHead>
-                        <TableHead className="text-center">Actions</TableHead>
+                        <TableHead className="text-center w-[120px]">Actions</TableHead>
                     </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -116,9 +119,9 @@ export function PayablesList() {
                             const totalCredit = contact.total_paid + contact.total_advance;
                             const progress = contact.total_due > 0 ? (totalCredit / contact.total_due) * 100 : (contact.total_advance > 0 ? 100 : 0);
                             return (
-                            <TableRow key={contact.contact_id}>
+                            <TableRow key={contact.contact_id} className="cursor-pointer" onClick={() => handleHistoryClick(contact)}>
                                 <TableCell className="font-medium">
-                                    <div className="cursor-pointer hover:underline" onClick={() => handleHistoryClick(contact)}>
+                                    <div>
                                         {contact.contact_name}
                                     </div>
                                     <div className="flex items-center gap-2 mt-1">
@@ -134,7 +137,7 @@ export function PayablesList() {
                                     )}
                                     <div className="text-xs text-muted-foreground font-normal">Total Due: {formatCurrency(contact.total_due)}</div>
                                 </TableCell>
-                                 <TableCell className="text-center">
+                                 <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
                                     {isAdmin && <div className="flex items-center justify-center gap-2">
                                         <TooltipProvider>
                                             <Tooltip>
@@ -177,11 +180,11 @@ export function PayablesList() {
                     const totalCredit = contact.total_paid + contact.total_advance;
                     const progress = contact.total_due > 0 ? (totalCredit / contact.total_due) * 100 : (contact.total_advance > 0 ? 100 : 0);
                     return (
-                        <Card key={contact.contact_id}>
+                        <Card key={contact.contact_id} onClick={() => handleHistoryClick(contact)}>
                             <CardContent className="p-4 space-y-3">
                                 <div className="flex justify-between items-start">
                                     <div>
-                                        <div className="font-semibold cursor-pointer hover:underline" onClick={() => handleHistoryClick(contact)}>
+                                        <div className="font-semibold">
                                             {contact.contact_name}
                                         </div>
                                         <div className="text-sm text-muted-foreground">Balance</div>
@@ -200,7 +203,7 @@ export function PayablesList() {
                                     <span className="text-xs text-muted-foreground font-mono">{progress.toFixed(0)}% paid</span>
                                 </div>
                                 {isAdmin && (
-                                    <div className="flex gap-2 pt-2">
+                                    <div className="flex gap-2 pt-2" onClick={(e) => e.stopPropagation()}>
                                         <Button variant="outline" size="sm" className="flex-1" onClick={() => handleSettleClick(contact)} disabled={contact.net_balance <= 0}>
                                             <HandCoins className="mr-2 h-4 w-4"/>
                                             Settle
