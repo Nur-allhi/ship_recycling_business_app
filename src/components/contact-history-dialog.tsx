@@ -1,9 +1,9 @@
 
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useEffect, useState } from "react";
 import { useAppContext } from "@/app/context/app-context";
-import type { Vendor, Client, LedgerTransaction, PaymentInstallment } from "@/lib/types";
+import type { Vendor, Client, LedgerTransaction, CashTransaction, BankTransaction } from "@/lib/types";
 import {
   Dialog,
   DialogContent,
@@ -16,7 +16,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from ".
 import { Badge } from "./ui/badge";
 import { format } from "date-fns";
 import { Button } from "./ui/button";
-import { FileText, ArrowRight } from "lucide-react";
+import { FileText, ArrowRight, Loader2 } from "lucide-react";
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import { toast } from 'sonner';
@@ -34,59 +34,61 @@ declare module 'jspdf' {
     }
 }
 
-// Type guard to check if an item is a PaymentInstallment
-const isPaymentInstallment = (item: any): item is PaymentInstallment & { originalDescription: string, isSettlement: true } => {
-    return 'isSettlement' in item;
-};
+type CombinedHistoryItem = (LedgerTransaction & { itemType: 'ledger' }) | ((CashTransaction | BankTransaction) & { itemType: 'payment' });
 
 export function ContactHistoryDialog({ isOpen, setIsOpen, contact, contactType }: ContactHistoryDialogProps) {
-  const { ledgerTransactions, currency } = useAppContext();
+  const { ledgerTransactions, currency, cashTransactions, bankTransactions } = useAppContext();
+  const [isLoading, setIsLoading] = useState(true);
+  const [combinedHistory, setCombinedHistory] = useState<CombinedHistoryItem[]>([]);
 
-  const transactions = useMemo(() => {
-    return ledgerTransactions
-        .filter(tx => tx.contact_id === contact.id)
-        .sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-  }, [ledgerTransactions, contact.id]);
+  useEffect(() => {
+    if (!isOpen) return;
+    setIsLoading(true);
 
-  const combinedHistory = useMemo(() => {
-    const history: (LedgerTransaction | (PaymentInstallment & { originalDescription: string, isSettlement: true }))[] = [];
-    transactions.forEach(tx => {
-        history.push(tx);
-        // Ensure installments is an array before trying to iterate
-        if (Array.isArray(tx.installments)) {
-            tx.installments.forEach(inst => {
-                history.push({ ...inst, originalDescription: tx.description, isSettlement: true });
-            });
-        }
-    });
-    return history.sort((a, b) => {
-        const dateA = new Date(a.date).getTime();
-        const dateB = new Date(b.date).getTime();
-        if (dateA !== dateB) return dateA - dateB;
-        // If dates are the same, settlements should come after the charge
-        if(isPaymentInstallment(a) && !isPaymentInstallment(b)) return 1;
-        if(!isPaymentInstallment(a) && isPaymentInstallment(b)) return -1;
-        return 0;
-    });
-  }, [transactions]);
+    // 1. Get all A/R or A/P ledger entries for this contact
+    const arApTxs: CombinedHistoryItem[] = ledgerTransactions
+      .filter(tx => tx.contact_id === contact.id)
+      .map(tx => ({ ...tx, itemType: 'ledger' }));
 
+    // 2. Get all cash and bank payments related to this contact
+    const relevantCashTxs: CombinedHistoryItem[] = cashTransactions
+      .filter(tx => tx.contact_id === contact.id && (tx.category === 'A/R Settlement' || tx.category === 'A/P Settlement'))
+      .map(tx => ({ ...tx, itemType: 'payment' }));
+
+    const relevantBankTxs: CombinedHistoryItem[] = bankTransactions
+      .filter(tx => tx.contact_id === contact.id && (tx.category === 'A/R Settlement' || tx.category === 'A/P Settlement'))
+      .map(tx => ({ ...tx, itemType: 'payment' }));
+      
+    // 3. Combine and sort all transactions chronologically
+    const allHistory = [...arApTxs, ...relevantCashTxs, ...relevantBankTxs];
+    allHistory.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    
+    setCombinedHistory(allHistory);
+    setIsLoading(false);
+  }, [isOpen, ledgerTransactions, cashTransactions, bankTransactions, contact.id]);
 
   const { totalDebit, totalCredit, finalBalance } = useMemo(() => {
     let debit = 0;
     let credit = 0;
-    transactions.forEach(tx => {
-        if (tx.type === 'advance') {
-            credit += Math.abs(tx.amount);
-        } else {
-            debit += tx.amount;
-            credit += tx.paid_amount;
+    
+    combinedHistory.forEach(item => {
+        if (item.itemType === 'ledger') {
+             if (item.type === 'advance') {
+                credit += Math.abs(item.amount);
+            } else {
+                debit += item.amount;
+            }
+        } else { // payment
+            credit += item.actual_amount;
         }
     });
+
     return { totalDebit: debit, totalCredit: credit, finalBalance: debit - credit };
-  }, [transactions]);
+  }, [combinedHistory]);
 
 
   const formatCurrency = (amount: number) => {
+    if (amount === 0) return '-';
     if (currency === 'BDT') {
       return `৳ ${new Intl.NumberFormat('en-US').format(amount)}`;
     }
@@ -95,7 +97,6 @@ export function ContactHistoryDialog({ isOpen, setIsOpen, contact, contactType }
 
   const formatCurrencyForPdf = (amount: number) => {
     if (amount === 0 || !amount) return '-';
-    // Use "BDT" prefix instead of the symbol to ensure compatibility with standard PDF fonts
     const prefix = currency === 'BDT' ? 'BDT' : currency; 
     return `${prefix} ${amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
@@ -125,19 +126,19 @@ export function ContactHistoryDialog({ isOpen, setIsOpen, contact, contactType }
         let credit = 0;
         let description = '';
 
-        if (isPaymentInstallment(item)) { // PaymentInstallment
-             credit = item.amount;
-             runningBalance -= credit;
-             description = `Payment for: ${item.originalDescription}`;
-        } else { // LedgerTransaction
-            if(item.type === 'advance') {
+        if (item.itemType === 'ledger') {
+            if (item.type === 'advance') {
                 credit = Math.abs(item.amount);
                 runningBalance -= credit;
             } else {
                 debit = item.amount;
-                runningBalance += item.amount;
+                runningBalance += debit;
             }
             description = item.description;
+        } else { // payment
+            credit = item.actual_amount;
+            runningBalance -= credit;
+            description = `Payment Received/Made`;
         }
 
         return [
@@ -161,16 +162,9 @@ export function ContactHistoryDialog({ isOpen, setIsOpen, contact, contactType }
         body: tableData,
         foot: footerData,
         theme: 'grid',
-        styles: {
-            font: 'Helvetica',
-            fontSize: 9,
-        },
+        styles: { font: 'Helvetica', fontSize: 9, },
         headStyles: { fillColor: [34, 49, 63], textColor: 255, fontStyle: 'bold', halign: 'center' },
-        footStyles: {
-            fillColor: [236, 240, 241],
-            textColor: [44, 62, 80],
-            fontStyle: 'bold',
-        },
+        footStyles: { fillColor: [236, 240, 241], textColor: [44, 62, 80], fontStyle: 'bold', },
         columnStyles: {
             0: { halign: 'center' },
             2: { halign: 'right' },
@@ -178,33 +172,17 @@ export function ContactHistoryDialog({ isOpen, setIsOpen, contact, contactType }
             4: { halign: 'right' },
         },
         didParseCell: function(data: any) {
-            // Center align the footer labels
             if (data.section === 'foot') {
-                if (data.column.index === 1) {
-                    data.cell.styles.halign = 'right';
-                }
-                if (data.column.index === 2 || data.column.index === 3 || data.column.index === 4) {
-                    data.cell.styles.halign = 'right';
-                }
-                if(data.row.index === 2) { // Balance Due row
-                    data.cell.styles.fontSize = 10;
-                }
+                if (data.column.index === 1) data.cell.styles.halign = 'right';
+                if (data.column.index >= 2) data.cell.styles.halign = 'right';
+                if(data.row.index === 2) data.cell.styles.fontSize = 10;
             }
         },
         didDrawPage: (data: any) => {
             doc.setFontSize(8);
             doc.setTextColor(150);
-            doc.text(
-                'System Generated Report',
-                data.settings.margin.left,
-                doc.internal.pageSize.getHeight() - 10
-            );
-            doc.text(
-                `Page ${data.pageNumber}`,
-                doc.internal.pageSize.getWidth() - data.settings.margin.right,
-                doc.internal.pageSize.getHeight() - 10,
-                { align: 'right' }
-            );
+            doc.text( 'System Generated Report', data.settings.margin.left, doc.internal.pageSize.getHeight() - 10);
+            doc.text(`Page ${data.pageNumber}`, doc.internal.pageSize.getWidth() - data.settings.margin.right, doc.internal.pageSize.getHeight() - 10, { align: 'right' });
         },
     });
 
@@ -250,18 +228,17 @@ export function ContactHistoryDialog({ isOpen, setIsOpen, contact, contactType }
                     </TableRow>
                 </TableHeader>
                 <TableBody>
-                    {combinedHistory.length > 0 ? (() => {
+                    {isLoading ? (
+                         <TableRow>
+                            <TableCell colSpan={5} className="text-center h-24"><Loader2 className="h-6 w-6 animate-spin mx-auto" /></TableCell>
+                        </TableRow>
+                    ) : combinedHistory.length > 0 ? (() => {
                         let balance = 0;
                         return combinedHistory.map((item, index) => {
                             let debit = 0;
                             let credit = 0;
-                            let description = '';
                             
-                            if (isPaymentInstallment(item)) {
-                                credit = item.amount;
-                                balance -= credit;
-                                description = item.originalDescription;
-                            } else { // LedgerTransaction
+                            if (item.itemType === 'ledger') {
                                 if (item.type === 'advance') {
                                     credit = Math.abs(item.amount);
                                     balance -= credit;
@@ -269,21 +246,22 @@ export function ContactHistoryDialog({ isOpen, setIsOpen, contact, contactType }
                                     debit = item.amount;
                                     balance += debit;
                                 }
-                                description = item.description;
+                            } else { // Payment
+                                credit = item.actual_amount;
+                                balance -= credit;
                             }
 
                             return (
-                                <TableRow key={('id' in item ? item.id : item.createdAt) + index}>
+                                <TableRow key={item.id + index}>
                                     <TableCell className="font-mono">{format(new Date(item.date), 'dd-MM-yy')}</TableCell>
                                     <TableCell>
-                                        {isPaymentInstallment(item) ? (
-                                            <div className="flex items-center gap-2 text-sm">
-                                                <ArrowRight className="h-4 w-4 text-green-500"/>
-                                                <span className="text-muted-foreground italic">Payment for:</span>
-                                                <span className="italic">{description}</span>
+                                        {item.itemType === 'payment' ? (
+                                            <div className="flex items-center gap-2 text-sm text-green-600">
+                                                <ArrowRight className="h-4 w-4"/>
+                                                <span className="italic">Payment {contactType === 'vendor' ? 'Made' : 'Received'}</span>
                                             </div>
                                         ) : (
-                                           <span className={('type' in item && item.type === 'advance') ? 'text-blue-600' : ''}>{description}</span>
+                                           <span className={item.type === 'advance' ? 'text-blue-600' : ''}>{item.description}</span>
                                         )}
                                     </TableCell>
                                     <TableCell className="text-right font-mono">{debit > 0 ? formatCurrency(debit) : '-'}</TableCell>
@@ -301,7 +279,7 @@ export function ContactHistoryDialog({ isOpen, setIsOpen, contact, contactType }
             </Table>
         </div>
         <DialogFooter>
-          <Button onClick={handleExportPdf}>
+          <Button onClick={handleExportPdf} disabled={isLoading}>
               <FileText className="mr-2 h-4 w-4" />
               Export to PDF
           </Button>
