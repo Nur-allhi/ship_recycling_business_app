@@ -94,6 +94,7 @@ export function CashTab() {
         const dateA = new Date(a.date).getTime();
         const dateB = new Date(b.date).getTime();
         if(dateA !== dateB) return dateA - dateB;
+        // Secondary sort by creation time for same-day transactions
         return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
     });
 
@@ -122,6 +123,7 @@ export function CashTab() {
              const dateA = new Date(a.date).getTime();
              const dateB = new Date(b.date).getTime();
              if(dateA !== dateB) return sortDirection === 'desc' ? dateB - dateA : dateA - dateB;
+             // Secondary sort for date
              return sortDirection === 'desc' 
                 ? new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime() 
                 : new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
@@ -483,5 +485,3 @@ export function CashTab() {
     </>
   )
 }
-
-    
