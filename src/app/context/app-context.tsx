@@ -245,6 +245,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 case 'addInitialStockItem': result = await server.addInitialStockItem(item.payload); break;
                 case 'batchImportData': result = await server.batchImportData(item.payload.data); break;
                 case 'deleteAllData': result = await server.deleteAllData(); break;
+                case 'emptyRecycleBin': result = await server.emptyRecycleBin(); break;
                 default:
                   console.warn(`Unknown sync action: ${item.action}`);
             }
