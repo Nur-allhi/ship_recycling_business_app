@@ -57,6 +57,7 @@ interface AppContextType extends AppData {
   setLoadedMonths: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
   setDeletedItems: React.Dispatch<React.SetStateAction<{ cash: any[]; bank: any[]; stock: any[]; ap_ar: any[]; }>>;
   setUser: (user: User | null) => void;
+  loadRecycleBinData: () => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
