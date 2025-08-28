@@ -54,10 +54,10 @@ interface AppContextType extends AppData {
   processSyncQueue: (specificItemId?: number) => Promise<void>;
   openInitialBalanceDialog: () => void;
   closeInitialBalanceDialog: () => void;
+  loadRecycleBinData: () => Promise<void>;
   setLoadedMonths: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
   setDeletedItems: React.Dispatch<React.SetStateAction<{ cash: any[]; bank: any[]; stock: any[]; ap_ar: any[]; }>>;
   setUser: (user: User | null) => void;
-  loadRecycleBinData: () => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -237,8 +237,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                     if(result && (result as any).ledgerEntry && (result as any).financialTx) {
                         await db.transaction('rw', db.ap_ar_transactions, db.cash_transactions, db.bank_transactions, async () => {
                             if(localLedgerId) await db.ap_ar_transactions.where({id: localLedgerId}).modify({ id: (result as any).ledgerEntry.id });
-                            const finTable = (result as any).financialTx.bank_id ? db.bank_transactions : db.cash_transactions;
-                            if(localFinancialId) await finTable.where({id: localFinancialId}).modify({ id: (result as any).financialTx.id, advance_id: (result as any).ledgerEntry.id });
+                            if ((result as any).financialTx.bank_id) {
+                                if(localFinancialId) await db.bank_transactions.where({id: localFinancialId}).modify({ id: (result as any).financialTx.id, advance_id: (result as any).ledgerEntry.id });
+                            } else {
+                                if(localFinancialId) await db.cash_transactions.where({id: localFinancialId}).modify({ id: (result as any).financialTx.id, advance_id: (result as any).ledgerEntry.id });
+                            }
                         });
                     }
                     break;
