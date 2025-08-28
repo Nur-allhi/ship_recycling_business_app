@@ -16,7 +16,9 @@ const createSupabaseClient = (serviceRole = false) => {
         throw new Error("Supabase URL, Anon Key, or Service Role Key is missing from environment variables.");
     }
     
-    return createClient(supabaseUrl, serviceRole ? supabaseServiceKey : supabaseAnonKey, {
+    const supabaseKey = serviceRole ? supabaseServiceKey : supabaseAnonKey;
+
+    return createClient(supabaseUrl, supabaseKey, {
         auth: {
             // Prevent the server-side client from using cookies, as we're managing them manually.
             persistSession: false,

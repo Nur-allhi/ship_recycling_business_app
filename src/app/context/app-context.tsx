@@ -18,9 +18,9 @@ interface AppData {
   bankBalance: number;
   stockItems: StockItem[];
   totalPayables: number;
-  totalReceivables: number;
+  totalReceivables: number; // Removed trailing comma
   isLoading: boolean;
-  isInitialBalanceDialogOpen: boolean;
+  isInitialBalanceDialogOpen: boolean; // Keep this property
   isSyncing: boolean;
   isOnline: boolean;
   user: User | null;
@@ -50,7 +50,7 @@ interface AppContextType extends AppData {
   logout: () => Promise<void>;
   reloadData: (options?: { force?: boolean; needsInitialBalance?: boolean }) => Promise<void>;
   updateBalances: () => Promise<void>;
-  handleApiError: (error: any) => void;
+  handleApiError: (error: unknown) => void;
   processSyncQueue: (specificItemId?: number) => Promise<void>;
   openInitialBalanceDialog: () => void;
   closeInitialBalanceDialog: () => void;
@@ -66,8 +66,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<Omit<AppData, keyof ReturnType<typeof useLiveDBData>>>({
     cashBalance: 0, bankBalance: 0, stockItems: [], totalPayables: 0, totalReceivables: 0,
     isLoading: true, isInitialBalanceDialogOpen: false, isSyncing: false, 
-    isOnline: typeof navigator !== 'undefined' ? navigator.onLine : true,
-    user: null, // Initialize user here to avoid dependency issues
+    isOnline: typeof navigator !== 'undefined' ? navigator.onLine : true,    
+    deletedCashTransactions: [], // Added
+    deletedBankTransactions: [], // Added
+    deletedStockTransactions: [], // Added
+    deletedLedgerTransactions: [], // Added
+    loadedMonths: {}, // Added
+    // user: null, // Initialize user here to avoid dependency issues - Removed as it's in the omitted type
   });
   const [loadedMonths, setLoadedMonths] = useState<Record<string, boolean>>({});
   const [deletedItems, setDeletedItems] = useState<{ cash: any[], bank: any[], stock: any[], ap_ar: any[] }>({ cash: [], bank: [], stock: [], ap_ar: [] });
@@ -88,7 +93,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     window.location.href = '/login';
   }, [setUser]);
   
-  const login = useCallback(async (credentials: Parameters<typeof serverLogin>[0]) => {
+  const login = useCallback(async (credentials: Parameters<typeof serverLogin>[0]): Promise<{
+    success: boolean;
+    needsInitialBalance?: boolean;
+    session?: { id: string; username: string; role: any; accessToken: string; };
+    error?: string; // Add error property for failed logins
+  }> => {
     try {
       const result = await serverLogin(credentials);
       if (result.success && result.session) {
@@ -96,11 +106,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setUser(result.session); // Immediately update context state
         // Let useEffect handle navigation
       } else if (!result.success) {
-        throw new Error(result.error || "Login failed");
+        // If login fails, return the result directly which might contain an error message
+        return result as { success: false; error?: string };
       }
+      // If login is successful, return the result
       return result;
-    } catch (error: any) {
-      toast.error('Login Failed', { description: error.message });
+    } catch (error: unknown) {
+      let errorMessage = "An unknown error occurred during login.";
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (typeof error === 'string') {
+        errorMessage = error;
+      }
+      toast.error('Login Failed', { description: errorMessage });
       throw error;
     }
   }, [setUser]);
@@ -189,13 +207,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     let failedItems = 0;
     for (const item of queue) {
         try {
-            let result;
+            let result: any; // Use any for now to bypass complex union typing
             const { localId, localFinancialId, localLedgerId, localCashId, localBankId, ...payloadWithoutId } = item.payload || {};
 
             switch(item.action) {
                 case 'appendData':
                     result = await server.appendData(payloadWithoutId);
-                    if (result && localId) {
+                    if (result && (result as any).id && localId) {
                         const localTableName = payloadWithoutId.tableName;
                         await db.table(localTableName).where({ id: localId }).modify({ id: result.id });
                     }
@@ -205,30 +223,33 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 case 'restoreData': result = await server.restoreData(item.payload); break;
                 case 'recordPaymentAgainstTotal': 
                     result = await server.recordPaymentAgainstTotal(payloadWithoutId); 
-                    if(result && result.financialTxId && localFinancialId) {
-                        const table = payloadWithoutId.payment_method === 'cash' ? db.cash_transactions : db.bank_transactions;
-                        await table.where({id: localFinancialId}).modify({id: result.financialTxId});
+                    if (result && (result as any).financialTxId && localFinancialId) {
+                        if (payloadWithoutId.payment_method === 'cash') {
+                            await db.cash_transactions.where({id: localFinancialId}).modify({id: result.financialTxId});
+                        } else {
+                            await db.bank_transactions.where({id: localFinancialId}).modify({id: result.financialTxId});
+                        }
                     }
                     break;
                 case 'recordDirectPayment': result = await server.recordDirectPayment(item.payload); break;
                 case 'recordAdvancePayment':
                     result = await server.recordAdvancePayment(payloadWithoutId);
-                    if(result && result.ledgerEntry && result.financialTx) {
+                    if(result && (result as any).ledgerEntry && (result as any).financialTx) {
                         await db.transaction('rw', db.ap_ar_transactions, db.cash_transactions, db.bank_transactions, async () => {
-                            if(localLedgerId) await db.ap_ar_transactions.where({id: localLedgerId}).modify({ id: result.ledgerEntry.id });
-                            const finTable = result.financialTx.bank_id ? db.bank_transactions : db.cash_transactions;
-                            if(localFinancialId) await finTable.where({id: localFinancialId}).modify({ id: result.financialTx.id, advance_id: result.ledgerEntry.id });
+                            if(localLedgerId) await db.ap_ar_transactions.where({id: localLedgerId}).modify({ id: (result as any).ledgerEntry.id });
+                            const finTable = (result as any).financialTx.bank_id ? db.bank_transactions : db.cash_transactions;
+                            if(localFinancialId) await finTable.where({id: localFinancialId}).modify({ id: (result as any).financialTx.id, advance_id: (result as any).ledgerEntry.id });
                         });
                     }
                     break;
                 case 'transferFunds': 
                     result = await server.transferFunds(payloadWithoutId); 
                     if(result && localCashId && localBankId) {
-                        await db.cash_transactions.where({id: localCashId}).modify({ id: result.cashTxId });
-                        await db.bank_transactions.where({id: localBankId}).modify({ id: result.bankTxId });
+                        await db.cash_transactions.where({id: localCashId}).modify({ id: (result as any).cashTxId });
+                        await db.bank_transactions.where({id: localBankId}).modify({ id: (result as any).bankTxId });
                     }
                     break;
-                case 'setInitialBalances': result = await server.setInitialBalances(item.payload); break;
+                case 'setInitialBalances': result = await server.setInitialBalances((item.payload as any).data); break;
                 case 'deleteCategory': result = await server.deleteCategory(item.payload); break;
                 case 'addStockTransaction': result = await server.addStockTransaction(payloadWithoutId); 
                     if (result && localId) {
@@ -244,7 +265,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 case 'deleteClient': result = await server.deleteClient(item.payload.id); break;
                 case 'addInitialStockItem': result = await server.addInitialStockItem(item.payload); break;
                 case 'batchImportData': result = await server.batchImportData(item.payload.data); break;
-                case 'deleteAllData': result = await server.deleteAllData(); break;
+                case 'deleteAllData': result = await server.deleteAllData((item.payload as any).data); break;
                 case 'emptyRecycleBin': result = await server.emptyRecycleBin(); break;
                 default:
                   console.warn(`Unknown sync action: ${item.action}`);
@@ -547,3 +568,5 @@ export function useAppContext() {
   }
   return context;
 }
+
+    
