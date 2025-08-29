@@ -35,6 +35,13 @@ import { ResponsiveSelect } from "@/components/ui/responsive-select"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { Badge } from "./ui/badge"
 import * as server from "@/lib/actions";
+import { db } from "@/lib/db"
+
+const toYYYYMMDD = (date: Date) => {
+    const d = new Date(date);
+    d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+    return d.toISOString().split('T')[0];
+};
 
 type SortKey = keyof BankTransaction | 'debit' | 'credit' | null;
 type SortDirection = 'asc' | 'desc';
@@ -59,9 +66,7 @@ export function BankTab() {
   const isAdmin = user?.role === 'admin';
 
   const fetchSnapshot = useCallback(async () => {
-    // Only fetch from server if online
     if (!isOnline) {
-        // Attempt to load from local DB if it exists, otherwise just stop loading
         const localSnapshot = await db.monthly_snapshots.where('snapshot_date').equals(toYYYYMMDD(startOfMonth(currentMonth))).first();
         setMonthlySnapshot(localSnapshot || null);
         setIsSnapshotLoading(false);
@@ -551,5 +556,3 @@ export function BankTab() {
     </>
   )
 }
-
-    
