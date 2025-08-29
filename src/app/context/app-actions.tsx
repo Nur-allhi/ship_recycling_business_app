@@ -7,7 +7,6 @@ import type { SyncQueueItem } from '@/lib/db';
 import { useAppContext } from './app-context';
 import type { CashTransaction, BankTransaction, StockTransaction, Vendor, Client, LedgerTransaction, PaymentInstallment, StockItem } from '@/lib/types';
 import * as server from '@/lib/actions'; 
-import { login as serverLogin, logout as serverLogout } from '@/app/auth/actions';
 
 // Helper to format date as YYYY-MM-DD string, preserving the local date
 const toYYYYMMDD = (date: Date) => {
@@ -30,10 +29,6 @@ export function useAppActions() {
         }
     }, [isOnline, processSyncQueue]);
     
-    // Auth actions are now in src/app/auth/actions.ts
-
-
-    // DATA MUTATION ACTIONS
     const addCashTransaction = async (tx: Omit<CashTransaction, 'id' | 'createdAt' | 'deletedAt'>) => {
         const tempId = `temp_cash_${Date.now()}`;
         const newTxData: CashTransaction = { ...tx, id: tempId, createdAt: new Date().toISOString() };
@@ -166,22 +161,18 @@ export function useAppActions() {
         toast.success("Stock transaction updated locally.");
     };
 
-    const deleteTransaction = async (tableName: 'cash_transactions' | 'bank_transactions' | 'stock_transactions' | 'ap_ar_transactions', txToDelete: any) => {
+    const deleteTransaction = useCallback(async (tableName: 'cash_transactions' | 'bank_transactions' | 'stock_transactions' | 'ap_ar_transactions', txToDelete: any) => {
         const isTemporary = txToDelete.id.startsWith('temp_');
         
-        // Always delete from the local DB immediately for instant UI feedback
         await db.table(tableName).delete(txToDelete.id);
 
         if (isTemporary) {
-            // If the item was temporary, it only existed locally and in the sync queue.
-            // Find the original 'add' action in the queue and delete it.
             const queueItemToDelete = await db.sync_queue.where('payload.localId').equals(txToDelete.id).first();
             if (queueItemToDelete && queueItemToDelete.id) {
                 await db.sync_queue.delete(queueItemToDelete.id);
                 toast.success("Unsynced transaction removed.");
             }
         } else {
-            // If it's a synced item, queue a delete action for the server.
             queueOrSync({ action: 'deleteData', payload: { tableName, id: txToDelete.id, logDescription: `Deleted item from ${tableName}` }});
             toast.success("Moved to recycle bin.");
         }
@@ -198,7 +189,7 @@ export function useAppActions() {
         }
         
         await updateBalances();
-    };
+    }, [queueOrSync, updateBalances]);
     
     const setFontSize = (size: 'sm' | 'base' | 'lg') => db.app_state.update(1, { fontSize: size });
     const setWastagePercentage = (percentage: number) => db.app_state.update(1, { wastagePercentage: percentage });
@@ -243,13 +234,11 @@ export function useAppActions() {
 
     const setInitialBalances = async (cash: number, bankTotals: Record<string, number>, date: Date) => {
         const isoDate = toYYYYMMDD(date);
-        // Clear existing initial balance entries locally to avoid duplicates
         const oldInitialCash = await db.cash_transactions.where('category').equals('Initial Balance').toArray();
         const oldInitialBank = await db.bank_transactions.where('category').equals('Initial Balance').toArray();
         await db.cash_transactions.bulkDelete(oldInitialCash.map(tx => tx.id));
         await db.bank_transactions.bulkDelete(oldInitialBank.map(tx => tx.id));
 
-        // Add new initial balance entries
         await db.cash_transactions.add({ id: `temp_init_cash_${Date.now()}`, date: isoDate, type: 'income', category: 'Initial Balance', description: 'Initial cash balance', actual_amount: cash, expected_amount: cash, difference: 0, createdAt: new Date().toISOString() });
         for (const [bankId, amount] of Object.entries(bankTotals)) {
             await db.bank_transactions.add({ id: `temp_init_bank_${bankId}_${Date.now()}`, date: isoDate, type: 'deposit', category: 'Initial Balance', description: 'Initial bank balance', actual_amount: amount, expected_amount: amount, difference: 0, bank_id: bankId, createdAt: new Date().toISOString() });
@@ -298,14 +287,12 @@ export function useAppActions() {
         const category = ledgerType === 'payable' ? 'A/P Settlement' : 'A/R Settlement';
         const isoDate = toYYYYMMDD(paymentDate);
 
-        // Add the financial transaction locally
         if (paymentMethod === 'cash') {
             await db.cash_transactions.add({ id: tempFinancialId, date: isoDate, type: ledgerType === 'payable' ? 'expense' : 'income', category, description: desc, actual_amount: paymentAmount, expected_amount: paymentAmount, difference: 0, createdAt: new Date().toISOString(), contact_id: contactId });
         } else {
             await db.bank_transactions.add({ id: tempFinancialId, date: isoDate, type: ledgerType === 'payable' ? 'withdrawal' : 'deposit', category, description: desc, actual_amount: paymentAmount, expected_amount: paymentAmount, difference: 0, bank_id: bankId!, createdAt: new Date().toISOString(), contact_id: contactId });
         }
 
-        // Apply payment to local ledger transactions
         let amountToSettle = paymentAmount;
         const outstandingTxs = await db.ap_ar_transactions
             .where({ contact_id: contactId, type: ledgerType })
@@ -322,7 +309,6 @@ export function useAppActions() {
             
             await db.ap_ar_transactions.update(tx.id, { paid_amount: newPaidAmount, status: newStatus });
             
-            // Add installment locally (optional, but good for consistency)
             const installment: PaymentInstallment = {
                 id: `temp_inst_${Date.now()}`,
                 ap_ar_transaction_id: tx.id,
@@ -352,7 +338,6 @@ export function useAppActions() {
         const tempFinancialId = `temp_adv_fin_${Date.now()}`;
         const ledgerDescription = description || `Advance ${ledger_type === 'payable' ? 'to' : 'from'} ${contact_name}`;
 
-        // Create the advance entry in the local ledger. Amount is negative.
         const advanceLedgerEntry: LedgerTransaction = {
             id: tempLedgerId,
             date: isoDate,
@@ -367,7 +352,6 @@ export function useAppActions() {
         };
         await db.ap_ar_transactions.add(advanceLedgerEntry);
 
-        // Create the corresponding financial transaction
         const financialTxData = {
             id: tempFinancialId,
             date: isoDate,
@@ -389,7 +373,6 @@ export function useAppActions() {
         
         await updateBalances();
         
-        // Queue the entire operation for the server
         queueOrSync({
             action: 'recordAdvancePayment',
             payload: { ...payload, date: isoDate, localLedgerId: tempLedgerId, localFinancialId: tempFinancialId }
@@ -398,12 +381,6 @@ export function useAppActions() {
         toast.success("Advance payment recorded locally and will sync to the server.");
     };
     
-    const loadDataForMonth = useCallback(async (month: Date) => {
-       // This function is now less critical for UI speed but good for fetching historical data.
-       // The implementation in app-context.tsx can handle this.
-       // We keep the shell of the function here in case it's needed for other purposes.
-    }, []);
-
     const { loadRecycleBinData, setDeletedItems } = useAppContext();
     const restoreTransaction = useCallback(async (txType: 'cash' | 'bank' | 'stock' | 'ap_ar', id: string) => {
         let tableName: 'cash_transactions' | 'bank_transactions' | 'stock_transactions' | 'ap_ar_transactions' = 'cash_transactions';
@@ -416,15 +393,11 @@ export function useAppActions() {
         }
 
         queueOrSync({ action: 'restoreData', payload: { tableName, id } });
-        // Optimistic UI update for recycle bin
         setDeletedItems(prev => ({ ...prev, [txType]: (prev as any)[txType].filter((item: any) => item.id !== id) }));
         
         toast.success("Item restoration queued.");
         
-        // No need to await a full reload. We can add the item back locally if we want,
-        // but for now, letting the next sync/reload handle it is simpler.
-        // A full reload can be triggered manually by the user if they want to see it immediately.
-        await updateBalances(); // This is fast and local now.
+        await updateBalances();
     }, [queueOrSync, setDeletedItems, updateBalances]);
     
     const emptyRecycleBin = useCallback(async () => {
@@ -436,7 +409,6 @@ export function useAppActions() {
     const handleExport = async () => {
         try {
             const data = await server.exportAllData();
-            // Trigger download on client
             const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
             const link = document.createElement('a');
             link.href = URL.createObjectURL(blob);
@@ -456,7 +428,6 @@ export function useAppActions() {
                 const data = JSON.parse(event.target?.result as string);
                 queueOrSync({ action: 'batchImportData', payload: { data } });
                 toast.info("Data import has been queued. The app will reload once completed.");
-                // Let the sync process handle the reload
             } catch (e) {
                 toast.error("Import failed", { description: "Invalid file format." });
             }
@@ -500,7 +471,6 @@ export function useAppActions() {
         deleteClient,
         recordPayment,
         recordAdvancePayment,
-        loadDataForMonth,
         loadRecycleBinData,
         restoreTransaction,
         emptyRecycleBin,
