@@ -70,7 +70,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const [state, setState] = useState({
         cashBalance: 0, bankBalance: 0, totalPayables: 0, totalReceivables: 0,
         isLoading: true, isInitialBalanceDialogOpen: false, isSyncing: false,
-        isOnline: typeof navigator !== 'undefined' ? navigator.onLine : true,
+        isOnline: true, // Always start with true to avoid hydration mismatch
+        isOnlineStatusReady: false, // Track when online status is properly initialized
     });
     
     const [user, setUser] = useState<User | null>(null);
@@ -374,9 +375,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             toast.info("You are offline", { description: "Changes will be saved locally and synced when you're back." });
             setState(prev => ({ ...prev, isOnline: false }));
         };
+        
+        // Initialize online status after component mounts to avoid hydration mismatch
+        setState(prev => ({ 
+            ...prev, 
+            isOnline: navigator.onLine,
+            isOnlineStatusReady: true 
+        }));
+        
         window.addEventListener('online', handleOnline);
         window.addEventListener('offline', handleOffline);
-        setState(prev => ({ ...prev, isOnline: navigator.onLine }));
+        
         return () => {
             window.removeEventListener('online', handleOnline);
             window.removeEventListener('offline', handleOffline);
@@ -404,30 +413,35 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const openInitialBalanceDialog = () => setState(prev => ({ ...prev, isInitialBalanceDialogOpen: true }));
     const closeInitialBalanceDialog = () => setState(prev => ({ ...prev, isInitialBalanceDialogOpen: false }));
 
-    const OnlineStatusIndicator = () => (
-        <div className="fixed bottom-4 right-4 z-50 animate-fade-in">
-            <div className="flex items-center gap-2 rounded-full bg-background px-3 py-2 text-foreground shadow-lg border">
-                {state.isOnline ? (
-                    state.isSyncing ? (
-                        <>
-                            <RefreshCw className="h-5 w-5 animate-spin" />
-                            <span className="font-semibold text-sm">Syncing...</span>
-                        </>
+    const OnlineStatusIndicator = () => {
+        // Don't render until online status is properly initialized to avoid hydration mismatch
+        if (!state.isOnlineStatusReady) return null;
+        
+        return (
+            <div className="fixed bottom-4 right-4 z-50 animate-fade-in">
+                <div className="flex items-center gap-2 rounded-full bg-background px-3 py-2 text-foreground shadow-lg border">
+                    {state.isOnline ? (
+                        state.isSyncing ? (
+                            <>
+                                <RefreshCw className="h-5 w-5 animate-spin" />
+                                <span className="font-semibold text-sm">Syncing...</span>
+                            </>
+                        ) : (
+                            <>
+                                <Wifi className="h-5 w-5 text-accent" />
+                                <span className="font-semibold text-sm">Online</span>
+                            </>
+                        )
                     ) : (
                         <>
-                            <Wifi className="h-5 w-5 text-accent" />
-                            <span className="font-semibold text-sm">Online</span>
+                            <WifiOff className="h-5 w-5 text-destructive" />
+                            <span className="font-semibold text-sm">Offline</span>
                         </>
-                    )
-                ) : (
-                    <>
-                        <WifiOff className="h-5 w-5 text-destructive" />
-                        <span className="font-semibold text-sm">Offline</span>
-                    </>
-                )}
+                    )}
+                </div>
             </div>
-        </div>
-    );
+        );
+    };
     
     const contextValue = useMemo(() => ({
         ...state,

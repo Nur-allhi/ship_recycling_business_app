@@ -6,13 +6,14 @@ import { useAppContext } from "@/app/context/app-context"
 import { Wallet, Landmark, Boxes, LineChart } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Skeleton } from "@/components/ui/skeleton";
+import { useMemo } from "react";
 
 interface DashboardTabProps {
   setActiveTab: (tab: string) => void;
 }
 
 export function DashboardTab({ setActiveTab }: DashboardTabProps) {
-  const { cashBalance, bankBalance, stockItems, currency, isLoading } = useAppContext()
+  const { cashBalance, bankBalance, stockItems, stockTransactions, currency, isLoading } = useAppContext()
 
   const formatCurrency = (amount: number) => {
     if (currency === 'BDT') {
@@ -21,8 +22,53 @@ export function DashboardTab({ setActiveTab }: DashboardTabProps) {
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: currency, currencyDisplay: 'symbol' }).format(amount)
   }
 
-  const totalStockValue = (stockItems || []).reduce((acc, item) => acc + item.weight * item.purchasePricePerKg, 0)
-  const totalStockWeight = (stockItems || []).reduce((acc, item) => acc + item.weight, 0);
+  // Calculate current stock balance by considering all transactions
+  const { currentStockWeight, currentStockValue } = useMemo(() => {
+    // Start with initial stock
+    const stockBalance: Record<string, { weight: number, totalValue: number }> = {};
+    
+    // Add initial stock items
+    (stockItems || []).forEach(item => {
+      if (!stockBalance[item.name]) {
+        stockBalance[item.name] = { weight: 0, totalValue: 0 };
+      }
+      stockBalance[item.name].weight += item.weight;
+      stockBalance[item.name].totalValue += item.weight * item.purchasePricePerKg;
+    });
+    
+    // Process all stock transactions
+    (stockTransactions || []).forEach(tx => {
+      if (!stockBalance[tx.stockItemName]) {
+        stockBalance[tx.stockItemName] = { weight: 0, totalValue: 0 };
+      }
+      
+      const item = stockBalance[tx.stockItemName];
+      const currentAvgPrice = item.weight > 0 ? item.totalValue / item.weight : 0;
+      
+      if (tx.type === 'purchase') {
+        // Add purchased stock
+        item.weight += tx.weight;
+        item.totalValue += tx.weight * tx.pricePerKg;
+      } else {
+        // Subtract sold stock
+        item.weight -= tx.weight;
+        // Subtract value using average cost method
+        item.totalValue -= tx.weight * currentAvgPrice;
+      }
+    });
+    
+    // Calculate totals
+    const totalCurrentWeight = Object.values(stockBalance).reduce((acc, item) => acc + Math.max(0, item.weight), 0);
+    const totalCurrentValue = Object.values(stockBalance).reduce((acc, item) => acc + Math.max(0, item.totalValue), 0);
+    
+    return {
+      currentStockWeight: totalCurrentWeight,
+      currentStockValue: totalCurrentValue
+    };
+  }, [stockItems, stockTransactions]);
+
+  const totalStockValue = currentStockValue;
+  const totalStockWeight = currentStockWeight;
   const totalBalance = cashBalance + bankBalance
 
   const renderValue = (value: string | number, isCurrency = true) => {

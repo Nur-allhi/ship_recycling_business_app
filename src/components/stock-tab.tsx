@@ -161,6 +161,62 @@ export function StockTab() {
   const totalStockWeight = (stockItems || []).reduce((acc, item) => acc + item.weight, 0);
   const weightedAveragePrice = totalStockWeight > 0 ? totalStockValue / totalStockWeight : 0;
   
+  // Calculate current stock balance by considering all transactions
+  const { currentStockWeight, currentStockValue, currentStockItems } = useMemo(() => {
+    // Start with initial stock
+    const stockBalance: Record<string, { weight: number, totalValue: number }> = {};
+    
+    // Add initial stock items
+    (stockItems || []).forEach(item => {
+      if (!stockBalance[item.name]) {
+        stockBalance[item.name] = { weight: 0, totalValue: 0 };
+      }
+      stockBalance[item.name].weight += item.weight;
+      stockBalance[item.name].totalValue += item.weight * item.purchasePricePerKg;
+    });
+    
+    // Process all stock transactions
+    (stockTransactions || []).forEach(tx => {
+      if (!stockBalance[tx.stockItemName]) {
+        stockBalance[tx.stockItemName] = { weight: 0, totalValue: 0 };
+      }
+      
+      const item = stockBalance[tx.stockItemName];
+      const currentAvgPrice = item.weight > 0 ? item.totalValue / item.weight : 0;
+      
+      if (tx.type === 'purchase') {
+        // Add purchased stock
+        item.weight += tx.weight;
+        item.totalValue += tx.weight * tx.pricePerKg;
+      } else {
+        // Subtract sold stock
+        item.weight -= tx.weight;
+        // Subtract value using average cost method
+        item.totalValue -= tx.weight * currentAvgPrice;
+      }
+    });
+    
+    // Calculate totals and create current stock items array
+    const totalCurrentWeight = Object.values(stockBalance).reduce((acc, item) => acc + Math.max(0, item.weight), 0);
+    const totalCurrentValue = Object.values(stockBalance).reduce((acc, item) => acc + Math.max(0, item.totalValue), 0);
+    
+    // Create array of current stock items (only items with positive weight)
+    const currentItems = Object.entries(stockBalance)
+      .filter(([_, item]) => item.weight > 0)
+      .map(([name, item]) => ({
+        name,
+        weight: item.weight,
+        avgPrice: item.weight > 0 ? item.totalValue / item.weight : 0,
+        totalValue: item.totalValue
+      }));
+    
+    return {
+      currentStockWeight: totalCurrentWeight,
+      currentStockValue: totalCurrentValue,
+      currentStockItems: currentItems
+    };
+  }, [stockItems, stockTransactions]);
+  
   const { totalPurchaseWeight, totalSaleWeight, totalPurchaseValue, totalSaleValue } = useMemo(() => {
     return filteredByMonth.reduce((acc, tx) => {
         if (tx.type === 'purchase') {
@@ -366,28 +422,28 @@ export function StockTab() {
                 </TableRow>
             </TableHeader>
             <TableBody>
-                {(stockItems || []).length > 0 ? (
-                (stockItems || []).map((item: StockItem) => (
-                    <TableRow key={item.id}>
+                {currentStockItems.length > 0 ? (
+                currentStockItems.map((item, index) => (
+                    <TableRow key={index}>
                     <TableCell className="font-medium text-center">{item.name}</TableCell>
                     <TableCell className="text-center font-mono">{item.weight.toFixed(2)}</TableCell>
-                    <TableCell className="text-center font-mono">{formatCurrency(item.purchasePricePerKg)}</TableCell>
-                    <TableCell className="text-center font-medium font-mono">{formatCurrency(item.weight * item.purchasePricePerKg)}</TableCell>
+                    <TableCell className="text-center font-mono">{formatCurrency(item.avgPrice)}</TableCell>
+                    <TableCell className="text-center font-medium font-mono">{formatCurrency(item.totalValue)}</TableCell>
                     </TableRow>
                 ))
                 ) : (
                 <TableRow>
-                    <TableCell colSpan={4} className="text-center h-24">No stock items yet.</TableCell>
+                    <TableCell colSpan={4} className="text-center h-24">No stock items with current balance.</TableCell>
                 </TableRow>
                 )}
             </TableBody>
-            {(stockItems || []).length > 0 && (
+            {currentStockItems.length > 0 && (
                 <TableFoot>
                     <TableRow>
                     <TableCell className="font-bold text-center">Totals</TableCell>
-                    <TableCell className="text-center font-bold font-mono">{totalStockWeight.toFixed(2)} kg</TableCell>
-                    <TableCell className="text-center font-bold font-mono">{formatCurrency(weightedAveragePrice)}</TableCell>
-                    <TableCell className="text-center font-bold font-mono">{formatCurrency(totalStockValue)}</TableCell>
+                    <TableCell className="text-center font-bold font-mono">{currentStockWeight.toFixed(2)} kg</TableCell>
+                    <TableCell className="text-center font-bold font-mono">{formatCurrency(currentStockWeight > 0 ? currentStockValue / currentStockWeight : 0)}</TableCell>
+                    <TableCell className="text-center font-bold font-mono">{formatCurrency(currentStockValue)}</TableCell>
                     </TableRow>
                 </TableFoot>
             )}
@@ -397,29 +453,29 @@ export function StockTab() {
 
   const renderMobileInventory = () => (
     <div className="space-y-4">
-        {(stockItems || []).length > 0 ? (
-            (stockItems || []).map((item: StockItem) => (
-                <Card key={item.id}>
+        {currentStockItems.length > 0 ? (
+            currentStockItems.map((item, index) => (
+                <Card key={index}>
                     <CardContent className="p-4 space-y-2">
                         <div className="flex justify-between items-start">
                             <div className="font-semibold text-lg">{item.name}</div>
                             <div className="text-right">
-                                <div className="font-bold text-primary text-xl font-mono">{formatCurrency(item.weight * item.purchasePricePerKg)}</div>
+                                <div className="font-bold text-primary text-xl font-mono">{formatCurrency(item.totalValue)}</div>
                                 <div className="text-xs text-muted-foreground">Current Value</div>
                             </div>
                         </div>
                         <div className="flex justify-between text-sm text-muted-foreground font-mono pt-2">
                             <span>{item.weight.toFixed(2)} kg</span>
-                            <span>@ {formatCurrency(item.purchasePricePerKg)}/kg</span>
+                            <span>@ {formatCurrency(item.avgPrice)}/kg</span>
                         </div>
                     </CardContent>
                 </Card>
             ))
         ) : (
-            <div className="text-center text-muted-foreground py-12">No stock items yet.</div>
+            <div className="text-center text-muted-foreground py-12">No stock items with current balance.</div>
         )}
 
-        {(stockItems || []).length > 0 && (
+        {currentStockItems.length > 0 && (
             <Card className="bg-muted/50">
                 <CardHeader>
                     <CardTitle className="text-base">Total Inventory Summary</CardTitle>
@@ -427,15 +483,15 @@ export function StockTab() {
                 <CardContent className="space-y-2">
                      <div className="flex justify-between items-center text-lg">
                         <span className="font-semibold">Total Value</span>
-                        <span className="font-bold font-mono">{formatCurrency(totalStockValue)}</span>
+                        <span className="font-bold font-mono">{formatCurrency(currentStockValue)}</span>
                     </div>
                      <div className="flex justify-between items-center text-sm text-muted-foreground">
                         <span className="">Total Weight</span>
-                        <span className="font-mono">{totalStockWeight.toFixed(2)} kg</span>
+                        <span className="font-mono">{currentStockWeight.toFixed(2)} kg</span>
                     </div>
                      <div className="flex justify-between items-center text-sm text-muted-foreground">
                         <span className="">Avg. Price/kg</span>
-                        <span className="font-mono">{formatCurrency(weightedAveragePrice)}</span>
+                        <span className="font-mono">{formatCurrency(currentStockWeight > 0 ? currentStockValue / currentStockWeight : 0)}</span>
                     </div>
                 </CardContent>
             </Card>
@@ -517,8 +573,8 @@ export function StockTab() {
                             </div>
                             <div className="border-t border-border md:border-t-0 md:border-r md:border-border md:px-4 pt-4 md:pt-0">
                                 <h4 className="font-semibold text-primary">Current Stock Balance</h4>
-                                <p className="font-mono">{totalStockWeight.toFixed(2)} kg</p>
-                                <p className="font-bold font-mono">{formatCurrency(totalStockValue)}</p>
+                                <p className="font-mono">{currentStockWeight.toFixed(2)} kg</p>
+                                <p className="font-bold font-mono">{formatCurrency(currentStockValue)}</p>
                             </div>
                             <div className="border-t border-border md:border-t-0 md:pl-4 pt-4 md:pt-0">
                                 <h4 className="font-semibold text-accent">Monthly Sales</h4>
