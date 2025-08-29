@@ -1,6 +1,4 @@
-
 "use client";
-
 import { useState, useEffect, useMemo } from 'react';
 import { useForm, Controller, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -24,12 +22,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Alert, AlertTitle, AlertDescription } from './ui/alert';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Checkbox } from './ui/checkbox';
-
 const baseSchema = z.object({
     date: z.date({ required_error: "Date is required." }),
     amount: z.coerce.number().positive("Amount must be a positive number."),
 });
-
 const cashSchema = baseSchema.extend({
     category: z.string({ required_error: "Category is required." }),
     description: z.string().min(1, "Description is required."),
@@ -39,7 +35,6 @@ const cashSchema = baseSchema.extend({
     difference_reason: z.string().optional(),
     payLater: z.boolean().optional(),
 });
-
 const bankSchema = baseSchema.extend({
     bank_id: z.string({ required_error: "Bank account is required." }),
     category: z.string({ required_error: "Category is required." }),
@@ -50,8 +45,6 @@ const bankSchema = baseSchema.extend({
     difference_reason: z.string().optional(),
     payLater: z.boolean().optional(),
 });
-
-
 const stockSchema = z.object({
     date: z.date({ required_error: "Date is required." }),
     stockType: z.enum(['purchase', 'sale'], { required_error: "Please select purchase or sale."}),
@@ -79,7 +72,6 @@ const stockSchema = z.object({
         ctx.addIssue({ code: 'custom', message: 'New contact name is required.', path: ['newContact'] });
     }
 });
-
 const transferSchema = baseSchema.extend({
     transferFrom: z.enum(['cash', 'bank'], { required_error: "Please select transfer source."}),
     transferToBankId: z.string().optional(),
@@ -93,7 +85,6 @@ const transferSchema = baseSchema.extend({
         ctx.addIssue({ code: 'custom', message: 'Source bank is required.', path: ['transferFromBankId'] });
     }
 });
-
 const apArSchema = baseSchema.extend({
     ledgerType: z.enum(['payable', 'receivable'], { required_error: "Please select payable or receivable." }),
     contact_id: z.string({ required_error: "A contact is required." }),
@@ -104,8 +95,6 @@ const apArSchema = baseSchema.extend({
         ctx.addIssue({ code: 'custom', message: 'New contact name is required.', path: ['newContact'] });
     }
 });
-
-
 const formSchemas = {
     cash: cashSchema,
     bank: bankSchema,
@@ -113,13 +102,10 @@ const formSchemas = {
     transfer: transferSchema,
     ap_ar: apArSchema,
 };
-
 type TransactionType = keyof typeof formSchemas;
-
 interface UnifiedTransactionFormProps {
   setDialogOpen: (open: boolean) => void;
 }
-
 export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionFormProps) {
   const [transactionType, setTransactionType] = useState<TransactionType>('cash');
   const isMobile = useIsMobile();
@@ -128,9 +114,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
   const [isBankSettlement, setIsBankSettlement] = useState(false);
   const [showAdvancedFields, setShowAdvancedFields] = useState(false);
   const [showStockContact, setShowStockContact] = useState(false);
-
-  
-  const { 
+    const { 
     addCashTransaction, 
     addBankTransaction, 
     addStockTransaction, 
@@ -139,7 +123,6 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
     addClient,
     transferFunds,
   } = useAppActions();
-
   const {
     cashCategories,
     bankCategories,
@@ -149,11 +132,10 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
     banks,
     currency,
   } = useAppContext();
-  
-  const currentSchema = useMemo(() => {
+    const currentSchema = useMemo(() => {
     let schema = formSchemas[transactionType];
     if (transactionType === 'cash' || transactionType === 'bank') {
-        schema = schema.superRefine((data: any, ctx) => {
+        schema = (schema as any).superRefine((data: any, ctx: any) => {
             if (data.payLater && !data.contact_id) {
                 ctx.addIssue({ code: 'custom', message: 'A vendor is required for pay later transactions.', path: ['contact_id'] });
             }
@@ -161,17 +143,14 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
     }
     return schema;
   }, [transactionType]);
-
-
-  const { register, handleSubmit, control, reset, setValue, watch, formState: { errors, isSubmitting } } = useForm({
-    resolver: zodResolver(currentSchema),
+  const { register, handleSubmit, control, reset, setValue, watch, formState: { errors, isSubmitting } } = useForm<any>({
+    resolver: zodResolver(currentSchema as any),
     defaultValues: {
         date: new Date(),
         payLater: false,
     }
   });
-  
-  const watchedAmount = useWatch({ control, name: 'amount' });
+    const watchedAmount = useWatch({ control, name: 'amount' });
   const watchedExpectedAmount = useWatch({ control, name: 'expected_amount'});
   const watchedActualAmount = useWatch({ control, name: 'actual_amount'});
   const stockType = useWatch({ control, name: 'stockType' });
@@ -182,13 +161,12 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
   const cashCategoryName = useWatch({ control, name: 'category' });
   const bankCategoryName = useWatch({ control, name: 'category' });
   const [isNewStockItem, setIsNewStockItem] = useState(false);
-  const weight = useWatch({ control, name: 'weight' });
-  const pricePerKg = useWatch({ control, name: 'pricePerKg' });
+  const weight = useWatch({ control: control as any, name: 'weight' });
+  const pricePerKg = useWatch({ control: control as any, name: 'pricePerKg' });
   const payLater = watch('payLater');
   const cashCategoryInfo = useMemo(() => (cashCategories || []).find(c => c.name === cashCategoryName), [cashCategories, cashCategoryName]);
   const bankCategoryInfo = useMemo(() => (bankCategories || []).find(c => c.name === bankCategoryName), [bankCategories, bankCategoryName]);
   const isExpense = (transactionType === 'cash' && cashCategoryInfo?.direction === 'debit') || (transactionType === 'bank' && bankCategoryInfo?.direction === 'debit');
-
   useEffect(() => {
     // When the user is in simple mode, keep both amounts in sync
     if (!showAdvancedFields && typeof watchedAmount === 'number') {
@@ -196,18 +174,14 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
         setValue('actual_amount', watchedAmount);
     }
   }, [watchedAmount, showAdvancedFields, setValue]);
-
-
   useEffect(() => {
       const isSettlement = cashCategoryName === 'A/R Settlement' || cashCategoryName === 'A/P Settlement';
       setIsCashSettlement(isSettlement);
   }, [cashCategoryName]);
-
   useEffect(() => {
     const isSettlement = bankCategoryName === 'A/R Settlement' || bankCategoryName === 'A/P Settlement';
     setIsBankSettlement(isSettlement);
   }, [bankCategoryName]);
-
   const difference = useMemo(() => {
     const expected = parseFloat(watchedExpectedAmount || 0);
     const actual = parseFloat(watchedActualAmount || 0);
@@ -216,8 +190,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
     }
     return actual - expected;
   }, [watchedExpectedAmount, watchedActualAmount, showAdvancedFields]);
-  
-  useEffect(() => {
+    useEffect(() => {
     if (transactionType === 'stock' && weight && pricePerKg) {
       const calculatedAmount = weight * pricePerKg;
       setValue('expected_amount', calculatedAmount);
@@ -226,7 +199,6 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
       }
     }
   }, [weight, pricePerKg, transactionType, setValue, watch]);
-
   useEffect(() => {
     reset({
         date: new Date(),
@@ -238,31 +210,26 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
     setShowAdvancedFields(false);
     setShowStockContact(false);
   }, [transactionType, reset]);
-  
-  useEffect(() => {
+    useEffect(() => {
     setValue('contact_id', undefined);
     setValue('newContact', '');
   }, [stockType, ledgerType, cashCategoryName, bankCategoryName, setValue]);
-
   // Logic to show/hide the contact dropdown for stock transactions
   useEffect(() => {
     if (stockPaymentMethod === 'credit') {
         setShowStockContact(true);
     }
   }, [stockPaymentMethod]);
-
   const onSubmit = async (data: any) => {
     const transactionDate = format(data.date, 'yyyy-MM-dd');
     try {
         let finalExpectedAmount = showAdvancedFields ? data.expected_amount : data.amount;
         let finalActualAmount = showAdvancedFields ? data.actual_amount : data.amount;
         let finalDifference = finalActualAmount - finalExpectedAmount;
-        
-        // Handle "Pay Later" for cash/bank expenses
+                // Handle "Pay Later" for cash/bank expenses
         if ((transactionType === 'cash' || transactionType === 'bank') && data.payLater) {
             const contact = (vendors || []).find(v => v.id === data.contact_id);
             if (!contact) throw new Error("Vendor not found for pay later transaction.");
-
             await addLedgerTransaction({
                 type: 'payable',
                 description: data.description!,
@@ -317,8 +284,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                         const contactList = data.stockType === 'purchase' ? vendors : clients;
                         stockContactName = (contactList || []).find(c => c.id === stockContactId)?.name;
                     }
-                    
-                    await addStockTransaction({
+                                        await addStockTransaction({
                         type: data.stockType!,
                         stockItemName: data.stockItemName!,
                         weight: data.weight!,
@@ -344,7 +310,6 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                     let ledgerContactName: string | undefined;
                     const contactType = data.ledgerType === 'payable' ? 'vendor' : 'client';
                     const contactList = data.ledgerType === 'payable' ? vendors : clients;
-
                     if (data.contact_id === 'new') {
                         const newContact = await (data.ledgerType === 'payable' ? addVendor(data.newContact!) : await addClient(data.newContact!));
                         if (!newContact) throw new Error(`Failed to create new ${contactType}.`);
@@ -354,11 +319,9 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                         ledgerContactId = data.contact_id;
                         ledgerContactName = (contactList || []).find(c => c.id === ledgerContactId)?.name;
                     }
-                    
-                    if(!ledgerContactId || !ledgerContactName) {
+                                        if(!ledgerContactId || !ledgerContactName) {
                         throw new Error("A contact is required for this transaction.");
                     }
-
                     await addLedgerTransaction({
                         type: data.ledgerType!,
                         description: data.description!,
@@ -376,11 +339,9 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
          toast.error("Operation Failed", { description: error.message || "An unexpected error occurred." });
     }
   };
-
   const stockContactType = stockType === 'purchase' ? 'Vendor' : 'Client';
   const settlementContactType = cashCategoryName === 'A/P Settlement' || bankCategoryName === 'A/P Settlement' ? 'Vendor' : 'Client';
   const settlementContacts = settlementContactType === 'Vendor' ? vendors : clients;
-  
   const cashCategoryItems = useMemo(() => (cashCategories || []).filter(c => c.name !== 'Stock Purchase' && c.name !== 'Stock Sale').map(c => ({ value: c.name, label: `${c.name}` })), [cashCategories]);
   const bankCategoryItems = useMemo(() => (bankCategories || []).filter(c => c.name !== 'Stock Purchase' && c.name !== 'Stock Sale').map(c => ({ value: c.name, label: `${c.name}` })), [bankCategories]);
   const bankAccountItems = useMemo(() => (banks || []).map(b => ({ value: b.id, label: b.name })), [banks]);
@@ -397,7 +358,6 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
   const currentStockContactItems = stockType === 'purchase' ? vendorContactItems : clientContactItems;
   const currentLedgerContactItems = ledgerType === 'payable' ? vendorContactItems : clientContactItems;
   const currentLedgerContactType = ledgerType === 'payable' ? 'Vendor' : 'Client';
-
   const transactionTypeItems: {value: TransactionType, label: string, icon: React.ElementType}[] = [
       { value: 'cash', label: 'Cash', icon: Wallet },
       { value: 'bank', label: 'Bank', icon: Landmark },
@@ -405,7 +365,6 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
       { value: 'transfer', label: 'Transfer', icon: ArrowRightLeft },
       { value: 'ap_ar', label: 'A/R & A/P', icon: UserPlus },
   ];
-
   const renderDiscrepancyFields = () => (
     <>
       <div className="space-y-2">
@@ -418,21 +377,21 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                 </Button>
             )}
         </div>
-        <Input id="amount" type="number" step="0.01" {...register('amount')} placeholder="e.g., 1000.00" className="border-2"/>
-        {errors.amount && <p className="text-sm text-destructive">{(errors.amount as any).message}</p>}
+        <Input id="amount" type="number" step="0.01" {...register('amount' as any)} placeholder="e.g., 1000.00" className="border-2"/>
+        {(errors as any).amount && <p className="text-sm text-destructive">{((errors as any).amount as any).message}</p>}
       </div>
         {showAdvancedFields && (
             <div className="p-4 border rounded-md bg-muted/30 space-y-4 animate-fade-in">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
                         <Label htmlFor="expected_amount">Transaction Value</Label>
-                        <Input id="expected_amount" type="number" step="0.01" {...register('expected_amount')} placeholder="e.g., Invoice total" className="border-2"/>
-                        {errors.expected_amount && <p className="text-sm text-destructive">{(errors.expected_amount as any).message}</p>}
+                        <Input id="expected_amount" type="number" step="0.01" {...register('expected_amount' as any)} placeholder="e.g., Invoice total" className="border-2"/>
+                        {(errors as any).expected_amount && <p className="text-sm text-destructive">{((errors as any).expected_amount as any).message}</p>}
                     </div>
                     <div className="space-y-2">
                         <Label htmlFor="actual_amount">Amount Paid/Received</Label>
-                        <Input id="actual_amount" type="number" step="0.01" {...register('actual_amount')} placeholder="e.g., Actual cash paid" className="border-2"/>
-                        {errors.actual_amount && <p className="text-sm text-destructive">{(errors.actual_amount as any).message}</p>}
+                        <Input id="actual_amount" type="number" step="0.01" {...register('actual_amount' as any)} placeholder="e.g., Actual cash paid" className="border-2"/>
+                        {(errors as any).actual_amount && <p className="text-sm text-destructive">{((errors as any).actual_amount as any).message}</p>}
                     </div>
                 </div>
                 {difference !== 0 && (
@@ -445,7 +404,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                         </div>
                         <div className="space-y-2">
                             <Label htmlFor="difference_reason">Reason for Difference</Label>
-                            <Input id="difference_reason" {...register('difference_reason')} placeholder="e.g., Discount, Rounding, Late fee" className="border-2"/>
+                            <Input id="difference_reason" {...register('difference_reason' as any)} placeholder="e.g., Discount, Rounding, Late fee" className="border-2"/>
                         </div>
                     </div>
                 )}
@@ -453,7 +412,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
         )}
     </>
   );
-  
+
   const dateField = (
       <div className="space-y-2">
         <Label htmlFor="date">Date</Label>
@@ -488,9 +447,9 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                 </Popover>
             )}
         />
-        {errors.date && <p className="text-sm text-destructive">{(errors.date as any).message}</p>}
+        {(errors as any).date && <p className="text-sm text-destructive">{((errors as any).date as any).message}</p>}
     </div>
-  )
+  );
 
   const settlementContactFields = (
     <div className="space-y-2 animate-fade-in pt-2">
@@ -509,10 +468,10 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                 />
             )}
         />
-        {errors.contact_id && <p className="text-sm text-destructive">{(errors.contact_id as any).message}</p>}
+        {(errors as any).contact_id && <p className="text-sm text-destructive">{((errors as any).contact_id as any).message}</p>}
     </div>
   );
-  
+
   const payLaterFields = (
     <>
        <div className="flex items-center space-x-2 pt-2">
@@ -552,7 +511,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                     />
                 )}
             />
-            {errors.contact_id && <p className="text-sm text-destructive">{(errors.contact_id as any).message}</p>}
+            {(errors as any).contact_id && <p className="text-sm text-destructive">{((errors as any).contact_id as any).message}</p>}
         </div>
        )}
     </>
@@ -561,8 +520,12 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
   return (
     <>
       <DialogHeader>
-        <DialogTitle className="flex items-center"><PlusCircle className="mr-2 h-6 w-6" /> Add a New Transaction</DialogTitle>
-        <DialogDescription>Select a transaction type and fill in the details below.</DialogDescription>
+        <DialogTitle className="flex items-center">
+          <PlusCircle className="mr-2 h-6 w-6" /> Add a New Transaction
+        </DialogTitle>
+        <DialogDescription>
+          Select a transaction type and fill in the details below.
+        </DialogDescription>
       </DialogHeader>
       
       <div className="py-4">
@@ -584,7 +547,6 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
             </Tabs>
         )}
       </div>
-
       <form onSubmit={handleSubmit(onSubmit)}>
           <div className="space-y-4">
               {transactionType === 'cash' && (
@@ -606,25 +568,24 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                                 />
                             )}
                         />
-                        {errors.category && <p className="text-sm text-destructive">{(errors.category as any).message}</p>}
+                        {(errors as any).category && <p className="text-sm text-destructive">{((errors as any).category as any).message}</p>}
                     </div>
                     {isCashSettlement ? settlementContactFields : payLaterFields}
                     <div className="space-y-2">
                         <Label htmlFor="description-cash">Description</Label>
-                        <Input id="description-cash" {...register('description')} placeholder="e.g., Weekly groceries" className="border-2"/>
-                        {errors.description && <p className="text-sm text-destructive">{(errors.description as any).message}</p>}
+                        <Input id="description-cash" {...register('description' as any)} placeholder="e.g., Weekly groceries" className="border-2"/>
+                        {(errors as any).description && <p className="text-sm text-destructive">{((errors as any).description as any).message}</p>}
                     </div>
                     {!payLater && renderDiscrepancyFields()}
                     {payLater && (
                         <div className="space-y-2">
                             <Label htmlFor="amount">Amount</Label>
-                            <Input id="amount" type="number" step="0.01" {...register('amount')} placeholder="e.g., 1000.00" className="border-2"/>
-                            {errors.amount && <p className="text-sm text-destructive">{(errors.amount as any).message}</p>}
+                            <Input id="amount" type="number" step="0.01" {...register('amount' as any)} placeholder="e.g., 1000.00" className="border-2"/>
+                            {(errors as any).amount && <p className="text-sm text-destructive">{((errors as any).amount as any).message}</p>}
                         </div>
                     )}
                   </div>
               )}
-
               {transactionType === 'bank' && (
                   <div className="m-0 space-y-4 animate-fade-in">
                     {dateField}
@@ -644,7 +605,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                                 />
                             )}
                         />
-                        {errors.bank_id && <p className="text-sm text-destructive">{(errors.bank_id as any).message}</p>}
+                        {(errors as any).bank_id && <p className="text-sm text-destructive">{((errors as any).bank_id as any).message}</p>}
                     </div>
                     <div className="space-y-2">
                         <Label>Category</Label>
@@ -662,25 +623,24 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                                 />
                             )}
                         />
-                        {errors.category && <p className="text-sm text-destructive">{(errors.category as any).message}</p>}
+                        {(errors as any).category && <p className="text-sm text-destructive">{((errors as any).category as any).message}</p>}
                     </div>
                     {isBankSettlement ? settlementContactFields : payLaterFields}
                     <div className="space-y-2">
                         <Label htmlFor="description-bank">Description</Label>
-                        <Input id="description-bank" {...register('description')} placeholder="e.g., Monthly salary" className="border-2"/>
-                        {errors.description && <p className="text-sm text-destructive">{(errors.description as any).message}</p>}
+                        <Input id="description-bank" {...register('description' as any)} placeholder="e.g., Monthly salary" className="border-2"/>
+                        {(errors as any).description && <p className="text-sm text-destructive">{((errors as any).description as any).message}</p>}
                     </div>
                      {!payLater && renderDiscrepancyFields()}
                      {payLater && (
                         <div className="space-y-2">
                             <Label htmlFor="amount">Amount</Label>
-                            <Input id="amount" type="number" step="0.01" {...register('amount')} placeholder="e.g., 1000.00" className="border-2"/>
-                            {errors.amount && <p className="text-sm text-destructive">{(errors.amount as any).message}</p>}
+                            <Input id="amount" type="number" step="0.01" {...register('amount' as any)} placeholder="e.g., 1000.00" className="border-2"/>
+                            {(errors as any).amount && <p className="text-sm text-destructive">{((errors as any).amount as any).message}</p>}
                         </div>
                     )}
                   </div>
               )}
-              
               {transactionType === 'stock' && (
                   <div className="m-0 space-y-4 animate-fade-in">
                     {dateField}
@@ -696,15 +656,14 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                                 </RadioGroup>
                             )}
                         />
-                        {errors.stockType && <p className="text-sm text-destructive">{(errors.stockType as any).message}</p>}
+                        {(errors as any).stockType && <p className="text-sm text-destructive">{((errors as any).stockType as any).message}</p>}
                     </div>
-                    
                     <div className="space-y-2">
                         <Label>Item Name</Label>
                         {stockType === 'purchase' ? (
                             <div className="flex items-center gap-2">
                                 {isNewStockItem ? (
-                                    <Input {...register('stockItemName')} placeholder="e.g. Iron Rod" className="border-2"/>
+                                    <Input {...register('stockItemName' as any)} placeholder="e.g. Iron Rod" className="border-2"/>
                                 ) : (
                                     <Controller
                                         control={control}
@@ -741,18 +700,18 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                                 )}
                             />
                         )}
-                        {errors.stockItemName && <p className="text-sm text-destructive">{(errors.stockItemName as any).message}</p>}
+                        {(errors as any).stockItemName && <p className="text-sm text-destructive">{((errors as any).stockItemName as any).message}</p>}
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-2">
                             <Label>Weight (kg)</Label>
-                            <Input type="number" step="0.01" {...register('weight')} placeholder="0.00" className="border-2"/>
-                            {errors.weight && <p className="text-sm text-destructive">{(errors.weight as any).message}</p>}
+                            <Input type="number" step="0.01" {...register('weight' as any)} placeholder="0.00" className="border-2"/>
+                            {(errors as any).weight && <p className="text-sm text-destructive">{((errors as any).weight as any).message}</p>}
                         </div>
                         <div className="space-y-2">
                             <Label>Price per kg</Label>
-                            <Input type="number" step="0.01" {...register('pricePerKg')} placeholder="0.00" className="border-2"/>
-                            {errors.pricePerKg && <p className="text-sm text-destructive">{(errors.pricePerKg as any).message}</p>}
+                            <Input type="number" step="0.01" {...register('pricePerKg' as any)} placeholder="0.00" className="border-2"/>
+                            {(errors as any).pricePerKg && <p className="text-sm text-destructive">{((errors as any).pricePerKg as any).message}</p>}
                         </div>
                     </div>
                     <div className="space-y-2">
@@ -768,9 +727,8 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                                 </RadioGroup>
                             )}
                         />
-                        {errors.paymentMethod && <p className="text-sm text-destructive">{(errors.paymentMethod as any).message}</p>}
+                        {(errors as any).paymentMethod && <p className="text-sm text-destructive">{((errors as any).paymentMethod as any).message}</p>}
                     </div>
-
                     {stockType && (showStockContact || stockPaymentMethod === 'credit') ? (
                          <div className="space-y-2 animate-fade-in">
                             <Label>{stockContactType}</Label>
@@ -788,17 +746,16 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                                     />
                                 )}
                             />
-                            {errors.contact_id && <p className="text-sm text-destructive">{(errors.contact_id as any).message}</p>}
-                            
+                            {(errors as any).contact_id && <p className="text-sm text-destructive">{((errors as any).contact_id as any).message}</p>}
                             {contact_id === 'new' && (
                                 <div className="flex items-end gap-2 pt-2 animate-fade-in">
                                     <div className="flex-grow space-y-1">
                                         <Label htmlFor="newContact">New {stockContactType} Name</Label>
-                                        <Input {...register('newContact')} placeholder={`Enter new ${stockContactType.toLowerCase()} name`} className="border-2"/>
+                                        <Input {...register('newContact' as any)} placeholder={`Enter new ${stockContactType.toLowerCase()} name`} className="border-2"/>
                                     </div>
                                 </div>
                             )}
-                            {errors.newContact && <p className="text-sm text-destructive">{(errors.newContact as any).message}</p>}
+                            {(errors as any).newContact && <p className="text-sm text-destructive">{((errors as any).newContact as any).message}</p>}
                         </div>
                     ) : stockType && (
                         <div className="pt-2">
@@ -808,15 +765,14 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                            </Button>
                         </div>
                     )}
-
                     {stockPaymentMethod !== 'credit' && (
                         <div className="space-y-2">
                             <div className="flex items-center justify-between">
                                 <Label htmlFor="actual_amount">Amount Paid/Received</Label>
                                 <span className="text-sm text-muted-foreground">Expected: {currency} {((weight || 0) * (pricePerKg || 0)).toFixed(2)}</span>
                             </div>
-                            <Input id="actual_amount" type="number" step="0.01" {...register('actual_amount')} placeholder="e.g., Actual cash paid" className="border-2"/>
-                             {errors.actual_amount && <p className="text-sm text-destructive">{(errors.actual_amount as any).message}</p>}
+                            <Input id="actual_amount" type="number" step="0.01" {...register('actual_amount' as any)} placeholder="e.g., Actual cash paid" className="border-2"/>
+                             {(errors as any).actual_amount && <p className="text-sm text-destructive">{((errors as any).actual_amount as any).message}</p>}
                         </div>
                      )}
                     {stockPaymentMethod === 'bank' && (
@@ -836,7 +792,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                                 />
                             )}
                         />
-                        {errors.bank_id && <p className="text-sm text-destructive">{(errors.bank_id as any).message}</p>}
+                        {(errors as any).bank_id && <p className="text-sm text-destructive">{((errors as any).bank_id as any).message}</p>}
                     </div>
                     )}
                     {stockPaymentMethod === 'credit' && stockType && (
@@ -852,12 +808,11 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                     )}
                     <div className="space-y-2">
                         <Label htmlFor="description-stock">Description (Optional)</Label>
-                        <Input id="description-stock" {...register('description')} placeholder="e.g., invoice #, delivery details" className="border-2"/>
-                        {errors.description && <p className="text-sm text-destructive">{(errors.description as any).message}</p>}
+                        <Input id="description-stock" {...register('description' as any)} placeholder="e.g., invoice #, delivery details" className="border-2"/>
+                        {(errors as any).description && <p className="text-sm text-destructive">{((errors as any).description as any).message}</p>}
                     </div>
                   </div>
               )}
-
               {transactionType === 'transfer' && (
                   <div className="m-0 space-y-4 animate-fade-in">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -866,14 +821,14 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                         </div>
                         <div className="space-y-2">
                             <Label htmlFor="amount-transfer">Amount</Label>
-                            <Input id="amount-transfer" type="number" step="0.01" {...register('amount')} placeholder="0.00" className="border-2"/>
-                            {errors.amount && <p className="text-sm text-destructive">{(errors.amount as any).message}</p>}
+                            <Input id="amount-transfer" type="number" step="0.01" {...register('amount' as any)} placeholder="0.00" className="border-2"/>
+                            {(errors as any).amount && <p className="text-sm text-destructive">{((errors as any).amount as any).message}</p>}
                         </div>
                     </div>
                      <div className="space-y-2">
                         <Label htmlFor="description-transfer">Description (Optional)</Label>
-                        <Input id="description-transfer" {...register('description')} placeholder="e.g., Owner's drawing" className="border-2"/>
-                        {errors.description && <p className="text-sm text-destructive">{(errors.description as any).message}</p>}
+                        <Input id="description-transfer" {...register('description' as any)} placeholder="e.g., Owner's drawing" className="border-2"/>
+                        {(errors as any).description && <p className="text-sm text-destructive">{((errors as any).description as any).message}</p>}
                     </div>
                     <div className="space-y-2">
                         <Label>Transfer Direction</Label>
@@ -887,7 +842,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                                 </RadioGroup>
                             )}
                         />
-                        {errors.transferFrom && <p className="text-sm text-destructive">{(errors.transferFrom as any).message}</p>}
+                        {(errors as any).transferFrom && <p className="text-sm text-destructive">{((errors as any).transferFrom as any).message}</p>}
                     </div>
                     {transferFrom === 'cash' && (
                         <div className="space-y-2 animate-fade-in">
@@ -906,7 +861,7 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                                     />
                                 )}
                             />
-                            {errors.transferToBankId && <p className="text-sm text-destructive">{(errors.transferToBankId as any).message}</p>}
+                            {(errors as any).transferToBankId && <p className="text-sm text-destructive">{((errors as any).transferToBankId as any).message}</p>}
                         </div>
                     )}
                     {transferFrom === 'bank' && (
@@ -926,12 +881,11 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                                     />
                                 )}
                             />
-                            {errors.transferFromBankId && <p className="text-sm text-destructive">{(errors.transferFromBankId as any).message}</p>}
+                            {(errors as any).transferFromBankId && <p className="text-sm text-destructive">{((errors as any).transferFromBankId as any).message}</p>}
                         </div>
                     )}
                   </div>
               )}
-
               {transactionType === 'ap_ar' && (
                   <div className="m-0 space-y-4 animate-fade-in">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -940,8 +894,8 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                         </div>
                         <div className="space-y-2">
                             <Label htmlFor="amount-ledger">Amount</Label>
-                            <Input id="amount-ledger" type="number" step="0.01" {...register('amount')} placeholder="0.00" className="border-2"/>
-                            {errors.amount && <p className="text-sm text-destructive">{(errors.amount as any).message}</p>}
+                            <Input id="amount-ledger" type="number" step="0.01" {...register('amount' as any)} placeholder="0.00" className="border-2"/>
+                            {(errors as any).amount && <p className="text-sm text-destructive">{((errors as any).amount as any).message}</p>}
                         </div>
                     </div>
                     <div className="space-y-2">
@@ -956,9 +910,8 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                                 </RadioGroup>
                             )}
                         />
-                        {errors.ledgerType && <p className="text-sm text-destructive">{(errors.ledgerType as any).message}</p>}
+                        {(errors as any).ledgerType && <p className="text-sm text-destructive">{((errors as any).ledgerType as any).message}</p>}
                     </div>
-
                     {ledgerType && (
                         <div className="space-y-2 animate-fade-in">
                             <Label>{currentLedgerContactType}</Label>
@@ -976,23 +929,22 @@ export function UnifiedTransactionForm({ setDialogOpen }: UnifiedTransactionForm
                                     />
                                 )}
                             />
-                            {errors.contact_id && <p className="text-sm text-destructive">{(errors.contact_id as any).message}</p>}
-                        
-                            {contact_id === 'new' && (
+                            {(errors as any).contact_id && <p className="text-sm text-destructive">{((errors as any).contact_id as any).message}</p>}
+                                                    {contact_id === 'new' && (
                                 <div className="flex items-end gap-2 pt-2 animate-fade-in">
                                     <div className="flex-grow space-y-1">
                                         <Label htmlFor="newContact">New {currentLedgerContactType} Name</Label>
-                                        <Input {...register('newContact')} placeholder={`Enter new ${currentLedgerContactType.toLowerCase()} name`} className="border-2"/>
+                                        <Input {...register('newContact' as any)} placeholder={`Enter new ${currentLedgerContactType.toLowerCase()} name`} className="border-2"/>
                                     </div>
                                 </div>
                             )}
-                            {errors.newContact && <p className="text-sm text-destructive">{(errors.newContact as any).message}</p>}
+                            {(errors as any).newContact && <p className="text-sm text-destructive">{((errors as any).newContact as any).message}</p>}
                         </div>
                     )}
                         <div className="space-y-2">
                         <Label htmlFor="description-ap">Description</Label>
-                        <Input id="description-ap" {...register('description')} placeholder="e.g., Raw materials from X vendor" className="border-2"/>
-                        {errors.description && <p className="text-sm text-destructive">{(errors.description as any).message}</p>}
+                        <Input id="description-ap" {...register('description' as any)} placeholder="e.g., Raw materials from X vendor" className="border-2"/>
+                        {(errors as any).description && <p className="text-sm text-destructive">{((errors as any).description as any).message}</p>}
                     </div>
                   </div>
               )}

@@ -16,7 +16,7 @@ export async function createSession(payload: SessionPayload, rememberMe?: boolea
   const sessionPayload = JSON.stringify(payload);
   const maxAge = rememberMe ? 60 * 60 * 24 * 30 : 60 * 60 * 24; // 30 days or 1 day
 
-  cookies().set('session', sessionPayload, {
+  (await cookies()).set('session', sessionPayload, {
     httpOnly: true,
     secure: true, 
     maxAge: maxAge,
@@ -28,7 +28,7 @@ export async function createSession(payload: SessionPayload, rememberMe?: boolea
 }
 
 export async function getSession(): Promise<SessionPayload | null> {
-  const sessionCookie = cookies().get('session')?.value;
+  const sessionCookie = (await cookies()).get('session')?.value;
   if (!sessionCookie) return null;
 
   try {
@@ -41,7 +41,7 @@ export async function getSession(): Promise<SessionPayload | null> {
 }
 
 export async function removeSession() {
-  cookies().set('session', '', {
+  (await cookies()).set('session', '', {
     httpOnly: true,
     secure: true,
     sameSite: 'none',

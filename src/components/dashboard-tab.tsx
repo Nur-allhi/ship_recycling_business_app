@@ -21,8 +21,8 @@ export function DashboardTab({ setActiveTab }: DashboardTabProps) {
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: currency, currencyDisplay: 'symbol' }).format(amount)
   }
 
-  const totalStockValue = stockItems.reduce((acc, item) => acc + item.weight * item.purchasePricePerKg, 0)
-  const totalStockWeight = stockItems.reduce((acc, item) => acc + item.weight, 0);
+  const totalStockValue = (stockItems || []).reduce((acc, item) => acc + item.weight * item.purchasePricePerKg, 0)
+  const totalStockWeight = (stockItems || []).reduce((acc, item) => acc + item.weight, 0);
   const totalBalance = cashBalance + bankBalance
 
   const renderValue = (value: string | number, isCurrency = true) => {

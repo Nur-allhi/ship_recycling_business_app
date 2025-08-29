@@ -87,7 +87,7 @@ export function EditTransactionSheet({ isOpen, setIsOpen, transaction, transacti
         actual_amount: tx.actual_amount,
         description: tx.description,
         category: tx.category,
-        inOutType: tx.type === 'income' || tx.type === 'deposit' ? 'in' : 'out',
+        inOutType: (tx.type === 'income' || tx.type === 'deposit' ? 'in' : 'out') as 'in' | 'out',
       }
     }
     if (isStock) {

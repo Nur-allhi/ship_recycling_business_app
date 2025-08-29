@@ -280,10 +280,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 ];
 
                 for (const cat of essentialCategories) {
-                    const exists = (categoriesData || []).some((c: Category) => c.name === cat.name && c.type === cat.type);
+                    const categories = Array.isArray(categoriesData) ? (categoriesData as unknown as Category[]) : [];
+                    const exists = categories.some((c) => c.name === cat.name && c.type === cat.type);
                     if (!exists) {
                         const newCat = await server.appendData({ tableName: 'categories', data: cat, select: '*' });
-                        if (newCat) (categoriesData || []).push(newCat);
+                        if (newCat && Array.isArray(categoriesData)) {
+                            ((categoriesData as unknown) as Category[]).push((newCat as unknown) as Category);
+                        }
                     }
                 }
 
@@ -468,7 +471,7 @@ function useLiveDBData() {
     const categories = useLiveQuery(() => db.categories.toArray(), []);
     const vendors = useLiveQuery(() => db.vendors.toArray(), []);
     const clients = useLiveQuery(() => db.clients.toArray(), []);
-    const syncQueueCount = useLiveQuery(() => db.sync_queue.count(), 0) ?? 0;
+    const syncQueueCount = useLiveQuery(() => db.sync_queue.count(), []) ?? 0;
 
     const { cashCategories, bankCategories } = useMemo(() => {
         const dbCash: Category[] = [];

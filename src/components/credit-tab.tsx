@@ -15,7 +15,7 @@ export function CreditTab() {
     const [mobileView, setMobileView] = useState<'payables' | 'receivables'>('payables');
     const isMobile = useIsMobile();
     
-    const formatCurrency = (amount: number) => {
+    const formatCurrency = (amount: number): string => {
         if (amount < 0) {
             return `-${formatCurrency(Math.abs(amount))}`;
         }

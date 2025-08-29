@@ -260,7 +260,7 @@ export function ReceivablesList() {
                  <ContactHistoryDialog 
                     isOpen={historyDialogState.isOpen}
                     setIsOpen={(isOpen) => setHistoryDialogState({ isOpen, contact: null })}
-                    contact={historyDialogState.contact}
+                    contact={historyDialogState.contact as any}
                     contactType="client"
                 />
             )}

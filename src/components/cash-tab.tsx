@@ -442,9 +442,7 @@ export function CashTab() {
                                   <ResponsiveSelect 
                                     value={selectedTransferBankId}
                                     onValueChange={setSelectedTransferBankId}
-                                    name="bank_id" 
                                     title="Select a Bank Account" 
-                                    required 
                                     items={(banks || []).map(b => ({value: b.id, label: b.name}))} 
                                   />
                               </div>

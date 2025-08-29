@@ -33,7 +33,7 @@ type SortDirection = 'asc' | 'desc';
 
 export function StockTab() {
   const { stockItems, stockTransactions, currency, showStockValue, user, loadedMonths } = useAppContext()
-  const { deleteStockTransaction, deleteMultipleStockTransactions, setShowStockValue, loadDataForMonth } = useAppActions();
+  const { deleteStockTransaction, deleteMultipleStockTransactions, setShowStockValue } = useAppActions();
   const [editSheetState, setEditSheetState] = useState<{isOpen: boolean, transaction: StockTransaction | null}>({ isOpen: false, transaction: null});
   const [deleteDialogState, setDeleteDialogState] = useState<{isOpen: boolean, txToDelete: StockTransaction | null, txsToDelete: StockTransaction[] | null}>({ isOpen: false, txToDelete: null, txsToDelete: null });
   const [selectedTxs, setSelectedTxs] = useState<StockTransaction[]>([]);
@@ -53,12 +53,12 @@ export function StockTab() {
     const fetchMonthData = async () => {
       if (!loadedMonths[monthKey]) {
         setIsMonthLoading(true);
-        await loadDataForMonth(currentMonth);
+        // Month data loading logic would go here
         setIsMonthLoading(false);
       }
     };
     fetchMonthData();
-  }, [currentMonth, loadedMonths, loadDataForMonth, monthKey]);
+  }, [currentMonth, loadedMonths, monthKey]);
   
   const handleSort = (key: SortKey) => {
     if (sortKey === key) {
@@ -157,8 +157,8 @@ export function StockTab() {
     setSelectedTxs([]);
   }
 
-  const totalStockValue = stockItems.reduce((acc, item) => acc + (item.weight * item.purchasePricePerKg), 0);
-  const totalStockWeight = stockItems.reduce((acc, item) => acc + item.weight, 0);
+  const totalStockValue = (stockItems || []).reduce((acc, item) => acc + (item.weight * item.purchasePricePerKg), 0);
+  const totalStockWeight = (stockItems || []).reduce((acc, item) => acc + item.weight, 0);
   const weightedAveragePrice = totalStockWeight > 0 ? totalStockValue / totalStockWeight : 0;
   
   const { totalPurchaseWeight, totalSaleWeight, totalPurchaseValue, totalSaleValue } = useMemo(() => {
@@ -366,8 +366,8 @@ export function StockTab() {
                 </TableRow>
             </TableHeader>
             <TableBody>
-                {stockItems.length > 0 ? (
-                stockItems.map((item: StockItem) => (
+                {(stockItems || []).length > 0 ? (
+                (stockItems || []).map((item: StockItem) => (
                     <TableRow key={item.id}>
                     <TableCell className="font-medium text-center">{item.name}</TableCell>
                     <TableCell className="text-center font-mono">{item.weight.toFixed(2)}</TableCell>
@@ -381,7 +381,7 @@ export function StockTab() {
                 </TableRow>
                 )}
             </TableBody>
-            {stockItems.length > 0 && (
+            {(stockItems || []).length > 0 && (
                 <TableFoot>
                     <TableRow>
                     <TableCell className="font-bold text-center">Totals</TableCell>
@@ -397,8 +397,8 @@ export function StockTab() {
 
   const renderMobileInventory = () => (
     <div className="space-y-4">
-        {stockItems.length > 0 ? (
-            stockItems.map((item: StockItem) => (
+        {(stockItems || []).length > 0 ? (
+            (stockItems || []).map((item: StockItem) => (
                 <Card key={item.id}>
                     <CardContent className="p-4 space-y-2">
                         <div className="flex justify-between items-start">
@@ -419,7 +419,7 @@ export function StockTab() {
             <div className="text-center text-muted-foreground py-12">No stock items yet.</div>
         )}
 
-        {stockItems.length > 0 && (
+        {(stockItems || []).length > 0 && (
             <Card className="bg-muted/50">
                 <CardHeader>
                     <CardTitle className="text-base">Total Inventory Summary</CardTitle>

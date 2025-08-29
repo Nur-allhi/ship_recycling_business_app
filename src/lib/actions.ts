@@ -708,34 +708,40 @@ export async function getOrCreateSnapshot(date: string): Promise<MonthlySnapshot
             readData({ tableName: 'initial_stock', select: '*' }),
         ]);
 
-        const cash_balance = (cashTxs || []).reduce((acc, tx) => acc + (tx.type === 'income' ? tx.actual_amount : -tx.actual_amount), 0);
+        const cash_balance = Array.isArray(cashTxs) ? (cashTxs as any[]).reduce((acc, tx) => acc + (tx.type === 'income' ? tx.actual_amount : -tx.actual_amount), 0) : 0;
         const bank_balances: Record<string, number> = {};
-        (bankTxs || []).forEach(tx => {
-            if (!bank_balances[tx.bank_id]) bank_balances[tx.bank_id] = 0;
-            bank_balances[tx.bank_id] += (tx.type === 'deposit' ? tx.actual_amount : -tx.actual_amount);
-        });
+        if (Array.isArray(bankTxs)) {
+            (bankTxs as any[]).forEach(tx => {
+                if (!bank_balances[tx.bank_id]) bank_balances[tx.bank_id] = 0;
+                bank_balances[tx.bank_id] += (tx.type === 'deposit' ? tx.actual_amount : -tx.actual_amount);
+            });
+        }
 
-        const total_receivables = (ledgerTxs || []).filter(tx => tx.type === 'receivable').reduce((acc, tx) => acc + (tx.amount - tx.paid_amount), 0);
-        const total_payables = (ledgerTxs || []).filter(tx => tx.type === 'payable').reduce((acc, tx) => acc + (tx.amount - tx.paid_amount), 0);
+        const total_receivables = Array.isArray(ledgerTxs) ? (ledgerTxs as any[]).filter(tx => tx.type === 'receivable').reduce((acc, tx) => acc + (tx.amount - tx.paid_amount), 0) : 0;
+        const total_payables = Array.isArray(ledgerTxs) ? (ledgerTxs as any[]).filter(tx => tx.type === 'payable').reduce((acc, tx) => acc + (tx.amount - tx.paid_amount), 0) : 0;
         
         const stockPortfolio: Record<string, { weight: number, totalValue: number }> = {};
-        (initialStock || []).forEach(item => {
-            if (!stockPortfolio[item.name]) stockPortfolio[item.name] = { weight: 0, totalValue: 0 };
-            stockPortfolio[item.name].weight += item.weight;
-            stockPortfolio[item.name].totalValue += item.weight * item.purchasePricePerKg;
-        });
-        (stockTxs || []).forEach(tx => {
-            if (!stockPortfolio[tx.stockItemName]) stockPortfolio[tx.stockItemName] = { weight: 0, totalValue: 0 };
-            const item = stockPortfolio[tx.stockItemName];
-            const currentAvgPrice = item.weight > 0 ? item.totalValue / item.weight : 0;
-            if (tx.type === 'purchase') {
-                item.weight += tx.weight;
-                item.totalValue += tx.weight * tx.pricePerKg;
-            } else {
-                item.weight -= tx.weight;
-                item.totalValue -= tx.weight * currentAvgPrice;
-            }
-        });
+        if (Array.isArray(initialStock)) {
+            (initialStock as any[]).forEach(item => {
+                if (!stockPortfolio[item.name]) stockPortfolio[item.name] = { weight: 0, totalValue: 0 };
+                stockPortfolio[item.name].weight += item.weight;
+                stockPortfolio[item.name].totalValue += item.weight * item.purchasePricePerKg;
+            });
+        }
+        if (Array.isArray(stockTxs)) {
+            (stockTxs as any[]).forEach(tx => {
+                if (!stockPortfolio[tx.stockItemName]) stockPortfolio[tx.stockItemName] = { weight: 0, totalValue: 0 };
+                const item = stockPortfolio[tx.stockItemName];
+                const currentAvgPrice = item.weight > 0 ? item.totalValue / item.weight : 0;
+                if (tx.type === 'purchase') {
+                    item.weight += tx.weight;
+                    item.totalValue += tx.weight * tx.pricePerKg;
+                } else {
+                    item.weight -= tx.weight;
+                    item.totalValue -= tx.weight * currentAvgPrice;
+                }
+            });
+        }
         const stock_items: Record<string, { weight: number; value: number }> = {};
         Object.entries(stockPortfolio).forEach(([name, data]) => {
             stock_items[name] = { weight: data.weight, value: data.totalValue };

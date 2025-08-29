@@ -67,9 +67,9 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
 
         // Fetch ALL data for the given range, ignoring what's in the state
         const [cashTransactions, bankTransactions, stockTransactions] = await Promise.all([
-            readData({ tableName: 'cash_transactions', startDate: fromDate.toISOString(), endDate: toDate.toISOString() }),
-            readData({ tableName: 'bank_transactions', startDate: fromDate.toISOString(), endDate: toDate.toISOString() }),
-            readData({ tableName: 'stock_transactions', startDate: fromDate.toISOString(), endDate: toDate.toISOString() }),
+            readData({ tableName: 'cash_transactions', select: '*', startDate: fromDate.toISOString(), endDate: toDate.toISOString() }),
+            readData({ tableName: 'bank_transactions', select: '*', startDate: fromDate.toISOString(), endDate: toDate.toISOString() }),
+            readData({ tableName: 'stock_transactions', select: '*', startDate: fromDate.toISOString(), endDate: toDate.toISOString() }),
         ]);
 
         const doc = new jsPDF();
@@ -111,7 +111,7 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
         finalY = 35;
         
         if (dataSource === 'cash' || dataSource === 'bank') {
-            let allTxs: (CashTransaction | BankTransaction)[] = dataSource === 'cash' ? [...(cashTransactions || [])] : [...(bankTransactions || [])];
+            let allTxs: (CashTransaction | BankTransaction)[] = dataSource === 'cash' ? [...((cashTransactions as unknown) as CashTransaction[] || [])] : [...((bankTransactions as unknown) as BankTransaction[] || [])];
             if (dataSource === 'bank' && selectedBankId !== 'all') {
                 allTxs = allTxs.filter(tx => (tx as BankTransaction).bank_id === selectedBankId);
             }
@@ -159,7 +159,7 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
             }
 
         } else { // Stock
-            const { totalPurchaseValue, totalSaleValue } = (stockTransactions || []).reduce((acc, tx) => {
+            const { totalPurchaseValue, totalSaleValue } = ((stockTransactions as unknown) as StockTransaction[] || []).reduce((acc, tx) => {
                 if (tx.type === 'purchase') acc.totalPurchaseValue += tx.actual_amount;
                 else acc.totalSaleValue += tx.actual_amount;
                 return acc;
@@ -174,7 +174,7 @@ export function PdfExportDialog({ isOpen, setIsOpen }: PdfExportDialogProps) {
 
             tableHeaders = [['Date', 'Description', 'Item', 'Type', 'Weight (kg)', 'Expected', 'Actual', 'Diff.', 'Reason']];
 
-            tableData = (stockTransactions || []).sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime()).map((tx: StockTransaction) => [
+            tableData = ((stockTransactions as unknown) as StockTransaction[] || []).sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime()).map((tx: StockTransaction) => [
                 format(new Date(tx.date), 'dd-MM-yyyy'),
                 tx.description || '',
                 tx.stockItemName,

@@ -17,9 +17,13 @@ export function ActivityLogTab() {
   const fetchLogs = useCallback(async () => {
     setIsLoading(true);
     try {
-      const fetchedLogs = await readData({ tableName: 'activity_log' });
-      // Supabase might return null, so ensure we have an array
-      setLogs(fetchedLogs?.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()) || []);
+      const fetchedLogs = await readData({ tableName: 'activity_log', select: '*' });
+      // Ensure we have a valid array and type it properly
+      if (Array.isArray(fetchedLogs)) {
+        setLogs(((fetchedLogs as unknown) as ActivityLog[]).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));
+      } else {
+        setLogs([]);
+      }
     } catch (error: any) {
       toast.error('Error fetching activity logs', { description: error.message });
     } finally {

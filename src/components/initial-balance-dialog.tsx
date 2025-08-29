@@ -190,7 +190,7 @@ export function InitialBalanceDialog({ isOpen }: InitialBalanceDialogProps) {
                         </Label>
                         <Input
                             id={`bank-balance-${bank.id}`}
-                            ref={el => bankRefs.current[bank.id] = el}
+                            ref={el => { bankRefs.current[bank.id] = el; }}
                             type="number"
                             placeholder="Initial Bank Balance"
                             className="col-span-3"
