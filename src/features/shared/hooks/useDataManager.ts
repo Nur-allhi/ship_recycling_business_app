@@ -2,9 +2,25 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { toast } from 'sonner';
+import { format } from 'date-fns';
 import type { User, Category, CashTransaction, BankTransaction, StockTransaction, LedgerTransaction, Vendor, Client, Bank, StockItem, MonthlySnapshot } from '@/lib/types';
 import { db, bulkPut, clearAllData as clearLocalDb } from '@/lib/db';
 import * as server from '@/lib/actions';
+
+// Helper function to validate if data is an array and not an error object
+const isValidDataArray = (data: any): data is any[] => {
+  return Array.isArray(data) && data.every(item => item && typeof item === 'object' && !('error' in item));
+};
+
+// Helper function to validate if an object is a valid Category
+const isValidCategory = (obj: any): obj is Category => {
+  return obj && typeof obj === 'object' && 'id' in obj && 'name' in obj && 'type' in obj && 'direction' in obj && 'is_deletable' in obj;
+};
+
+// Helper function to validate if data is a valid Category array
+const isValidCategoryArray = (data: any): data is Category[] => {
+  return Array.isArray(data) && data.every(item => isValidCategory(item));
+};
 
 type FontSize = 'sm' | 'base' | 'lg';
 
@@ -134,10 +150,10 @@ export function useDataManager(
           server.readData({ tableName: 'initial_stock', select: '*' }),
         ]);
         
-        const ledgerTxsWithInstallments = (ledgerData || []).map((tx: any) => ({
+        const ledgerTxsWithInstallments = isValidDataArray(ledgerData) ? ledgerData.map((tx: any) => ({
           ...tx,
-          installments: (installmentsData || []).filter((ins: any) => ins.ap_ar_transaction_id === tx.id)
-        }));
+          installments: isValidDataArray(installmentsData) ? installmentsData.filter((ins: any) => ins.ap_ar_transaction_id === tx.id) : []
+        })) : [];
 
         // Ensure essential categories exist
         const essentialCategories = [
@@ -159,12 +175,16 @@ export function useDataManager(
           { name: 'Advance Received', type: 'bank', direction: 'credit', is_deletable: false },
         ];
         
-        if (Array.isArray(categoriesData)) {
+        // Check if categoriesData is a valid array and not an error object
+        if (isValidCategoryArray(categoriesData)) {
             for (const cat of essentialCategories) {
-                const exists = (categoriesData as Category[]).some((c: Category) => c.name === cat.name && c.type === cat.type);
+                const exists = categoriesData.some((c: Category) => c.name === cat.name && c.type === cat.type);
                 if (!exists) {
                     const newCat = await server.appendData({ tableName: 'categories', data: cat, select: '*' });
-                    if (newCat) (categoriesData as Category[]).push(newCat as Category);
+                    // Check if newCat is a valid Category object and not an error
+                    if (isValidCategory(newCat)) {
+                        categoriesData.push(newCat);
+                    }
                 }
             }
         }
@@ -182,17 +202,17 @@ export function useDataManager(
             lastSync: null
           });
           
-          await bulkPut('categories', categoriesData);
-          await bulkPut('vendors', vendorsData);
-          await bulkPut('clients', clientsData);
-          await bulkPut('banks', banksData);
-          await bulkPut('cash_transactions', cashTxs);
-          await bulkPut('bank_transactions', bankTxs);
-          await bulkPut('stock_transactions', stockTxs);
-          await bulkPut('ap_ar_transactions', ledgerTxsWithInstallments);
-          await bulkPut('payment_installments', installmentsData);
-          await bulkPut('monthly_snapshots', snapshotsData);
-          await bulkPut('initial_stock', initialStockData);
+          await bulkPut('categories', isValidDataArray(categoriesData) ? categoriesData : []);
+          await bulkPut('vendors', isValidDataArray(vendorsData) ? vendorsData : []);
+          await bulkPut('clients', isValidDataArray(clientsData) ? clientsData : []);
+          await bulkPut('banks', isValidDataArray(banksData) ? banksData : []);
+          await bulkPut('cash_transactions', isValidDataArray(cashTxs) ? cashTxs : []);
+          await bulkPut('bank_transactions', isValidDataArray(bankTxs) ? bankTxs : []);
+          await bulkPut('stock_transactions', isValidDataArray(stockTxs) ? stockTxs : []);
+          await bulkPut('ap_ar_transactions', Array.isArray(ledgerTxsWithInstallments) ? ledgerTxsWithInstallments : []);
+          await bulkPut('payment_installments', isValidDataArray(installmentsData) ? installmentsData : []);
+          await bulkPut('monthly_snapshots', isValidDataArray(snapshotsData) ? snapshotsData : []);
+          await bulkPut('initial_stock', isValidDataArray(initialStockData) ? initialStockData : []);
           await db.app_state.update(1, { lastSync: new Date().toISOString() });
         });
         
@@ -220,10 +240,10 @@ export function useDataManager(
           server.readDeletedData({ tableName: 'ap_ar_transactions', select: '*' }),
         ]);
         setDeletedItems({ 
-          cash: cash || [], 
-          bank: bank || [], 
-          stock: stock || [], 
-          ap_ar: ap_ar || [] 
+          cash: isValidDataArray(cash) ? cash : [], 
+          bank: isValidDataArray(bank) ? bank : [], 
+          stock: isValidDataArray(stock) ? stock : [], 
+          ap_ar: isValidDataArray(ap_ar) ? ap_ar : [] 
         });
       } catch (error) {
         handleApiError(error);
