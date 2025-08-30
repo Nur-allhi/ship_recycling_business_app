@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useState, useMemo, useEffect, useCallback } from "react"
@@ -59,22 +60,24 @@ export function CashTab() {
   const fetchSnapshot = useCallback(async () => {
     setIsSnapshotLoading(true);
     try {
-      // First, try to get the snapshot from the local DB.
       const localSnapshot = await db.monthly_snapshots.where('snapshot_date').equals(toYYYYMMDD(startOfMonth(currentMonth))).first();
-      setMonthlySnapshot(localSnapshot || null);
       
-      // If online, fetch from server to ensure it's up-to-date or to create it.
       if (isOnline) {
         const serverSnapshot = await server.getOrCreateSnapshot(currentMonth.toISOString());
-        // If server returns a snapshot (it might not for non-admins if it doesn't exist), update state and local DB.
         if (serverSnapshot) {
             setMonthlySnapshot(serverSnapshot);
             await db.monthly_snapshots.put(serverSnapshot);
+        } else {
+            setMonthlySnapshot(localSnapshot || null);
         }
+      } else {
+        setMonthlySnapshot(localSnapshot || null);
       }
     } catch(e) {
+        console.error("Failed to fetch or create snapshot:", e);
         handleApiError(e);
-        // In case of error, rely on whatever local snapshot we might have found.
+        const localSnapshot = await db.monthly_snapshots.where('snapshot_date').equals(toYYYYMMDD(startOfMonth(currentMonth))).first();
+        setMonthlySnapshot(localSnapshot || null);
     } finally {
         setIsSnapshotLoading(false);
     }

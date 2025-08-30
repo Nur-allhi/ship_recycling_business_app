@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useState, useMemo, useEffect, useCallback } from "react"
@@ -34,7 +35,7 @@ import { ResponsiveSelect } from "@/components/ui/responsive-select"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { Badge } from "@/components/ui/badge"
 import * as server from "@/lib/actions";
-import { db } from "@/lib/db"
+import { db } from "@/lib/db";
 
 const toYYYYMMDD = (date: Date) => {
     const d = new Date(date);
@@ -67,22 +68,26 @@ export function BankTab() {
   const fetchSnapshot = useCallback(async () => {
     setIsSnapshotLoading(true);
     try {
-      // First, try to get the snapshot from the local DB.
       const localSnapshot = await db.monthly_snapshots.where('snapshot_date').equals(toYYYYMMDD(startOfMonth(currentMonth))).first();
-      setMonthlySnapshot(localSnapshot || null);
       
-      // If online, fetch from server to ensure it's up-to-date or to create it.
       if (isOnline) {
         const serverSnapshot = await server.getOrCreateSnapshot(currentMonth.toISOString());
-        // If server returns a snapshot (it might not for non-admins if it doesn't exist), update state and local DB.
         if (serverSnapshot) {
             setMonthlySnapshot(serverSnapshot);
             await db.monthly_snapshots.put(serverSnapshot);
+        } else {
+            // If server returns null (e.g. non-admin before snapshot exists), use local one if available
+            setMonthlySnapshot(localSnapshot || null);
         }
+      } else {
+        setMonthlySnapshot(localSnapshot || null);
       }
     } catch(e) {
+        console.error("Failed to fetch or create snapshot:", e);
         handleApiError(e);
-        // In case of error, rely on whatever local snapshot we might have found.
+        // Fallback to local snapshot on error
+        const localSnapshot = await db.monthly_snapshots.where('snapshot_date').equals(toYYYYMMDD(startOfMonth(currentMonth))).first();
+        setMonthlySnapshot(localSnapshot || null);
     } finally {
         setIsSnapshotLoading(false);
     }

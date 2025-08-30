@@ -2,7 +2,7 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { toast } from 'sonner';
-import type { User, Category, CashTransaction, BankTransaction, StockTransaction, LedgerTransaction, Vendor, Client, Bank, StockItem } from '@/lib/types';
+import type { User, Category, CashTransaction, BankTransaction, StockTransaction, LedgerTransaction, Vendor, Client, Bank, StockItem, MonthlySnapshot } from '@/lib/types';
 import { db, bulkPut, clearAllData as clearLocalDb } from '@/lib/db';
 import * as server from '@/lib/actions';
 
@@ -27,6 +27,7 @@ export interface DataManagerActions {
   reloadData: (options?: { force?: boolean; needsInitialBalance?: boolean }) => Promise<void>;
   updateBalances: () => Promise<void>;
   loadRecycleBinData: () => Promise<void>;
+  loadDataForMonth: (date: Date) => Promise<void>;
   openInitialBalanceDialog: () => void;
   closeInitialBalanceDialog: () => void;
   setLoadedMonths: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
@@ -114,15 +115,6 @@ export function useDataManager(
 
       const localUser = await db.app_state.get(1);
       if (!localUser || !localUser.user || localUser.user.id !== user.id || options?.force) {
-        await db.app_state.put({
-          id: 1, 
-          user: user, 
-          fontSize: 'base', 
-          currency: 'BDT',
-          wastagePercentage: 0, 
-          showStockValue: false, 
-          lastSync: null
-        });
         
         const [
           categoriesData, vendorsData, clientsData, banksData, 
@@ -166,7 +158,7 @@ export function useDataManager(
           { name: 'Advance Payment', type: 'bank', direction: 'debit', is_deletable: false },
           { name: 'Advance Received', type: 'bank', direction: 'credit', is_deletable: false },
         ];
-
+        
         if (Array.isArray(categoriesData)) {
             for (const cat of essentialCategories) {
                 const exists = (categoriesData as Category[]).some((c: Category) => c.name === cat.name && c.type === cat.type);
@@ -176,6 +168,7 @@ export function useDataManager(
                 }
             }
         }
+
 
         await db.transaction('rw', db.tables, async () => {
           await clearLocalDb();
@@ -239,6 +232,16 @@ export function useDataManager(
       toast.error("Cannot load recycle bin data while offline.");
     }
   }, [handleApiError, isOnline]);
+  
+  const loadDataForMonth = useCallback(async (date: Date) => {
+    // This function will likely be used for fetching historical data on demand.
+    // For now, it's a placeholder to prevent errors.
+    console.log("loadDataForMonth called for:", date);
+    // In a real scenario, you'd fetch data for this month and update the local DB.
+    // e.g., const data = await server.readData({tableName: 'stock_transactions', startDate, endDate});
+    // await bulkPut('stock_transactions', data);
+    setLoadedMonths(prev => ({ ...prev, [format(date, 'yyyy-MM')]: true }));
+  }, [setLoadedMonths]);
 
   const openInitialBalanceDialog = () => setState(prev => ({ ...prev, isInitialBalanceDialogOpen: true }));
   const closeInitialBalanceDialog = () => setState(prev => ({ ...prev, isInitialBalanceDialogOpen: false }));
@@ -255,6 +258,7 @@ export function useDataManager(
     reloadData,
     updateBalances,
     loadRecycleBinData,
+    loadDataForMonth,
     openInitialBalanceDialog,
     closeInitialBalanceDialog,
     setLoadedMonths,
