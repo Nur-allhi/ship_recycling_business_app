@@ -65,23 +65,24 @@ export function BankTab() {
   const isAdmin = user?.role === 'admin';
 
   const fetchSnapshot = useCallback(async () => {
-    if (!isOnline) {
-        const localSnapshot = await db.monthly_snapshots.where('snapshot_date').equals(toYYYYMMDD(startOfMonth(currentMonth))).first();
-        setMonthlySnapshot(localSnapshot || null);
-        setIsSnapshotLoading(false);
-        return;
-    }
-    
     setIsSnapshotLoading(true);
     try {
-        const snapshot = await server.getOrCreateSnapshot(currentMonth.toISOString());
-        setMonthlySnapshot(snapshot);
-        if (snapshot) {
-            await db.monthly_snapshots.put(snapshot);
+      // First, try to get the snapshot from the local DB.
+      const localSnapshot = await db.monthly_snapshots.where('snapshot_date').equals(toYYYYMMDD(startOfMonth(currentMonth))).first();
+      setMonthlySnapshot(localSnapshot || null);
+      
+      // If online, fetch from server to ensure it's up-to-date or to create it.
+      if (isOnline) {
+        const serverSnapshot = await server.getOrCreateSnapshot(currentMonth.toISOString());
+        // If server returns a snapshot (it might not for non-admins if it doesn't exist), update state and local DB.
+        if (serverSnapshot) {
+            setMonthlySnapshot(serverSnapshot);
+            await db.monthly_snapshots.put(serverSnapshot);
         }
+      }
     } catch(e) {
         handleApiError(e);
-        setMonthlySnapshot(null);
+        // In case of error, rely on whatever local snapshot we might have found.
     } finally {
         setIsSnapshotLoading(false);
     }
@@ -312,6 +313,8 @@ export function BankTab() {
         <TableBody>
             {isLoading || isSnapshotLoading ? (
               <TableRow><TableCell colSpan={isSelectionMode ? 9 : 8} className="h-24 text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin" /></TableCell></TableRow>
+            ) : !monthlySnapshot ? (
+                <TableRow><TableCell colSpan={isSelectionMode ? 9 : 8} className="h-24 text-center">Opening balance for this month is being calculated. Please check back.</TableCell></TableRow>
             ) : sortedTransactions.length > 0 ? (
             sortedTransactions.map((tx: any) => (
                 <TableRow key={tx.id} data-state={selectedTxIds.includes(tx.id) && "selected"}>
@@ -350,7 +353,7 @@ export function BankTab() {
                 )}
                 <TableCell className="text-right font-mono font-semibold text-red-600 dark:text-red-400">{formatCurrency(tx.type === 'withdrawal' ? tx.actual_amount : 0)}</TableCell>
                 <TableCell className="text-right font-mono font-semibold text-green-600 dark:text-green-400">{formatCurrency(tx.type === 'deposit' ? tx.actual_amount : 0)}</TableCell>
-                <TableCell className="text-right font-mono font-semibold">{formatCurrency(tx.balance)}</TableCell>
+                <TableCell className="text-right font-mono font-semibold">{tx.balance ? formatCurrency(tx.balance) : 'Calculating...'}</TableCell>
                 {showActions && (
                   <TableCell className="text-center">
                       <div className="flex items-center justify-center gap-2">

@@ -75,7 +75,7 @@ export function DashboardTab({ setActiveTab }: DashboardTabProps) {
       return <Skeleton className="h-12 w-3/4" />;
     }
     const formattedValue = isCurrency ? formatCurrency(value as number) : `${value}`;
-    return <div className="text-4xl md:text-5xl lg:text-6xl font-bold font-mono animate-fade-in">{formattedValue}</div>;
+    return <div className="text-3xl md:text-4xl lg:text-5xl font-bold font-mono animate-fade-in">{formattedValue}</div>;
   };
 
   const renderSubtext = (value: string) => {

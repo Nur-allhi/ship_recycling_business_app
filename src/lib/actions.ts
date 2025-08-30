@@ -697,7 +697,10 @@ export async function getOrCreateSnapshot(date: string): Promise<MonthlySnapshot
         const { data: existingSnapshot } = await supabase.from('monthly_snapshots').select('*').eq('snapshot_date', snapshotDate).maybeSingle();
         if (existingSnapshot) return existingSnapshot;
         
-        if (session.role !== 'admin') return null;
+        // Only admins can create new snapshots. Non-admins will return null if it doesn't exist.
+        if (session.role !== 'admin') {
+            return null;
+        }
 
         const calculationEndDate = toYYYYMMDD(endOfMonth(subMonths(new Date(snapshotDate), 1)));
         const [cashTxs, bankTxs, ledgerTxs, stockTxs, initialStock] = await Promise.all([
