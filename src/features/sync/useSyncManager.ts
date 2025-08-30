@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
 import { db } from '@/lib/db';
@@ -7,7 +8,6 @@ export interface SyncManagerState {
   isSyncing: boolean;
   isOnline: boolean;
   isOnlineStatusReady: boolean;
-  syncQueueCount: number;
 }
 
 export interface SyncManagerActions {
@@ -24,7 +24,6 @@ export function useSyncManager(
     isSyncing: false,
     isOnline: true, // Always start with true to avoid hydration mismatch
     isOnlineStatusReady: false, // Track when online status is properly initialized
-    syncQueueCount: 0
   });
 
   const handleApiError = useCallback((error: any) => {
@@ -108,20 +107,6 @@ export function useSyncManager(
       window.removeEventListener('offline', handleOffline);
     };
   }, [processSyncQueue]);
-
-  // Update sync queue count
-  useEffect(() => {
-    const updateSyncQueueCount = async () => {
-      const count = await db.sync_queue.count();
-      setState(prev => ({ ...prev, syncQueueCount: count }));
-    };
-
-    updateSyncQueueCount();
-    
-    // Set up interval to periodically update count
-    const interval = setInterval(updateSyncQueueCount, 5000);
-    return () => clearInterval(interval);
-  }, []);
 
   return {
     ...state,

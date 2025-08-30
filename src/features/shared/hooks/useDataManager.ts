@@ -1,3 +1,4 @@
+
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { toast } from 'sonner';
@@ -105,7 +106,7 @@ export function useDataManager(
   // Update balances whenever transactions change
   useEffect(() => {
     updateBalances();
-  }, [liveData.cashTransactions, liveData.bankTransactions, liveData.ledgerTransactions]);
+  }, [liveData.cashTransactions, liveData.bankTransactions, liveData.ledgerTransactions, updateBalances]);
 
   const reloadData = useCallback(async (options?: { force?: boolean, needsInitialBalance?: boolean }) => {
     try {
@@ -166,15 +167,14 @@ export function useDataManager(
           { name: 'Advance Received', type: 'bank', direction: 'credit', is_deletable: false },
         ];
 
-        for (const cat of essentialCategories) {
-          const categories = Array.isArray(categoriesData) ? (categoriesData as unknown as Category[]) : [];
-          const exists = categories.some((c) => c.name === cat.name && c.type === cat.type);
-          if (!exists) {
-            const newCat = await server.appendData({ tableName: 'categories', data: cat, select: '*' });
-            if (newCat && Array.isArray(categoriesData)) {
-              ((categoriesData as unknown) as Category[]).push((newCat as unknown) as Category);
+        if (Array.isArray(categoriesData)) {
+            for (const cat of essentialCategories) {
+                const exists = (categoriesData as Category[]).some((c: Category) => c.name === cat.name && c.type === cat.type);
+                if (!exists) {
+                    const newCat = await server.appendData({ tableName: 'categories', data: cat, select: '*' });
+                    if (newCat) (categoriesData as Category[]).push(newCat as Category);
+                }
             }
-          }
         }
 
         await db.transaction('rw', db.tables, async () => {
@@ -215,7 +215,7 @@ export function useDataManager(
     } catch (error: any) {
       handleApiError(error);
     }
-  }, [user, handleApiError]);
+  }, [user, handleApiError, updateBalances]);
 
   const loadRecycleBinData = useCallback(async () => {
     if (isOnline) {
