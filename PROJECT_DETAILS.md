@@ -1,49 +1,260 @@
 # ShipShape Ledger - Project Map & Technical Breakdown
 
-This document provides a detailed map of the ShipShape Ledger application, outlining its architecture, file structure, features, and data flow. It is intended to serve as a comprehensive technical guide for developers.
+This document provides a detailed map of the ShipShape Ledger application, outlining its **refactored feature-based architecture**, file structure, features, and data flow. This document reflects the completed modular restructure that organizes code into feature-specific modules for improved maintainability and scalability.
 
 ## 1. High-Level Overview
 
 ### Project Purpose
-The ShipShape Ledger is an offline-first financial and inventory management application designed for a business named "Ha-Mim Iron Mart". It allows users to track cash, bank transactions, stock levels, accounts receivable (A/R), and accounts payable (A/P) seamlessly, with or without an internet connection.
+The ShipShape Ledger is an offline-first financial and inventory management application designed for "Ha-Mim Iron Mart" ship recycling business. It allows users to track cash, bank transactions, stock levels, accounts receivable (A/R), and accounts payable (A/P) seamlessly, with or without an internet connection.
 
 ### Core Technologies
-- **Framework**: Next.js (App Router)
-- **Language**: TypeScript
-- **UI**: React, ShadCN UI Components, Tailwind CSS
-- **Local Database (Offline Caching)**: Dexie.js (a wrapper for IndexedDB)
-- **Backend & Database**: Supabase (PostgreSQL, Auth)
-- **State Management**: React Context API (`AppContext`) combined with `dexie-react-hooks` for live UI updates.
+- **Framework**: Next.js 15.3.3 (App Router)
+- **Language**: TypeScript 5.x
+- **UI**: React 18.3.1, ShadCN UI Components, Tailwind CSS 3.4.1
+- **Local Database (Offline Caching)**: Dexie.js 4.0.7 (IndexedDB wrapper)
+- **Backend & Database**: Supabase (PostgreSQL, Auth, Storage)
+- **State Management**: React Context API (`AppContext`) with modular feature hooks
+- **Authentication**: Supabase Auth with JWT in httpOnly cookies
+- **Build Tools**: Next.js with Turbopack, PWA support via next-pwa
+
+### Architecture Patterns
+- **Feature-Based Architecture**: Code organized by business features rather than technical layers
+- **Offline-First Pattern**: Local data persistence with background sync
+- **Optimistic UI Updates**: Immediate local updates with server reconciliation
+- **Modular Hooks**: Feature-specific logic encapsulated in custom hooks
+- **Component Composition**: Reusable UI components with clear separation of concerns
 
 ---
 
-## 2. File & Folder Structure
+## 2. Refactored File & Folder Structure
 
-### Major Folders
-- **/src/app/**: The core of the Next.js application, containing routing, page layouts, and global context providers.
-- **/src/components/**: Contains all reusable React components, including UI elements and feature-specific tabs.
-- **/src/lib/**: Houses shared logic, utility functions, database definitions, and server-side actions.
-- **/src/hooks/**: Contains custom React hooks, such as `useIsMobile`.
+### Major Architectural Changes
+The application has been **completely refactored** from a monolithic structure to a **feature-based modular architecture**:
 
-### Key File Breakdown
+#### Before Refactoring:
+```
+src/
+├── app/
+├── components/           # All components mixed together
+├── lib/
+└── hooks/
+```
 
-| File Path | Description & Purpose | Feature(s) Responsible For | Side |
-| :--- | :--- | :--- | :--- |
-| `src/app/layout.tsx` | The root layout of the application. It sets up the main HTML structure, fonts, and wraps the entire app in the `AppProvider`. | Core App Structure | Client |
-| `src/app/page.tsx` | The main application view after login. It contains the primary `Tabs` component that orchestrates the different ledger views (Dashboard, Cash, Bank, etc.). | Main UI Navigation, Tab Layout | Client |
-| `src/app/login/page.tsx` | The UI for the login page. | User Login | Client |
-| `src/app/context/app-context.tsx` | **(Very Large File)** The heart of the application's state management. It initializes the app, manages user sessions, handles online/offline status, fetches and syncs data, and provides global state (balances, transactions) to all components. | **Core State Management**, Auth, Data Sync, Offline/Online Status | Client |
-| `src/app/context/app-actions.tsx` | Contains the `useAppActions` hook. This file centralizes all functions that modify the application's state (e.g., adding/deleting transactions, recording payments). It handles both local DB updates and queuing server syncs. | **Core Action Logic**, Transaction Management, Payment Recording | Client |
-| `src/lib/actions.ts` | **(Critical File)** Contains all server-side functions (Supabase interactions). This is the bridge between the client app and the PostgreSQL database. All database reads and writes are defined here. | **Database Communication**, Data CRUD, Server-side Logic | Server |
-| `src/lib/auth.ts` | Manages the session cookie. It handles creating, reading, and removing the `httpOnly` cookie that stores the user's session payload. | Session Management | Server |
-| `src/app/auth/actions.ts` | Contains server-side functions specifically for authentication (login, logout, add/delete users) that interact with Supabase Auth. | User Authentication | Server |
-| `src/lib/db.ts` | Defines the entire **local** IndexedDB schema using `Dexie.js`. It lists all tables, their indexes, and provides the `db` instance used for all local database operations. | Local Database Schema | Utility |
-| `src/components/unified-transaction-form.tsx` | **(Very Large File)** A complex, multi-purpose form used for adding all types of transactions (cash, bank, stock, etc.). It dynamically changes its fields based on user selections. | Adding All Transactions | Client |
-| `src/components/cash-tab.tsx` | The UI and logic for displaying the cash ledger, including monthly navigation and running balances. | Cash Ledger View | Client |
-| `src/components/bank-tab.tsx` | The UI and logic for the bank ledger. | Bank Ledger View | Client |
-| `src/components/stock-tab.tsx` | UI and logic for both the stock history and current inventory views. | Stock Ledger & Inventory | Client |
-| `src/components/credit-tab.tsx` | The main container for displaying Accounts Payable and Accounts Receivable lists. | A/R & A/P Management | Client |
-| `src/components/settings-tab.tsx` | The main navigation for all settings pages, including Appearance, General, Contacts, and Admin tools. | Settings Navigation | Client |
+#### After Refactoring:
+```
+src/
+├── app/                  # Core application setup
+├── features/            # 🆕 Feature-based modules
+│   ├── auth/           # Authentication logic
+│   ├── admin/          # Admin components
+│   ├── contacts/       # Contact management
+│   ├── dashboard/      # Dashboard functionality
+│   ├── ledger/         # Financial ledger components
+│   ├── settings/       # Application settings
+│   ├── shared/         # Shared utilities
+│   ├── stock/          # Stock management
+│   ├── sync/           # Data synchronization
+│   └── transactions/   # Transaction forms & validation
+├── components/         # Shared UI components & backward compatibility
+├── lib/               # Core utilities and database
+└── hooks/             # Global custom hooks
+```
+
+### Feature Modules Structure
+Each feature module follows a consistent structure:
+```
+features/[feature-name]/
+├── components/         # Feature-specific components
+│   ├── [Component].tsx
+│   └── index.ts       # Clean exports
+├── hooks/             # Feature-specific hooks (if needed)
+├── validation/        # Feature-specific schemas (if needed)
+└── index.ts          # Feature module exports
+```
+
+---
+
+## 3. Detailed Feature Module Breakdown
+
+### Core Application (`src/app/`)
+| File | Purpose | Refactoring Impact |
+|------|---------|-------------------|
+| `layout.tsx` | Root application layout | ✅ Unchanged - stable foundation |
+| `page.tsx` | Main application dashboard | ✅ Updated imports - now uses feature modules |
+| `context/app-context.tsx` | **Refactored** - Core state management | 🔄 **Session logic → `/features/auth/useSessionManager.ts`** |
+| `context/app-actions.tsx` | **Refactored** - Action handlers | 🔄 **Sync logic → `/features/sync/useSyncManager.ts`** |
+| `login/page.tsx` | Login page | ✅ Unchanged |
+| `auth/actions.ts` | Server-side auth actions | ✅ Unchanged |
+
+### Authentication Module (`src/features/auth/`)
+- **`useSessionManager.ts`** - 🆕 **Extracted from app-context.tsx**
+  - Session state management
+  - User authentication flow
+  - Login/logout handling
+  - Cookie-based session persistence
+
+### Data Synchronization Module (`src/features/sync/`)
+- **`sync.service.ts`** - 🆕 **Core sync functionality**
+  - `enqueue()` - Add operations to sync queue
+  - `flushQueue()` - Process pending sync operations
+  - `resolveConflict()` - Handle data conflicts
+- **`useSyncManager.ts`** - 🆕 **Extracted from app-context.tsx**
+  - Online/offline status management
+  - Background synchronization
+  - Queue processing logic
+
+### Transaction Management (`src/features/transactions/`)
+- **`components/UnifiedTransactionController.tsx`** - 🆕 **Refactored from unified-transaction-form.tsx**
+  - Main transaction form controller
+  - Orchestrates different transaction types
+- **`components/CashForm.tsx`** - 🆕 **Extracted component**
+- **`components/BankForm.tsx`** - 🆕 **Extracted component**
+- **`components/StockForm.tsx`** - 🆕 **Extracted component**
+- **`components/SharedFields.tsx`** - 🆕 **Reusable form fields**
+- **`validation/transaction.schema.ts`** - 🆕 **Extracted validation logic**
+
+### Financial Ledger (`src/features/ledger/`)
+- **`components/CashTab.tsx`** - 🔄 **Moved from `/components`**
+- **`components/BankTab.tsx`** - 🔄 **Moved from `/components`**
+- **`components/CreditTab.tsx`** - 🔄 **Moved from `/components`**
+- **`components/PayablesList.tsx`** - 🔄 **Moved from `/components`**
+- **`components/ReceivablesList.tsx`** - 🔄 **Moved from `/components`**
+- **Dialog components** for payment settlement and advance recording
+
+### Other Feature Modules
+- **`/features/dashboard/`** - Dashboard components
+- **`/features/stock/`** - Stock management
+- **`/features/contacts/`** - Client/vendor management
+- **`/features/admin/`** - Admin tools and user management
+- **`/features/settings/`** - Application settings
+- **`/features/shared/`** - Shared utilities and dialogs
+
+---
+
+## 4. Migration & Backward Compatibility
+
+### Import Path Strategy
+To ensure smooth migration, a **backward compatibility layer** was implemented:
+
+```typescript
+// src/components/index.ts - Backward compatibility exports
+export { DashboardTab } from '@/features/dashboard/components';
+export { CashTab, BankTab, CreditTab } from '@/features/ledger/components';
+export { StockTab } from '@/features/stock/components';
+export { UnifiedTransactionForm } from '@/features/transactions/components';
+// ... other feature exports
+```
+
+This allows existing code to continue working while gradually migrating to direct feature imports:
+
+```typescript
+// Old way (still works)
+import { CashTab } from '@/components';
+
+// New way (preferred)
+import { CashTab } from '@/features/ledger/components';
+```
+
+---
+
+## 5. Key Refactoring Benefits
+
+### 🎯 **Improved Maintainability**
+- **Feature Isolation**: Each business feature is self-contained
+- **Clear Dependencies**: Easier to understand component relationships
+- **Reduced Coupling**: Components only import what they need
+
+### 📈 **Enhanced Scalability**
+- **Modular Growth**: New features can be added without affecting others
+- **Team Collaboration**: Multiple developers can work on different features
+- **Code Reuse**: Shared components and utilities are clearly identified
+
+### 🔧 **Developer Experience**
+- **Faster Navigation**: Find feature-related code quickly
+- **Better IntelliSense**: More precise auto-completion
+- **Easier Testing**: Unit test individual features in isolation
+
+### 🚀 **Performance Benefits**
+- **Tree Shaking**: Better dead code elimination
+- **Lazy Loading**: Features can be loaded on demand (future enhancement)
+- **Bundle Optimization**: Smaller JavaScript bundles
+
+---
+
+## 6. Database Interaction (Unchanged)
+
+### Local Database (Dexie.js / IndexedDB)
+- **Definition**: `src/lib/db.ts` 
+- **Primary Consumers**: Feature hooks and context providers
+- **Tables**: `cash_transactions`, `bank_transactions`, `stock_transactions`, `ledger_transactions`, `vendors`, `clients`, `banks`, `categories`, `sync_queue`, `monthly_snapshots`
+
+### Remote Database (Supabase / PostgreSQL)
+- **Interface**: `src/lib/actions.ts`
+- **Authentication**: Service role key for trusted operations
+- **Sync Strategy**: Background synchronization with conflict resolution
+
+---
+
+## 7. Integration Points (Enhanced)
+
+### Supabase Integration
+- **Client Setup**: `src/lib/supabase.ts`
+- **Server Actions**: `src/lib/actions.ts` 
+- **Authentication**: `src/app/auth/actions.ts`
+- **Enhanced Security**: Row-level security with JWT validation
+
+### Progressive Web App
+- **Configuration**: `next.config.ts`
+- **Service Worker**: Auto-generated via next-pwa
+- **Offline Support**: Full offline functionality with sync queue
+
+---
+
+## 8. Development & Build Process
+
+### Commands
+```bash
+# Development with Turbopack
+npm run dev
+# or: next dev --turbopack -p 9002
+
+# Production Build
+npm run build
+
+# Type Checking
+npm run typecheck
+
+# Linting
+npm run lint
+```
+
+### Build Validation
+- ✅ **TypeScript Compilation**: All types validate correctly
+- ✅ **Module Resolution**: All imports resolve successfully  
+- ✅ **PWA Generation**: Service worker and manifest created
+- ✅ **Bundle Optimization**: Tree shaking and code splitting working
+- ✅ **Static Generation**: Pages pre-rendered for performance
+
+---
+
+## 9. Future Considerations
+
+### Potential Enhancements
+1. **Feature-based Lazy Loading**: Load features on-demand
+2. **Micro-Frontend Architecture**: Split features into separate deployments
+3. **Shared Component Library**: Extract UI components to separate package
+4. **Feature Flags**: Enable/disable features dynamically
+5. **Advanced Testing**: Feature-specific test suites
+
+### Migration Guidelines
+- **Gradual Migration**: Move imports to feature modules over time
+- **Documentation**: Update all documentation to reflect new structure
+- **Team Training**: Ensure all developers understand the new architecture
+- **Monitoring**: Track build performance and bundle sizes
+
+---
+
+*This document reflects the application state after the complete architectural refactoring completed in the QODER_TASKS.md implementation.*
 
 ---
 

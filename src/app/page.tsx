@@ -5,21 +5,15 @@ import { useState, useEffect } from 'react';
 import { useAppContext } from './context/app-context';
 import { cn } from '@/lib/utils';
 import { Wallet, Landmark, Boxes, Settings, PlusCircle, LogOut, CreditCard, Users, LineChart, Loader2 } from 'lucide-react';
-import { DashboardTab } from '@/components/dashboard-tab';
-import { CashTab } from '@/components/cash-tab';
-import { BankTab } from '@/components/bank-tab';
-import { StockTab } from '@/components/stock-tab';
-import { SettingsTab } from '@/components/settings-tab';
-import { CreditTab } from '@/components/credit-tab';
-import { UnifiedTransactionForm } from '@/components/unified-transaction-form';
+import { 
+  DashboardTab, CashTab, BankTab, StockTab, SettingsTab, CreditTab, 
+  UnifiedTransactionForm, InitialBalanceDialog, Logo, AppLoading 
+} from '@/components';
 import { Dialog, DialogContent, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
-import { InitialBalanceDialog } from '@/components/initial-balance-dialog';
-import Logo from '@/components/logo';
-import { AppLoading } from '@/components/app-loading';
 
 const fontClasses = {
   sm: 'text-sm',

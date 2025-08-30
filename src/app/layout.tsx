@@ -1,5 +1,5 @@
 
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { Toaster } from 'sonner';
 import { AppProvider } from '@/app/context/app-context';
@@ -9,6 +9,9 @@ export const metadata: Metadata = {
   title: 'Ha-Mim Iron Mart',
   description: 'Manage your inventory, sales, and finances for Ha-Mim Iron Mart.',
   manifest: '/manifest.json',
+};
+
+export const viewport: Viewport = {
   themeColor: '#ffffff',
 };
 

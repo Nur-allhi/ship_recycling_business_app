@@ -1,9 +1,8 @@
-
 "use client";
 import { useCallback } from 'react';
 import { toast } from 'sonner';
 import { db, bulkPut } from '@/lib/db';
-import type { SyncQueueItem } from '@/lib/db';
+import { syncService } from '@/features/sync/sync.service';
 import { useAppContext } from './app-context';
 import type { CashTransaction, BankTransaction, StockTransaction, Vendor, Client, LedgerTransaction, PaymentInstallment, StockItem } from '@/lib/types';
 import * as server from '@/lib/actions'; 
@@ -19,16 +18,16 @@ const toYYYYMMDD = (date: Date) => {
 export function useAppActions() {
     const { isOnline, handleApiError, reloadData, updateBalances, processSyncQueue, setUser, login, logout } = useAppContext();
 
-    const queueOrSync = useCallback(async (item: Omit<SyncQueueItem, 'timestamp' | 'id'>) => {
-        const id = await db.sync_queue.add({ ...item, timestamp: Date.now() });
+    const queueOrSync = useCallback(async (operation: string, payload: any) => {
+        await syncService.enqueue(operation, payload);
         if (isOnline) {
             // Don't await this. Let it run in the background.
-            processSyncQueue(id); 
+            processSyncQueue(); 
         } else {
             toast.info("You are offline. Change saved locally and will sync later.");
         }
     }, [isOnline, processSyncQueue]);
-    
+
     const addCashTransaction = async (tx: Omit<CashTransaction, 'id' | 'createdAt' | 'deletedAt'>) => {
         const tempId = `temp_cash_${Date.now()}`;
         const newTxData: CashTransaction = { ...tx, id: tempId, createdAt: new Date().toISOString() };
@@ -42,9 +41,9 @@ export function useAppActions() {
                 description: tx.description, contact_id: tx.contact_id!,
                 contact_name: tx.type === 'income' ? (await db.clients.get(tx.contact_id!))?.name || '?' : (await db.vendors.get(tx.contact_id!))?.name || '?',
             };
-            queueOrSync({ action: 'recordDirectPayment', payload: { ...payload, localId: tempId } });
+            queueOrSync('recordDirectPayment', { ...payload, localId: tempId });
         } else {
-            queueOrSync({ action: 'appendData', payload: { tableName: 'cash_transactions', data: tx, localId: tempId, logDescription: `Added cash transaction: ${tx.description}`, select: '*' } });
+            queueOrSync('appendData', { tableName: 'cash_transactions', data: tx, localId: tempId, logDescription: `Added cash transaction: ${tx.description}`, select: '*' });
         }
     };
 
@@ -61,9 +60,9 @@ export function useAppActions() {
                 description: tx.description, contact_id: tx.contact_id!,
                 contact_name: tx.type === 'deposit' ? (await db.clients.get(tx.contact_id!))?.name || '?' : (await db.vendors.get(tx.contact_id!))?.name || '?',
             };
-            queueOrSync({ action: 'recordDirectPayment', payload: { ...payload, localId: tempId } });
+            queueOrSync('recordDirectPayment', { ...payload, localId: tempId });
         } else {
-            queueOrSync({ action: 'appendData', payload: { tableName: 'bank_transactions', data: tx, localId: tempId, logDescription: `Added bank transaction: ${tx.description}`, select: '*' } });
+            queueOrSync('appendData', { tableName: 'bank_transactions', data: tx, localId: tempId, logDescription: `Added bank transaction: ${tx.description}`, select: '*' });
         }
     };
 
@@ -100,14 +99,11 @@ export function useAppActions() {
             };
             await db.ap_ar_transactions.add(ledgerData);
         }
-        
+
         await updateBalances();
         
         // Queue the entire stock operation for background sync
-        queueOrSync({
-            action: 'addStockTransaction',
-            payload: { stockTx: tx, bank_id, localId: stockTempId }
-        });
+        queueOrSync('addStockTransaction', { stockTx: tx, bank_id, localId: stockTempId });
     };
 
     const addLedgerTransaction = async (tx: Omit<LedgerTransaction, 'id' | 'deletedAt' | 'status' | 'paid_amount' | 'installments'>) => {
@@ -117,20 +113,20 @@ export function useAppActions() {
         await updateBalances();
         
         const { installments, id, ...syncData } = dataToSave;
-        queueOrSync({ action: 'appendData', payload: { tableName: 'ap_ar_transactions', data: syncData, localId: tempId, logDescription: `Added A/P or A/R: ${tx.description}`, select: '*' } });
-    }
-    
+        queueOrSync('appendData', { tableName: 'ap_ar_transactions', data: syncData, localId: tempId, logDescription: `Added A/P or A/R: ${tx.description}`, select: '*' });
+    };
+
     const editCashTransaction = async (originalTx: CashTransaction, updatedTxData: Partial<Omit<CashTransaction, 'id' | 'date' | 'createdAt'>>) => {
         await db.cash_transactions.update(originalTx.id, updatedTxData);
         await updateBalances();
-        queueOrSync({ action: 'updateData', payload: { tableName: 'cash_transactions', id: originalTx.id, data: updatedTxData, logDescription: `Edited cash tx: ${originalTx.id}` }});
+        queueOrSync('updateData', { tableName: 'cash_transactions', id: originalTx.id, data: updatedTxData, logDescription: `Edited cash tx: ${originalTx.id}` });
         toast.success("Cash transaction updated locally.");
     };
 
     const editBankTransaction = async (originalTx: BankTransaction, updatedTxData: Partial<Omit<BankTransaction, 'id'| 'date' | 'createdAt'>>) => {
         await db.bank_transactions.update(originalTx.id, updatedTxData);
         await updateBalances();
-        queueOrSync({ action: 'updateData', payload: { tableName: 'bank_transactions', id: originalTx.id, data: updatedTxData, logDescription: `Edited bank tx: ${originalTx.id}` }});
+        queueOrSync('updateData', { tableName: 'bank_transactions', id: originalTx.id, data: updatedTxData, logDescription: `Edited bank tx: ${originalTx.id}` });
         toast.success("Bank transaction updated locally.");
     };
 
@@ -157,7 +153,7 @@ export function useAppActions() {
         }
 
         await updateBalances();
-        queueOrSync({ action: 'updateStockTransaction', payload: { stockTxId: originalTx.id, updates: finalUpdates } });
+        queueOrSync('updateStockTransaction', { stockTxId: originalTx.id, updates: finalUpdates });
         toast.success("Stock transaction updated locally.");
     };
 
@@ -173,7 +169,7 @@ export function useAppActions() {
                 toast.success("Unsynced transaction removed.");
             }
         } else {
-            queueOrSync({ action: 'deleteData', payload: { tableName, id: txToDelete.id, logDescription: `Deleted item from ${tableName}` }});
+            queueOrSync('deleteData', { tableName, id: txToDelete.id, logDescription: `Deleted item from ${tableName}` });
             toast.success("Moved to recycle bin.");
         }
         
@@ -190,7 +186,7 @@ export function useAppActions() {
         
         await updateBalances();
     }, [queueOrSync, updateBalances]);
-    
+
     const setFontSize = (size: 'sm' | 'base' | 'lg') => db.app_state.update(1, { fontSize: size });
     const setWastagePercentage = (percentage: number) => db.app_state.update(1, { wastagePercentage: percentage });
     const setCurrency = (currency: string) => db.app_state.update(1, { currency: currency });
@@ -199,18 +195,18 @@ export function useAppActions() {
     const addBank = async (name: string) => {
         const tempId = `temp_${Date.now()}`;
         await db.banks.add({ id: tempId, name, createdAt: new Date().toISOString() });
-        queueOrSync({ action: 'appendData', payload: { tableName: 'banks', data: { name }, localId: tempId, select: '*' } });
+        queueOrSync('appendData', { tableName: 'banks', data: { name }, localId: tempId, select: '*' });
     };
 
     const addCategory = async (type: 'cash' | 'bank', name: string, direction: 'credit' | 'debit') => {
         const tempId = `temp_${Date.now()}`;
         await db.categories.add({ id: tempId, name, type, direction, is_deletable: true});
-        queueOrSync({ action: 'appendData', payload: { tableName: 'categories', data: { name, type, direction, is_deletable: true }, localId: tempId, select: '*' } });
+        queueOrSync('appendData', { tableName: 'categories', data: { name, type, direction, is_deletable: true }, localId: tempId, select: '*' });
     };
 
     const deleteCategory = async (id: string) => {
         await db.categories.delete(id);
-        queueOrSync({ action: 'deleteCategory', payload: { id } });
+        queueOrSync('deleteCategory', { id });
     };
 
     const transferFunds = async (from: 'cash' | 'bank', amount: number, date: string, bankId: string, description?: string) => {
@@ -228,7 +224,7 @@ export function useAppActions() {
         }
         
         await updateBalances();
-        queueOrSync({ action: 'transferFunds', payload: { from, amount, date, bankId, description, localCashId: tempCashId, localBankId: tempBankId } });
+        queueOrSync('transferFunds', { from, amount, date, bankId, description, localCashId: tempCashId, localBankId: tempBankId });
         toast.success("Transfer recorded locally.");
     };
 
@@ -245,87 +241,64 @@ export function useAppActions() {
         }
         
         await updateBalances();
-        queueOrSync({ action: 'setInitialBalances', payload: { cash, bankTotals, date: isoDate } });
+        queueOrSync('setInitialBalances', { cash, bankTotals, date: isoDate });
     };
-    
+
     const addInitialStockItem = async (item: { name: string; weight: number; pricePerKg: number }) => {
       const newItem: StockItem = { ...item, id: `temp_init_stock_${Date.now()}`, purchasePricePerKg: item.pricePerKg };
       await db.initial_stock.add(newItem as any);
       await updateBalances();
-      queueOrSync({ action: 'addInitialStockItem', payload: { item } });
-    }
-    
+      queueOrSync('addInitialStockItem', { item });
+    };
+
     const addVendor = async (name: string): Promise<Vendor> => {
         const tempId = `temp_vendor_${Date.now()}`;
         const newVendor = { id: tempId, name, createdAt: new Date().toISOString() };
         await db.vendors.add(newVendor);
-        queueOrSync({ action: 'appendData', payload: { tableName: 'vendors', data: { name }, localId: tempId, select: '*' }});
+        queueOrSync('appendData', { tableName: 'vendors', data: { name }, localId: tempId, select: '*' });
         return newVendor;
     };
-  
+
     const addClient = async (name: string): Promise<Client> => {
         const tempId = `temp_client_${Date.now()}`;
         const newClient = { id: tempId, name, createdAt: new Date().toISOString() };
         await db.clients.add(newClient);
-        queueOrSync({ action: 'appendData', payload: { tableName: 'clients', data: { name }, localId: tempId, select: '*' }});
+        queueOrSync('appendData', { tableName: 'clients', data: { name }, localId: tempId, select: '*' });
         return newClient;
     };
 
     const deleteVendor = async (id: string) => {
         await db.vendors.delete(id);
-        queueOrSync({ action: 'deleteVendor', payload: { id } });
+        queueOrSync('deleteVendor', { id });
     };
-  
+
     const deleteClient = async (id: string) => {
         await db.clients.delete(id);
-        queueOrSync({ action: 'deleteClient', payload: { id } });
+        queueOrSync('deleteClient', { id });
     };
 
     const recordPayment = async (contactId: string, contactName: string, paymentAmount: number, paymentMethod: 'cash' | 'bank', paymentDate: Date, ledgerType: 'payable' | 'receivable', bankId?: string) => {
         const tempFinancialId = `temp_payment_fin_${Date.now()}`;
-        const desc = `Payment ${ledgerType === 'payable' ? 'to' : 'from'} ${contactName}`;
-        const category = ledgerType === 'payable' ? 'A/P Settlement' : 'A/R Settlement';
         const isoDate = toYYYYMMDD(paymentDate);
+        const desc = `${ledgerType === 'payable' ? 'Payment to' : 'Payment from'} ${contactName}`;
+
+        const financialTxData = {
+            id: tempFinancialId, createdAt: new Date().toISOString(),
+            date: isoDate, actual_amount: paymentAmount, expected_amount: paymentAmount,
+            difference: 0, description: desc, category: ledgerType === 'payable' ? 'A/P Settlement' : 'A/R Settlement',
+            contact_id: contactId
+        };
 
         if (paymentMethod === 'cash') {
-            await db.cash_transactions.add({ id: tempFinancialId, date: isoDate, type: ledgerType === 'payable' ? 'expense' : 'income', category, description: desc, actual_amount: paymentAmount, expected_amount: paymentAmount, difference: 0, createdAt: new Date().toISOString(), contact_id: contactId });
+            await db.cash_transactions.add({ ...financialTxData, type: ledgerType === 'payable' ? 'expense' : 'income' });
         } else {
-            await db.bank_transactions.add({ id: tempFinancialId, date: isoDate, type: ledgerType === 'payable' ? 'withdrawal' : 'deposit', category, description: desc, actual_amount: paymentAmount, expected_amount: paymentAmount, difference: 0, bank_id: bankId!, createdAt: new Date().toISOString(), contact_id: contactId });
-        }
-
-        let amountToSettle = paymentAmount;
-        const outstandingTxs = await db.ap_ar_transactions
-            .where({ contact_id: contactId, type: ledgerType })
-            .filter(tx => tx.status !== 'paid')
-            .sortBy('date');
-            
-        for (const tx of outstandingTxs) {
-            if (amountToSettle <= 0) break;
-            const remainingBalance = tx.amount - tx.paid_amount;
-            const paymentForThisTx = Math.min(amountToSettle, remainingBalance);
-            
-            const newPaidAmount = tx.paid_amount + paymentForThisTx;
-            const newStatus = newPaidAmount >= tx.amount ? 'paid' : 'partially paid';
-            
-            await db.ap_ar_transactions.update(tx.id, { paid_amount: newPaidAmount, status: newStatus });
-            
-            const installment: PaymentInstallment = {
-                id: `temp_inst_${Date.now()}`,
-                ap_ar_transaction_id: tx.id,
-                amount: paymentForThisTx,
-                date: isoDate,
-                payment_method: paymentMethod,
-                createdAt: new Date().toISOString(),
-            };
-            await db.payment_installments.add(installment);
-            
-            amountToSettle -= paymentForThisTx;
+            await db.bank_transactions.add({ ...financialTxData, type: ledgerType === 'payable' ? 'withdrawal' : 'deposit', bank_id: bankId! });
         }
 
         await updateBalances();
-        queueOrSync({ 
-            action: 'recordPaymentAgainstTotal', 
-            payload: { contact_id: contactId, contact_name: contactName, payment_amount: paymentAmount, payment_date: isoDate, payment_method: paymentMethod, ledger_type: ledgerType, bank_id: bankId, localFinancialId: tempFinancialId, description: desc }
+        
+        queueOrSync('recordPaymentAgainstTotal', { 
+            contact_id: contactId, contact_name: contactName, payment_amount: paymentAmount, payment_date: isoDate, payment_method: paymentMethod, ledger_type: ledgerType, bank_id: bankId, localFinancialId: tempFinancialId, description: desc 
         });
         toast.success("Payment recorded locally.");
     };
@@ -350,19 +323,14 @@ export function useAppActions() {
             contact_name: contact_name,
             installments: []
         };
+
         await db.ap_ar_transactions.add(advanceLedgerEntry);
 
         const financialTxData = {
-            id: tempFinancialId,
-            date: isoDate,
-            description: ledgerDescription,
-            category: `Advance ${ledger_type === 'payable' ? 'Payment' : 'Received'}`,
-            expected_amount: amount,
-            actual_amount: amount,
-            difference: 0,
-            advance_id: tempLedgerId,
-            createdAt: new Date().toISOString(),
-            contact_id: contact_id,
+            id: tempFinancialId, createdAt: new Date().toISOString(),
+            date: isoDate, actual_amount: amount, expected_amount: amount,
+            difference: 0, description: ledgerDescription, advance_id: tempLedgerId,
+            category: 'Advance Payment', contact_id: contact_id
         };
 
         if (payment_method === 'cash') {
@@ -370,17 +338,15 @@ export function useAppActions() {
         } else {
             await db.bank_transactions.add({ ...financialTxData, type: ledger_type === 'payable' ? 'withdrawal' : 'deposit', bank_id: bank_id! });
         }
-        
+
         await updateBalances();
         
-        queueOrSync({
-            action: 'recordAdvancePayment',
-            payload: { ...payload, date: isoDate, localLedgerId: tempLedgerId, localFinancialId: tempFinancialId }
+        queueOrSync('recordAdvancePayment', { 
+            ...payload, date: isoDate, localLedgerId: tempLedgerId, localFinancialId: tempFinancialId 
         });
-        
         toast.success("Advance payment recorded locally and will sync to the server.");
     };
-    
+
     const { loadRecycleBinData, setDeletedItems } = useAppContext();
     const restoreTransaction = useCallback(async (txType: 'cash' | 'bank' | 'stock' | 'ap_ar', id: string) => {
         let tableName: 'cash_transactions' | 'bank_transactions' | 'stock_transactions' | 'ap_ar_transactions' = 'cash_transactions';
@@ -392,16 +358,16 @@ export function useAppActions() {
             case 'ap_ar': tableName = 'ap_ar_transactions'; break;
         }
 
-        queueOrSync({ action: 'restoreData', payload: { tableName, id } });
+        queueOrSync('restoreData', { tableName, id });
         setDeletedItems(prev => ({ ...prev, [txType]: (prev as any)[txType].filter((item: any) => item.id !== id) }));
         
         toast.success("Item restoration queued.");
         
         await updateBalances();
     }, [queueOrSync, setDeletedItems, updateBalances]);
-    
+
     const emptyRecycleBin = useCallback(async () => {
-        queueOrSync({ action: 'emptyRecycleBin', payload: {} });
+        queueOrSync('emptyRecycleBin', {});
         setDeletedItems({ cash: [], bank: [], stock: [], ap_ar: [] });
         toast.success("Recycle bin clearing queued.");
     }, [queueOrSync, setDeletedItems]);
@@ -426,7 +392,7 @@ export function useAppActions() {
         reader.onload = async (event) => {
             try {
                 const data = JSON.parse(event.target?.result as string);
-                queueOrSync({ action: 'batchImportData', payload: { data } });
+                queueOrSync('batchImportData', { data });
                 toast.info("Data import has been queued. The app will reload once completed.");
             } catch (e) {
                 toast.error("Import failed", { description: "Invalid file format." });
@@ -437,7 +403,7 @@ export function useAppActions() {
 
     const handleDeleteAllData = async () => {
         toast.info("Deleting all data. You will be logged out.");
-        queueOrSync({ action: 'deleteAllData', payload: {} });
+        queueOrSync('deleteAllData', {});
     };
 
     return {
@@ -477,7 +443,5 @@ export function useAppActions() {
         handleExport,
         handleImport,
         handleDeleteAllData,
-        login,
-        logout
     };
 }
