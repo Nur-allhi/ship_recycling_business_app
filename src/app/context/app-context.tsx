@@ -79,10 +79,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const [loadedMonths, setLoadedMonths] = useState<Record<string, boolean>>({});
 
     const logout = useCallback(async () => {
-        await serverLogout();
-        await clearLocalDb();
-        setUser(null);
-        window.location.href = '/login';
+        try {
+            await serverLogout();
+            // Explicitly clear user from app_state first
+            await db.app_state.update(1, { user: null });
+            await clearLocalDb();
+            setUser(null);
+            // A hard redirect is the most reliable way to clear all state.
+            window.location.href = '/login';
+        } catch (error) {
+            console.error("Logout failed:", error);
+            toast.error("Logout Failed", { description: "Could not properly log you out. Please try clearing your cookies and refreshing the page." });
+            // As a fallback, force a reload.
+            window.location.href = '/login';
+        }
     }, [setUser]);
 
     const handleApiError = useCallback((error: any) => {
@@ -292,7 +302,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 }
 
                 await db.transaction('rw', db.tables, async () => {
-                    await clearLocalDb();
                     await db.app_state.put({
                         id: 1, user: session, fontSize: 'base', currency: 'BDT',
                         wastagePercentage: 0, showStockValue: false, lastSync: null
