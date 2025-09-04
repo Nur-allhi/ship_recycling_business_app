@@ -4,6 +4,7 @@ import './globals.css';
 import { Toaster } from 'sonner';
 import { AppProvider } from '@/app/context/app-context';
 import { LayoutProvider } from '@/components/layout-provider';
+import LogoutOverlayWrapper from '@/components/logout-overlay-wrapper'; // Import as default
 
 export const metadata: Metadata = {
   title: 'Ha-Mim Iron Mart',
@@ -28,6 +29,7 @@ export default function RootLayout({
         <AppProvider>
           <LayoutProvider>
             {children}
+            <LogoutOverlayWrapper />
             <Toaster richColors />
           </LayoutProvider>
         </AppProvider>
@@ -35,3 +37,4 @@ export default function RootLayout({
     </html>
   );
 }
+

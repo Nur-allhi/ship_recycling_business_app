@@ -12,7 +12,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { hasUsers, login } from '@/app/auth/actions';
+import { hasUsers } from '@/app/auth/actions';
 import { Loader2 } from 'lucide-react';
 import Logo from './logo';
 import { Checkbox } from './ui/checkbox';
@@ -28,8 +28,7 @@ const formSchema = z.object({
 type FormData = z.infer<typeof formSchema>;
 
 export function LoginForm() {
-  const { reloadData } = useAppContext();
-  const [isLoading, setIsLoading] = useState(false);
+  const { login, isAuthenticating } = useAppContext();
   const [doesAnyUserExist, setDoesAnyUserExist] = useState(true);
   const router = useRouter();
   
@@ -64,9 +63,8 @@ export function LoginForm() {
   }, [setValue]);
 
   const onSubmit = async (data: FormData) => {
-    setIsLoading(true);
     try {
-      const result = await login(data);
+      const result = await login(data); // Await the login call from context
       
       if (data.rememberMe) {
           localStorage.setItem('rememberedUsername', data.username);
@@ -74,17 +72,9 @@ export function LoginForm() {
           localStorage.removeItem('rememberedUsername');
       }
 
-      toast.success("Login Successful", { description: "Welcome back!" });
-      // Force a full data reload to ensure the new session is picked up everywhere
-      await reloadData({ force: true, needsInitialBalance: result.needsInitialBalance });
-      router.push('/');
     } catch (error: any) {
-      toast.error(
-        'Login Failed',
-        {description: error.message}
-      );
-    } finally {
-        setIsLoading(false);
+      // Error handling is done in the context's login function, so no toast here.
+      console.error("Login form submission error:", error);
     }
   };
   
@@ -123,8 +113,8 @@ export function LoginForm() {
            </div>
         </CardContent>
         <CardFooter>
-          <Button type="submit" className="w-full" disabled={isLoading}>
-            {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          <Button type="submit" className="w-full" disabled={isAuthenticating}>
+            {isAuthenticating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             {buttonText}
           </Button>
         </CardFooter>

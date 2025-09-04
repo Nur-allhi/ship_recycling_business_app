@@ -37,7 +37,7 @@ const navItems = [
 ]
 
 function ShipShapeLedger() {
-  const { fontSize, isInitialBalanceDialogOpen, user, logout, isLoading } = useAppContext();
+  const { fontSize, isInitialBalanceDialogOpen, user, logout, isLoading, isInitialLoadComplete } = useAppContext();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isSheetOpen, setIsSheetOpen] = useState(false);
@@ -53,12 +53,21 @@ function ShipShapeLedger() {
 
   const roleDisplayName = user?.role ? user.role.charAt(0).toUpperCase() + user.role.slice(1) : '';
   
-  if (isLoading && !user) {
+  // Show loading screen during initial session check
+  if (!isInitialLoadComplete) {
     return <AppLoading />;
   }
-  
+
+  // If initial load is complete but no user, it means they are not logged in.
+  // The useEffect in app-context.tsx will handle the redirect to /login.
+  // So, we just return null here to prevent rendering the dashboard.
   if (!user) {
-    return null; // or a redirect component
+    return null;
+  }
+
+  // If user is logged in and data is still loading (e.g., after a fresh login)
+  if (isLoading) {
+    return <AppLoading />;
   }
 
 

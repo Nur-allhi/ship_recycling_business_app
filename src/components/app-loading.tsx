@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import { Progress } from "@/components/ui/progress";
 import Logo from './logo';
 
-export function AppLoading() {
+export function AppLoading({ message }: { message?: string }) {
     const [progress, setProgress] = useState(0);
 
     useEffect(() => {
@@ -31,7 +31,7 @@ export function AppLoading() {
                 </div>
                 <Progress value={progress} className="w-full h-2" />
                 <p className="text-muted-foreground animate-pulse">
-                    Loading your ledger...
+                    {message || "Loading your ledger..."}
                 </p>
             </div>
         </div>

@@ -10,6 +10,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, bulkPut, clearAllData as clearLocalDb, type SyncQueueItem } from '@/lib/db';
 import { WifiOff, Wifi, RefreshCw } from 'lucide-react';
+import { AppLoading } from '@/components/app-loading';
 
 type FontSize = 'sm' | 'base' | 'lg';
 
@@ -43,6 +44,9 @@ interface AppData {
   banks: Bank[];
   syncQueueCount: number;
   loadedMonths: Record<string, boolean>;
+  isInitialLoadComplete: boolean; // New property
+  isLoggingOut: boolean; // New property
+  isAuthenticating: boolean; // New property
 }
 
 interface AppContextType extends AppData {
@@ -72,6 +76,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         isLoading: true, isInitialBalanceDialogOpen: false, isSyncing: false,
         isOnline: true, // Always start with true to avoid hydration mismatch
         isOnlineStatusReady: false, // Track when online status is properly initialized
+        isInitialLoadComplete: false, // Initialize to false
+        isLoggingOut: false, // Initialize to false
+        isAuthenticating: false, // Initialize to false
     });
     
     const [user, setUser] = useState<User | null>(null);
@@ -79,19 +86,25 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const [loadedMonths, setLoadedMonths] = useState<Record<string, boolean>>({});
 
     const logout = useCallback(async () => {
+        setState(prev => ({ ...prev, isLoggingOut: true })); // Set to true at the start
         try {
             await serverLogout();
             // Explicitly clear user from app_state first
             await db.app_state.update(1, { user: null });
             await clearLocalDb();
             setUser(null);
-            // A hard redirect is the most reliable way to clear all state.
-            window.location.href = '/login';
+            toast.success("Logged out successfully!"); // Add success toast for logout
+            // Delay the redirect to allow animation to play
+            setTimeout(() => {
+                window.location.href = '/login';
+            }, 1000); // 1 second delay
         } catch (error) {
             console.error("Logout failed:", error);
             toast.error("Logout Failed", { description: "Could not properly log you out. Please try clearing your cookies and refreshing the page." });
             // As a fallback, force a reload.
             window.location.href = '/login';
+        } finally {
+            setState(prev => ({ ...prev, isLoggingOut: false })); // Reset in finally block
         }
     }, [setUser]);
 
@@ -332,19 +345,24 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }, [handleApiError, updateBalances, processSyncQueue, setUser]);
     
     const login = useCallback(async (credentials: Parameters<typeof serverLogin>[0]) => {
+        setState(prev => ({ ...prev, isAuthenticating: true })); // Set to true at the start
         try {
             const result = await serverLogin(credentials);
             if (result.success && result.session) {
                 await db.app_state.update(1, { user: result.session });
                 setUser(result.session);
                 await reloadData({ force: true, needsInitialBalance: result.needsInitialBalance });
+                toast.success("Login Successful", { description: "Welcome back!" }); // Show success toast
+                router.push('/'); // Move to dashboard
             }
             return result;
         } catch (error: any) {
             toast.error('Login Failed', { description: error.message });
             throw error;
+        } finally {
+            setState(prev => ({ ...prev, isAuthenticating: false })); // Reset in finally block
         }
-    }, [setUser, reloadData]);
+    }, [setUser, reloadData, router]);
 
     useEffect(() => {
         const checkSessionAndLoad = async () => {
@@ -360,6 +378,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             } else {
                 setState(prev => ({ ...prev, isLoading: false }));
             }
+            setState(prev => ({ ...prev, isInitialLoadComplete: true })); // Set to true after session check
         };
         checkSessionAndLoad();
     }, []);
@@ -472,8 +491,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         openInitialBalanceDialog,
         closeInitialBalanceDialog,
         loadRecycleBinData,
-        setUser
-    }), [state, liveData, user, deletedItems, loadedMonths, reloadData, updateBalances, handleApiError, processSyncQueue, login, logout]);
+        setUser,
+        isLoggingOut: state.isLoggingOut,
+        isAuthenticating: state.isAuthenticating, // Add to context value
+    }), [state, liveData, user, deletedItems, loadedMonths, reloadData, updateBalances, handleApiError, processSyncQueue, login, logout, router]);
 
     return (
         <AppContext.Provider value={contextValue}>
