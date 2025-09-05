@@ -19,7 +19,6 @@ import { Calendar } from '@/components/ui/calendar';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '../ui/card';
-import { useScrollOnFocus } from '@/hooks/use-scroll-on-focus';
 
 const transferSchema = z.object({
     date: z.date({ required_error: "Date is required." }),
@@ -47,7 +46,6 @@ export function TransferForm({ setDialogOpen }: TransferFormProps) {
   const { transferFunds } = useAppActions();
   const { banks } = useAppContext();
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
-  const { registerForFocus, containerRef } = useScrollOnFocus();
 
   const { register, handleSubmit, control, watch, formState: { errors, isSubmitting } } = useForm<FormData>({
     resolver: zodResolver(transferSchema),
@@ -72,9 +70,9 @@ export function TransferForm({ setDialogOpen }: TransferFormProps) {
   const bankAccountItems = useMemo(() => (banks || []).map(b => ({ value: b.id, label: b.name })), [banks]);
 
   return (
-    <Card className="border-0 shadow-none">
+    <Card className="border-0 shadow-none overflow-y-auto pb-8">
       <form onSubmit={handleSubmit(onSubmit)}>
-        <CardContent className="space-y-4 pt-4 px-4 sm:px-6" ref={containerRef}>
+        <CardContent className="space-y-4 pt-4 px-4 sm:px-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Date</Label>
@@ -88,13 +86,13 @@ export function TransferForm({ setDialogOpen }: TransferFormProps) {
             </div>
             <div className="space-y-2">
               <Label htmlFor="amount-transfer">Amount</Label>
-              <Input id="amount-transfer" type="number" step="0.01" {...register('amount')} placeholder="0.00" {...registerForFocus('amount')}/>
+              <Input id="amount-transfer" type="number" step="0.01" {...register('amount')} placeholder="0.00"/>
               {errors.amount && <p className="text-sm text-destructive">{errors.amount.message}</p>}
             </div>
           </div>
           <div className="space-y-2">
             <Label htmlFor="description-transfer">Description (Optional)</Label>
-            <Input id="description-transfer" {...register('description')} placeholder="e.g., Owner's drawing" {...registerForFocus('description')}/>
+            <Input id="description-transfer" {...register('description')} placeholder="e.g., Owner's drawing"/>
             {errors.description && <p className="text-sm text-destructive">{errors.description.message}</p>}
           </div>
           <div className="space-y-2">
