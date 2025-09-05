@@ -70,11 +70,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const router = useRouter();
     const pathname = usePathname();
     const liveData = useLiveDBData();
+    const [hasMounted, setHasMounted] = useState(false);
 
     const [state, setState] = useState({
         cashBalance: 0, bankBalance: 0, totalPayables: 0, totalReceivables: 0,
         isLoading: true, isInitialBalanceDialogOpen: false, isSyncing: false,
-        isOnline: typeof navigator !== 'undefined' ? navigator.onLine : true,
+        isOnline: true, // Default to true on server and initial client render
         isInitialLoadComplete: false, // Initialize to false
         isLoggingOut: false, // Initialize to false
         isAuthenticating: false, // Initialize to false
@@ -83,6 +84,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const [user, setUser] = useState<User | null>(null);
     const [deletedItems, setDeletedItems] = useState<{ cash: any[], bank: any[], stock: any[], ap_ar: any[] }>({ cash: [], bank: [], stock: [], ap_ar: [] });
     const [loadedMonths, setLoadedMonths] = useState<Record<string, boolean>>({});
+
+    useEffect(() => {
+        setHasMounted(true);
+        // Now that we're on the client, set the initial online status
+        setState(prev => ({ ...prev, isOnline: navigator.onLine }));
+    }, []);
 
     const logout = useCallback(async () => {
         console.log("Logout: Setting isLoggingOut to true");
@@ -397,6 +404,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }, [user, state.isLoading, pathname, router]);
 
     useEffect(() => {
+        if (!hasMounted) return; // Don't run this effect on the server or before mounting
+
         const handleOnline = () => setState(prev => {
             if (!prev.isOnline) {
                 toast.success("You are back online!");
@@ -418,7 +427,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             window.removeEventListener('online', handleOnline);
             window.removeEventListener('offline', handleOffline);
         };
-    }, [processSyncQueue, state.isOnline]);
+    }, [processSyncQueue, state.isOnline, hasMounted]);
 
     const loadRecycleBinData = useCallback(async () => {
         if (state.isOnline) {
@@ -442,6 +451,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const closeInitialBalanceDialog = () => setState(prev => ({ ...prev, isInitialBalanceDialogOpen: false }));
 
     const OnlineStatusIndicator = () => {
+        if (!hasMounted) {
+            return null; // Don't render on server or initial client render
+        }
+
         return (
             <div className="fixed bottom-4 right-4 z-50 animate-fade-in">
                 <div className="flex items-center gap-2 rounded-full bg-background px-3 py-2 text-foreground shadow-lg border">
@@ -551,3 +564,5 @@ export function useAppContext() {
     }
     return context;
 }
+
+    
