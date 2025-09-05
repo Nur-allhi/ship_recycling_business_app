@@ -115,7 +115,7 @@ export function useAppActions() {
             
             queueOrSync({
                 action: 'addStockTransaction',
-                payload: { stockTx, localId: stockTempId }
+                payload: { stockTx: tx, localId: stockTempId }
             });
         });
     };
@@ -298,12 +298,10 @@ export function useAppActions() {
         
         try {
             await db.contacts.add(newContact);
-            const savedContact = await queueOrSync({ action: 'appendData', payload: { tableName: 'contacts', data: { name, type }, localId: tempId, select: '*' }});
-            // If online, savedContact will have the real ID. If offline, it will be undefined, so we use the local temp object.
-            return savedContact ? { ...savedContact, ...newContact, id: savedContact.id } : newContact;
+            const savedContact = await queueOrSync({ action: 'appendData', payload: { tableName: 'contacts', data: { name, type }, localId: tempId, logDescription: `Added contact: ${name}`, select: '*' }});
+            return savedContact ? { ...savedContact, id: savedContact.id } : newContact;
         } catch (e: any) {
             toast.error("Operation Failed", { description: e.message });
-            // Even if sync fails, return the locally-saved contact so the UI can proceed.
             return newContact;
         }
     };
@@ -539,5 +537,3 @@ export function useAppActions() {
         addLoan,
     };
 }
-
-    
