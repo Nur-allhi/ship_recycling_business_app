@@ -78,13 +78,12 @@ export function StockForm({ setDialogOpen }: StockFormProps) {
   const actual_amount = watch('actual_amount');
   
   useEffect(() => {
-    // On mount, scroll the form into view if it's in a drawer
-    const formElement = formRef.current;
-    if (formElement) {
-        const drawerContent = formElement.closest('[data-vaul-drawer-visible="true"] > div');
-        if (drawerContent) {
-            drawerContent.scrollTo(0, 0);
-        }
+    const formEl = formRef.current;
+    if (formEl) {
+      const drawerContent = formEl.closest('[data-vaul-drawer-visible="true"] > div');
+      if (drawerContent) {
+        drawerContent.scrollTo(0, 0);
+      }
     }
   }, []);
 
