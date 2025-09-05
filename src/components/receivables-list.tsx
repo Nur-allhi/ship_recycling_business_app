@@ -26,7 +26,7 @@ interface AggregatedContact {
 }
 
 export function ReceivablesList() {
-    const { ledgerTransactions, currency, user, clients } = useAppContext();
+    const { ledgerTransactions, currency, user, contacts } = useAppContext();
     const [settleDialogState, setSettleDialogState] = useState<{isOpen: boolean, contact: AggregatedContact | null}>({isOpen: false, contact: null});
     const [advanceDialogState, setAdvanceDialogState] = useState<{isOpen: boolean, contact: AggregatedContact | null, ledgerType: 'payable' | 'receivable' | null}>({isOpen: false, contact: null, ledgerType: null});
     const [historyDialogState, setHistoryDialogState] = useState<{isOpen: boolean, contact: AggregatedContact | null}>({isOpen: false, contact: null});
@@ -34,6 +34,7 @@ export function ReceivablesList() {
     const isAdmin = user?.role === 'admin';
 
     const receivablesByContact = useMemo(() => {
+        const clients = contacts.filter(c => c.type === 'client' || c.type === 'both');
         const groups: Record<string, { total_due: number, total_paid: number, total_advance: number, contact_name: string }> = {};
 
         // Initialize all clients in the groups object
@@ -79,7 +80,7 @@ export function ReceivablesList() {
             };
         }).sort((a,b) => b.net_balance - a.net_balance);
 
-    }, [ledgerTransactions, clients]);
+    }, [ledgerTransactions, contacts]);
     
     const formatCurrency = (amount: number) => {
         if (currency === 'BDT') {
@@ -97,7 +98,7 @@ export function ReceivablesList() {
     }
 
     const handleHistoryClick = (contact: AggregatedContact) => {
-        const fullContact = clients.find(c => c.id === contact.contact_id);
+        const fullContact = contacts.find(c => c.id === contact.contact_id);
         if (fullContact) {
             setHistoryDialogState({ isOpen: true, contact: fullContact as any });
         }
@@ -110,7 +111,7 @@ export function ReceivablesList() {
                     <TableRow>
                         <TableHead>Client</TableHead>
                         <TableHead className="text-right">Balance</TableHead>
-                        <TableHead className="text-center w-[120px]">Actions</TableHead>
+                        {isAdmin && <TableHead className="text-center w-[120px]">Actions</TableHead>}
                     </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -137,8 +138,8 @@ export function ReceivablesList() {
                                     )}
                                     <div className="text-xs text-muted-foreground font-normal">Total Billed: {formatCurrency(contact.total_due)}</div>
                                 </TableCell>
-                                <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
-                                    {isAdmin && <div className="flex items-center justify-center gap-2">
+                                {isAdmin && <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
+                                    <div className="flex items-center justify-center gap-2">
                                         <TooltipProvider>
                                             <Tooltip>
                                                 <TooltipTrigger asChild>
@@ -159,13 +160,13 @@ export function ReceivablesList() {
                                                 <TooltipContent><p>Record Advance Received</p></TooltipContent>
                                             </Tooltip>
                                         </TooltipProvider>
-                                    </div>}
-                                </TableCell>
+                                    </div>
+                                </TableCell>}
                             </TableRow>
                         )})
                     ) : (
                         <TableRow>
-                            <TableCell colSpan={3} className="text-center h-24">No clients found.</TableCell>
+                            <TableCell colSpan={isAdmin ? 3 : 2} className="text-center h-24">No clients found.</TableCell>
                         </TableRow>
                     )}
                 </TableBody>
@@ -261,7 +262,6 @@ export function ReceivablesList() {
                     isOpen={historyDialogState.isOpen}
                     setIsOpen={(isOpen) => setHistoryDialogState({ isOpen, contact: null })}
                     contact={historyDialogState.contact as any}
-                    contactType="client"
                 />
             )}
         </>

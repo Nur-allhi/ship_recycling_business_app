@@ -26,7 +26,7 @@ interface AggregatedContact {
 }
 
 export function PayablesList() {
-    const { ledgerTransactions, currency, user, vendors } = useAppContext();
+    const { ledgerTransactions, currency, user, contacts } = useAppContext();
     const [settleDialogState, setSettleDialogState] = useState<{isOpen: boolean, contact: AggregatedContact | null}>({isOpen: false, contact: null});
     const [advanceDialogState, setAdvanceDialogState] = useState<{isOpen: boolean, contact: AggregatedContact | null, ledgerType: 'payable' | 'receivable' | null}>({isOpen: false, contact: null, ledgerType: null});
     const [historyDialogState, setHistoryDialogState] = useState<{isOpen: boolean, contact: AggregatedContact | null}>({isOpen: false, contact: null});
@@ -34,6 +34,7 @@ export function PayablesList() {
     const isAdmin = user?.role === 'admin';
 
     const payablesByContact = useMemo(() => {
+        const vendors = contacts.filter(c => c.type === 'vendor' || c.type === 'both');
         const groups: Record<string, { total_due: number, total_paid: number, total_advance: number, contact_name: string }> = {};
 
         // Initialize all vendors in the groups object
@@ -79,7 +80,7 @@ export function PayablesList() {
             };
         }).sort((a, b) => b.net_balance - a.net_balance);
 
-    }, [ledgerTransactions, vendors]);
+    }, [ledgerTransactions, contacts]);
     
     const formatCurrency = (amount: number) => {
         if (currency === 'BDT') {
@@ -97,7 +98,7 @@ export function PayablesList() {
     }
     
     const handleHistoryClick = (contact: AggregatedContact) => {
-        const fullContact = vendors.find(v => v.id === contact.contact_id);
+        const fullContact = contacts.find(c => c.id === contact.contact_id);
         if (fullContact) {
             setHistoryDialogState({ isOpen: true, contact: fullContact as any });
         }
@@ -110,7 +111,7 @@ export function PayablesList() {
                     <TableRow>
                         <TableHead>Vendor</TableHead>
                         <TableHead className="text-right">Balance</TableHead>
-                        <TableHead className="text-center w-[120px]">Actions</TableHead>
+                        {isAdmin && <TableHead className="text-center w-[120px]">Actions</TableHead>}
                     </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -137,8 +138,8 @@ export function PayablesList() {
                                     )}
                                     <div className="text-xs text-muted-foreground font-normal">Total Due: {formatCurrency(contact.total_due)}</div>
                                 </TableCell>
-                                 <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
-                                    {isAdmin && <div className="flex items-center justify-center gap-2">
+                                 {isAdmin && <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
+                                    <div className="flex items-center justify-center gap-2">
                                         <TooltipProvider>
                                             <Tooltip>
                                                 <TooltipTrigger asChild>
@@ -159,13 +160,13 @@ export function PayablesList() {
                                                 <TooltipContent><p>Add Advance Payment</p></TooltipContent>
                                             </Tooltip>
                                         </TooltipProvider>
-                                    </div>}
-                                </TableCell>
+                                    </div>
+                                </TableCell>}
                             </TableRow>
                         )})
                     ) : (
                         <TableRow>
-                            <TableCell colSpan={3} className="text-center h-24">No vendors found.</TableCell>
+                            <TableCell colSpan={isAdmin ? 3 : 2} className="text-center h-24">No vendors found.</TableCell>
                         </TableRow>
                     )}
                 </TableBody>
@@ -260,7 +261,6 @@ export function PayablesList() {
                     isOpen={historyDialogState.isOpen}
                     setIsOpen={(isOpen) => setHistoryDialogState({ isOpen, contact: null })}
                     contact={historyDialogState.contact as any}
-                    contactType="vendor"
                 />
             )}
         </>

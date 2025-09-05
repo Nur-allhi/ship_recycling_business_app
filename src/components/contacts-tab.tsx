@@ -20,7 +20,7 @@ import { Tabs, TabsList, TabsTrigger } from "./ui/tabs";
 import { Badge } from "./ui/badge";
 
 export function ContactsTab() {
-    const { contacts, ledgerTransactions } = useAppContext();
+    const { contacts, ledgerTransactions, user } = useAppContext();
     const { addContact, deleteContact } = useAppActions();
     
     const [historyState, setHistoryState] = useState<{isOpen: boolean, contact: Contact | null}>({isOpen: false, contact: null});
@@ -29,6 +29,7 @@ export function ContactsTab() {
     
     const newContactNameRef = useRef<HTMLInputElement>(null);
     const [newContactType, setNewContactType] = useState<'vendor' | 'client'>('vendor');
+    const isAdmin = user?.role === 'admin';
 
     const contactTransactionCounts = useMemo(() => {
         const counts: Record<string, number> = {};
@@ -70,7 +71,7 @@ export function ContactsTab() {
 
     const filteredContacts = useMemo(() => {
         if (filter === 'all') return contacts;
-        return contacts.filter(c => c.type === filter);
+        return contacts.filter(c => c.type === filter || c.type === 'both');
     }, [contacts, filter]);
 
     return (
@@ -81,25 +82,28 @@ export function ContactsTab() {
                     <CardDescription>Manage your list of vendors and clients.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
-                    <div>
-                        <h3 className="font-semibold mb-2">Add New Contact</h3>
-                        <div className="flex flex-col sm:flex-row gap-4 p-4 border rounded-lg">
-                           <div className="flex-grow space-y-2">
-                                <Label htmlFor="new-contact-name">Contact Name</Label>
-                                <Input id="new-contact-name" placeholder="Enter name" ref={newContactNameRef} />
-                           </div>
-                           <div className="space-y-2">
-                               <Label>Contact Type</Label>
-                                <RadioGroup onValueChange={(v) => setNewContactType(v as any)} defaultValue={newContactType} className="flex pt-2 gap-4">
-                                    <Label className="flex items-center gap-2 cursor-pointer"><RadioGroupItem value="vendor" /> Vendor</Label>
-                                    <Label className="flex items-center gap-2 cursor-pointer"><RadioGroupItem value="client" /> Client</Label>
-                                </RadioGroup>
-                           </div>
-                            <Button onClick={handleAddContact} className="mt-auto"><Plus className="mr-2 h-4 w-4" /> Add</Button>
-                        </div>
-                    </div>
-
-                    <Separator />
+                    {isAdmin && (
+                        <>
+                            <div>
+                                <h3 className="font-semibold mb-2">Add New Contact</h3>
+                                <div className="flex flex-col sm:flex-row gap-4 p-4 border rounded-lg">
+                                   <div className="flex-grow space-y-2">
+                                        <Label htmlFor="new-contact-name">Contact Name</Label>
+                                        <Input id="new-contact-name" placeholder="Enter name" ref={newContactNameRef} />
+                                   </div>
+                                   <div className="space-y-2">
+                                       <Label>Contact Type</Label>
+                                        <RadioGroup onValueChange={(v) => setNewContactType(v as any)} defaultValue={newContactType} className="flex pt-2 gap-4">
+                                            <Label className="flex items-center gap-2 cursor-pointer"><RadioGroupItem value="vendor" /> Vendor</Label>
+                                            <Label className="flex items-center gap-2 cursor-pointer"><RadioGroupItem value="client" /> Client</Label>
+                                        </RadioGroup>
+                                   </div>
+                                    <Button onClick={handleAddContact} className="mt-auto"><Plus className="mr-2 h-4 w-4" /> Add</Button>
+                                </div>
+                            </div>
+                            <Separator />
+                        </>
+                    )}
                     
                     <div className="space-y-4">
                         <Tabs value={filter} onValueChange={(value) => setFilter(value as any)}>
@@ -132,14 +136,16 @@ export function ContactsTab() {
                                                         <FileClock className="mr-2 h-4 w-4" />
                                                         History
                                                     </Button>
-                                                    <Button 
-                                                        variant="destructive" 
-                                                        size="icon" 
-                                                        onClick={() => handleDeleteClick(contact)}
-                                                        disabled={contactTransactionCounts[contact.id] > 0}
-                                                    >
-                                                        <Trash2 className="h-4 w-4" />
-                                                    </Button>
+                                                    {isAdmin && (
+                                                        <Button 
+                                                            variant="destructive" 
+                                                            size="icon" 
+                                                            onClick={() => handleDeleteClick(contact)}
+                                                            disabled={contactTransactionCounts[contact.id] > 0}
+                                                        >
+                                                            <Trash2 className="h-4 w-4" />
+                                                        </Button>
+                                                    )}
                                                 </TableCell>
                                             </TableRow>
                                         ))
