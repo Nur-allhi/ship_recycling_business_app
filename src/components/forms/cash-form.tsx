@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useMemo, useEffect, useRef } from 'react';
@@ -115,7 +114,10 @@ export function CashForm({ setDialogOpen }: CashFormProps) {
   const categoryItems = useMemo(() => {
     const filteredCategories = (cashCategories || []).filter(c => c.name !== 'Stock Purchase' && c.name !== 'Stock Sale');
     if (!cashTransactions || cashTransactions.length === 0) {
-        return filteredCategories.map(c => ({ value: c.name, label: c.name }));
+        return [{
+            label: "All Categories",
+            items: filteredCategories.map(c => ({ value: c.name, label: c.name }))
+        }];
     }
     
     const categoryCounts = cashTransactions.reduce((acc, tx) => {
@@ -128,14 +130,27 @@ export function CashForm({ setDialogOpen }: CashFormProps) {
     const top5 = sortedCategories.slice(0, 5);
     const rest = sortedCategories.slice(5);
 
-    const topItems = top5.map(c => ({ value: c.name, label: c.name }));
-    const restItems = rest.map(c => ({ value: c.name, label: c.name }));
-    
-    if (rest.length > 0) {
-        // We use a special value for the separator that won't be selectable
-        return [...topItems, { value: 'separator', label: <CommandSeparator /> }, ...restItems];
+    const groups = [];
+    if (top5.length > 0) {
+        groups.push({
+            label: 'Most Used',
+            items: top5.map(c => ({ value: c.name, label: c.name }))
+        });
     }
-    return topItems;
+    if (rest.length > 0) {
+        groups.push({
+            label: 'All Categories',
+            items: rest.map(c => ({ value: c.name, label: c.name }))
+        });
+    } else if (top5.length > 0 && rest.length === 0) {
+        // If there are 5 or less categories, just show them under one group
+        return [{
+            label: "All Categories",
+            items: top5.map(c => ({ value: c.name, label: c.name }))
+        }];
+    }
+
+    return groups;
 }, [cashCategories, cashTransactions]);
 
   const vendorContactItems = useMemo(() => (vendors || []).map(c => ({ value: c.id, label: c.name })), [vendors]);

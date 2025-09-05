@@ -1,4 +1,3 @@
-
 "use client"
 
 import * as React from "react"
@@ -13,6 +12,7 @@ import {
   CommandInput,
   CommandItem,
   CommandList,
+  CommandSeparator,
 } from "@/components/ui/command"
 import {
   Popover,
@@ -34,6 +34,12 @@ interface SelectItem {
   label: React.ReactNode;
 }
 
+interface SelectGroup {
+  label: string;
+  items: SelectItem[];
+}
+
+
 const ResponsiveSelect = React.forwardRef<
   React.ElementRef<typeof Button>,
   Omit<ButtonProps, 'onSelect'> & {
@@ -41,7 +47,7 @@ const ResponsiveSelect = React.forwardRef<
     onValueChange: (value: string) => void
     placeholder?: string
     title?: string
-    items: SelectItem[]
+    items: (SelectItem | SelectGroup)[]
     onSelect?: (value: string) => void
     showSearch?: boolean
   }
@@ -62,11 +68,28 @@ const ResponsiveSelect = React.forwardRef<
   ) => {
     const isMobile = useIsMobile()
     const [open, setOpen] = React.useState(false)
-    const showSearch = showSearchProp !== undefined ? showSearchProp : items.length > 8;
+    const isGrouped = items.length > 0 && 'items' in items[0];
+    
+    // For ungrouped lists, we check the length of the flat array.
+    // For grouped lists, we check the length of the first group.
+    // This is an assumption, but reasonable for our use case.
+    const searchDefault = isGrouped 
+      ? (items[0] as SelectGroup).items.length > 8 
+      : items.length > 8;
 
+    const showSearch = showSearchProp !== undefined ? showSearchProp : searchDefault;
+    
     const selectedItem = React.useMemo(() => {
-      return items.find((item) => item.value === value)
-    }, [items, value])
+       if (isGrouped) {
+          for (const group of items as SelectGroup[]) {
+              const item = group.items.find((item) => item.value === value);
+              if (item) return item;
+          }
+          return null;
+       }
+       return (items as SelectItem[]).find((item) => item.value === value);
+    }, [items, value, isGrouped]);
+
 
     const handleSelect = (currentValue: string) => {
         onValueChange(currentValue)
@@ -75,30 +98,42 @@ const ResponsiveSelect = React.forwardRef<
             onSelect(currentValue)
         }
     }
+    
+    const renderItems = (itemList: SelectItem[]) => {
+       return itemList.map((item, index) => (
+            <CommandItem
+                key={`${item.value}-${index}`}
+                value={item.value}
+                onSelect={handleSelect}
+                className="flex items-center justify-between"
+            >
+                <span className="truncate">{item.label}</span>
+                <Check
+                    className={cn(
+                    "h-4 w-4",
+                    value === item.value ? "opacity-100" : "opacity-0"
+                    )}
+                />
+            </CommandItem>
+        ));
+    }
 
     const content = (
       <Command>
         {showSearch && <CommandInput placeholder="Search..." />}
         <CommandList>
           <CommandEmpty>No results found.</CommandEmpty>
-          <CommandGroup>
-            {items.map((item, index) => (
-                <CommandItem
-                    key={`${item.value}-${index}`}
-                    value={item.value}
-                    onSelect={handleSelect}
-                    className="flex items-center justify-between"
-                >
-                    <span className="truncate">{item.label}</span>
-                    <Check
-                        className={cn(
-                        "h-4 w-4",
-                        value === item.value ? "opacity-100" : "opacity-0"
-                        )}
-                    />
-                </CommandItem>
-            ))}
-          </CommandGroup>
+            {isGrouped ? (
+                (items as SelectGroup[]).map((group, groupIndex) => (
+                    <CommandGroup key={groupIndex} heading={group.label}>
+                       {renderItems(group.items)}
+                    </CommandGroup>
+                ))
+            ) : (
+                 <CommandGroup>
+                    {renderItems(items as SelectItem[])}
+                 </CommandGroup>
+            )}
         </CommandList>
       </Command>
     )
