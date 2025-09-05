@@ -56,7 +56,7 @@ export function FloatingActionButton() {
     return (
         <>
             <div className="fixed bottom-6 right-6 z-40">
-                <div className="relative flex flex-col items-center gap-2">
+                <div className="relative flex flex-col items-end gap-2">
                     <AnimatePresence>
                         {isOpen && fabActions.map((action, index) => (
                             <motion.div
@@ -65,7 +65,7 @@ export function FloatingActionButton() {
                                 animate={{ opacity: 1, y: 0 }}
                                 exit={{ opacity: 0, y: 10 * (index + 1) }}
                                 transition={{ duration: 0.2, delay: index * 0.05 }}
-                                className="flex items-center gap-2"
+                                className="flex items-center gap-2 justify-end"
                             >
                                 <span className="bg-card text-card-foreground text-sm px-3 py-1 rounded-md shadow-lg">{action.label}</span>
                                 <Button
@@ -120,4 +120,3 @@ export function FloatingActionButton() {
         </>
     );
 }
-
