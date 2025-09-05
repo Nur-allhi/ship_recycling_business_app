@@ -3,7 +3,7 @@
 
 import { useMemo, useEffect, useState } from "react";
 import { useAppContext } from "@/app/context/app-context";
-import type { Vendor, Client, LedgerTransaction, CashTransaction, BankTransaction } from "@/lib/types";
+import type { Contact, LedgerTransaction, CashTransaction, BankTransaction } from "@/lib/types";
 import {
   Dialog,
   DialogContent,
@@ -24,8 +24,7 @@ import { toast } from 'sonner';
 interface ContactHistoryDialogProps {
   isOpen: boolean;
   setIsOpen: (open: boolean) => void;
-  contact: Vendor | Client;
-  contactType: 'vendor' | 'client';
+  contact: Contact;
 }
 
 declare module 'jspdf' {
@@ -36,7 +35,7 @@ declare module 'jspdf' {
 
 type CombinedHistoryItem = (LedgerTransaction & { itemType: 'ledger' }) | ((CashTransaction | BankTransaction) & { itemType: 'payment' });
 
-export function ContactHistoryDialog({ isOpen, setIsOpen, contact, contactType }: ContactHistoryDialogProps) {
+export function ContactHistoryDialog({ isOpen, setIsOpen, contact }: ContactHistoryDialogProps) {
   const { ledgerTransactions, currency, cashTransactions, bankTransactions } = useAppContext();
   const [isLoading, setIsLoading] = useState(true);
   const [combinedHistory, setCombinedHistory] = useState<CombinedHistoryItem[]>([]);
@@ -75,16 +74,25 @@ export function ContactHistoryDialog({ isOpen, setIsOpen, contact, contactType }
         if (item.itemType === 'ledger') {
              if (item.type === 'advance') {
                 credit += Math.abs(item.amount);
-            } else {
+             } else if (item.type === 'receivable') { // We owe them money
                 debit += item.amount;
-            }
+             } else if (item.type === 'payable') { // They owe us money
+                debit += item.amount;
+             }
         } else { // payment
-            credit += item.actual_amount;
+             if (contact.type === 'vendor') { // We paid a vendor
+                credit += item.actual_amount;
+             } else { // We received from a client
+                credit += item.actual_amount;
+             }
         }
     });
 
+    const finalDebit = contact.type === 'vendor' ? totalCredit : totalDebit;
+    const finalCredit = contact.type === 'vendor' ? totalDebit : totalCredit;
+
     return { totalDebit: debit, totalCredit: credit, finalBalance: debit - credit };
-  }, [combinedHistory]);
+  }, [combinedHistory, contact.type]);
 
 
   const formatCurrency = (amount: number) => {
@@ -112,7 +120,7 @@ export function ContactHistoryDialog({ isOpen, setIsOpen, contact, contactType }
     doc.text("Ha-Mim Iron Mart", centerX, 15, { align: 'center' });
     
     doc.setFontSize(14);
-    doc.text(`${contactType === 'vendor' ? 'Vendor' : 'Client'} Statement`, centerX, 22, { align: 'center' });
+    doc.text(`${contact.type === 'vendor' ? 'Vendor' : 'Client'} Statement`, centerX, 22, { align: 'center' });
     
     doc.setFontSize(12);
     doc.text(contact.name, centerX, 29, { align: 'center' });
@@ -197,7 +205,7 @@ export function ContactHistoryDialog({ isOpen, setIsOpen, contact, contactType }
         <DialogHeader>
           <DialogTitle>Transaction History: {contact.name}</DialogTitle>
           <DialogDescription>
-            A complete record of all transactions with this {contactType}.
+            A complete record of all transactions with this <span className="capitalize font-medium">{contact.type}</span>.
           </DialogDescription>
         </DialogHeader>
 
@@ -258,7 +266,7 @@ export function ContactHistoryDialog({ isOpen, setIsOpen, contact, contactType }
                                         {item.itemType === 'payment' ? (
                                             <div className="flex items-center gap-2 text-sm text-green-600">
                                                 <ArrowRight className="h-4 w-4"/>
-                                                <span className="italic">Payment {contactType === 'vendor' ? 'Made' : 'Received'}</span>
+                                                <span className="italic">Payment {contact.type === 'vendor' ? 'Made' : 'Received'}</span>
                                             </div>
                                         ) : (
                                            <span className={item.type === 'advance' ? 'text-blue-600' : ''}>{item.description}</span>
@@ -272,7 +280,7 @@ export function ContactHistoryDialog({ isOpen, setIsOpen, contact, contactType }
                         });
                     })() : (
                         <TableRow>
-                            <TableCell colSpan={5} className="text-center h-24">No transactions found for this {contactType}.</TableCell>
+                            <TableCell colSpan={5} className="text-center h-24">No transactions found for this {contact.type}.</TableCell>
                         </TableRow>
                     )}
                 </TableBody>

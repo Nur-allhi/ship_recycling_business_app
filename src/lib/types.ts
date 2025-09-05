@@ -67,17 +67,13 @@ export interface User {
     accessToken?: string; // JWT token
 }
 
-export interface Vendor {
+export interface Contact {
   id: string;
   name: string;
+  type: 'vendor' | 'client' | 'both';
   createdAt: string;
 }
 
-export interface Client {
-  id: string;
-  name: string;
-  createdAt: string;
-}
 
 export interface PaymentInstallment {
   id: string;
@@ -129,6 +125,29 @@ export interface MonthlySnapshot {
     total_payables: number;
     created_at: string;
 }
+
+// New Types for Loans Module
+export interface Loan {
+  id: string;
+  contact_id: string;
+  type: 'payable' | 'receivable'; // 'payable' (we borrowed), 'receivable' (we lent)
+  principal_amount: number;
+  interest_rate: number;
+  issue_date: string;
+  due_date?: string;
+  status: 'active' | 'paid' | 'defaulted';
+  created_at: string;
+}
+
+export interface LoanPayment {
+  id: string;
+  loan_id: string;
+  payment_date: string;
+  amount: number;
+  linked_transaction_id?: string; // Can be linked to a cash or bank transaction
+  notes?: string;
+  created_at: string;
+}
     
 
     
@@ -136,6 +155,7 @@ export interface MonthlySnapshot {
 
 
     
+
 
 
 

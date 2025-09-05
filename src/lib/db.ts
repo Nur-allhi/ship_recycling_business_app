@@ -1,6 +1,6 @@
 
 import Dexie, { type EntityTable } from 'dexie';
-import type { CashTransaction, BankTransaction, StockTransaction, StockItem, Category, Vendor, Client, LedgerTransaction, PaymentInstallment, Bank, MonthlySnapshot, User } from '@/lib/types';
+import type { CashTransaction, BankTransaction, StockTransaction, StockItem, Category, Contact, LedgerTransaction, PaymentInstallment, Bank, MonthlySnapshot, User, Loan, LoanPayment } from '@/lib/types';
 
 interface AppState {
     id: number; // Singleton, always 1
@@ -14,7 +14,7 @@ interface AppState {
 
 export interface SyncQueueItem {
     id?: number;
-    action: 'appendData' | 'updateData' | 'deleteData' | 'restoreData' | 'recordPaymentAgainstTotal' | 'recordDirectPayment' | 'transferFunds' | 'setInitialBalances' | 'deleteCategory' | 'addStockTransaction' | 'addInitialStockItem' | 'batchImportData' | 'deleteAllData' | 'updateStockTransaction' | 'recordAdvancePayment' | 'deleteVendor' | 'deleteClient' | 'emptyRecycleBin';
+    action: 'appendData' | 'updateData' | 'deleteData' | 'restoreData' | 'recordPaymentAgainstTotal' | 'recordDirectPayment' | 'transferFunds' | 'setInitialBalances' | 'deleteCategory' | 'addStockTransaction' | 'addInitialStockItem' | 'batchImportData' | 'deleteAllData' | 'updateStockTransaction' | 'recordAdvancePayment' | 'deleteContact' | 'emptyRecycleBin' | 'addLoan' | 'addLoanPayment';
     payload: any;
     timestamp: number;
 }
@@ -30,30 +30,61 @@ export class AppDatabase extends Dexie {
     
     banks!: EntityTable<Bank, 'id'>;
     categories!: EntityTable<Category, 'id'>;
-    vendors!: EntityTable<Vendor, 'id'>;
-    clients!: EntityTable<Client, 'id'>;
+    contacts!: EntityTable<Contact, 'id'>;
     initial_stock!: EntityTable<StockItem, 'id'>;
     monthly_snapshots!: EntityTable<MonthlySnapshot, 'id'>;
+    loans!: EntityTable<Loan, 'id'>;
+    loan_payments!: EntityTable<LoanPayment, 'id'>;
     sync_queue!: EntityTable<SyncQueueItem, 'id'>;
 
     constructor() {
         super('ShipShapeLedgerDB');
-        this.version(8).stores({
+        this.version(9).stores({
             app_state: 'id',
-            cash_transactions: '++id, date, category, linkedStockTxId, advance_id',
-            bank_transactions: '++id, date, bank_id, category, linkedStockTxId, advance_id',
-            stock_transactions: '++id, date, stockItemName, type',
+            cash_transactions: '++id, date, category, linkedStockTxId, advance_id, contact_id',
+            bank_transactions: '++id, date, bank_id, category, linkedStockTxId, advance_id, contact_id',
+            stock_transactions: '++id, date, stockItemName, type, contact_id',
             ap_ar_transactions: '++id, date, type, contact_id, status',
             payment_installments: '++id, ap_ar_transaction_id, date',
 
             banks: '++id, name',
             categories: '++id, type, name',
-            vendors: '++id, name',
-            clients: '++id, name',
+            contacts: '++id, name, type',
             initial_stock: '++id, name',
             monthly_snapshots: '++id, snapshot_date',
+            loans: '++id, contact_id, type, status',
+            loan_payments: '++id, loan_id, payment_date',
             sync_queue: '++id, timestamp, payload.localId',
+        }).upgrade(tx => {
+            // Migration logic to convert vendors and clients to contacts
+             return Promise.all([
+                tx.table('vendors').toArray(),
+                tx.table('clients').toArray()
+            ]).then(([vendors, clients]) => {
+                const contactsToAdd: Contact[] = [];
+                vendors.forEach(v => contactsToAdd.push({ ...v, type: 'vendor'}));
+                clients.forEach(c => {
+                    const existing = contactsToAdd.find(contact => contact.id === c.id);
+                    if (existing) {
+                        existing.type = 'both';
+                    } else {
+                        contactsToAdd.push({ ...c, type: 'client' });
+                    }
+                });
+                return tx.table('contacts').bulkAdd(contactsToAdd);
+            }).then(() => {
+                // After migration, you might want to delete the old tables.
+                // This is commented out to be safe, but would be part of a full migration.
+                // return Dexie.delete('vendors');
+                // return Dexie.delete('clients');
+            });
         });
+        
+        // Remove vendors and clients tables in a later version if they exist
+        this.version(10).stores({
+            vendors: null,
+            clients: null
+        })
     }
 }
 
