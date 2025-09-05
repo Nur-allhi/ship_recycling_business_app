@@ -2,7 +2,7 @@
 import { useCallback, useState } from 'react';
 import { toast } from 'sonner';
 import { db } from '@/lib/db';
-import type { SyncQueueItem } from '@/lib/db';
+import type { SyncQueueItem, User } from '@/lib/db';
 import { useDataSyncer } from './useDataSyncer';
 import { useBalanceCalculator } from './useBalanceCalculator';
 import { useSessionManager } from './useSessionManager';
@@ -24,7 +24,7 @@ export function useAppActions() {
     const { updateBalances } = useBalanceCalculator();
     
     const adminAction = <T extends any[], R>(action: (...args: T) => Promise<R> | R) => {
-        return async (...args: T): Promise<R | undefined> => {
+        return async (user: User | null, ...args: T): Promise<R | undefined> => {
             if (user?.role !== 'admin') {
                 toast.error("Permission Denied", { description: "You do not have permission to perform this action." });
                 return undefined;
@@ -263,7 +263,6 @@ export function useAppActions() {
     });
     
     const addContact = async (name: string, type: 'vendor' | 'client' | 'both'): Promise<Contact | undefined> => {
-        // Fetch the current session directly to ensure role is up-to-date
         const session = await getSession();
         if (session?.role !== 'admin') {
             toast.error("Permission Denied", { description: "You do not have permission to perform this action." });
@@ -273,14 +272,9 @@ export function useAppActions() {
         const tempId = `temp_contact_${Date.now()}`;
         const newContact: Contact = { id: tempId, name, type, createdAt: new Date().toISOString() };
         
-        try {
-            await db.contacts.add(newContact);
-            queueOrSync({ action: 'appendData', payload: { tableName: 'contacts', data: { name, type }, localId: tempId, logDescription: `Added contact: ${name}`, select: '*' }});
-            return newContact;
-        } catch (e: any) {
-            toast.error("Local DB Error", { description: `Could not save contact locally: ${e.message}`});
-            return undefined;
-        }
+        await db.contacts.add(newContact);
+        queueOrSync({ action: 'appendData', payload: { tableName: 'contacts', data: { name, type }, localId: tempId, logDescription: `Added contact: ${name}`, select: '*' }});
+        return newContact;
     };
   
     const deleteContact = adminAction(async (id: string) => {
@@ -447,8 +441,8 @@ export function useAppActions() {
         toast.info("Deleting all data. You will be logged out.");
         queueOrSync({ action: 'deleteAllData', payload: {} });
     });
-
-    const addLoan = adminAction(async (loan: Omit<Loan, 'id' | 'status' | 'created_at'>, disbursement: { method: 'cash' | 'bank', bank_id?: string }) => {
+    
+    const addLoanAction = async (loan: Omit<Loan, 'id' | 'status' | 'created_at'>, disbursement: { method: 'cash' | 'bank', bank_id?: string }) => {
         const tempId = `temp_loan_${Date.now()}`;
         const tempFinancialId = `temp_loan_fin_${Date.now()}`;
         const newLoan: Loan = { ...loan, id: tempId, status: 'active', created_at: new Date().toISOString() };
@@ -478,42 +472,44 @@ export function useAppActions() {
 
         queueOrSync({ action: 'addLoan', payload: { loanData: loan, disbursement, localId: tempId, localFinancialId: tempFinancialId } });
         return newLoan;
-    });
+    };
+    
+    const addLoan = adminAction(addLoanAction);
 
     return {
-        addCashTransaction,
-        addBankTransaction,
-        addStockTransaction,
-        addLedgerTransaction,
-        editCashTransaction,
-        editBankTransaction,
-        editStockTransaction,
-        deleteCashTransaction: adminAction((tx: CashTransaction) => deleteTransaction('cash_transactions', tx)),
-        deleteBankTransaction: adminAction((tx: BankTransaction) => deleteTransaction('bank_transactions', tx)),
-        deleteStockTransaction: adminAction((tx: StockTransaction) => deleteTransaction('stock_transactions', tx)),
-        deleteLedgerTransaction: adminAction((tx: LedgerTransaction) => deleteTransaction('ap_ar_transactions', tx)),
-        deleteMultipleCashTransactions: adminAction((txs: CashTransaction[]) => Promise.all(txs.map(tx => deleteTransaction('cash_transactions', tx)))),
-        deleteMultipleBankTransactions: adminAction((txs: BankTransaction[]) => Promise.all(txs.map(tx => deleteTransaction('bank_transactions', tx)))),
-        deleteMultipleStockTransactions: adminAction((txs: StockTransaction[]) => Promise.all(txs.map(tx => deleteTransaction('stock_transactions', tx)))),
+        addCashTransaction: (tx: any) => adminAction(addCashTransaction)(user, tx),
+        addBankTransaction: (tx: any) => adminAction(addBankTransaction)(user, tx),
+        addStockTransaction: (tx: any) => adminAction(addStockTransaction)(user, tx),
+        addLedgerTransaction: (tx: any) => adminAction(addLedgerTransaction)(user, tx),
+        editCashTransaction: (originalTx: any, updatedTxData: any) => adminAction(editCashTransaction)(user, originalTx, updatedTxData),
+        editBankTransaction: (originalTx: any, updatedTxData: any) => adminAction(editBankTransaction)(user, originalTx, updatedTxData),
+        editStockTransaction: (originalTx: any, updatedTxData: any) => adminAction(editStockTransaction)(user, originalTx, updatedTxData),
+        deleteCashTransaction: (tx: CashTransaction) => adminAction(deleteTransaction)(user, 'cash_transactions', tx),
+        deleteBankTransaction: (tx: BankTransaction) => adminAction(deleteTransaction)(user, 'bank_transactions', tx),
+        deleteStockTransaction: (tx: StockTransaction) => adminAction(deleteTransaction)(user, 'stock_transactions', tx),
+        deleteLedgerTransaction: (tx: LedgerTransaction) => adminAction(deleteTransaction)(user, 'ap_ar_transactions', tx),
+        deleteMultipleCashTransactions: (txs: CashTransaction[]) => Promise.all(txs.map(tx => adminAction(deleteTransaction)(user, 'cash_transactions', tx))),
+        deleteMultipleBankTransactions: (txs: BankTransaction[]) => Promise.all(txs.map(tx => adminAction(deleteTransaction)(user, 'bank_transactions', tx))),
+        deleteMultipleStockTransactions: (txs: StockTransaction[]) => Promise.all(txs.map(tx => adminAction(deleteTransaction)(user, 'stock_transactions', tx))),
         setFontSize,
-        setWastagePercentage,
+        setWastagePercentage: (percentage: number) => adminAction(setWastagePercentage)(user, percentage),
         setCurrency,
         setShowStockValue,
-        addBank,
-        addCategory,
-        deleteCategory,
-        transferFunds,
-        setInitialBalances,
-        addInitialStockItem,
+        addBank: (name: string) => adminAction(addBank)(user, name),
+        addCategory: (type: 'cash' | 'bank', name: string, direction: 'credit' | 'debit') => adminAction(addCategory)(user, type, name, direction),
+        deleteCategory: (id: string) => adminAction(deleteCategory)(user, id),
+        transferFunds: (from: 'cash' | 'bank', amount: number, date: string, bankId: string, description?: string) => adminAction(transferFunds)(user, from, amount, date, bankId, description),
+        setInitialBalances: (cash: number, bankTotals: Record<string, number>, date: Date) => adminAction(setInitialBalances)(user, cash, bankTotals, date),
+        addInitialStockItem: (item: { name: string; weight: number; pricePerKg: number; }) => adminAction(addInitialStockItem)(user, item),
         addContact,
-        deleteContact,
-        recordPayment,
-        recordAdvancePayment,
-        restoreTransaction,
-        emptyRecycleBin,
-        handleExport,
-        handleImport,
-        handleDeleteAllData,
-        addLoan,
+        deleteContact: (id: string) => adminAction(deleteContact)(user, id),
+        recordPayment: (contactId: string, paymentAmount: number, paymentMethod: 'cash' | 'bank', paymentDate: Date, ledgerType: 'payable' | 'receivable', bankId?: string) => adminAction(recordPayment)(user, contactId, paymentAmount, paymentMethod, paymentDate, ledgerType, bankId),
+        recordAdvancePayment: (payload: any) => adminAction(recordAdvancePayment)(user, payload),
+        restoreTransaction: (txType: 'cash' | 'bank' | 'stock' | 'ap_ar', id: string) => adminAction(restoreTransaction)(user, txType, id),
+        emptyRecycleBin: () => adminAction(emptyRecycleBin)(user),
+        handleExport: () => adminAction(handleExport)(user),
+        handleImport: (file: File) => adminAction(handleImport)(user, file),
+        handleDeleteAllData: () => adminAction(handleDeleteAllData)(user),
+        addLoan: (loan, disbursement) => addLoan(user, loan, disbursement),
     };
 }
