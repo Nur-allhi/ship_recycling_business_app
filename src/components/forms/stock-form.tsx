@@ -155,12 +155,8 @@ export function StockForm({ setDialogOpen }: StockFormProps) {
 
   return (
     <Card className="border-0 shadow-none">
-      <CardHeader>
-        <CardTitle>New Stock Transaction</CardTitle>
-        <CardDescription>Record a new stock purchase or sale.</CardDescription>
-      </CardHeader>
       <form onSubmit={handleSubmit(onSubmit)}>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-4 pt-4 px-4 sm:px-6">
           <div className="space-y-2">
             <Label>Date</Label>
             <Controller name="date" control={control} render={({ field }) => (
@@ -248,7 +244,7 @@ export function StockForm({ setDialogOpen }: StockFormProps) {
           <div className="space-y-2"><Label htmlFor="description-stock">Description (Optional)</Label><Input id="description-stock" {...register('description')} placeholder="e.g., invoice #, delivery details" />{errors.description && <p className="text-sm text-destructive">{errors.description.message}</p>}</div>
         
         </CardContent>
-        <CardFooter className="flex justify-end">
+        <CardFooter className="flex justify-end p-4 sm:p-6">
           <Button type="submit" disabled={isSubmitting}>{isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Record Transaction</Button>
         </CardFooter>
       </form>

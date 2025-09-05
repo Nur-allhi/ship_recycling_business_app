@@ -117,12 +117,8 @@ export function CashForm({ setDialogOpen }: CashFormProps) {
   
   return (
     <Card className="border-0 shadow-none">
-      <CardHeader>
-        <CardTitle>New Cash Transaction</CardTitle>
-        <CardDescription>Record a new income or expense using cash.</CardDescription>
-      </CardHeader>
       <form onSubmit={handleSubmit(onSubmit)}>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-4 pt-4 px-4 sm:px-6">
           <div className="space-y-2">
             <Label>Date</Label>
             <Controller name="date" control={control} render={({ field }) => (
@@ -194,7 +190,7 @@ export function CashForm({ setDialogOpen }: CashFormProps) {
             </div>
           )}
         </CardContent>
-        <CardFooter className="flex justify-end">
+        <CardFooter className="flex justify-end p-4 sm:p-6">
           <Button type="submit" disabled={isSubmitting}>{isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Record Transaction</Button>
         </CardFooter>
       </form>
