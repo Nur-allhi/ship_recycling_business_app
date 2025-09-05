@@ -92,7 +92,8 @@ This script migrates existing data from the old `vendors` and `clients` tables i
 -- Step 1: Insert all vendors into the new contacts table
 INSERT INTO contacts (id, name, type, created_at)
 SELECT id, name, 'vendor', created_at
-FROM vendors;
+FROM vendors
+ON CONFLICT (id) DO NOTHING;
 
 -- Step 2: Insert all clients into the new contacts table
 -- This uses ON CONFLICT to handle cases where a contact might exist as both a vendor and a client
@@ -102,19 +103,36 @@ FROM clients
 ON CONFLICT (id) DO UPDATE
 SET type = 'both';
 
--- Step 3: Update all transaction tables to point to the new contacts table
--- This assumes the contact_id from vendors/clients is directly transferrable.
-UPDATE ap_ar_transactions
-SET contact_id = ap_ar_transactions.contact_id; -- No change needed if IDs are preserved
+-- Step 3: Safely update transaction tables to point to the new contacts table.
+-- These DO blocks check if the contact_id column exists before trying to update.
 
-UPDATE stock_transactions
-SET contact_id = stock_transactions.contact_id; -- No change needed if IDs are preserved
+DO $$
+BEGIN
+   IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='ap_ar_transactions' and column_name='contact_id') THEN
+      UPDATE ap_ar_transactions SET contact_id = ap_ar_transactions.contact_id;
+   END IF;
+END $$;
 
-UPDATE cash_transactions
-SET contact_id = cash_transactions.contact_id; -- No change needed if IDs are preserved
+DO $$
+BEGIN
+   IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='stock_transactions' and column_name='contact_id') THEN
+      UPDATE stock_transactions SET contact_id = stock_transactions.contact_id;
+   END IF;
+END $$;
 
-UPDATE bank_transactions
-SET contact_id = bank_transactions.contact_id; -- No change needed if IDs are preserved
+DO $$
+BEGIN
+   IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='cash_transactions' and column_name='contact_id') THEN
+      UPDATE cash_transactions SET contact_id = cash_transactions.contact_id;
+   END IF;
+END $$;
+
+DO $$
+BEGIN
+   IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='bank_transactions' and column_name='contact_id') THEN
+      UPDATE bank_transactions SET contact_id = bank_transactions.contact_id;
+   END IF;
+END $$;
 ```
 
 ---
