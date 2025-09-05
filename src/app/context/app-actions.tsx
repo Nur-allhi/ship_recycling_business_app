@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 import { db, bulkPut } from '@/lib/db';
 import type { SyncQueueItem } from '@/lib/db';
 import { useAppContext } from './app-context';
-import type { CashTransaction, BankTransaction, StockTransaction, Vendor, Client, LedgerTransaction, PaymentInstallment, StockItem } from '@/lib/types';
+import type { CashTransaction, BankTransaction, StockTransaction, Contact, LedgerTransaction, PaymentInstallment, StockItem, Loan, LoanPayment } from '@/lib/types';
 import * as server from '@/lib/actions'; 
 
 // Helper to format date as YYYY-MM-DD string, preserving the local date
@@ -40,7 +40,7 @@ export function useAppActions() {
             const payload = {
                 payment_method: 'cash' as const, date: tx.date, amount: tx.actual_amount, category: tx.category,
                 description: tx.description, contact_id: tx.contact_id!,
-                contact_name: tx.type === 'income' ? (await db.clients.get(tx.contact_id!))?.name || '?' : (await db.vendors.get(tx.contact_id!))?.name || '?',
+                contact_name: (await db.contacts.get(tx.contact_id!))?.name || '?',
             };
             queueOrSync({ action: 'recordDirectPayment', payload: { ...payload, localId: tempId } });
         } else {
@@ -59,7 +59,7 @@ export function useAppActions() {
             const payload = {
                 payment_method: 'bank' as const, bank_id: tx.bank_id, date: tx.date, amount: tx.actual_amount, category: tx.category,
                 description: tx.description, contact_id: tx.contact_id!,
-                contact_name: tx.type === 'deposit' ? (await db.clients.get(tx.contact_id!))?.name || '?' : (await db.vendors.get(tx.contact_id!))?.name || '?',
+                contact_name: (await db.contacts.get(tx.contact_id!))?.name || '?',
             };
             queueOrSync({ action: 'recordDirectPayment', payload: { ...payload, localId: tempId } });
         } else {
@@ -255,30 +255,17 @@ export function useAppActions() {
       queueOrSync({ action: 'addInitialStockItem', payload: { item } });
     }
     
-    const addVendor = async (name: string): Promise<Vendor> => {
-        const tempId = `temp_vendor_${Date.now()}`;
-        const newVendor = { id: tempId, name, createdAt: new Date().toISOString() };
-        await db.vendors.add(newVendor);
-        queueOrSync({ action: 'appendData', payload: { tableName: 'vendors', data: { name }, localId: tempId, select: '*' }});
-        return newVendor;
+    const addContact = async (name: string, type: 'vendor' | 'client'): Promise<Contact> => {
+        const tempId = `temp_contact_${Date.now()}`;
+        const newContact = { id: tempId, name, type, createdAt: new Date().toISOString() };
+        await db.contacts.add(newContact);
+        queueOrSync({ action: 'appendData', payload: { tableName: 'contacts', data: { name, type }, localId: tempId, select: '*' }});
+        return newContact;
     };
   
-    const addClient = async (name: string): Promise<Client> => {
-        const tempId = `temp_client_${Date.now()}`;
-        const newClient = { id: tempId, name, createdAt: new Date().toISOString() };
-        await db.clients.add(newClient);
-        queueOrSync({ action: 'appendData', payload: { tableName: 'clients', data: { name }, localId: tempId, select: '*' }});
-        return newClient;
-    };
-
-    const deleteVendor = async (id: string) => {
-        await db.vendors.delete(id);
-        queueOrSync({ action: 'deleteVendor', payload: { id } });
-    };
-  
-    const deleteClient = async (id: string) => {
-        await db.clients.delete(id);
-        queueOrSync({ action: 'deleteClient', payload: { id } });
+    const deleteContact = async (id: string) => {
+        await db.contacts.delete(id);
+        queueOrSync({ action: 'deleteContact', payload: { id } });
     };
 
     const recordPayment = async (contactId: string, contactName: string, paymentAmount: number, paymentMethod: 'cash' | 'bank', paymentDate: Date, ledgerType: 'payable' | 'receivable', bankId?: string) => {
@@ -465,10 +452,8 @@ export function useAppActions() {
         transferFunds,
         setInitialBalances,
         addInitialStockItem,
-        addVendor,
-        addClient,
-        deleteVendor,
-        deleteClient,
+        addContact,
+        deleteContact,
         recordPayment,
         recordAdvancePayment,
         loadRecycleBinData,
@@ -478,6 +463,8 @@ export function useAppActions() {
         handleImport,
         handleDeleteAllData,
         login,
-        logout
+        logout,
     };
 }
+
+    

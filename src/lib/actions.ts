@@ -272,7 +272,7 @@ export async function exportAllData() {
         if (!session) throw new Error("SESSION_EXPIRED");
         
         const supabase = createAdminSupabaseClient();
-        const tables = ['banks', 'cash_transactions', 'bank_transactions', 'stock_transactions', 'initial_stock', 'categories', 'vendors', 'clients', 'ap_ar_transactions', 'payment_installments'];
+        const tables = ['banks', 'cash_transactions', 'bank_transactions', 'stock_transactions', 'initial_stock', 'categories', 'contacts', 'ap_ar_transactions', 'payment_installments', 'loans', 'loan_payments'];
         const exportedData: Record<string, any[]> = {};
         
         for (const tableName of tables) {
@@ -296,14 +296,14 @@ export async function batchImportData(dataToImport: z.infer<typeof ImportDataSch
         if (!session || session.role !== 'admin') throw new Error("Only admins can import data.");
 
         const supabase = createAdminSupabaseClient();
-        const tables = ['payment_installments', 'ap_ar_transactions', 'cash_transactions', 'bank_transactions', 'stock_transactions', 'initial_stock', 'categories', 'vendors', 'clients', 'banks', 'monthly_snapshots'];
+        const tables = ['payment_installments', 'ap_ar_transactions', 'cash_transactions', 'bank_transactions', 'stock_transactions', 'initial_stock', 'categories', 'contacts', 'banks', 'monthly_snapshots', 'loans', 'loan_payments'];
 
         for (const table of tables) {
              const { error: deleteError } = await supabase.from(table).delete().gt('created_at', '1970-01-01');
              if (deleteError && deleteError.code !== '42P01') throw new Error(`Failed to clear ${table}: ${deleteError.message}`);
         }
 
-        const importOrder = ['banks', 'categories', 'vendors', 'clients', 'initial_stock', 'cash_transactions', 'bank_transactions', 'stock_transactions', 'ap_ar_transactions', 'payment_installments', 'monthly_snapshots'];
+        const importOrder = ['banks', 'categories', 'contacts', 'initial_stock', 'cash_transactions', 'bank_transactions', 'stock_transactions', 'ap_ar_transactions', 'payment_installments', 'monthly_snapshots', 'loans', 'loan_payments'];
 
         for (const tableName of importOrder) {
             const records = dataToImport[tableName];
@@ -334,7 +334,7 @@ export async function deleteAllData() {
             }
         }
         
-        const tables = ['payment_installments', 'ap_ar_transactions', 'cash_transactions', 'bank_transactions', 'stock_transactions', 'initial_stock', 'categories', 'vendors', 'clients', 'banks', 'activity_log', 'monthly_snapshots'];
+        const tables = ['payment_installments', 'ap_ar_transactions', 'cash_transactions', 'bank_transactions', 'stock_transactions', 'initial_stock', 'categories', 'contacts', 'banks', 'activity_log', 'monthly_snapshots', 'loans', 'loan_payments'];
         for (const tableName of tables) {
             const { error } = await supabase.from(tableName).delete().gt('created_at', '1970-01-01');
             if (error && error.code !== '42P01') throw new Error(`Failed to delete data from ${tableName}.`);
@@ -347,29 +347,15 @@ export async function deleteAllData() {
     }
 }
 
-
-export async function deleteVendor(id: string) {
+// NEW: Replaces deleteVendor and deleteClient
+export async function deleteContact(id: string) {
     try {
         const session = await getSession();
         if (!session || session.role !== 'admin') throw new Error("Only admins can perform this action.");
         const supabase = createAdminSupabaseClient();
-        const { error } = await supabase.from('vendors').delete().eq('id', id);
+        const { error } = await supabase.from('contacts').delete().eq('id', id);
         if(error) throw error;
-        await logActivity(`Deleted vendor with ID: ${id}`);
-        return { success: true };
-    } catch (error) {
-        return handleApiError(error);
-    }
-}
-
-export async function deleteClient(id: string) {
-    try {
-        const session = await getSession();
-        if (!session || session.role !== 'admin') throw new Error("Only admins can perform this action.");
-        const supabase = createAdminSupabaseClient();
-        const { error } = await supabase.from('clients').delete().eq('id', id);
-        if(error) throw error;
-        await logActivity(`Deleted client with ID: ${id}`);
+        await logActivity(`Deleted contact with ID: ${id}`);
         return { success: true };
     } catch (error) {
         return handleApiError(error);
@@ -763,3 +749,5 @@ export async function getOrCreateSnapshot(date: string): Promise<MonthlySnapshot
         return handleApiError(error);
     }
 }
+
+    
