@@ -81,7 +81,7 @@ export function StockForm({ setDialogOpen }: StockFormProps) {
     if (container) {
       container.scrollTop = 0;
     }
-  }, []);
+  }, [containerRef]);
 
   useEffect(() => {
     if (weight && pricePerKg) {
