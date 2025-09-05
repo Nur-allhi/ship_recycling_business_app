@@ -1,5 +1,5 @@
 "use client";
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import { toast } from 'sonner';
 import { db } from '@/lib/db';
 import type { SyncQueueItem } from '@/lib/db';
@@ -8,6 +8,7 @@ import { useBalanceCalculator } from './useBalanceCalculator';
 import { useSessionManager } from './useSessionManager';
 import type { CashTransaction, BankTransaction, StockTransaction, Contact, LedgerTransaction, PaymentInstallment, StockItem, Loan, LoanPayment } from '@/lib/types';
 import * as server from '@/lib/actions'; 
+import { getSession } from '../auth/actions';
 
 // Helper to format date as YYYY-MM-DD string, preserving the local date
 const toYYYYMMDD = (date: Date) => {
@@ -262,26 +263,24 @@ export function useAppActions() {
     });
     
     const addContact = async (name: string, type: 'vendor' | 'client' | 'both'): Promise<Contact | undefined> => {
-        if (user?.role !== 'admin') {
+        // Fetch the current session directly to ensure role is up-to-date
+        const session = await getSession();
+        if (session?.role !== 'admin') {
             toast.error("Permission Denied", { description: "You do not have permission to perform this action." });
             return undefined;
         }
+
         const tempId = `temp_contact_${Date.now()}`;
         const newContact: Contact = { id: tempId, name, type, createdAt: new Date().toISOString() };
         
-        // This is now robust. It adds locally first and returns immediately.
         try {
             await db.contacts.add(newContact);
+            queueOrSync({ action: 'appendData', payload: { tableName: 'contacts', data: { name, type }, localId: tempId, logDescription: `Added contact: ${name}`, select: '*' }});
+            return newContact;
         } catch (e: any) {
             toast.error("Local DB Error", { description: `Could not save contact locally: ${e.message}`});
-            return undefined; // Return undefined if local save fails
+            return undefined;
         }
-        
-        // The sync is queued but we don't wait for it.
-        // We have successfully added it locally, so we can return the contact.
-        queueOrSync({ action: 'appendData', payload: { tableName: 'contacts', data: { name, type }, localId: tempId, logDescription: `Added contact: ${name}`, select: '*' }});
-        
-        return newContact;
     };
   
     const deleteContact = adminAction(async (id: string) => {
