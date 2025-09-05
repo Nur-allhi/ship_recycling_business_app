@@ -1,11 +1,10 @@
-
 # New Database Schema (Version 2.0)
 
-This file documents the new, refactored SQL structure for the application. It includes a unified `contacts` table and a dedicated module for `loans`.
+This file documents the new, refactored SQL structure for the application. It includes a unified `contacts` table, a dedicated module for `loans`, and a `monthly_snapshots` table for performance optimization.
 
 ### **Part 1: Create New Tables**
 
-These commands set up the new tables for contacts and loans.
+These commands set up the new tables for contacts, loans, and monthly snapshots.
 
 ```sql
 -- Create a new unified contacts table
@@ -35,7 +34,7 @@ CREATE TABLE loans (
 CREATE TABLE loan_payments (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     loan_id UUID NOT NULL REFERENCES loans(id) ON DELETE CASCADE,
-    payment_date TIMESTamptz NOT NULL,
+    payment_date TIMESTAMPTZ NOT NULL,
     amount NUMERIC NOT NULL,
     -- Can be linked to a cash or bank transaction
     linked_transaction_id UUID,
@@ -43,15 +42,44 @@ CREATE TABLE loan_payments (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- Creates a table to store balance snapshots at the start of each month for performance
+CREATE TABLE monthly_snapshots (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    snapshot_date DATE NOT NULL,
+    cash_balance NUMERIC NOT NULL DEFAULT 0,
+    bank_balances JSONB NOT NULL DEFAULT '{}'::jsonb,
+    stock_items JSONB NOT NULL DEFAULT '{}'::jsonb, -- Stores { "itemName": { "weight": X, "value": Y } }
+    total_receivables NUMERIC NOT NULL DEFAULT 0,
+    total_payables NUMERIC NOT NULL DEFAULT 0,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE(snapshot_date)
+);
+
 -- Enable RLS for the new tables
 ALTER TABLE contacts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE loans ENABLE ROW LEVEL SECURITY;
 ALTER TABLE loan_payments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE monthly_snapshots ENABLE ROW LEVEL SECURITY;
+
+-- Helper function to get user role (if it doesn't exist)
+-- This may already exist from previous steps, CREATE OR REPLACE is safe.
+CREATE OR REPLACE FUNCTION get_user_role(user_id uuid)
+RETURNS text AS $$
+BEGIN
+  RETURN (SELECT raw_user_meta_data->>'role' FROM auth.users WHERE id = user_id);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
 
 -- Create basic RLS policies
 CREATE POLICY "Allow all for authenticated users" ON contacts FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow all for authenticated users" ON loans FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow all for authenticated users" ON loan_payments FOR ALL USING (true) WITH CHECK (true);
+
+-- Create RLS policies for snapshots table
+CREATE POLICY "Authenticated users can view snapshots" ON monthly_snapshots FOR SELECT TO authenticated USING (true);
+CREATE POLICY "Admins can manage snapshots" ON monthly_snapshots FOR ALL TO authenticated USING (get_user_role(auth.uid()) = 'admin') WITH CHECK (get_user_role(auth.uid()) = 'admin');
+
 ```
 
 ---
