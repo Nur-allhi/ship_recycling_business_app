@@ -4,15 +4,13 @@
 import { useState, useEffect } from 'react';
 import { useAppContext } from './context/app-context';
 import { cn } from '@/lib/utils';
-import { Wallet, Landmark, Boxes, Settings, PlusCircle, LogOut, CreditCard, Users, LineChart, Loader2 } from 'lucide-react';
+import { Wallet, Landmark, Boxes, Settings, LogOut, CreditCard, LineChart } from 'lucide-react';
 import { DashboardTab } from '@/components/dashboard-tab';
 import { CashTab } from '@/components/cash-tab';
 import { BankTab } from '@/components/bank-tab';
 import { StockTab } from '@/components/stock-tab';
 import { SettingsTab } from '@/components/settings-tab';
 import { CreditTab } from '@/components/credit-tab';
-import { UnifiedTransactionForm } from '@/components/unified-transaction-form';
-import { Dialog, DialogContent, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -20,6 +18,7 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTr
 import { InitialBalanceDialog } from '@/components/initial-balance-dialog';
 import Logo from '@/components/logo';
 import { AppLoading } from '@/components/app-loading';
+import { FloatingActionButton } from '@/components/floating-action-button';
 
 const fontClasses = {
   sm: 'text-sm',
@@ -39,7 +38,6 @@ const navItems = [
 function ShipShapeLedger() {
   const { fontSize, isInitialBalanceDialogOpen, user, logout, isLoading, isInitialLoadComplete } = useAppContext();
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   const isMobile = useIsMobile();
   const isAdmin = user?.role === 'admin';
@@ -53,23 +51,17 @@ function ShipShapeLedger() {
 
   const roleDisplayName = user?.role ? user.role.charAt(0).toUpperCase() + user.role.slice(1) : '';
   
-  // Show loading screen during initial session check
   if (!isInitialLoadComplete) {
     return <AppLoading />;
   }
 
-  // If initial load is complete but no user, it means they are not logged in.
-  // The useEffect in app-context.tsx will handle the redirect to /login.
-  // So, we just return null here to prevent rendering the dashboard.
   if (!user) {
     return null;
   }
 
-  // If user is logged in and data is still loading (e.g., after a fresh login)
   if (isLoading) {
     return <AppLoading />;
   }
-
 
   return (
     <div className={cn('min-h-screen bg-background text-foreground animate-fade-in', fontClasses[fontSize] || 'text-base')}>
@@ -113,10 +105,10 @@ function ShipShapeLedger() {
                         </nav>
                         <Button variant="ghost" onClick={(e) => { 
     e.preventDefault(); 
-    setIsSheetOpen(false); // Close the sidebar first
-    setTimeout(() => { // Add a small delay before calling logout
+    setIsSheetOpen(false);
+    setTimeout(() => {
         logout(); 
-    }, 100); // 100ms delay to allow sidebar to start closing
+    }, 100);
 }} className="justify-start">
                             <LogOut className="mr-2 h-4 w-4" /> Logout
                         </Button>
@@ -138,16 +130,6 @@ function ShipShapeLedger() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            {isAdmin && (
-              <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-                <DialogTrigger asChild>
-                  <Button className="w-full sm:w-auto flex-shrink-0"><PlusCircle className="mr-2 h-4 w-4" /> Add Transaction</Button>
-                </DialogTrigger>
-                <DialogContent className="sm:max-w-3xl">
-                    <UnifiedTransactionForm setDialogOpen={setIsDialogOpen}/>
-                </DialogContent>
-              </Dialog>
-            )}
             {!isMobile && <Button variant="outline" onClick={logout} size="sm"><LogOut className="mr-2 h-4 w-4" />Logout</Button>}
           </div>
         </header>
@@ -188,6 +170,7 @@ function ShipShapeLedger() {
             </TabsContent>
           </Tabs>
         </main>
+        {isAdmin && <FloatingActionButton />}
       </div>
     </div>
   );
