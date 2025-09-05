@@ -402,28 +402,28 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }, [user, state.isLoading, pathname, router]);
 
     useEffect(() => {
-        if (!hasMounted) return; // Don't run this effect on the server or before mounting
-
-        // Set initial online status
+        if (!hasMounted) return;
+    
+        const handleOnline = () => {
+            setState(prev => {
+                if (!prev.isOnline) {
+                    toast.success("You are back online!");
+                    processSyncQueue();
+                }
+                return { ...prev, isOnline: true };
+            });
+        };
+    
+        const handleOffline = () => {
+             setState(prev => ({ ...prev, isOnline: false }));
+        };
+    
+        // Set initial state
         setState(prev => ({ ...prev, isOnline: navigator.onLine }));
-
-        const handleOnline = () => setState(prev => {
-            if (!prev.isOnline) {
-                toast.success("You are back online!");
-                processSyncQueue();
-            }
-            return { ...prev, isOnline: true };
-        });
-        const handleOffline = () => setState(prev => {
-            if (prev.isOnline) {
-                 toast.info("You are offline", { description: "Changes will be saved locally and synced when you're back." });
-            }
-            return { ...prev, isOnline: false };
-        });
-
+    
         window.addEventListener('online', handleOnline);
         window.addEventListener('offline', handleOffline);
-
+    
         return () => {
             window.removeEventListener('online', handleOnline);
             window.removeEventListener('offline', handleOffline);
@@ -452,25 +452,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const closeInitialBalanceDialog = () => setState(prev => ({ ...prev, isInitialBalanceDialogOpen: false }));
 
     const OnlineStatusIndicator = () => {
-        if (!hasMounted) {
-            return null; // Don't render on server or initial client render
+        if (!hasMounted || state.isOnline) {
+            return null; // Don't render on server, initial client render, or when online
         }
-
+    
+        // Only render when offline
         return (
             <div className="fixed bottom-4 right-4 z-50 animate-fade-in">
                 <div className="flex items-center gap-2 rounded-full bg-background px-3 py-2 text-foreground shadow-lg border">
-                    {state.isOnline ? (
-                        state.isSyncing ? (
-                            <>
-                                <RefreshCw className="h-5 w-5 animate-spin" />
-                                <span className="font-semibold text-sm">Syncing...</span>
-                            </>
-                        ) : (
-                            <>
-                                <Wifi className="h-5 w-5 text-accent" />
-                                <span className="font-semibold text-sm">Online</span>
-                            </>
-                        )
+                    {state.isSyncing ? (
+                        <>
+                            <RefreshCw className="h-5 w-5 animate-spin" />
+                            <span className="font-semibold text-sm">Syncing...</span>
+                        </>
                     ) : (
                         <>
                             <WifiOff className="h-5 w-5 text-destructive" />
@@ -565,5 +559,7 @@ export function useAppContext() {
     }
     return context;
 }
+
+    
 
     
