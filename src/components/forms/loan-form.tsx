@@ -80,7 +80,10 @@ export function LoanForm({ setDialogOpen }: LoanFormProps) {
         if (data.contact_id === 'new' && data.newContact) {
              const contactType = data.type === 'payable' ? 'vendor' : 'client';
              const newContact = await addContact(data.newContact, contactType);
-             if (!newContact) throw new Error("Failed to create new contact.");
+             if (!newContact) {
+                toast.error("Failed to create new contact.");
+                return;
+             }
              finalContactId = newContact.id;
         } else {
             finalContactId = data.contact_id;

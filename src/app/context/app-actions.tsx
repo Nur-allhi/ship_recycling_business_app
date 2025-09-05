@@ -23,16 +23,17 @@ export function useAppActions() {
     const { queueOrSync } = useDataSyncer();
     const { updateBalances } = useBalanceCalculator();
     
-    const adminAction = <T extends any[], R>(action: (...args: T) => R) => {
-        return (...args: T): R | undefined => {
+    const adminAction = <T extends any[], R>(action: (...args: T) => Promise<R> | R) => {
+        return async (...args: T): Promise<R | undefined> => {
             if (user?.role !== 'admin') {
                 toast.error("Permission Denied", { description: "You do not have permission to perform this action." });
                 return undefined;
             }
             try {
-                return action(...args);
+                return await action(...args);
             } catch (e: any) {
                 toast.error("Operation Failed", { description: e.message });
+                // We re-throw so the calling component knows the promise was rejected.
                 throw e;
             }
         };
@@ -261,13 +262,22 @@ export function useAppActions() {
       queueOrSync({ action: 'addInitialStockItem', payload: { item } });
     });
     
-    const addContact = adminAction(async (name: string, type: 'vendor' | 'client' | 'both'): Promise<Contact | undefined> => {
+    const addContact = async (name: string, type: 'vendor' | 'client' | 'both'): Promise<Contact | undefined> => {
+        if (user?.role !== 'admin') {
+            toast.error("Permission Denied", { description: "You do not have permission to perform this action." });
+            return undefined;
+        }
         const tempId = `temp_contact_${Date.now()}`;
         const newContact: Contact = { id: tempId, name, type, createdAt: new Date().toISOString() };
-        await db.contacts.add(newContact);
-        queueOrSync({ action: 'appendData', payload: { tableName: 'contacts', data: { name, type }, localId: tempId, logDescription: `Added contact: ${name}`, select: '*' }});
-        return newContact;
-    });
+        try {
+            await db.contacts.add(newContact);
+            queueOrSync({ action: 'appendData', payload: { tableName: 'contacts', data: { name, type }, localId: tempId, logDescription: `Added contact: ${name}`, select: '*' }});
+            return newContact;
+        } catch (e: any) {
+            toast.error("Operation Failed", { description: e.message });
+            return undefined;
+        }
+    };
   
     const deleteContact = adminAction(async (id: string) => {
         await db.contacts.delete(id);
