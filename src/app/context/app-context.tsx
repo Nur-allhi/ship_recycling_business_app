@@ -74,8 +74,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const [state, setState] = useState({
         cashBalance: 0, bankBalance: 0, totalPayables: 0, totalReceivables: 0,
         isLoading: true, isInitialBalanceDialogOpen: false, isSyncing: false,
-        isOnline: true, // Always start with true to avoid hydration mismatch
-        isOnlineStatusReady: false, // Track when online status is properly initialized
+        isOnline: typeof navigator !== 'undefined' ? navigator.onLine : true,
         isInitialLoadComplete: false, // Initialize to false
         isLoggingOut: false, // Initialize to false
         isAuthenticating: false, // Initialize to false
@@ -398,36 +397,28 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }, [user, state.isLoading, pathname, router]);
 
     useEffect(() => {
-        const handleOnline = () => {
-            toast.success("You are back online!");
-            setState(prev => ({ ...prev, isOnline: true }));
-            processSyncQueue();
+        const handleOnline = () => setState(prev => {
+            if (!prev.isOnline) {
+                toast.success("You are back online!");
+                processSyncQueue();
+            }
+            return { ...prev, isOnline: true };
+        });
+        const handleOffline = () => setState(prev => {
+            if (prev.isOnline) {
+                 toast.info("You are offline", { description: "Changes will be saved locally and synced when you're back." });
+            }
+            return { ...prev, isOnline: false };
+        });
+
+        window.addEventListener('online', handleOnline);
+        window.addEventListener('offline', handleOffline);
+
+        return () => {
+            window.removeEventListener('online', handleOnline);
+            window.removeEventListener('offline', handleOffline);
         };
-        const handleOffline = () => {
-            toast.info("You are offline", { description: "Changes will be saved locally and synced when you're back." });
-            setState(prev => ({ ...prev, isOnline: false }));
-        };
-
-        // This effect should only run once on the client after hydration
-        if (!state.isOnlineStatusReady) {
-            // Set initial status from navigator
-            setState(prev => ({ 
-                ...prev, 
-                isOnline: navigator.onLine,
-                isOnlineStatusReady: true 
-            }));
-
-            // Add event listeners
-            window.addEventListener('online', handleOnline);
-            window.addEventListener('offline', handleOffline);
-
-            // Cleanup function
-            return () => {
-                window.removeEventListener('online', handleOnline);
-                window.removeEventListener('offline', handleOffline);
-            };
-        }
-    }, [processSyncQueue, state.isOnlineStatusReady]);
+    }, [processSyncQueue, state.isOnline]);
 
     const loadRecycleBinData = useCallback(async () => {
         if (state.isOnline) {
@@ -451,9 +442,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const closeInitialBalanceDialog = () => setState(prev => ({ ...prev, isInitialBalanceDialogOpen: false }));
 
     const OnlineStatusIndicator = () => {
-        // Don't render until online status is properly initialized to avoid hydration mismatch
-        if (!state.isOnlineStatusReady) return null;
-        
         return (
             <div className="fixed bottom-4 right-4 z-50 animate-fade-in">
                 <div className="flex items-center gap-2 rounded-full bg-background px-3 py-2 text-foreground shadow-lg border">
@@ -563,5 +551,3 @@ export function useAppContext() {
     }
     return context;
 }
-
-    
