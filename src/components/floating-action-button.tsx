@@ -99,8 +99,8 @@ export function FloatingActionButton() {
             </div>
 
             <DialogComponent open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-                <DialogContentComponent className="sm:max-w-xl p-0">
-                    <DialogHeader className="p-4 sm:p-6 pb-0 text-left">
+                <DialogContentComponent className="sm:max-w-xl p-0 overflow-hidden flex flex-col">
+                    <DialogHeader className="p-4 sm:p-6 pb-0 text-left shrink-0">
                         {activeAction && <DialogTitle>{activeAction.title}</DialogTitle>}
                         {activeAction && <DialogDescription>{activeAction.description}</DialogDescription>}
                     </DialogHeader>
