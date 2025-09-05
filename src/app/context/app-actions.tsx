@@ -288,14 +288,24 @@ export function useAppActions() {
     }
     
     const addContact = async (name: string, type: 'vendor' | 'client' | 'both'): Promise<Contact | undefined> => {
-        return performAdminAction(async () => {
-            const tempId = `temp_contact_${Date.now()}`;
-            const newContact: Contact = { id: tempId, name, type, createdAt: new Date().toISOString() };
+        if (user?.role !== 'admin') {
+            toast.error("Permission Denied", { description: "You do not have permission to perform this action." });
+            return undefined;
+        }
+
+        const tempId = `temp_contact_${Date.now()}`;
+        const newContact: Contact = { id: tempId, name, type, createdAt: new Date().toISOString() };
+        
+        try {
             await db.contacts.add(newContact);
             const savedContact = await queueOrSync({ action: 'appendData', payload: { tableName: 'contacts', data: { name, type }, localId: tempId, select: '*' }});
-            // The result from queueOrSync might be complex, so we ensure we return a clean contact object
-            return { id: savedContact?.id || tempId, name, type, createdAt: new Date().toISOString() };
-        });
+            // If online, savedContact will have the real ID. If offline, it will be undefined, so we use the local temp object.
+            return savedContact ? { ...savedContact, ...newContact, id: savedContact.id } : newContact;
+        } catch (e: any) {
+            toast.error("Operation Failed", { description: e.message });
+            // Even if sync fails, return the locally-saved contact so the UI can proceed.
+            return newContact;
+        }
     };
   
     const deleteContact = async (id: string) => {
