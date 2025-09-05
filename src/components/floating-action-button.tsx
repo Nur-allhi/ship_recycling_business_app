@@ -81,7 +81,7 @@ export function FloatingActionButton() {
                                 transition={{ duration: 0.2, delay: index * 0.05 }}
                                 className="flex items-center justify-end gap-2 w-48"
                             >
-                                <span className="bg-card text-card-foreground text-sm px-3 py-1 rounded-md shadow-lg">{action.label}</span>
+                                <span className="bg-card text-card-foreground text-sm px-3 py-1 rounded-md shadow-lg w-full text-center">{action.label}</span>
                                 <Button
                                     size="sm"
                                     className="rounded-full w-12 h-12 shadow-lg"
