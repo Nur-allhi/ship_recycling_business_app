@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, lazy, Suspense } from 'react';
@@ -102,14 +103,14 @@ export function FloatingActionButton() {
                     {isMobile ? (
                         <>
                             <DrawerHeader className="pt-4 px-4 text-left">
-                            {activeAction && <DrawerTitle>{activeAction.title}</DrawerTitle>}
-                            {activeAction && <DrawerDescription>{activeAction.description}</DrawerDescription>}
+                                {activeAction && <DrawerTitle>{activeAction.title}</DrawerTitle>}
+                                {activeAction && <DrawerDescription>{activeAction.description}</DrawerDescription>}
                             </DrawerHeader>
-                            <Suspense fallback={<div className="h-[400px] flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>}>
-                                <div className="p-4 pt-0 overflow-y-auto">
+                            <div className="p-4 pt-0 overflow-y-auto pb-8">
+                                <Suspense fallback={<div className="h-[400px] flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>}>
                                     {renderForm()}
-                                </div>
-                            </Suspense>
+                                </Suspense>
+                            </div>
                         </>
                     ) : (
                         <>
