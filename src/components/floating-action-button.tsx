@@ -64,7 +64,7 @@ export function FloatingActionButton() {
                                 animate={{ opacity: 1, y: 0 }}
                                 exit={{ opacity: 0, y: 10 * (index + 1) }}
                                 transition={{ duration: 0.2, delay: index * 0.05 }}
-                                className="flex items-center gap-2 justify-end"
+                                className="flex items-center gap-2 w-full justify-end"
                             >
                                 <span className="bg-card text-card-foreground text-sm px-3 py-1 rounded-md shadow-lg">{action.label}</span>
                                 <Button
@@ -100,29 +100,27 @@ export function FloatingActionButton() {
 
             <DialogComponent open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                 <DialogContentComponent className="sm:max-w-xl p-0">
-                    {isMobile ? (
-                        <>
-                            <DrawerHeader className="pt-4 px-4 text-left">
-                                {activeAction && <DrawerTitle>{activeAction.title}</DrawerTitle>}
-                                {activeAction && <DrawerDescription>{activeAction.description}</DrawerDescription>}
-                            </DrawerHeader>
-                            <div className="p-4 pt-0 overflow-y-auto pb-8">
-                                <Suspense fallback={<div className="h-[400px] flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>}>
+                    <Suspense fallback={<div className="h-[400px] flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>}>
+                         {isMobile ? (
+                            <>
+                                <DrawerHeader className="pt-4 px-4 text-left">
+                                    {activeAction && <DrawerTitle>{activeAction.title}</DrawerTitle>}
+                                    {activeAction && <DrawerDescription>{activeAction.description}</DrawerDescription>}
+                                </DrawerHeader>
+                                <div className="overflow-y-auto">
                                     {renderForm()}
-                                </Suspense>
-                            </div>
-                        </>
-                    ) : (
-                        <>
-                            <DialogHeader className="p-4 sm:p-6 pb-0 text-center">
-                                {activeAction && <DialogTitle>{activeAction.title}</DialogTitle>}
-                                {activeAction && <DialogDescription>{activeAction.description}</DialogDescription>}
-                            </DialogHeader>
-                            <Suspense fallback={<div className="h-[400px] flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>}>
+                                </div>
+                            </>
+                        ) : (
+                            <>
+                                <DialogHeader className="p-4 sm:p-6 pb-0 text-center">
+                                    {activeAction && <DialogTitle>{activeAction.title}</DialogTitle>}
+                                    {activeAction && <DialogDescription>{activeAction.description}</DialogDescription>}
+                                </DialogHeader>
                                 {renderForm()}
-                            </Suspense>
-                        </>
-                    )}
+                            </>
+                        )}
+                    </Suspense>
                 </DialogContentComponent>
             </DialogComponent>
         </>
