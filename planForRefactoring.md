@@ -7,6 +7,7 @@ This document outlines the step-by-step plan to perform a significant architectu
 2.  **Introduce a Loans Module**: Add a dedicated feature to manage both money borrowed (Liabilities) and money lent (Assets).
 3.  **Enhance Code Quality**: Refactor large, complex components into smaller, single-responsibility custom hooks to improve readability and make future development easier.
 4.  **Implement Backup & Restore**: Provide a crucial data safety feature allowing users to export and import their entire ledger.
+5.  **Ensure Data Integrity with Cascading Updates**: Implement intelligent editing logic so that updating a primary transaction (e.g., a stock purchase) automatically updates all linked financial records (e.g., cash payments or payables).
 
 ---
 
@@ -27,6 +28,7 @@ This document outlines the step-by-step plan to perform a significant architectu
         *   I will modify functions like `addStockTransaction` and `recordPayment` to reference the new `contacts` table.
         *   I will create a new set of server actions specifically for the Loans module, such as `addLoan`, `recordLoanPayment`, and `getLoanDetails`.
         *   I will implement the `exportAllData` and `batchImportData` server actions for the backup/restore functionality.
+        *   **Cascading Updates**: I will build more robust update functions (e.g., `updateStockTransaction`) that not only modify the primary record but also find and update any linked financial transactions in a single, atomic operation.
 
 ---
 
@@ -49,6 +51,7 @@ This document outlines the step-by-step plan to perform a significant architectu
         *   **Create `useBalanceCalculator.ts`**: This hook will handle all financial calculations based on the data in the local database.
         *   **Refactor `app-context.tsx`**: This provider will become a lightweight coordinator that calls the new hooks and passes the state down.
         *   **Update `app-actions.tsx`**: This file will be simplified to focus only on writing new user actions into the local database and queuing them for synchronization. This will also include the new client-side actions for backup and restore.
+        *   **Cascading Updates**: I will enhance the client-side edit functions (e.g., `editStockTransaction`) to perform these cascading updates on the local Dexie database first, ensuring the UI updates instantly and correctly while the changes are queued for the server.
 
 ---
 
@@ -83,3 +86,4 @@ This document outlines the step-by-step plan to perform a significant architectu
     *   **Details**:
         *   All forms that have a "contact" dropdown will be updated to fetch from the new unified `contacts` list.
         *   I will create dedicated logic hooks (e.g., `useStockFormLogic.ts`) to separate the complex state management and validation from the form's UI (the JSX), making the component files much cleaner.
+        *   **Cascading Updates**: The UI for editing transactions will be simplified. The user will edit the primary transaction in one place, and the form's submission logic will call the new, smarter update actions that handle all linked records automatically.
