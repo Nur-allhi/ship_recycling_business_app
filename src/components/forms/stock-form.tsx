@@ -155,106 +155,105 @@ export function StockForm({ setDialogOpen }: StockFormProps) {
 
   return (
     <Card className="border-0 shadow-none flex flex-col h-full bg-transparent">
-      <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col h-full">
-        {/* Non-scrolling Header */}
-        <CardHeader className="p-4 sm:p-6 shrink-0">
-            <div className="space-y-2">
-                <Label>Date</Label>
-                <Controller name="date" control={control} render={({ field }) => (
-                <Popover open={isDatePickerOpen} onOpenChange={setIsDatePickerOpen}>
-                    <PopoverTrigger asChild><Button variant="outline" className={cn("w-full justify-start text-left font-normal", !field.value && "text-muted-foreground")}><CalendarIcon className="mr-2 h-4 w-4" />{field.value ? format(field.value, "dd-MM-yyyy") : <span>Pick a date</span>}</Button></PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start"><Calendar mode="single" selected={field.value} onSelect={(d) => { if (d) field.onChange(d); setIsDatePickerOpen(false); }} initialFocus /></PopoverContent>
-                </Popover>
-                )} />
-                {errors.date && <p className="text-sm text-destructive">{errors.date.message}</p>}
-            </div>
-        </CardHeader>
-
-        {/* Scrolling Content */}
-        <div className="flex-grow overflow-y-auto px-4 sm:px-6">
-            <div className="space-y-4 pb-16">
+        <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col h-full">
+            <CardHeader className="p-4 sm:p-6 shrink-0">
                 <div className="space-y-2">
-                    <Label>Transaction Type</Label>
-                    <Controller name="stockType" control={control} render={({ field }) => (
-                    <RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex pt-2 gap-4">
-                        <Label htmlFor="purchase" className="flex items-center gap-2 cursor-pointer"><RadioGroupItem value="purchase" id="purchase" />Purchase</Label>
-                        <Label htmlFor="sale" className="flex items-center gap-2 cursor-pointer"><RadioGroupItem value="sale" id="sale" />Sale</Label>
-                    </RadioGroup>
+                    <Label>Date</Label>
+                    <Controller name="date" control={control} render={({ field }) => (
+                    <Popover open={isDatePickerOpen} onOpenChange={setIsDatePickerOpen}>
+                        <PopoverTrigger asChild><Button variant="outline" className={cn("w-full justify-start text-left font-normal", !field.value && "text-muted-foreground")}><CalendarIcon className="mr-2 h-4 w-4" />{field.value ? format(field.value, "dd-MM-yyyy") : <span>Pick a date</span>}</Button></PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start"><Calendar mode="single" selected={field.value} onSelect={(d) => { if (d) field.onChange(d); setIsDatePickerOpen(false); }} initialFocus /></PopoverContent>
+                    </Popover>
                     )} />
-                    {errors.stockType && <p className="text-sm text-destructive">{errors.stockType.message}</p>}
+                    {errors.date && <p className="text-sm text-destructive">{errors.date.message}</p>}
                 </div>
+            </CardHeader>
 
-                <div className="space-y-2">
-                    <Label>Item Name</Label>
-                    {stockType === 'purchase' ? (
-                    <div className="flex items-center gap-2">
-                        {isNewStockItem ? <Input {...register('stockItemName')} placeholder="e.g. Iron Rod"/> : <Controller name="stockItemName" control={control} render={({ field }) => <ResponsiveSelect onValueChange={field.onChange} value={field.value} title="Select an item" placeholder="Select existing item" className="flex-1" items={stockItemsForPurchase} />} />}
-                        <Button type="button" variant="outline" size="sm" onClick={() => setIsNewStockItem(prev => !prev)}>{isNewStockItem ? 'Select Existing' : 'Add New'}</Button>
+            <CardContent className="flex-grow overflow-y-auto px-4 sm:px-6 pb-16">
+                <div className="space-y-4">
+                    <div className="space-y-2">
+                        <Label>Transaction Type</Label>
+                        <Controller name="stockType" control={control} render={({ field }) => (
+                        <RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex pt-2 gap-4">
+                            <Label htmlFor="purchase" className="flex items-center gap-2 cursor-pointer"><RadioGroupItem value="purchase" id="purchase" />Purchase</Label>
+                            <Label htmlFor="sale" className="flex items-center gap-2 cursor-pointer"><RadioGroupItem value="sale" id="sale" />Sale</Label>
+                        </RadioGroup>
+                        )} />
+                        {errors.stockType && <p className="text-sm text-destructive">{errors.stockType.message}</p>}
                     </div>
-                    ) : <Controller name="stockItemName" control={control} render={({ field }) => <ResponsiveSelect onValueChange={field.onChange} value={field.value} title="Select an item" placeholder="Select item to sell" items={stockItemsForSale} />} />}
-                    {errors.stockItemName && <p className="text-sm text-destructive">{errors.stockItemName.message}</p>}
-                </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2"><Label>Weight (kg)</Label><Input type="number" step="0.01" {...register('weight')} placeholder="0.00"/>{errors.weight && <p className="text-sm text-destructive">{errors.weight.message}</p>}</div>
-                    <div className="space-y-2"><Label>Price per kg</Label><Input type="number" step="0.01" {...register('pricePerKg')} placeholder="0.00"/>{errors.pricePerKg && <p className="text-sm text-destructive">{errors.pricePerKg.message}</p>}</div>
-                </div>
-                
-                <Separator />
-                
-                <div className="space-y-2">
-                    <Label>Payment Method</Label>
-                    <Controller name="paymentMethod" control={control} render={({ field }) => (
-                    <RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex pt-2 gap-4">
-                        <Label htmlFor="cash-payment" className="flex items-center gap-2 cursor-pointer"><RadioGroupItem value="cash" id="cash-payment" /><span>Cash</span></Label>
-                        <Label htmlFor="bank-payment" className="flex items-center gap-2 cursor-pointer"><RadioGroupItem value="bank" id="bank-payment" /><span>Bank</span></Label>
-                        <Label htmlFor="credit-payment" className="flex items-center gap-2 cursor-pointer"><RadioGroupItem value="credit" id="credit-payment" /><span>Credit</span></Label>
-                    </RadioGroup>
-                    )} />
-                    {errors.paymentMethod && <p className="text-sm text-destructive">{errors.paymentMethod.message}</p>}
-                </div>
-
-                {stockType && (showStockContact || paymentMethod === 'credit') ? (
-                    <div className="space-y-2 animate-fade-in">
-                    <Label>{stockContactType}</Label>
-                    <Controller name="contact_id" control={control} render={({ field }) => <ResponsiveSelect onValueChange={field.onChange} value={field.value} title={`Select a ${stockContactType}`} placeholder={`Select a ${stockContactType}`} items={currentStockContactItems} />} />
-                    {errors.contact_id && <p className="text-sm text-destructive">{errors.contact_id.message}</p>}
-                    {contact_id === 'new' && <div className="flex items-end gap-2 pt-2 animate-fade-in"><div className="flex-grow space-y-1"><Label htmlFor="newContact">New {stockContactType} Name</Label><Input {...register('newContact')} placeholder={`Enter new ${stockContactType.toLowerCase()} name`}/></div></div>}
-                    {errors.newContact && <p className="text-sm text-destructive">{errors.newContact.message}</p>}
-                    </div>
-                ) : stockType && paymentMethod !== 'credit' && (
-                    <div className="pt-2"><Button type="button" variant="link" size="sm" className="p-0 h-auto" onClick={() => setShowStockContact(true)}><Link className="mr-2 h-4 w-4" />Link to a {stockContactType} (Optional)</Button></div>
-                )}
-
-                {paymentMethod === 'bank' && <div className="space-y-2 animate-fade-in"><Label>Bank Account</Label><Controller name="bank_id" control={control} render={({ field }) => <ResponsiveSelect onValueChange={field.onChange} value={field.value} title="Select bank" placeholder="Select bank" items={bankAccountItems} />} />{errors.bank_id && <p className="text-sm text-destructive">{errors.bank_id.message}</p>}</div>}
-                
-                {paymentMethod !== 'credit' && (
-                    <div className="p-4 border rounded-md bg-muted/30 space-y-4 animate-fade-in">
-                        <div className="space-y-2">
-                            <div className="flex items-center justify-between"><Label htmlFor="actual_amount">Amount Paid/Received</Label><span className="text-sm text-muted-foreground">Expected: {currency} {((weight || 0) * (pricePerKg || 0)).toFixed(2)}</span></div>
-                            <Input id="actual_amount" type="number" step="0.01" {...register('actual_amount')} placeholder="e.g., Actual cash paid"/>
-                            {errors.actual_amount && <p className="text-sm text-destructive">{errors.actual_amount.message}</p>}
+                    <div className="space-y-2">
+                        <Label>Item Name</Label>
+                        {stockType === 'purchase' ? (
+                        <div className="flex items-center gap-2">
+                            {isNewStockItem ? <Input {...register('stockItemName')} placeholder="e.g. Iron Rod"/> : <Controller name="stockItemName" control={control} render={({ field }) => <ResponsiveSelect onValueChange={field.onChange} value={field.value} title="Select an item" placeholder="Select existing item" className="flex-1" items={stockItemsForPurchase} />} />}
+                            <Button type="button" variant="outline" size="sm" onClick={() => setIsNewStockItem(prev => !prev)}>{isNewStockItem ? 'Select Existing' : 'Add New'}</Button>
                         </div>
-                        {difference !== 0 && (
-                            <div className="space-y-2 animate-fade-in">
-                                <div className="flex justify-between items-center"><Label>Difference</Label><span className={cn("font-bold", difference > 0 ? "text-accent" : "text-destructive")}>{new Intl.NumberFormat('en-US', { style: 'currency', currency, currencyDisplay: 'symbol' }).format(difference)}</span></div>
-                                <div className="space-y-2"><Label htmlFor="difference_reason">Reason for Difference</Label><Input id="difference_reason" {...register('difference_reason')} placeholder="e.g., Discount, Rounding"/></div>
-                            </div>
-                        )}
+                        ) : <Controller name="stockItemName" control={control} render={({ field }) => <ResponsiveSelect onValueChange={field.onChange} value={field.value} title="Select an item" placeholder="Select item to sell" items={stockItemsForSale} />} />}
+                        {errors.stockItemName && <p className="text-sm text-destructive">{errors.stockItemName.message}</p>}
                     </div>
-                )}
 
-                {paymentMethod === 'credit' && stockType && <div className="space-y-2 animate-fade-in pt-2"><Alert variant="default" className="mt-4 bg-blue-50 border-blue-200 text-blue-800"><AlertTitle>On Credit</AlertTitle><AlertDescription>This will create a new item in your Accounts {stockType === 'purchase' ? 'Payable' : 'Receivable'} ledger.</AlertDescription></Alert></div>}
-                
-                <div className="space-y-2"><Label htmlFor="description-stock">Description (Optional)</Label><Input id="description-stock" {...register('description')} placeholder="e.g., invoice #, delivery details"/>{errors.description && <p className="text-sm text-destructive">{errors.description.message}</p>}</div>
-            </div>
-        </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2"><Label>Weight (kg)</Label><Input type="number" step="0.01" {...register('weight')} placeholder="0.00"/>{errors.weight && <p className="text-sm text-destructive">{errors.weight.message}</p>}</div>
+                        <div className="space-y-2"><Label>Price per kg</Label><Input type="number" step="0.01" {...register('pricePerKg')} placeholder="0.00"/>{errors.pricePerKg && <p className="text-sm text-destructive">{errors.pricePerKg.message}</p>}</div>
+                    </div>
+                    
+                    <Separator />
+                    
+                    <div className="space-y-2">
+                        <Label>Payment Method</Label>
+                        <Controller name="paymentMethod" control={control} render={({ field }) => (
+                        <RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex pt-2 gap-4">
+                            <Label htmlFor="cash-payment" className="flex items-center gap-2 cursor-pointer"><RadioGroupItem value="cash" id="cash-payment" /><span>Cash</span></Label>
+                            <Label htmlFor="bank-payment" className="flex items-center gap-2 cursor-pointer"><RadioGroupItem value="bank" id="bank-payment" /><span>Bank</span></Label>
+                            <Label htmlFor="credit-payment" className="flex items-center gap-2 cursor-pointer"><RadioGroupItem value="credit" id="credit-payment" /><span>Credit</span></Label>
+                        </RadioGroup>
+                        )} />
+                        {errors.paymentMethod && <p className="text-sm text-destructive">{errors.paymentMethod.message}</p>}
+                    </div>
 
-        {/* Non-scrolling Footer */}
-        <CardFooter className="flex justify-end p-4 sm:p-6 border-t mt-auto shrink-0 bg-background">
-          <Button type="submit" disabled={isSubmitting}>{isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Record Transaction</Button>
-        </CardFooter>
-      </form>
+                    {stockType && (showStockContact || paymentMethod === 'credit') ? (
+                        <div className="space-y-2 animate-fade-in">
+                        <Label>{stockContactType}</Label>
+                        <Controller name="contact_id" control={control} render={({ field }) => <ResponsiveSelect onValueChange={field.onChange} value={field.value} title={`Select a ${stockContactType}`} placeholder={`Select a ${stockContactType}`} items={currentStockContactItems} />} />
+                        {errors.contact_id && <p className="text-sm text-destructive">{errors.contact_id.message}</p>}
+                        {contact_id === 'new' && <div className="flex items-end gap-2 pt-2 animate-fade-in"><div className="flex-grow space-y-1"><Label htmlFor="newContact">New {stockContactType} Name</Label><Input {...register('newContact')} placeholder={`Enter new ${stockContactType.toLowerCase()} name`}/></div></div>}
+                        {errors.newContact && <p className="text-sm text-destructive">{errors.newContact.message}</p>}
+                        </div>
+                    ) : stockType && paymentMethod !== 'credit' && (
+                        <div className="pt-2"><Button type="button" variant="link" size="sm" className="p-0 h-auto" onClick={() => setShowStockContact(true)}><Link className="mr-2 h-4 w-4" />Link to a {stockContactType} (Optional)</Button></div>
+                    )}
+
+                    {paymentMethod === 'bank' && <div className="space-y-2 animate-fade-in"><Label>Bank Account</Label><Controller name="bank_id" control={control} render={({ field }) => <ResponsiveSelect onValueChange={field.onChange} value={field.value} title="Select bank" placeholder="Select bank" items={bankAccountItems} />} />{errors.bank_id && <p className="text-sm text-destructive">{errors.bank_id.message}</p>}</div>}
+                    
+                    {paymentMethod !== 'credit' && (
+                        <div className="p-4 border rounded-md bg-muted/30 space-y-4 animate-fade-in">
+                            <div className="space-y-2">
+                                <div className="flex items-center justify-between"><Label htmlFor="actual_amount">Amount Paid/Received</Label><span className="text-sm text-muted-foreground">Expected: {currency} {((weight || 0) * (pricePerKg || 0)).toFixed(2)}</span></div>
+                                <Input id="actual_amount" type="number" step="0.01" {...register('actual_amount')} placeholder="e.g., Actual cash paid"/>
+                                {errors.actual_amount && <p className="text-sm text-destructive">{errors.actual_amount.message}</p>}
+                            </div>
+                            {difference !== 0 && (
+                                <div className="space-y-2 animate-fade-in">
+                                    <div className="flex justify-between items-center"><Label>Difference</Label><span className={cn("font-bold", difference > 0 ? "text-accent" : "text-destructive")}>{new Intl.NumberFormat('en-US', { style: 'currency', currency, currencyDisplay: 'symbol' }).format(difference)}</span></div>
+                                    <div className="space-y-2"><Label htmlFor="difference_reason">Reason for Difference</Label><Input id="difference_reason" {...register('difference_reason')} placeholder="e.g., Discount, Rounding"/></div>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {paymentMethod === 'credit' && stockType && <div className="space-y-2 animate-fade-in pt-2"><Alert variant="default" className="mt-4 bg-blue-50 border-blue-200 text-blue-800"><AlertTitle>On Credit</AlertTitle><AlertDescription>This will create a new item in your Accounts {stockType === 'purchase' ? 'Payable' : 'Receivable'} ledger.</AlertDescription></Alert></div>}
+                    
+                    <div className="space-y-2"><Label htmlFor="description-stock">Description (Optional)</Label><Input id="description-stock" {...register('description')} placeholder="e.g., invoice #, delivery details"/>{errors.description && <p className="text-sm text-destructive">{errors.description.message}</p>}</div>
+                </div>
+            </CardContent>
+
+            <CardFooter className="flex justify-end p-4 sm:p-6 border-t shrink-0 bg-background">
+                <Button type="submit" disabled={isSubmitting}>{isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Record Transaction</Button>
+            </CardFooter>
+        </form>
     </Card>
   );
 }
+
+    
