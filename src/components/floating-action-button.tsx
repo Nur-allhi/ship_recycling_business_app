@@ -20,7 +20,7 @@ type TransactionType = 'cash' | 'bank' | 'stock' | 'transfer' | 'ap_ar';
 const fabActions = [
     { type: 'ap_ar' as TransactionType, icon: UserPlus, label: 'A/R & A/P', title: 'New A/R or A/P Entry', description: 'Record a new payable or receivable item.' },
     { type: 'transfer' as TransactionType, icon: ArrowRightLeft, label: 'Transfer', title: 'Transfer Funds', description: 'Move money between your cash and bank accounts.' },
-    { type: 'stock' as TransactionType, icon: Boxes, label: 'Stock', title: 'New Stock Transaction', description: 'Record a new stock purchase or sale.' },
+    { type: 'stock' as TransactionType, icon: Boxes, label: 'New Stock Transaction', title: 'New Stock Transaction', description: 'Record a new stock purchase or sale.' },
     { type: 'bank' as TransactionType, icon: Landmark, label: 'Bank', title: 'New Bank Transaction', description: 'Record a new deposit or withdrawal from a bank account.' },
     { type: 'cash' as TransactionType, icon: Wallet, label: 'Cash', title: 'New Cash Transaction', description: 'Record a new income or expense using cash.' },
 ];
@@ -100,10 +100,16 @@ export function FloatingActionButton() {
 
             <DialogComponent open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                 <DialogContentComponent className="sm:max-w-xl p-0 overflow-hidden flex flex-col">
-                     {isMobile ? (
-                        <Suspense fallback={<div className="h-full flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>}>
-                            {renderForm()}
-                        </Suspense>
+                    {isMobile ? (
+                        <>
+                             <DrawerHeader className="p-4 pb-0 text-left shrink-0">
+                                {activeAction && <DrawerTitle>{activeAction.title}</DrawerTitle>}
+                                {activeAction && <DrawerDescription>{activeAction.description}</DrawerDescription>}
+                            </DrawerHeader>
+                            <Suspense fallback={<div className="h-full flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>}>
+                                {renderForm()}
+                            </Suspense>
+                        </>
                     ) : (
                         <>
                             <DialogHeader className="p-4 sm:p-6 pb-0 text-left shrink-0">
