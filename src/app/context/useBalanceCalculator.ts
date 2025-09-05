@@ -34,25 +34,41 @@ export function useBalanceCalculator() {
         setTotalReceivables(receivables);
         
         // This is a simplified stock calculation for the dashboard.
-        // The more complex running balance is handled in the stock tab itself.
-        const stockPortfolio: Record<string, { weight: number, purchasePricePerKg: number }> = {};
-        allInitialStock.forEach(item => {
-            stockPortfolio[item.name] = { weight: item.weight, purchasePricePerKg: item.purchasePricePerKg };
+        // It now CORRECTLY includes the initial stock.
+        const stockPortfolio: Record<string, { weight: number, purchasePricePerKg: number, totalValue: number }> = {};
+        
+        (allInitialStock || []).forEach(item => {
+            if (!stockPortfolio[item.name]) {
+                stockPortfolio[item.name] = { weight: 0, purchasePricePerKg: 0, totalValue: 0 };
+            }
+            stockPortfolio[item.name].weight += item.weight;
+            stockPortfolio[item.name].totalValue += item.weight * item.purchasePricePerKg;
         });
 
-        allStock.forEach(tx => {
+        (allStock || []).forEach(tx => {
             if (!stockPortfolio[tx.stockItemName]) {
-                stockPortfolio[tx.stockItemName] = { weight: 0, purchasePricePerKg: 0 };
+                stockPortfolio[tx.stockItemName] = { weight: 0, purchasePricePerKg: 0, totalValue: 0 };
             }
+            
+            const item = stockPortfolio[tx.stockItemName];
+            const currentAvgPrice = item.weight > 0 ? item.totalValue / item.weight : 0;
+
             if (tx.type === 'purchase') {
-                stockPortfolio[tx.stockItemName].weight += tx.weight;
+                item.weight += tx.weight;
+                item.totalValue += tx.weight * tx.pricePerKg;
             } else {
-                stockPortfolio[tx.stockItemName].weight -= tx.weight;
+                item.weight -= tx.weight;
+                item.totalValue -= tx.weight * currentAvgPrice;
             }
         });
         
         const currentStockItems = Object.entries(stockPortfolio)
-            .map(([name, { weight, purchasePricePerKg }]) => ({ id: name, name, weight, purchasePricePerKg }));
+            .map(([name, { weight, totalValue }]) => ({ 
+                id: name, 
+                name, 
+                weight, 
+                purchasePricePerKg: weight > 0 ? totalValue / weight : 0
+            }));
 
         setStockItems(currentStockItems);
 
@@ -67,5 +83,3 @@ export function useBalanceCalculator() {
         updateBalances,
     };
 }
-
-    
