@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, lazy, Suspense } from 'react';
+import { useState, lazy, Suspense, useRef, useEffect } from 'react';
 import { Button } from './ui/button';
 import { Plus, X, Wallet, Landmark, Boxes, ArrowRightLeft, UserPlus, Loader2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
@@ -30,6 +30,21 @@ export function FloatingActionButton() {
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [selectedForm, setSelectedForm] = useState<TransactionType | null>(null);
     const isMobile = useIsMobile();
+    const fabRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        function handleClickOutside(event: MouseEvent) {
+            if (fabRef.current && !fabRef.current.contains(event.target as Node)) {
+                setIsOpen(false);
+            }
+        }
+        if (isOpen) {
+            document.addEventListener("mousedown", handleClickOutside);
+        }
+        return () => {
+            document.removeEventListener("mousedown", handleClickOutside);
+        };
+    }, [isOpen]);
 
     const handleActionClick = (type: TransactionType) => {
         setSelectedForm(type);
@@ -54,7 +69,7 @@ export function FloatingActionButton() {
 
     return (
         <>
-            <div className="fixed bottom-6 right-6 z-40">
+            <div className="fixed bottom-6 right-6 z-40" ref={fabRef}>
                 <div className="relative flex flex-col items-end gap-2">
                     <AnimatePresence>
                         {isOpen && fabActions.map((action, index) => (
@@ -64,7 +79,7 @@ export function FloatingActionButton() {
                                 animate={{ opacity: 1, y: 0 }}
                                 exit={{ opacity: 0, y: 10 * (index + 1) }}
                                 transition={{ duration: 0.2, delay: index * 0.05 }}
-                                className="flex items-center gap-2"
+                                className="flex items-center justify-end gap-2 w-48"
                             >
                                 <span className="bg-card text-card-foreground text-sm px-3 py-1 rounded-md shadow-lg">{action.label}</span>
                                 <Button
