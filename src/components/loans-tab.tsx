@@ -1,8 +1,9 @@
-
 "use client";
 
 import React from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
+import { LoansPayableList } from './loans-payable-list';
+import { LoansReceivableList } from './loans-receivable-list';
 
 export function LoansTab() {
     return (
@@ -12,14 +13,10 @@ export function LoansTab() {
                 <TabsTrigger value="receivable">Loans Receivable</TabsTrigger>
             </TabsList>
             <TabsContent value="payable" className="mt-4">
-                <p className="text-muted-foreground text-center py-8">
-                    Content for loans you owe to others will be displayed here.
-                </p>
+                <LoansPayableList />
             </TabsContent>
             <TabsContent value="receivable" className="mt-4">
-                 <p className="text-muted-foreground text-center py-8">
-                    Content for loans you have given to others will be displayed here.
-                </p>
+                 <LoansReceivableList />
             </TabsContent>
         </Tabs>
     );
