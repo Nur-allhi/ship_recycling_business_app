@@ -95,8 +95,8 @@ export function StockForm({ setDialogOpen }: StockFormProps) {
   
   const difference = useMemo(() => {
     if (paymentMethod === 'credit') return 0;
-    const expected = parseFloat(expected_amount || '0');
-    const actual = parseFloat(actual_amount || '0');
+    const expected = expected_amount || 0;
+    const actual = actual_amount || 0;
     if (isNaN(expected) || isNaN(actual)) return 0;
     return actual - expected;
   }, [expected_amount, actual_amount, paymentMethod]);

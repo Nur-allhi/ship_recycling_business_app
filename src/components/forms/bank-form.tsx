@@ -79,8 +79,8 @@ export function BankForm({ setDialogOpen }: BankFormProps) {
   }, [isSettlement, setValue]);
 
   const difference = useMemo(() => {
-    const expected = parseFloat(watchedExpectedAmount || '0');
-    const actual = parseFloat(watchedActualAmount || '0');
+    const expected = watchedExpectedAmount || 0;
+    const actual = watchedActualAmount || 0;
     if (isNaN(expected) || isNaN(actual) || !showAdvancedFields) return 0;
     return actual - expected;
   }, [watchedExpectedAmount, watchedActualAmount, showAdvancedFields]);
