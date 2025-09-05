@@ -108,7 +108,7 @@ export function LoginForm() {
                 htmlFor="rememberMe"
                 className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
             >
-                Remember me for 30 days
+                Remember Me
             </label>
            </div>
         </CardContent>

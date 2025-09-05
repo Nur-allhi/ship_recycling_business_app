@@ -111,7 +111,13 @@ function ShipShapeLedger() {
                                 )
                             })}
                         </nav>
-                        <Button variant="ghost" onClick={logout} className="justify-start">
+                        <Button variant="ghost" onClick={(e) => { 
+    e.preventDefault(); 
+    setIsSheetOpen(false); // Close the sidebar first
+    setTimeout(() => { // Add a small delay before calling logout
+        logout(); 
+    }, 100); // 100ms delay to allow sidebar to start closing
+}} className="justify-start">
                             <LogOut className="mr-2 h-4 w-4" /> Logout
                         </Button>
                     </SheetContent>

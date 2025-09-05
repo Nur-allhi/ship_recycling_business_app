@@ -86,9 +86,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const [loadedMonths, setLoadedMonths] = useState<Record<string, boolean>>({});
 
     const logout = useCallback(async () => {
+        console.log("Logout: Setting isLoggingOut to true");
         setState(prev => ({ ...prev, isLoggingOut: true })); // Set to true at the start
         try {
             await serverLogout();
+            console.log("Logout: serverLogout completed");
             // Explicitly clear user from app_state first
             await db.app_state.update(1, { user: null });
             await clearLocalDb();
@@ -96,6 +98,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             toast.success("Logged out successfully!"); // Add success toast for logout
             // Delay the redirect to allow animation to play
             setTimeout(() => {
+                console.log("Logout: Redirecting to /login");
                 window.location.href = '/login';
             }, 1000); // 1 second delay
         } catch (error) {
@@ -104,6 +107,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             // As a fallback, force a reload.
             window.location.href = '/login';
         } finally {
+            console.log("Logout: Setting isLoggingOut to false in finally block");
             setState(prev => ({ ...prev, isLoggingOut: false })); // Reset in finally block
         }
     }, [setUser]);
