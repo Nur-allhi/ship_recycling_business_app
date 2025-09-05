@@ -30,7 +30,7 @@ import type { BankTransaction, MonthlySnapshot } from "@/lib/types"
 import { EditTransactionSheet } from "./edit-transaction-sheet"
 import { DeleteConfirmationDialog } from "./delete-confirmation-dialog"
 import { Checkbox } from "./ui/checkbox"
-import { format, subMonths, addMonths, startOfMonth, endOfMonth } from "date-fns"
+import { format, subMonths, addMonths, startOfMonth, endOfMonth, isBefore } from "date-fns"
 import { ResponsiveSelect } from "@/components/ui/responsive-select"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { Badge } from "./ui/badge"
@@ -117,13 +117,19 @@ export function BankTab() {
   }, [filteredByBank, currentMonth]);
   
   const transactionsWithBalances = useMemo(() => {
-    if (!monthlySnapshot) return [];
-
+    const start = startOfMonth(currentMonth);
     let openingBalance = 0;
-    if (selectedBankId === 'all') {
-        openingBalance = Object.values(monthlySnapshot.bank_balances || {}).reduce((sum, b) => sum + b, 0);
+
+    if (monthlySnapshot) {
+        if (selectedBankId === 'all') {
+            openingBalance = Object.values(monthlySnapshot.bank_balances || {}).reduce((sum, b) => sum + b, 0);
+        } else {
+            openingBalance = monthlySnapshot.bank_balances?.[selectedBankId] || 0;
+        }
     } else {
-        openingBalance = monthlySnapshot.bank_balances?.[selectedBankId] || 0;
+        openingBalance = (filteredByBank || [])
+            .filter(tx => isBefore(new Date(tx.date), start))
+            .reduce((acc, tx) => acc + (tx.type === 'deposit' ? tx.actual_amount : -tx.actual_amount), 0);
     }
 
     const txsInMonthForCalc = [...filteredByMonth].sort((a, b) => {
@@ -141,7 +147,7 @@ export function BankTab() {
     }
 
     return filteredByMonth.map(tx => ({...tx, balance: balancesMap.get(tx.id) || 0}));
-  }, [monthlySnapshot, filteredByMonth, selectedBankId]);
+  }, [monthlySnapshot, filteredByMonth, selectedBankId, filteredByBank, currentMonth]);
 
   const sortedTransactions = useMemo(() => {
     return [...transactionsWithBalances].sort((a, b) => {

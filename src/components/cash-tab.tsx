@@ -23,7 +23,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetTr
 import { EditTransactionSheet } from "./edit-transaction-sheet"
 import { DeleteConfirmationDialog } from "./delete-confirmation-dialog"
 import { Checkbox } from "./ui/checkbox"
-import { format, subMonths, addMonths, startOfMonth, endOfMonth } from "date-fns"
+import { format, subMonths, addMonths, startOfMonth, endOfMonth, isBefore } from "date-fns"
 import { ResponsiveSelect } from "@/components/ui/responsive-select"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { Badge } from "./ui/badge"
@@ -107,9 +107,18 @@ export function CashTab() {
   }, [cashTransactions, currentMonth]);
   
   const transactionsWithBalances = useMemo(() => {
-    if (!monthlySnapshot) return [];
+    const start = startOfMonth(currentMonth);
+    let openingBalance = 0;
 
-    const openingBalance = monthlySnapshot.cash_balance;
+    if (monthlySnapshot) {
+        openingBalance = monthlySnapshot.cash_balance;
+    } else {
+        // If no snapshot, calculate from all previous transactions
+        openingBalance = (cashTransactions || [])
+            .filter(tx => isBefore(new Date(tx.date), start))
+            .reduce((acc, tx) => acc + (tx.type === 'income' ? tx.actual_amount : -tx.actual_amount), 0);
+    }
+
     const txsInMonthForCalc = [...filteredByMonth].sort((a, b) => {
         const dateA = new Date(a.date).getTime();
         const dateB = new Date(b.date).getTime();
@@ -126,7 +135,7 @@ export function CashTab() {
     }
     
     return filteredByMonth.map(tx => ({...tx, balance: balancesMap.get(tx.id) || 0}));
-  }, [monthlySnapshot, filteredByMonth]);
+  }, [monthlySnapshot, filteredByMonth, cashTransactions, currentMonth]);
 
   const sortedTransactions = useMemo(() => {
     return [...transactionsWithBalances].sort((a, b) => {
@@ -503,5 +512,3 @@ export function CashTab() {
     </>
   )
 }
-
-    
