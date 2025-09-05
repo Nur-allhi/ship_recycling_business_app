@@ -4,13 +4,14 @@
 import { useState } from 'react';
 import { useAppContext } from './context/app-context';
 import { cn } from '@/lib/utils';
-import { Wallet, Landmark, Boxes, Settings, LogOut, CreditCard, LineChart } from 'lucide-react';
+import { Wallet, Landmark, Boxes, Settings, LogOut, CreditCard, LineChart, Handshake } from 'lucide-react';
 import { DashboardTab } from '@/components/dashboard-tab';
 import { CashTab } from '@/components/cash-tab';
 import { BankTab } from '@/components/bank-tab';
 import { StockTab } from '@/components/stock-tab';
 import { SettingsTab } from '@/components/settings-tab';
 import { CreditTab } from '@/components/credit-tab';
+import { LoansTab } from '@/components/loans-tab';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -32,6 +33,7 @@ const navItems = [
     { value: 'bank', label: 'Bank', icon: Landmark },
     { value: 'credit', label: 'A/R & A/P', icon: CreditCard },
     { value: 'stock', label: 'Stock', icon: Boxes },
+    { value: 'loans', label: 'Loans', icon: Handshake },
     { value: 'settings', label: 'Settings', icon: Settings },
 ]
 
@@ -129,7 +131,7 @@ function ShipShapeLedger() {
           <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
              {!isMobile && (
                 <div className="overflow-x-auto pb-2">
-                    <TabsList className="grid w-full grid-cols-6 min-w-[700px]">
+                    <TabsList className="grid w-full grid-cols-7 min-w-[800px]">
                         {navItems.map(item => {
                             const Icon = item.icon;
                             return (
@@ -156,6 +158,9 @@ function ShipShapeLedger() {
             </TabsContent>
             <TabsContent value="stock" className="mt-6 animate-slide-in-up">
                 <StockTab />
+            </TabsContent>
+             <TabsContent value="loans" className="mt-6 animate-slide-in-up">
+                <LoansTab />
             </TabsContent>
             <TabsContent value="settings" className="mt-6 animate-slide-in-up">
                 <SettingsTab />
