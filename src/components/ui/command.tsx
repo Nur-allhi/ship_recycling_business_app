@@ -1,3 +1,4 @@
+
 "use client"
 
 import * as React from "react"
@@ -104,7 +105,7 @@ const CommandSeparator = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <CommandPrimitive.Separator
     ref={ref}
-    className={cn("-mx-1 h-px bg-border", className)}
+    className={cn("-mx-1 my-1 h-px bg-border", className)}
     {...props}
   />
 ))
@@ -118,8 +119,13 @@ const CommandItem = React.forwardRef<
     ref={ref}
     className={cn(
       "relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none aria-selected:bg-accent aria-selected:text-accent-foreground data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-50",
+      "data-[value=separator]:cursor-auto data-[value=separator]:opacity-100 data-[value=separator]:focus:bg-transparent", // Custom style for separator
       className
     )}
+    onSelect={(value) => {
+        if (value === 'separator') return;
+        (props as any).onSelect?.(value);
+    }}
     {...props}
   />
 ))

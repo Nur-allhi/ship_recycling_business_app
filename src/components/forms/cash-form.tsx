@@ -19,6 +19,7 @@ import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '../ui/card';
 import { Checkbox } from '../ui/checkbox';
+import { CommandSeparator } from '../ui/command';
 
 const cashSchema = z.object({
     date: z.date({ required_error: "Date is required." }),
@@ -44,7 +45,7 @@ interface CashFormProps {
 
 export function CashForm({ setDialogOpen }: CashFormProps) {
   const { addCashTransaction, addLedgerTransaction } = useAppActions();
-  const { cashCategories, vendors, clients, currency } = useAppContext();
+  const { cashCategories, cashTransactions, vendors, clients, currency } = useAppContext();
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
   const [showAdvancedFields, setShowAdvancedFields] = useState(false);
 
@@ -111,7 +112,32 @@ export function CashForm({ setDialogOpen }: CashFormProps) {
     }
   };
 
-  const categoryItems = useMemo(() => (cashCategories || []).filter(c => c.name !== 'Stock Purchase' && c.name !== 'Stock Sale').map(c => ({ value: c.name, label: `${c.name}` })), [cashCategories]);
+  const categoryItems = useMemo(() => {
+    const filteredCategories = (cashCategories || []).filter(c => c.name !== 'Stock Purchase' && c.name !== 'Stock Sale');
+    if (!cashTransactions || cashTransactions.length === 0) {
+        return filteredCategories.map(c => ({ value: c.name, label: c.name }));
+    }
+    
+    const categoryCounts = cashTransactions.reduce((acc, tx) => {
+        acc[tx.category] = (acc[tx.category] || 0) + 1;
+        return acc;
+    }, {} as Record<string, number>);
+
+    const sortedCategories = filteredCategories.sort((a, b) => (categoryCounts[b.name] || 0) - (categoryCounts[a.name] || 0));
+    
+    const top5 = sortedCategories.slice(0, 5);
+    const rest = sortedCategories.slice(5);
+
+    const topItems = top5.map(c => ({ value: c.name, label: c.name }));
+    const restItems = rest.map(c => ({ value: c.name, label: c.name }));
+    
+    if (rest.length > 0) {
+        // We use a special value for the separator that won't be selectable
+        return [...topItems, { value: 'separator', label: <CommandSeparator /> }, ...restItems];
+    }
+    return topItems;
+}, [cashCategories, cashTransactions]);
+
   const vendorContactItems = useMemo(() => (vendors || []).map(c => ({ value: c.id, label: c.name })), [vendors]);
   const clientContactItems = useMemo(() => (clients || []).map(c => ({ value: c.id, label: c.name })), [clients]);
   
@@ -132,7 +158,7 @@ export function CashForm({ setDialogOpen }: CashFormProps) {
 
           <div className="space-y-2">
             <Label>Category</Label>
-            <Controller name="category" control={control} render={({ field }) => <ResponsiveSelect onValueChange={field.onChange} value={field.value} title="Select category" placeholder="Select category" items={categoryItems} />} />
+            <Controller name="category" control={control} render={({ field }) => <ResponsiveSelect onValueChange={field.onChange} value={field.value} title="Select category" placeholder="Select category" items={categoryItems} showSearch={false} />} />
             {errors.category && <p className="text-sm text-destructive">{errors.category.message}</p>}
           </div>
 

@@ -43,6 +43,7 @@ const ResponsiveSelect = React.forwardRef<
     title?: string
     items: SelectItem[]
     onSelect?: (value: string) => void
+    showSearch?: boolean
   }
 >(
   (
@@ -54,13 +55,14 @@ const ResponsiveSelect = React.forwardRef<
       title,
       items,
       onSelect,
+      showSearch: showSearchProp,
       ...props
     },
     ref
   ) => {
     const isMobile = useIsMobile()
     const [open, setOpen] = React.useState(false)
-    const showSearch = items.length > 8;
+    const showSearch = showSearchProp !== undefined ? showSearchProp : items.length > 8;
 
     const selectedItem = React.useMemo(() => {
       return items.find((item) => item.value === value)
