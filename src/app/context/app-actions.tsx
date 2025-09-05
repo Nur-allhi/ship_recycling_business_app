@@ -1,4 +1,3 @@
-
 "use client";
 import { useCallback } from 'react';
 import { toast } from 'sonner';
@@ -269,14 +268,20 @@ export function useAppActions() {
         }
         const tempId = `temp_contact_${Date.now()}`;
         const newContact: Contact = { id: tempId, name, type, createdAt: new Date().toISOString() };
+        
+        // This is now robust. It adds locally first and returns immediately.
         try {
             await db.contacts.add(newContact);
-            queueOrSync({ action: 'appendData', payload: { tableName: 'contacts', data: { name, type }, localId: tempId, logDescription: `Added contact: ${name}`, select: '*' }});
-            return newContact;
         } catch (e: any) {
-            toast.error("Operation Failed", { description: e.message });
-            return undefined;
+            toast.error("Local DB Error", { description: `Could not save contact locally: ${e.message}`});
+            return undefined; // Return undefined if local save fails
         }
+        
+        // The sync is queued but we don't wait for it.
+        // We have successfully added it locally, so we can return the contact.
+        queueOrSync({ action: 'appendData', payload: { tableName: 'contacts', data: { name, type }, localId: tempId, logDescription: `Added contact: ${name}`, select: '*' }});
+        
+        return newContact;
     };
   
     const deleteContact = adminAction(async (id: string) => {

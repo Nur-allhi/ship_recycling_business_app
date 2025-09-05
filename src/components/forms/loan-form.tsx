@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useForm, Controller } from 'react-hook-form';
@@ -51,8 +50,9 @@ export function LoanForm({ setDialogOpen }: LoanFormProps) {
   const { contacts, banks } = useAppContext();
   const [issueDatePickerOpen, setIssueDatePickerOpen] = useState(false);
   const [dueDatePickerOpen, setDueDatePickerOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const { register, handleSubmit, control, watch, formState: { errors, isSubmitting } } = useForm<FormData>({
+  const { register, handleSubmit, control, watch, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(loanSchema),
     defaultValues: {
       issue_date: new Date(),
@@ -75,16 +75,20 @@ export function LoanForm({ setDialogOpen }: LoanFormProps) {
   const bankAccountItems = useMemo(() => banks.map(b => ({ value: b.id, label: b.name })), [banks]);
 
   const onSubmit = async (data: FormData) => {
+    setIsSubmitting(true);
     try {
         let finalContactId: string;
         if (data.contact_id === 'new' && data.newContact) {
              const contactType = data.type === 'payable' ? 'vendor' : 'client';
+             toast.info("Creating new contact...");
              const newContact = await addContact(data.newContact, contactType);
              if (!newContact) {
                 toast.error("Failed to create new contact.");
+                setIsSubmitting(false);
                 return;
              }
              finalContactId = newContact.id;
+             toast.success("Contact created successfully.");
         } else {
             finalContactId = data.contact_id;
         }
@@ -102,13 +106,16 @@ export function LoanForm({ setDialogOpen }: LoanFormProps) {
             method: data.disbursement_method,
             bank_id: data.bank_id,
         }
-
+        
+        toast.info("Recording loan...");
         await addLoan(loanData, disbursementData);
         
         toast.success("Loan Recorded Successfully");
         setDialogOpen(false);
     } catch (error: any) {
         toast.error("Operation Failed", { description: error.message });
+    } finally {
+        setIsSubmitting(false);
     }
   };
 
