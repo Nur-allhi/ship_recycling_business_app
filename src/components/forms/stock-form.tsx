@@ -62,6 +62,7 @@ export function StockForm({ setDialogOpen }: StockFormProps) {
   const [isNewStockItem, setIsNewStockItem] = useState(false);
   const [showStockContact, setShowStockContact] = useState(false);
   const { registerForFocus, containerRef } = useScrollOnFocus();
+  const formRef = useRef<HTMLFormElement>(null);
 
   const { register, handleSubmit, control, setValue, watch, formState: { errors, isSubmitting } } = useForm<FormData>({
     resolver: zodResolver(stockSchema),
@@ -75,6 +76,17 @@ export function StockForm({ setDialogOpen }: StockFormProps) {
   const pricePerKg = watch('pricePerKg');
   const expected_amount = watch('expected_amount');
   const actual_amount = watch('actual_amount');
+  
+  useEffect(() => {
+    // On mount, scroll the form into view if it's in a drawer
+    const formElement = formRef.current;
+    if (formElement) {
+        const drawerContent = formElement.closest('[data-vaul-drawer-visible="true"] > div');
+        if (drawerContent) {
+            drawerContent.scrollTo(0, 0);
+        }
+    }
+  }, []);
 
   useEffect(() => {
     if (weight && pricePerKg) {
@@ -157,7 +169,7 @@ export function StockForm({ setDialogOpen }: StockFormProps) {
 
   return (
     <Card className="border-0 shadow-none">
-      <form onSubmit={handleSubmit(onSubmit)}>
+      <form onSubmit={handleSubmit(onSubmit)} ref={formRef}>
         <CardContent className="space-y-4 pt-4 px-4 sm:px-6" ref={containerRef}>
           <div className="space-y-2">
             <Label>Date</Label>
