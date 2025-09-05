@@ -3,12 +3,11 @@
 
 import { useState, lazy, Suspense } from 'react';
 import { Button } from './ui/button';
-import { Plus, X, Wallet, Landmark, Boxes, ArrowRightLeft, UserPlus } from 'lucide-react';
+import { Plus, X, Wallet, Landmark, Boxes, ArrowRightLeft, UserPlus, Loader2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerDescription } from './ui/drawer';
-import { AppLoading } from './app-loading';
 
 const CashForm = lazy(() => import('./forms/cash-form').then(m => ({ default: m.CashForm })));
 const BankForm = lazy(() => import('./forms/bank-form').then(m => ({ default: m.BankForm })));
@@ -101,20 +100,25 @@ export function FloatingActionButton() {
 
             <DialogComponent open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                 <DialogContentComponent className="sm:max-w-xl p-0">
-                    {isMobile ? (
-                        <DrawerHeader className="pt-4 px-4 text-left">
-                           {activeAction && <DrawerTitle>{activeAction.title}</DrawerTitle>}
-                           {activeAction && <DrawerDescription>{activeAction.description}</DrawerDescription>}
-                        </DrawerHeader>
-                    ) : (
-                         <DialogHeader className="p-4 sm:p-6 pb-0">
-                           {activeAction && <DialogTitle>{activeAction.title}</DialogTitle>}
-                           {activeAction && <DialogDescription>{activeAction.description}</DialogDescription>}
-                        </DialogHeader>
-                    )}
-                  <Suspense fallback={<div className="h-[400px] flex items-center justify-center"><AppLoading message="Loading form..." /></div>}>
-                    {renderForm()}
-                  </Suspense>
+                    <Suspense fallback={<div className="h-[400px] flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>}>
+                         {isMobile ? (
+                            <>
+                                <DrawerHeader className="pt-4 px-4 text-left">
+                                {activeAction && <DrawerTitle>{activeAction.title}</DrawerTitle>}
+                                {activeAction && <DrawerDescription>{activeAction.description}</DrawerDescription>}
+                                </DrawerHeader>
+                                {renderForm()}
+                            </>
+                        ) : (
+                            <>
+                                <DialogHeader className="p-4 sm:p-6 pb-0">
+                                    {activeAction && <DialogTitle>{activeAction.title}</DialogTitle>}
+                                    {activeAction && <DialogDescription>{activeAction.description}</DialogDescription>}
+                                </DialogHeader>
+                                {renderForm()}
+                            </>
+                        )}
+                    </Suspense>
                 </DialogContentComponent>
             </DialogComponent>
         </>
