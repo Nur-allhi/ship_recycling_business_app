@@ -23,12 +23,12 @@ export function useAppActions() {
     const { queueOrSync } = useDataSyncer();
     const { updateBalances } = useBalanceCalculator();
     
-    const performAdminAction = (action: Function) => {
+    const performAdminAction = async <T>(action: () => Promise<T>): Promise<T | undefined> => {
         if (user?.role !== 'admin') {
             toast.error("Permission Denied", { description: "You do not have permission to perform this action." });
-            return;
+            return undefined;
         }
-        action();
+        return await action();
     };
 
     const addCashTransaction = async (tx: Omit<CashTransaction, 'id' | 'createdAt' | 'deletedAt'>) => {
@@ -175,7 +175,7 @@ export function useAppActions() {
     };
 
     const deleteTransaction = useCallback(async (tableName: 'cash_transactions' | 'bank_transactions' | 'stock_transactions' | 'ap_ar_transactions', txToDelete: any) => {
-        performAdminAction(async () => {
+        await performAdminAction(async () => {
             const isTemporary = txToDelete.id.startsWith('temp_');
             
             await db.table(tableName).delete(txToDelete.id);
@@ -282,19 +282,13 @@ export function useAppActions() {
       });
     }
     
-    const addContact = async (name: string, type: 'vendor' | 'client' | 'both'): Promise<Contact> => {
-        return new Promise((resolve, reject) => {
-            performAdminAction(async () => {
-                try {
-                    const tempId = `temp_contact_${Date.now()}`;
-                    const newContact = { id: tempId, name, type, createdAt: new Date().toISOString() };
-                    await db.contacts.add(newContact);
-                    queueOrSync({ action: 'appendData', payload: { tableName: 'contacts', data: { name, type }, localId: tempId, select: '*' }});
-                    resolve(newContact);
-                } catch (e) {
-                    reject(e);
-                }
-            });
+    const addContact = async (name: string, type: 'vendor' | 'client' | 'both'): Promise<Contact | undefined> => {
+        return performAdminAction(async () => {
+            const tempId = `temp_contact_${Date.now()}`;
+            const newContact: Contact = { id: tempId, name, type, createdAt: new Date().toISOString() };
+            await db.contacts.add(newContact);
+            queueOrSync({ action: 'appendData', payload: { tableName: 'contacts', data: { name, type }, localId: tempId, select: '*' }});
+            return newContact;
         });
     };
   
@@ -517,5 +511,3 @@ export function useAppActions() {
         handleDeleteAllData,
     };
 }
-
-    
