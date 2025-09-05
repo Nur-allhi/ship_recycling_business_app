@@ -2,7 +2,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useMemo } from 'react';
-import type { User, CashTransaction, BankTransaction, StockItem, StockTransaction, Vendor, Client, LedgerTransaction, Bank, Category, MonthlySnapshot } from '@/lib/types';
+import type { User, CashTransaction, BankTransaction, StockItem, StockTransaction, Contact, LedgerTransaction, Bank, Category, MonthlySnapshot } from '@/lib/types';
 import { toast } from 'sonner';
 import * as server from '@/lib/actions';
 import { getSession, login as serverLogin, logout as serverLogout } from '@/app/auth/actions';
@@ -39,8 +39,9 @@ interface AppData {
   deletedLedgerTransactions: LedgerTransaction[];
   cashCategories: Category[];
   bankCategories: Category[];
-  vendors: Vendor[];
-  clients: Client[];
+  contacts: Contact[];
+  vendors: Contact[];
+  clients: Contact[];
   banks: Bank[];
   syncQueueCount: number;
   loadedMonths: Record<string, boolean>;
@@ -272,10 +273,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                     wastagePercentage: 0, showStockValue: false, lastSync: null
                 });
                 
-                const [categoriesData, vendorsData, clientsData, banksData, cashTxs, bankTxs, stockTxs, ledgerData, installmentsData, snapshotsData, initialStockData] = await Promise.all([
+                const [categoriesData, contactsData, banksData, cashTxs, bankTxs, stockTxs, ledgerData, installmentsData, snapshotsData, initialStockData] = await Promise.all([
                     server.readData({ tableName: 'categories', select: '*' }),
-                    server.readData({ tableName: 'vendors', select: '*' }),
-                    server.readData({ tableName: 'clients', select: '*' }),
+                    server.readData({ tableName: 'contacts', select: '*' }),
                     server.readData({ tableName: 'banks', select: '*' }),
                     server.readData({ tableName: 'cash_transactions', select: '*' }),
                     server.readData({ tableName: 'bank_transactions', select: '*' }),
@@ -326,8 +326,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                         id: 1, user: session, fontSize: 'base', currency: 'BDT',
                         wastagePercentage: 0, showStockValue: false, lastSync: null
                     });
-                    await bulkPut('categories', categoriesData); await bulkPut('vendors', vendorsData);
-                    await bulkPut('clients', clientsData); await bulkPut('banks', banksData);
+                    await bulkPut('categories', categoriesData); await bulkPut('contacts', contactsData);
+                    await bulkPut('banks', banksData);
                     await bulkPut('cash_transactions', cashTxs); await bulkPut('bank_transactions', bankTxs);
                     await bulkPut('stock_transactions', stockTxs); await bulkPut('ap_ar_transactions', ledgerTxsWithInstallments);
                     await bulkPut('payment_installments', installmentsData);
@@ -517,8 +517,7 @@ function useLiveDBData() {
     const ledgerTransactions = useLiveQuery(() => db.ap_ar_transactions.orderBy('date').reverse().toArray(), []);
     const banks = useLiveQuery(() => db.banks.toArray(), []);
     const categories = useLiveQuery(() => db.categories.toArray(), []);
-    const vendors = useLiveQuery(() => db.vendors.toArray(), []);
-    const clients = useLiveQuery(() => db.clients.toArray(), []);
+    const contacts = useLiveQuery(() => db.contacts.toArray(), []);
     const syncQueueCount = useLiveQuery(() => db.sync_queue.count(), []) ?? 0;
 
     const { cashCategories, bankCategories } = useMemo(() => {
@@ -530,6 +529,14 @@ function useLiveDBData() {
         });
         return { cashCategories: dbCash, bankCategories: dbBank };
     }, [categories]);
+
+    const { vendors, clients } = useMemo(() => {
+        const allContacts = contacts || [];
+        const vendorList: Contact[] = allContacts.filter(c => c.type === 'vendor' || c.type === 'both');
+        const clientList: Contact[] = allContacts.filter(c => c.type === 'client' || c.type === 'both');
+        return { vendors: vendorList, clients: clientList };
+    }, [contacts]);
+
 
     return {
         user: appState?.user ?? null,
@@ -543,6 +550,7 @@ function useLiveDBData() {
         ledgerTransactions: ledgerTransactions || [],
         cashCategories,
         bankCategories,
+        contacts: contacts || [],
         vendors: vendors || [],
         clients: clients || [],
         banks: banks || [],
