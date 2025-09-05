@@ -223,8 +223,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                         }
                         break;
                     case 'updateStockTransaction': result = await server.updateStockTransaction(item.payload); break;
-                    case 'deleteVendor': result = await server.deleteVendor(item.payload.id); break;
-                    case 'deleteClient': result = await server.deleteClient(item.payload.id); break;
+                    case 'deleteContact': result = await server.deleteContact(item.payload.id); break;
                     case 'addInitialStockItem': result = await server.addInitialStockItem(item.payload); break;
                     case 'batchImportData': result = await server.batchImportData(item.payload.data); break;
                     case 'deleteAllData': result = await server.deleteAllData(); break;
@@ -559,7 +558,3 @@ export function useAppContext() {
     }
     return context;
 }
-
-    
-
-    
