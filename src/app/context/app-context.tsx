@@ -87,8 +87,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     useEffect(() => {
         setHasMounted(true);
-        // Now that we're on the client, set the initial online status
-        setState(prev => ({ ...prev, isOnline: navigator.onLine }));
     }, []);
 
     const logout = useCallback(async () => {
@@ -406,6 +404,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     useEffect(() => {
         if (!hasMounted) return; // Don't run this effect on the server or before mounting
 
+        // Set initial online status
+        setState(prev => ({ ...prev, isOnline: navigator.onLine }));
+
         const handleOnline = () => setState(prev => {
             if (!prev.isOnline) {
                 toast.success("You are back online!");
@@ -427,7 +428,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             window.removeEventListener('online', handleOnline);
             window.removeEventListener('offline', handleOffline);
         };
-    }, [processSyncQueue, state.isOnline, hasMounted]);
+    }, [hasMounted, processSyncQueue]);
 
     const loadRecycleBinData = useCallback(async () => {
         if (state.isOnline) {
