@@ -1,3 +1,4 @@
+
 "use client"
 
 import * as React from "react"
@@ -34,12 +35,6 @@ interface SelectItem {
   label: React.ReactNode;
 }
 
-interface SelectGroup {
-  label: string;
-  items: SelectItem[];
-}
-
-
 const ResponsiveSelect = React.forwardRef<
   React.ElementRef<typeof Button>,
   Omit<ButtonProps, 'onSelect'> & {
@@ -47,7 +42,7 @@ const ResponsiveSelect = React.forwardRef<
     onValueChange: (value: string) => void
     placeholder?: string
     title?: string
-    items: (SelectItem | SelectGroup)[]
+    items: SelectItem[]
     onSelect?: (value: string) => void
     showSearch?: boolean
   }
@@ -68,27 +63,14 @@ const ResponsiveSelect = React.forwardRef<
   ) => {
     const isMobile = useIsMobile()
     const [open, setOpen] = React.useState(false)
-    const isGrouped = items.length > 0 && 'items' in items[0];
     
-    // For ungrouped lists, we check the length of the flat array.
-    // For grouped lists, we check the length of the first group.
-    // This is an assumption, but reasonable for our use case.
-    const searchDefault = isGrouped 
-      ? (items[0] as SelectGroup).items.length > 8 
-      : items.length > 8;
+    const searchDefault = items.length > 8;
 
     const showSearch = showSearchProp !== undefined ? showSearchProp : searchDefault;
     
     const selectedItem = React.useMemo(() => {
-       if (isGrouped) {
-          for (const group of items as SelectGroup[]) {
-              const item = group.items.find((item) => item.value === value);
-              if (item) return item;
-          }
-          return null;
-       }
-       return (items as SelectItem[]).find((item) => item.value === value);
-    }, [items, value, isGrouped]);
+       return items.find((item) => item.value === value);
+    }, [items, value]);
 
 
     const handleSelect = (currentValue: string) => {
@@ -123,17 +105,9 @@ const ResponsiveSelect = React.forwardRef<
         {showSearch && <CommandInput placeholder="Search..." />}
         <CommandList>
           <CommandEmpty>No results found.</CommandEmpty>
-            {isGrouped ? (
-                (items as SelectGroup[]).map((group, groupIndex) => (
-                    <CommandGroup key={groupIndex} heading={group.label}>
-                       {renderItems(group.items)}
-                    </CommandGroup>
-                ))
-            ) : (
-                 <CommandGroup>
-                    {renderItems(items as SelectItem[])}
-                 </CommandGroup>
-            )}
+            <CommandGroup>
+                {renderItems(items)}
+            </CommandGroup>
         </CommandList>
       </Command>
     )

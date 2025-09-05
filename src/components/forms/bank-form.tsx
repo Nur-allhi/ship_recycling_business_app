@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useMemo, useEffect, useRef } from 'react';
@@ -116,10 +117,7 @@ export function BankForm({ setDialogOpen }: BankFormProps) {
   const categoryItems = useMemo(() => {
     const filteredCategories = (bankCategories || []).filter(c => c.name !== 'Stock Purchase' && c.name !== 'Stock Sale');
     if (!bankTransactions || bankTransactions.length === 0) {
-        return [{
-            label: "All Categories",
-            items: filteredCategories.map(c => ({ value: c.name, label: c.name }))
-        }];
+        return filteredCategories.map(c => ({ value: c.name, label: c.name }));
     }
 
     const categoryCounts = bankTransactions.reduce((acc, tx) => {
@@ -129,28 +127,7 @@ export function BankForm({ setDialogOpen }: BankFormProps) {
 
     const sortedCategories = filteredCategories.sort((a, b) => (categoryCounts[b.name] || 0) - (categoryCounts[a.name] || 0));
 
-    const top5 = sortedCategories.slice(0, 5);
-    const rest = sortedCategories.slice(5);
-
-    const groups = [];
-    if (top5.length > 0) {
-        groups.push({
-            label: 'Most Used',
-            items: top5.map(c => ({ value: c.name, label: c.name }))
-        });
-    }
-    if (rest.length > 0) {
-        groups.push({
-            label: 'All Categories',
-            items: rest.map(c => ({ value: c.name, label: c.name }))
-        });
-    } else if (top5.length > 0 && rest.length === 0) {
-        return [{
-            label: "All Categories",
-            items: top5.map(c => ({ value: c.name, label: c.name }))
-        }];
-    }
-    return groups;
+    return sortedCategories.map(c => ({ value: c.name, label: c.name }));
 }, [bankCategories, bankTransactions]);
 
   const bankAccountItems = useMemo(() => (banks || []).map(b => ({ value: b.id, label: b.name })), [banks]);
