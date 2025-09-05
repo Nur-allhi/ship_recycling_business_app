@@ -46,7 +46,7 @@ interface AppData {
   loadedMonths: Record<string, boolean>;
   isInitialLoadComplete: boolean; // New property
   isLoggingOut: boolean; // New property
-  isAuthenticating: boolean; // New property
+  isAuthenticating: boolean; // New property;
 }
 
 interface AppContextType extends AppData {
@@ -407,22 +407,27 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             toast.info("You are offline", { description: "Changes will be saved locally and synced when you're back." });
             setState(prev => ({ ...prev, isOnline: false }));
         };
-        
-        // Initialize online status after component mounts to avoid hydration mismatch
-        setState(prev => ({ 
-            ...prev, 
-            isOnline: navigator.onLine,
-            isOnlineStatusReady: true 
-        }));
-        
-        window.addEventListener('online', handleOnline);
-        window.addEventListener('offline', handleOffline);
-        
-        return () => {
-            window.removeEventListener('online', handleOnline);
-            window.removeEventListener('offline', handleOffline);
-        };
-    }, [processSyncQueue]);
+
+        // This effect should only run once on the client after hydration
+        if (!state.isOnlineStatusReady) {
+            // Set initial status from navigator
+            setState(prev => ({ 
+                ...prev, 
+                isOnline: navigator.onLine,
+                isOnlineStatusReady: true 
+            }));
+
+            // Add event listeners
+            window.addEventListener('online', handleOnline);
+            window.addEventListener('offline', handleOffline);
+
+            // Cleanup function
+            return () => {
+                window.removeEventListener('online', handleOnline);
+                window.removeEventListener('offline', handleOffline);
+            };
+        }
+    }, [processSyncQueue, state.isOnlineStatusReady]);
 
     const loadRecycleBinData = useCallback(async () => {
         if (state.isOnline) {
@@ -558,3 +563,5 @@ export function useAppContext() {
     }
     return context;
 }
+
+    
