@@ -2,7 +2,7 @@
 
 import { useState, lazy, Suspense, useRef, useEffect } from 'react';
 import { Button } from './ui/button';
-import { Plus, X, Wallet, Landmark, Boxes, ArrowRightLeft, UserPlus, Loader2 } from 'lucide-react';
+import { Plus, X, Wallet, Landmark, Boxes, ArrowRightLeft, UserPlus, Handshake, Loader2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -13,10 +13,12 @@ const BankForm = lazy(() => import('./forms/bank-form').then(m => ({ default: m.
 const StockForm = lazy(() => import('./forms/stock-form').then(m => ({ default: m.StockForm })));
 const TransferForm = lazy(() => import('./forms/transfer-form').then(m => ({ default: m.TransferForm })));
 const ApArForm = lazy(() => import('./forms/ap-ar-form').then(m => ({ default: m.ApArForm })));
+const LoanForm = lazy(() => import('./forms/loan-form').then(m => ({ default: m.LoanForm })));
 
-type TransactionType = 'cash' | 'bank' | 'stock' | 'transfer' | 'ap_ar';
+type TransactionType = 'cash' | 'bank' | 'stock' | 'transfer' | 'ap_ar' | 'loan';
 
 const fabActions = [
+    { type: 'loan' as TransactionType, icon: Handshake, label: 'Add Loan', title: 'New Loan Agreement', description: 'Record a new loan payable or receivable.' },
     { type: 'ap_ar' as TransactionType, icon: UserPlus, label: 'A/R & A/P', title: 'New A/R or A/P Entry', description: 'Record a new payable or receivable item.' },
     { type: 'transfer' as TransactionType, icon: ArrowRightLeft, label: 'Transfer', title: 'Transfer Funds', description: 'Move money between your cash and bank accounts.' },
     { type: 'stock' as TransactionType, icon: Boxes, label: 'Stock Transaction', title: 'Stock Transaction', description: 'Record a stock purchase or sale.' },
@@ -58,6 +60,7 @@ export function FloatingActionButton() {
             case 'stock': return <StockForm setDialogOpen={setIsDialogOpen} />;
             case 'transfer': return <TransferForm setDialogOpen={setIsDialogOpen} />;
             case 'ap_ar': return <ApArForm setDialogOpen={setIsDialogOpen} />;
+            case 'loan': return <LoanForm setDialogOpen={setIsDialogOpen} />;
             default: return null;
         }
     };
