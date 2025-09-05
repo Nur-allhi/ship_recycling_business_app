@@ -45,6 +45,7 @@
     "embla-carousel-react": "^8.6.0",
     "firebase": "^11.9.1",
     "file-saver": "^2.0.5",
+    "framer-motion": "^11.3.2",
     "jspdf": "^2.5.1",
     "jspdf-autotable": "^3.8.2",
     "jszip": "^3.10.1",
