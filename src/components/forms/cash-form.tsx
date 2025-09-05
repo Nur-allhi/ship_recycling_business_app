@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useForm, Controller, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -19,6 +19,7 @@ import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '../ui/card';
 import { Checkbox } from '../ui/checkbox';
+import { useScrollOnFocus } from '@/hooks/use-scroll-on-focus';
 
 const cashSchema = z.object({
     date: z.date({ required_error: "Date is required." }),
@@ -47,6 +48,7 @@ export function CashForm({ setDialogOpen }: CashFormProps) {
   const { cashCategories, vendors, clients, currency } = useAppContext();
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
   const [showAdvancedFields, setShowAdvancedFields] = useState(false);
+  const { registerForFocus, containerRef } = useScrollOnFocus();
 
   const { register, handleSubmit, control, setValue, watch, formState: { errors, isSubmitting } } = useForm<FormData>({
     resolver: zodResolver(cashSchema),
@@ -118,7 +120,7 @@ export function CashForm({ setDialogOpen }: CashFormProps) {
   return (
     <Card className="border-0 shadow-none">
       <form onSubmit={handleSubmit(onSubmit)}>
-        <CardContent className="space-y-4 pt-4 px-4 sm:px-6">
+        <CardContent className="space-y-4 pt-4 px-4 sm:px-6" ref={containerRef}>
           <div className="space-y-2">
             <Label>Date</Label>
             <Controller name="date" control={control} render={({ field }) => (
@@ -162,7 +164,7 @@ export function CashForm({ setDialogOpen }: CashFormProps) {
 
           <div className="space-y-2">
             <Label htmlFor="description-cash">Description</Label>
-            <Input id="description-cash" {...register('description')} placeholder="e.g., Office supplies" />
+            <Input id="description-cash" {...register('description')} placeholder="e.g., Office supplies" {...registerForFocus('description')}/>
             {errors.description && <p className="text-sm text-destructive">{errors.description.message}</p>}
           </div>
 
@@ -171,20 +173,20 @@ export function CashForm({ setDialogOpen }: CashFormProps) {
               <Label htmlFor="amount">Amount</Label>
               {!showAdvancedFields && <Button type="button" variant="link" size="sm" className="h-auto p-0" onClick={() => setShowAdvancedFields(true)}><Settings2 className="mr-1 h-3 w-3" />Adjust</Button>}
             </div>
-            <Input id="amount" type="number" step="0.01" {...register('amount')} placeholder="e.g., 1000.00" disabled={showAdvancedFields} />
+            <Input id="amount" type="number" step="0.01" {...register('amount')} placeholder="e.g., 1000.00" disabled={showAdvancedFields} {...registerForFocus('amount')}/>
             {errors.amount && <p className="text-sm text-destructive">{errors.amount.message}</p>}
           </div>
 
           {showAdvancedFields && (
             <div className="p-4 border rounded-md bg-muted/30 space-y-4 animate-fade-in">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2"><Label htmlFor="expected_amount">Transaction Value</Label><Input id="expected_amount" type="number" step="0.01" {...register('expected_amount')} placeholder="e.g., Invoice total" />{errors.expected_amount && <p className="text-sm text-destructive">{errors.expected_amount.message}</p>}</div>
-                <div className="space-y-2"><Label htmlFor="actual_amount">Amount Paid/Received</Label><Input id="actual_amount" type="number" step="0.01" {...register('actual_amount')} placeholder="e.g., Actual cash paid" />{errors.actual_amount && <p className="text-sm text-destructive">{errors.actual_amount.message}</p>}</div>
+                <div className="space-y-2"><Label htmlFor="expected_amount">Transaction Value</Label><Input id="expected_amount" type="number" step="0.01" {...register('expected_amount')} placeholder="e.g., Invoice total" {...registerForFocus('expected_amount')}/>{errors.expected_amount && <p className="text-sm text-destructive">{errors.expected_amount.message}</p>}</div>
+                <div className="space-y-2"><Label htmlFor="actual_amount">Amount Paid/Received</Label><Input id="actual_amount" type="number" step="0.01" {...register('actual_amount')} placeholder="e.g., Actual cash paid" {...registerForFocus('actual_amount')}/>{errors.actual_amount && <p className="text-sm text-destructive">{errors.actual_amount.message}</p>}</div>
               </div>
               {difference !== 0 && (
                 <div className="space-y-2 animate-fade-in">
                   <div className="flex justify-between items-center"><Label>Difference</Label><span className={cn("font-bold", difference > 0 ? "text-accent" : "text-destructive")}>{new Intl.NumberFormat('en-US', { style: 'currency', currency, currencyDisplay: 'symbol' }).format(difference)}</span></div>
-                  <div className="space-y-2"><Label htmlFor="difference_reason">Reason for Difference</Label><Input id="difference_reason" {...register('difference_reason')} placeholder="e.g., Discount, Rounding" /></div>
+                  <div className="space-y-2"><Label htmlFor="difference_reason">Reason for Difference</Label><Input id="difference_reason" {...register('difference_reason')} placeholder="e.g., Discount, Rounding" {...registerForFocus('difference_reason')}/></div>
                 </div>
               )}
             </div>

@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useForm, Controller, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -21,6 +21,7 @@ import { cn } from '@/lib/utils';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '../ui/card';
 import { Separator } from '../ui/separator';
 import { Alert, AlertTitle, AlertDescription } from '../ui/alert';
+import { useScrollOnFocus } from '@/hooks/use-scroll-on-focus';
 
 const stockSchema = z.object({
     date: z.date({ required_error: "Date is required." }),
@@ -60,6 +61,7 @@ export function StockForm({ setDialogOpen }: StockFormProps) {
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
   const [isNewStockItem, setIsNewStockItem] = useState(false);
   const [showStockContact, setShowStockContact] = useState(false);
+  const { registerForFocus, containerRef } = useScrollOnFocus();
 
   const { register, handleSubmit, control, setValue, watch, formState: { errors, isSubmitting } } = useForm<FormData>({
     resolver: zodResolver(stockSchema),
@@ -156,7 +158,7 @@ export function StockForm({ setDialogOpen }: StockFormProps) {
   return (
     <Card className="border-0 shadow-none">
       <form onSubmit={handleSubmit(onSubmit)}>
-        <CardContent className="space-y-4 pt-4 px-4 sm:px-6">
+        <CardContent className="space-y-4 pt-4 px-4 sm:px-6" ref={containerRef}>
           <div className="space-y-2">
             <Label>Date</Label>
             <Controller name="date" control={control} render={({ field }) => (
@@ -183,7 +185,7 @@ export function StockForm({ setDialogOpen }: StockFormProps) {
             <Label>Item Name</Label>
             {stockType === 'purchase' ? (
               <div className="flex items-center gap-2">
-                {isNewStockItem ? <Input {...register('stockItemName')} placeholder="e.g. Iron Rod" /> : <Controller name="stockItemName" control={control} render={({ field }) => <ResponsiveSelect onValueChange={field.onChange} value={field.value} title="Select an item" placeholder="Select existing item" className="flex-1" items={stockItemsForPurchase} />} />}
+                {isNewStockItem ? <Input {...register('stockItemName')} placeholder="e.g. Iron Rod" {...registerForFocus('stockItemName')}/> : <Controller name="stockItemName" control={control} render={({ field }) => <ResponsiveSelect onValueChange={field.onChange} value={field.value} title="Select an item" placeholder="Select existing item" className="flex-1" items={stockItemsForPurchase} />} />}
                 <Button type="button" variant="outline" size="sm" onClick={() => setIsNewStockItem(prev => !prev)}>{isNewStockItem ? 'Select Existing' : 'Add New'}</Button>
               </div>
             ) : <Controller name="stockItemName" control={control} render={({ field }) => <ResponsiveSelect onValueChange={field.onChange} value={field.value} title="Select an item" placeholder="Select item to sell" items={stockItemsForSale} />} />}
@@ -191,8 +193,8 @@ export function StockForm({ setDialogOpen }: StockFormProps) {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2"><Label>Weight (kg)</Label><Input type="number" step="0.01" {...register('weight')} placeholder="0.00" />{errors.weight && <p className="text-sm text-destructive">{errors.weight.message}</p>}</div>
-            <div className="space-y-2"><Label>Price per kg</Label><Input type="number" step="0.01" {...register('pricePerKg')} placeholder="0.00" />{errors.pricePerKg && <p className="text-sm text-destructive">{errors.pricePerKg.message}</p>}</div>
+            <div className="space-y-2"><Label>Weight (kg)</Label><Input type="number" step="0.01" {...register('weight')} placeholder="0.00" {...registerForFocus('weight')}/>{errors.weight && <p className="text-sm text-destructive">{errors.weight.message}</p>}</div>
+            <div className="space-y-2"><Label>Price per kg</Label><Input type="number" step="0.01" {...register('pricePerKg')} placeholder="0.00" {...registerForFocus('pricePerKg')}/>{errors.pricePerKg && <p className="text-sm text-destructive">{errors.pricePerKg.message}</p>}</div>
           </div>
           
           <Separator />
@@ -214,7 +216,7 @@ export function StockForm({ setDialogOpen }: StockFormProps) {
               <Label>{stockContactType}</Label>
               <Controller name="contact_id" control={control} render={({ field }) => <ResponsiveSelect onValueChange={field.onChange} value={field.value} title={`Select a ${stockContactType}`} placeholder={`Select a ${stockContactType}`} items={currentStockContactItems} />} />
               {errors.contact_id && <p className="text-sm text-destructive">{errors.contact_id.message}</p>}
-              {contact_id === 'new' && <div className="flex items-end gap-2 pt-2 animate-fade-in"><div className="flex-grow space-y-1"><Label htmlFor="newContact">New {stockContactType} Name</Label><Input {...register('newContact')} placeholder={`Enter new ${stockContactType.toLowerCase()} name`} /></div></div>}
+              {contact_id === 'new' && <div className="flex items-end gap-2 pt-2 animate-fade-in"><div className="flex-grow space-y-1"><Label htmlFor="newContact">New {stockContactType} Name</Label><Input {...register('newContact')} placeholder={`Enter new ${stockContactType.toLowerCase()} name`} {...registerForFocus('newContact')}/></div></div>}
               {errors.newContact && <p className="text-sm text-destructive">{errors.newContact.message}</p>}
             </div>
           ) : stockType && paymentMethod !== 'credit' && (
@@ -227,13 +229,13 @@ export function StockForm({ setDialogOpen }: StockFormProps) {
             <div className="p-4 border rounded-md bg-muted/30 space-y-4 animate-fade-in">
                 <div className="space-y-2">
                     <div className="flex items-center justify-between"><Label htmlFor="actual_amount">Amount Paid/Received</Label><span className="text-sm text-muted-foreground">Expected: {currency} {((weight || 0) * (pricePerKg || 0)).toFixed(2)}</span></div>
-                    <Input id="actual_amount" type="number" step="0.01" {...register('actual_amount')} placeholder="e.g., Actual cash paid" />
+                    <Input id="actual_amount" type="number" step="0.01" {...register('actual_amount')} placeholder="e.g., Actual cash paid" {...registerForFocus('actual_amount')}/>
                     {errors.actual_amount && <p className="text-sm text-destructive">{errors.actual_amount.message}</p>}
                 </div>
                  {difference !== 0 && (
                     <div className="space-y-2 animate-fade-in">
                         <div className="flex justify-between items-center"><Label>Difference</Label><span className={cn("font-bold", difference > 0 ? "text-accent" : "text-destructive")}>{new Intl.NumberFormat('en-US', { style: 'currency', currency, currencyDisplay: 'symbol' }).format(difference)}</span></div>
-                        <div className="space-y-2"><Label htmlFor="difference_reason">Reason for Difference</Label><Input id="difference_reason" {...register('difference_reason')} placeholder="e.g., Discount, Rounding" /></div>
+                        <div className="space-y-2"><Label htmlFor="difference_reason">Reason for Difference</Label><Input id="difference_reason" {...register('difference_reason')} placeholder="e.g., Discount, Rounding" {...registerForFocus('difference_reason')}/></div>
                     </div>
                 )}
             </div>
@@ -241,7 +243,7 @@ export function StockForm({ setDialogOpen }: StockFormProps) {
 
           {paymentMethod === 'credit' && stockType && <div className="space-y-2 animate-fade-in pt-2"><Alert variant="default" className="mt-4 bg-blue-50 border-blue-200 text-blue-800"><AlertTitle>On Credit</AlertTitle><AlertDescription>This will create a new item in your Accounts {stockType === 'purchase' ? 'Payable' : 'Receivable'} ledger.</AlertDescription></Alert></div>}
           
-          <div className="space-y-2"><Label htmlFor="description-stock">Description (Optional)</Label><Input id="description-stock" {...register('description')} placeholder="e.g., invoice #, delivery details" />{errors.description && <p className="text-sm text-destructive">{errors.description.message}</p>}</div>
+          <div className="space-y-2"><Label htmlFor="description-stock">Description (Optional)</Label><Input id="description-stock" {...register('description')} placeholder="e.g., invoice #, delivery details" {...registerForFocus('description')}/>{errors.description && <p className="text-sm text-destructive">{errors.description.message}</p>}</div>
         
         </CardContent>
         <CardFooter className="flex justify-end p-4 sm:p-6">
