@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useForm, Controller } from 'react-hook-form';
@@ -40,8 +39,8 @@ interface ApArFormProps {
 }
 
 export function ApArForm({ setDialogOpen }: ApArFormProps) {
-  const { addLedgerTransaction, addVendor, addClient } = useAppActions();
-  const { vendors, clients } = useAppContext();
+  const { addLedgerTransaction, addContact } = useAppActions();
+  const { contacts } = useAppContext();
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
 
   const { register, handleSubmit, control, watch, formState: { errors, isSubmitting } } = useForm<FormData>({
@@ -55,14 +54,14 @@ export function ApArForm({ setDialogOpen }: ApArFormProps) {
   const contact_id = watch('contact_id');
 
   const vendorContactItems = useMemo(() => [
-    ...(vendors || []).map(c => ({ value: c.id, label: c.name })),
-    { value: 'new', label: <span className="flex items-center gap-2"><Plus className="h-4 w-4" />Add New</span> }
-  ], [vendors]);
+    ...contacts.filter(c => c.type === 'vendor' || c.type === 'both').map(c => ({ value: c.id, label: c.name })),
+    { value: 'new', label: <span className="flex items-center gap-2"><Plus className="h-4 w-4" />Add New Vendor</span> }
+  ], [contacts]);
 
   const clientContactItems = useMemo(() => [
-    ...(clients || []).map(c => ({ value: c.id, label: c.name })),
-    { value: 'new', label: <span className="flex items-center gap-2"><Plus className="h-4 w-4" />Add New</span> }
-  ], [clients]);
+    ...contacts.filter(c => c.type === 'client' || c.type === 'both').map(c => ({ value: c.id, label: c.name })),
+    { value: 'new', label: <span className="flex items-center gap-2"><Plus className="h-4 w-4" />Add New Client</span> }
+  ], [contacts]);
 
   const currentLedgerContactItems = ledgerType === 'payable' ? vendorContactItems : clientContactItems;
   const currentLedgerContactType = ledgerType === 'payable' ? 'Vendor' : 'Client';
@@ -70,24 +69,14 @@ export function ApArForm({ setDialogOpen }: ApArFormProps) {
   const onSubmit = async (data: FormData) => {
     const transactionDate = format(data.date, 'yyyy-MM-dd');
     try {
-        let ledgerContactId: string | undefined;
-        let ledgerContactName: string | undefined;
+        let finalContactId: string;
         const contactType = data.ledgerType === 'payable' ? 'vendor' : 'client';
-        const contactList = data.ledgerType === 'payable' ? vendors : clients;
 
         if (data.contact_id === 'new') {
-            const newContactFn = data.ledgerType === 'payable' ? addVendor : addClient;
-            const newContact = await newContactFn(data.newContact!);
-            if (!newContact) throw new Error(`Failed to create new ${contactType}.`);
-            ledgerContactId = newContact.id;
-            ledgerContactName = newContact.name;
+            const newContact = await addContact(data.newContact!, contactType);
+            finalContactId = newContact.id;
         } else {
-            ledgerContactId = data.contact_id;
-            ledgerContactName = (contactList || []).find(c => c.id === ledgerContactId)?.name;
-        }
-
-        if (!ledgerContactId || !ledgerContactName) {
-            throw new Error("A contact is required for this transaction.");
+            finalContactId = data.contact_id;
         }
 
         await addLedgerTransaction({
@@ -95,8 +84,7 @@ export function ApArForm({ setDialogOpen }: ApArFormProps) {
             description: data.description!,
             amount: data.amount!,
             date: transactionDate,
-            contact_id: ledgerContactId,
-            contact_name: ledgerContactName,
+            contact_id: finalContactId,
         });
 
         toast.success("A/R or A/P Entry Added");

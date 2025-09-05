@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useMemo, useEffect } from 'react';
@@ -57,8 +56,8 @@ interface StockFormProps {
 }
 
 export function StockForm({ setDialogOpen }: StockFormProps) {
-  const { addStockTransaction, addVendor, addClient } = useAppActions();
-  const { stockItems, vendors, clients, banks, currency } = useAppContext();
+  const { addStockTransaction, addContact } = useAppActions();
+  const { stockItems, contacts, banks, currency } = useAppContext();
   const [currentStep, setCurrentStep] = useState(0);
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
   const [isNewStockItem, setIsNewStockItem] = useState(false);
@@ -105,19 +104,14 @@ export function StockForm({ setDialogOpen }: StockFormProps) {
   const onSubmit = async (data: FormData) => {
     const transactionDate = format(data.date, 'yyyy-MM-dd');
     try {
-        let stockContactId: string | undefined;
-        let stockContactName: string | undefined;
+        let finalContactId: string | undefined;
 
         if (data.contact_id === 'new') {
-            const newContactFn = data.stockType === 'purchase' ? addVendor : addClient;
-            const newContact = await newContactFn(data.newContact!);
-            if (!newContact) throw new Error(`Failed to create new ${data.stockType === 'purchase' ? 'vendor' : 'client'}.`);
-            stockContactId = newContact.id;
-            stockContactName = newContact.name;
+            const contactType = data.stockType === 'purchase' ? 'vendor' : 'client';
+            const newContact = await addContact(data.newContact!, contactType);
+            finalContactId = newContact.id;
         } else if (data.contact_id) {
-            stockContactId = data.contact_id;
-            const contactList = data.stockType === 'purchase' ? vendors : clients;
-            stockContactName = (contactList || []).find(c => c.id === stockContactId)?.name;
+            finalContactId = data.contact_id;
         }
 
         await addStockTransaction({
@@ -132,9 +126,9 @@ export function StockForm({ setDialogOpen }: StockFormProps) {
             actual_amount: paymentMethod === 'credit' ? data.expected_amount : data.actual_amount,
             difference: difference,
             difference_reason: data.difference_reason,
-            contact_id: stockContactId,
-            contact_name: stockContactName,
-        }, data.bank_id);
+            contact_id: finalContactId,
+            bank_id: data.bank_id,
+        });
         
         toast.success("Stock Transaction Added");
         setDialogOpen(false);
@@ -147,8 +141,9 @@ export function StockForm({ setDialogOpen }: StockFormProps) {
   const stockItemsForSale = useMemo(() => (stockItems || []).filter(i => i.weight > 0).map(item => ({ value: item.name, label: item.name })), [stockItems]);
   const stockItemsForPurchase = useMemo(() => (stockItems || []).map(item => ({ value: item.name, label: item.name })), [stockItems]);
   const bankAccountItems = useMemo(() => (banks || []).map(b => ({ value: b.id, label: b.name })), [banks]);
-  const vendorContactItems = useMemo(() => [...(vendors || []).map(c => ({ value: c.id, label: c.name })), { value: 'new', label: <span className="flex items-center gap-2"><Plus className="h-4 w-4"/>Add New</span>}], [vendors]);
-  const clientContactItems = useMemo(() => [...(clients || []).map(c => ({ value: c.id, label: c.name })), { value: 'new', label: <span className="flex items-center gap-2"><Plus className="h-4 w-4"/>Add New</span>}], [clients]);
+  
+  const vendorContactItems = useMemo(() => [...contacts.filter(c => c.type === 'vendor' || c.type === 'both').map(c => ({ value: c.id, label: c.name })), { value: 'new', label: <span className="flex items-center gap-2"><Plus className="h-4 w-4"/>Add New</span>}], [contacts]);
+  const clientContactItems = useMemo(() => [...contacts.filter(c => c.type === 'client' || c.type === 'both').map(c => ({ value: c.id, label: c.name })), { value: 'new', label: <span className="flex items-center gap-2"><Plus className="h-4 w-4"/>Add New</span>}], [contacts]);
   const currentStockContactItems = stockType === 'purchase' ? vendorContactItems : clientContactItems;
 
   const steps = [

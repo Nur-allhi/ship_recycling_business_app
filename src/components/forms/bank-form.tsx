@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useMemo, useEffect, useRef } from 'react';
@@ -46,7 +45,7 @@ interface BankFormProps {
 
 export function BankForm({ setDialogOpen }: BankFormProps) {
   const { addBankTransaction, addLedgerTransaction } = useAppActions();
-  const { bankCategories, bankTransactions, vendors, clients, banks, currency } = useAppContext();
+  const { bankCategories, bankTransactions, contacts, banks, currency } = useAppContext();
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
   const [showAdvancedFields, setShowAdvancedFields] = useState(false);
 
@@ -65,7 +64,7 @@ export function BankForm({ setDialogOpen }: BankFormProps) {
   const isExpense = categoryInfo?.direction === 'debit';
   const isSettlement = categoryName === 'A/R Settlement' || categoryName === 'A/P Settlement';
   const settlementContactType = categoryName === 'A/P Settlement' ? 'Vendor' : 'Client';
-  const settlementContacts = settlementContactType === 'Vendor' ? vendors : clients;
+  const settlementContacts = contacts.filter(c => c.type === (settlementContactType === 'Vendor' ? 'vendor' : 'client') || c.type === 'both');
 
   useEffect(() => {
     if (!showAdvancedFields && typeof watchedAmount === 'number') {
@@ -89,9 +88,8 @@ export function BankForm({ setDialogOpen }: BankFormProps) {
     const transactionDate = format(data.date, 'yyyy-MM-dd');
     try {
         if (data.payLater && isExpense) {
-            const contact = vendors.find(v => v.id === data.contact_id);
-            if (!contact) throw new Error("Vendor not found for pay later transaction.");
-            await addLedgerTransaction({ type: 'payable', description: data.description, amount: data.amount, date: transactionDate, contact_id: data.contact_id!, contact_name: contact.name });
+            if (!data.contact_id) throw new Error("Vendor not found for pay later transaction.");
+            await addLedgerTransaction({ type: 'payable', description: data.description, amount: data.amount, date: transactionDate, contact_id: data.contact_id! });
         } else {
             if (!categoryInfo) throw new Error("Category information not found.");
             await addBankTransaction({
@@ -131,8 +129,8 @@ export function BankForm({ setDialogOpen }: BankFormProps) {
 }, [bankCategories, bankTransactions]);
 
   const bankAccountItems = useMemo(() => (banks || []).map(b => ({ value: b.id, label: b.name })), [banks]);
-  const vendorContactItems = useMemo(() => (vendors || []).map(c => ({ value: c.id, label: c.name })), [vendors]);
-  const clientContactItems = useMemo(() => (clients || []).map(c => ({ value: c.id, label: c.name })), [clients]);
+  const settlementContactItems = useMemo(() => (settlementContacts || []).map(c => ({ value: c.id, label: c.name })), [settlementContacts]);
+  const vendorContactItems = useMemo(() => contacts.filter(c => c.type === 'vendor' || c.type === 'both').map(c => ({ value: c.id, label: c.name })), [contacts]);
   
   return (
     <Card className="border-0 shadow-none overflow-y-auto pb-8">
@@ -164,7 +162,7 @@ export function BankForm({ setDialogOpen }: BankFormProps) {
           {isSettlement && (
             <div className="space-y-2 animate-fade-in">
               <Label>{settlementContactType}</Label>
-              <Controller name="contact_id" control={control} render={({ field }) => <ResponsiveSelect onValueChange={field.onChange} value={field.value} title={`Select a ${settlementContactType}`} placeholder={`Select a ${settlementContactType}`} items={settlementContactType === 'Vendor' ? vendorContactItems : clientContactItems} />} />
+              <Controller name="contact_id" control={control} render={({ field }) => <ResponsiveSelect onValueChange={field.onChange} value={field.value} title={`Select a ${settlementContactType}`} placeholder={`Select a ${settlementContactType}`} items={settlementContactItems} />} />
               {errors.contact_id && <p className="text-sm text-destructive">{errors.contact_id.message}</p>}
             </div>
           )}

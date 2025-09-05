@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useForm, Controller } from 'react-hook-form';
@@ -26,14 +25,6 @@ import { toast } from 'sonner';
 import { Input } from './ui/input';
 import { ResponsiveSelect } from './ui/responsive-select';
 import { useState } from 'react';
-
-// Helper to format date as YYYY-MM-DD string, preserving the local date
-const toYYYYMMDD = (date: Date) => {
-    const d = new Date(date);
-    // Adjust for timezone offset to prevent the date from changing
-    d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
-    return d.toISOString().split('T')[0];
-};
 
 interface AggregatedContact {
     contact_id: string;
@@ -84,7 +75,6 @@ export function RecordAdvanceDialog({ isOpen, setIsOpen, contact, ledgerType }: 
         try {
             await recordAdvancePayment({
                 contact_id: contact.contact_id,
-                contact_name: contact.contact_name,
                 amount: data.paymentAmount,
                 date: data.paymentDate,
                 payment_method: data.paymentMethod,
