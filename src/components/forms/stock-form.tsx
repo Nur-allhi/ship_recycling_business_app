@@ -154,8 +154,10 @@ export function StockForm({ setDialogOpen }: StockFormProps) {
   const currentStockContactItems = stockType === 'purchase' ? vendorContactItems : clientContactItems;
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col h-full bg-transparent">
-        <div className="p-4 sm:p-6 shrink-0">
+    <Card className="border-0 shadow-none flex flex-col h-full bg-transparent">
+      <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col h-full">
+        {/* Non-scrolling Header */}
+        <CardHeader className="p-4 sm:p-6 shrink-0">
             <div className="space-y-2">
                 <Label>Date</Label>
                 <Controller name="date" control={control} render={({ field }) => (
@@ -166,9 +168,11 @@ export function StockForm({ setDialogOpen }: StockFormProps) {
                 )} />
                 {errors.date && <p className="text-sm text-destructive">{errors.date.message}</p>}
             </div>
-        </div>
-        <div className="px-4 sm:px-6 flex-grow overflow-y-auto pb-16">
-            <div className="space-y-4">
+        </CardHeader>
+
+        {/* Scrolling Content */}
+        <div className="flex-grow overflow-y-auto px-4 sm:px-6">
+            <div className="space-y-4 pb-16">
                 <div className="space-y-2">
                     <Label>Transaction Type</Label>
                     <Controller name="stockType" control={control} render={({ field }) => (
@@ -245,11 +249,12 @@ export function StockForm({ setDialogOpen }: StockFormProps) {
                 <div className="space-y-2"><Label htmlFor="description-stock">Description (Optional)</Label><Input id="description-stock" {...register('description')} placeholder="e.g., invoice #, delivery details"/>{errors.description && <p className="text-sm text-destructive">{errors.description.message}</p>}</div>
             </div>
         </div>
-        <div className="flex justify-end p-4 sm:p-6 border-t mt-auto shrink-0 bg-background">
-            <Button type="submit" disabled={isSubmitting}>{isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Record Transaction</Button>
-        </div>
-    </form>
+
+        {/* Non-scrolling Footer */}
+        <CardFooter className="flex justify-end p-4 sm:p-6 border-t mt-auto shrink-0 bg-background">
+          <Button type="submit" disabled={isSubmitting}>{isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Record Transaction</Button>
+        </CardFooter>
+      </form>
+    </Card>
   );
 }
-
-    

@@ -100,13 +100,21 @@ export function FloatingActionButton() {
 
             <DialogComponent open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                 <DialogContentComponent className="sm:max-w-xl p-0 overflow-hidden flex flex-col">
-                    <DialogHeader className="p-4 sm:p-6 pb-0 text-left shrink-0">
-                        {activeAction && <DialogTitle>{activeAction.title}</DialogTitle>}
-                        {activeAction && <DialogDescription>{activeAction.description}</DialogDescription>}
-                    </DialogHeader>
-                    <Suspense fallback={<div className="h-[400px] flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>}>
-                        {renderForm()}
-                    </Suspense>
+                     {isMobile ? (
+                        <Suspense fallback={<div className="h-full flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>}>
+                            {renderForm()}
+                        </Suspense>
+                    ) : (
+                        <>
+                            <DialogHeader className="p-4 sm:p-6 pb-0 text-left shrink-0">
+                                {activeAction && <DialogTitle>{activeAction.title}</DialogTitle>}
+                                {activeAction && <DialogDescription>{activeAction.description}</DialogDescription>}
+                            </DialogHeader>
+                            <Suspense fallback={<div className="h-[400px] flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>}>
+                                {renderForm()}
+                            </Suspense>
+                        </>
+                    )}
                 </DialogContentComponent>
             </DialogComponent>
         </>
