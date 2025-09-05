@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useAppContext } from './context/app-context';
 import { cn } from '@/lib/utils';
 import { Wallet, Landmark, Boxes, Settings, LogOut, CreditCard, LineChart } from 'lucide-react';
@@ -36,7 +36,7 @@ const navItems = [
 ]
 
 function ShipShapeLedger() {
-  const { fontSize, isInitialBalanceDialogOpen, user, logout, isLoading, isInitialLoadComplete } = useAppContext();
+  const { fontSize, isInitialBalanceDialogOpen, user, logout } = useAppContext();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   const isMobile = useIsMobile();
@@ -51,16 +51,8 @@ function ShipShapeLedger() {
 
   const roleDisplayName = user?.role ? user.role.charAt(0).toUpperCase() + user.role.slice(1) : '';
   
-  if (!isInitialLoadComplete) {
-    return <AppLoading />;
-  }
-
   if (!user) {
-    return null;
-  }
-
-  if (isLoading) {
-    return <AppLoading />;
+    return <AppLoading message="Please wait..." />;
   }
 
   return (

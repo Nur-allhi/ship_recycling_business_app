@@ -6,13 +6,15 @@ import type { User, CashTransaction, BankTransaction, StockItem, StockTransactio
 import { toast } from 'sonner';
 import { useRouter, usePathname } from 'next/navigation';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { db } from '@/lib/db';
-import { WifiOff, Wifi, RefreshCw } from 'lucide-react';
+import { db, bulkPut } from '@/lib/db';
+import { WifiOff, RefreshCw } from 'lucide-react';
 import { AppLoading } from '@/components/app-loading';
 import { useSessionManager } from './useSessionManager';
 import { useDataSyncer } from './useDataSyncer';
 import { useBalanceCalculator } from './useBalanceCalculator';
 import * as server from '@/lib/actions';
+import { getSession as getSessionFromCookie } from '@/app/auth/actions';
+
 
 type FontSize = 'sm' | 'base' | 'lg';
 
@@ -79,8 +81,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const [hasMounted, setHasMounted] = useState(false);
 
     const {
-        user, setUser, isAuthenticating, isLoading, isLoggingOut, isOnline,
-        isInitialLoadComplete, login, logout, reloadData, handleApiError,
+        user, setUser, isAuthenticating, isLoading, setIsLoading, isLoggingOut, isOnline,
+        isInitialLoadComplete, setIsInitialLoadComplete, login, logout, handleApiError,
         setIsOnline
     } = useSessionManager();
 
@@ -93,6 +95,123 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     
     // Live Queries for UI data
     const liveData = useLiveDBData();
+
+    const reloadData = useCallback(async (options?: { force?: boolean, needsInitialBalance?: boolean }) => {
+        setIsLoading(true);
+        try {
+            const session = await getSessionFromCookie();
+            if (!session) {
+                setIsLoading(false);
+                setUser(null);
+                await db.app_state.update(1, { user: null });
+                return;
+            }
+
+            setUser(session);
+
+            const localUser = await db.app_state.get(1);
+            if (!localUser || !localUser.user || localUser.user.id !== session.id || options?.force) {
+                await db.app_state.put({
+                    id: 1, user: session, fontSize: 'base', currency: 'BDT',
+                    wastagePercentage: 0, showStockValue: false, lastSync: null
+                });
+                
+                const [categoriesData, contactsData, banksData, cashTxs, bankTxs, stockTxs, ledgerData, installmentsData, snapshotsData, initialStockData, loansData, loanPaymentsData] = await Promise.all([
+                    server.readData({ tableName: 'categories', select: '*' }),
+                    server.readData({ tableName: 'contacts', select: '*' }),
+                    server.readData({ tableName: 'banks', select: '*' }),
+                    server.readData({ tableName: 'cash_transactions', select: '*' }),
+                    server.readData({ tableName: 'bank_transactions', select: '*' }),
+                    server.readData({ tableName: 'stock_transactions', select: '*' }),
+                    server.readData({ tableName: 'ap_ar_transactions', select: '*' }),
+                    server.readData({ tableName: 'payment_installments', select: '*' }),
+                    server.readData({ tableName: 'monthly_snapshots', select: '*' }),
+                    server.readData({ tableName: 'initial_stock', select: '*' }),
+                    server.readData({ tableName: 'loans', select: '*' }),
+                    server.readData({ tableName: 'loan_payments', select: '*' }),
+                ]);
+                
+                const ledgerTxsWithInstallments = (ledgerData || []).map((tx: any) => ({
+                    ...tx,
+                    installments: (installmentsData || []).filter((ins: any) => ins.ap_ar_transaction_id === tx.id)
+                }));
+                
+                const essentialCategories = [
+                    { name: 'A/R Settlement', type: 'cash', direction: 'credit', is_deletable: false },
+                    { name: 'A/P Settlement', type: 'cash', direction: 'debit', is_deletable: false },
+                    { name: 'A/R Settlement', type: 'bank', direction: 'credit', is_deletable: false },
+                    { name: 'A/P Settlement', type: 'bank', direction: 'debit', is_deletable: false },
+                    { name: 'Stock Purchase', type: 'cash', direction: 'debit', is_deletable: false },
+                    { name: 'Stock Sale', type: 'cash', direction: 'credit', is_deletable: false },
+                    { name: 'Stock Purchase', type: 'bank', direction: 'debit', is_deletable: false },
+                    { name: 'Stock Sale', type: 'bank', direction: 'credit', is_deletable: false },
+                    { name: 'Initial Balance', type: 'cash', direction: 'credit', is_deletable: false },
+                    { name: 'Initial Balance', type: 'bank', direction: 'credit', is_deletable: false },
+                    { name: 'Funds Transfer', type: 'cash', direction: null, is_deletable: false },
+                    { name: 'Funds Transfer', type: 'bank', direction: null, is_deletable: false },
+                    { name: 'Advance Payment', type: 'cash', direction: 'debit', is_deletable: false },
+                    { name: 'Advance Received', type: 'cash', direction: 'credit', is_deletable: false },
+                    { name: 'Advance Payment', type: 'bank', direction: 'debit', is_deletable: false },
+                    { name: 'Advance Received', type: 'bank', direction: 'credit', is_deletable: false },
+                ];
+
+                for (const cat of essentialCategories) {
+                    const categories = Array.isArray(categoriesData) ? (categoriesData as unknown as Category[]) : [];
+                    const exists = categories.some((c) => c.name === cat.name && c.type === cat.type);
+                    if (!exists) {
+                        const newCat = await server.appendData({ tableName: 'categories', data: cat, select: '*' });
+                        if (newCat && Array.isArray(categoriesData)) {
+                            ((categoriesData as unknown) as Category[]).push((newCat as unknown) as Category);
+                        }
+                    }
+                }
+
+                await db.transaction('rw', db.tables, async () => {
+                    await bulkPut('categories', categoriesData); await bulkPut('contacts', contactsData);
+                    await bulkPut('banks', banksData);
+                    await bulkPut('cash_transactions', cashTxs); await bulkPut('bank_transactions', bankTxs);
+                    await bulkPut('stock_transactions', stockTxs); await bulkPut('ap_ar_transactions', ledgerTxsWithInstallments);
+                    await bulkPut('payment_installments', installmentsData);
+                    await bulkPut('monthly_snapshots', snapshotsData); await bulkPut('initial_stock', initialStockData);
+                    await bulkPut('loans', loansData); await bulkPut('loan_payments', loanPaymentsData);
+                    await db.app_state.update(1, { lastSync: new Date().toISOString() });
+                });
+            }
+
+            await updateBalances();
+            processSyncQueue();
+
+        } catch (error: any) {
+            handleApiError(error);
+        } finally {
+            setIsLoading(false);
+        }
+    }, [handleApiError, setIsLoading, setUser, updateBalances, processSyncQueue]);
+
+    useEffect(() => {
+        const checkSessionAndLoad = async () => {
+            setIsLoading(true);
+            const session = await getSessionFromCookie();
+            if (session) {
+                setUser(session);
+                const localUser = await db.app_state.get(1);
+                if (localUser?.user?.id === session.id) {
+                    // User is the same, no full reload needed, just ensure balances are good.
+                    await updateBalances();
+                    setIsLoading(false);
+                } else {
+                    // New user or forced reload, trigger full data load.
+                    await reloadData();
+                }
+            } else {
+                setUser(null);
+                setIsLoading(false);
+            }
+            setIsInitialLoadComplete(true);
+        };
+        checkSessionAndLoad();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []); // Only run once on mount
 
     useEffect(() => { setHasMounted(true); }, []);
 
@@ -197,7 +316,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return (
         <AppContext.Provider value={contextValue}>
             <OnlineStatusIndicator />
-            {children}
+            {isLoading && !isInitialLoadComplete ? <AppLoading /> : children}
         </AppContext.Provider>
     );
 }
@@ -213,6 +332,8 @@ function useLiveDBData() {
     const banks = useLiveQuery(() => db.banks.toArray(), []);
     const categories = useLiveQuery(() => db.categories.toArray(), []);
     const contacts = useLiveQuery(() => db.contacts.toArray(), []);
+    const initialStock = useLiveQuery(() => db.initial_stock.toArray(), []);
+
 
     const { cashCategories, bankCategories } = useMemo(() => {
         const dbCash: Category[] = [];
@@ -235,6 +356,7 @@ function useLiveDBData() {
         ledgerTransactions: ledgerTransactions || [],
         loans: loans || [],
         loanPayments: loanPayments || [],
+        initialStock: initialStock || [],
         cashCategories,
         bankCategories,
         contacts: contacts || [],
@@ -249,5 +371,3 @@ export function useAppContext() {
     }
     return context;
 }
-
-    
