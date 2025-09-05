@@ -19,6 +19,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { format, formatISO } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Card, CardContent, CardFooter } from '../ui/card';
+import { Separator } from '../ui/separator';
 
 const loanSchema = z.object({
     type: z.enum(['payable', 'receivable'], { required_error: "Please select loan type." }),
@@ -28,9 +29,14 @@ const loanSchema = z.object({
     interest_rate: z.coerce.number().nonnegative("Interest rate cannot be negative.").optional().default(0),
     issue_date: z.date({ required_error: "Issue date is required." }),
     due_date: z.date().optional(),
+    disbursement_method: z.enum(['cash', 'bank'], { required_error: "Disbursement method is required." }),
+    bank_id: z.string().optional(),
 }).superRefine((data, ctx) => {
     if (data.contact_id === 'new' && (!data.newContact || data.newContact.trim().length === 0)) {
         ctx.addIssue({ code: 'custom', message: 'New contact name is required.', path: ['newContact'] });
+    }
+    if (data.disbursement_method === 'bank' && !data.bank_id) {
+        ctx.addIssue({ code: 'custom', message: 'A bank account is required.', path: ['bank_id'] });
     }
 });
 
@@ -42,7 +48,7 @@ interface LoanFormProps {
 
 export function LoanForm({ setDialogOpen }: LoanFormProps) {
   const { addLoan, addContact } = useAppActions();
-  const { contacts } = useAppContext();
+  const { contacts, banks } = useAppContext();
   const [issueDatePickerOpen, setIssueDatePickerOpen] = useState(false);
   const [dueDatePickerOpen, setDueDatePickerOpen] = useState(false);
 
@@ -55,6 +61,7 @@ export function LoanForm({ setDialogOpen }: LoanFormProps) {
 
   const loanType = watch('type');
   const contact_id = watch('contact_id');
+  const disbursementMethod = watch('disbursement_method');
 
   const contactItems = useMemo(() => {
     if (!loanType) return [];
@@ -64,6 +71,8 @@ export function LoanForm({ setDialogOpen }: LoanFormProps) {
       { value: 'new', label: <span className="flex items-center gap-2"><Plus className="h-4 w-4" />Add New {contactTypeFilter}</span> }
     ];
   }, [contacts, loanType]);
+
+  const bankAccountItems = useMemo(() => banks.map(b => ({ value: b.id, label: b.name })), [banks]);
 
   const onSubmit = async (data: FormData) => {
     try {
@@ -81,12 +90,17 @@ export function LoanForm({ setDialogOpen }: LoanFormProps) {
           contact_id: finalContactId,
           type: data.type,
           principal_amount: data.principal_amount,
-          interest_rate: data.interest_rate,
-          issue_date: formatISO(data.issue_date),
-          due_date: data.due_date ? formatISO(data.due_date) : undefined,
+          interest_rate: data.interest_rate ?? 0,
+          issue_date: formatISO(data.issue_date, { representation: 'date' }),
+          due_date: data.due_date ? formatISO(data.due_date, { representation: 'date' }) : undefined,
+        }
+        
+        const disbursementData = {
+            method: data.disbursement_method,
+            bank_id: data.bank_id,
         }
 
-        await addLoan(loanData);
+        await addLoan(loanData, disbursementData);
         
         toast.success("Loan Recorded Successfully");
         setDialogOpen(false);
@@ -169,6 +183,35 @@ export function LoanForm({ setDialogOpen }: LoanFormProps) {
                     )} />
                 </div>
           </div>
+          <Separator />
+           <div className="space-y-2">
+                <Label>Disbursement Method</Label>
+                <Controller
+                    control={control}
+                    name="disbursement_method"
+                    render={({ field }) => (
+                        <RadioGroup onValueChange={field.onChange} value={field.value} className="flex flex-col sm:flex-row pt-2 gap-4">
+                            <Label className="flex items-center gap-2 cursor-pointer"><RadioGroupItem value="cash" />{loanType === 'payable' ? 'Receive in Cash' : 'Disburse from Cash'}</Label>
+                            <Label className="flex items-center gap-2 cursor-pointer"><RadioGroupItem value="bank" />{loanType === 'payable' ? 'Receive in Bank' : 'Disburse from Bank'}</Label>
+                        </RadioGroup>
+                    )}
+                />
+                {errors.disbursement_method && <p className="text-sm text-destructive">{errors.disbursement_method.message}</p>}
+            </div>
+
+            {disbursementMethod === 'bank' && (
+                <div className="space-y-2 animate-fade-in">
+                    <Label>Bank Account</Label>
+                    <Controller
+                        control={control}
+                        name="bank_id"
+                        render={({ field }) => (
+                            <ResponsiveSelect onValueChange={field.onChange} value={field.value} title="Select a bank account" placeholder="Select a bank account" items={bankAccountItems} />
+                        )}
+                    />
+                    {errors.bank_id && <p className="text-sm text-destructive">{errors.bank_id.message}</p>}
+                </div>
+            )}
         </CardContent>
         <CardFooter className="flex justify-end p-4 sm:p-6">
           <Button type="submit" disabled={isSubmitting}>
@@ -180,5 +223,3 @@ export function LoanForm({ setDialogOpen }: LoanFormProps) {
     </Card>
   );
 }
-
-    

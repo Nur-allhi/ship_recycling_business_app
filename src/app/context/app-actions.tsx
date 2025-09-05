@@ -32,7 +32,8 @@ export function useAppActions() {
             return await action();
         } catch(e: any) {
             toast.error("Operation Failed", { description: e.message });
-            return undefined;
+            // Do not return undefined here, let specific actions handle it.
+            throw e;
         }
     };
 
@@ -287,23 +288,18 @@ export function useAppActions() {
       });
     }
     
-    const addContact = async (name: string, type: 'vendor' | 'client' | 'both'): Promise<Contact | undefined> => {
+    const addContact = async (name: string, type: 'vendor' | 'client' | 'both'): Promise<Contact> => {
         if (user?.role !== 'admin') {
             toast.error("Permission Denied", { description: "You do not have permission to perform this action." });
-            return undefined;
+            throw new Error("Permission Denied");
         }
 
         const tempId = `temp_contact_${Date.now()}`;
         const newContact: Contact = { id: tempId, name, type, createdAt: new Date().toISOString() };
         
-        try {
-            await db.contacts.add(newContact);
-            const savedContact = await queueOrSync({ action: 'appendData', payload: { tableName: 'contacts', data: { name, type }, localId: tempId, logDescription: `Added contact: ${name}`, select: '*' }});
-            return savedContact ? { ...savedContact, id: savedContact.id } : newContact;
-        } catch (e: any) {
-            toast.error("Operation Failed", { description: e.message });
-            return newContact;
-        }
+        await db.contacts.add(newContact);
+        queueOrSync({ action: 'appendData', payload: { tableName: 'contacts', data: { name, type }, localId: tempId, logDescription: `Added contact: ${name}`, select: '*' }});
+        return newContact;
     };
   
     const deleteContact = async (id: string) => {
@@ -489,13 +485,36 @@ export function useAppActions() {
         });
     };
 
-    const addLoan = async (loan: Omit<Loan, 'id' | 'status' | 'created_at'>) => {
+    const addLoan = async (loan: Omit<Loan, 'id' | 'status' | 'created_at'>, disbursement: { method: 'cash' | 'bank', bank_id?: string }) => {
         return performAdminAction(async () => {
             const tempId = `temp_loan_${Date.now()}`;
+            const tempFinancialId = `temp_loan_fin_${Date.now()}`;
             const newLoan: Loan = { ...loan, id: tempId, status: 'active', created_at: new Date().toISOString() };
+            
             await db.loans.add(newLoan);
+
+            // Create the corresponding financial transaction locally
+            const financialTxData = {
+                id: tempFinancialId,
+                date: loan.issue_date,
+                description: `Loan ${loan.type === 'payable' ? 'received from' : 'given to'} contact ID ${loan.contact_id}`,
+                category: loan.type === 'payable' ? 'Loan In' : 'Loan Out',
+                expected_amount: loan.principal_amount,
+                actual_amount: loan.principal_amount,
+                difference: 0,
+                contact_id: loan.contact_id,
+                createdAt: new Date().toISOString(),
+            };
+
+            if (disbursement.method === 'cash') {
+                await db.cash_transactions.add({ ...financialTxData, type: loan.type === 'payable' ? 'income' : 'expense' });
+            } else {
+                await db.bank_transactions.add({ ...financialTxData, type: loan.type === 'payable' ? 'deposit' : 'withdrawal', bank_id: disbursement.bank_id! });
+            }
+
             await updateBalances();
-            queueOrSync({ action: 'addLoan', payload: { loanData: loan, localId: tempId } });
+
+            queueOrSync({ action: 'addLoan', payload: { loanData: loan, disbursement, localId: tempId, localFinancialId: tempFinancialId } });
             return newLoan;
         });
     };

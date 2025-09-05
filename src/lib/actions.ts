@@ -505,7 +505,7 @@ export async function addStockTransaction(input: z.infer<typeof AddStockTransact
                 const ledgerData = {
                     type: stockTx.type === 'purchase' ? 'payable' : 'receivable',
                     description: stockTx.description || `${stockTx.stockItemName} (${stockTx.weight}kg)`,
-                    amount: amountToLog, date: stockTx.date, contact_id: stockTx.contact_id!, contact_name: stockTx.contact_name!,
+                    amount: amountToLog, date: stockTx.date, contact_id: stockTx.contact_id!,
                     status: 'unpaid', paid_amount: 0
                 };
                 const { error } = await supabase.from('ap_ar_transactions').insert(ledgerData);
@@ -626,7 +626,7 @@ export async function transferFunds(input: z.infer<typeof TransferFundsSchema>) 
 }
 
 const RecordAdvancePaymentSchema = z.object({
-    contact_id: z.string(), contact_name: z.string(), amount: z.number().positive(), date: z.string(),
+    contact_id: z.string(), amount: z.number().positive(), date: z.string(),
     payment_method: z.enum(['cash', 'bank']), ledger_type: z.enum(['payable', 'receivable']),
     bank_id: z.string().optional(), description: z.string().optional(),
 });
@@ -636,13 +636,17 @@ export async function recordAdvancePayment(input: z.infer<typeof RecordAdvancePa
         const session = await getSession();
         if (!session || session.role !== 'admin') throw new Error("Only admins can record advance payments.");
         const supabase = createAdminSupabaseClient();
-        const { contact_id, contact_name, amount, date, payment_method, ledger_type, bank_id, description } = input;
+        const { contact_id, amount, date, payment_method, ledger_type, bank_id, description } = input;
+        
+        const contact = await supabase.from('contacts').select('name').eq('id', contact_id).single();
+        if (!contact.data) throw new Error("Contact not found");
+
         const ledgerAmount = -amount;
-        const ledgerDescription = description || `Advance ${ledger_type === 'payable' ? 'to' : 'from'} ${contact_name}`;
+        const ledgerDescription = description || `Advance ${ledger_type === 'payable' ? 'to' : 'from'} ${contact.data.name}`;
         
         const { data: ledgerEntry, error: ledgerError } = await supabase.from('ap_ar_transactions').insert({
             type: 'advance', date: date, description: ledgerDescription, amount: ledgerAmount, paid_amount: 0,
-            status: 'paid', contact_id: contact_id, contact_name: contact_name,
+            status: 'paid', contact_id: contact_id,
         }).select().single();
         if (ledgerError) throw new Error(ledgerError.message);
         if (!ledgerEntry) throw new Error("Failed to create ledger entry for advance.");
@@ -750,20 +754,53 @@ export async function getOrCreateSnapshot(date: string): Promise<MonthlySnapshot
     }
 }
 
-export async function addLoan(loanData: Omit<Loan, 'id' | 'status' | 'created_at'>) {
+const AddLoanSchema = z.object({
+    loanData: z.any(),
+    disbursement: z.object({
+        method: z.enum(['cash', 'bank']),
+        bank_id: z.string().optional(),
+    })
+});
+
+export async function addLoan(input: z.infer<typeof AddLoanSchema>) {
     try {
         const session = await getSession();
         if (!session || session.role !== 'admin') throw new Error("Only admins can add loans.");
         const supabase = createAdminSupabaseClient();
         
-        const { data, error } = await supabase.from('loans').insert({
-            ...loanData,
+        const { data: loan, error: loanError } = await supabase.from('loans').insert({
+            ...input.loanData,
             status: 'active',
         }).select().single();
 
-        if (error) throw error;
-        await logActivity(`Added new ${loanData.type} loan for ${loanData.principal_amount}`);
-        return data;
+        if (loanError) throw loanError;
+
+        // Now create the corresponding financial transaction
+        const financialTxData = {
+            date: loan.issue_date,
+            description: `Loan ${loan.type === 'payable' ? 'received from' : 'given to'} contact ID ${loan.contact_id}`,
+            category: loan.type === 'payable' ? 'Loan In' : 'Loan Out',
+            expected_amount: loan.principal_amount,
+            actual_amount: loan.principal_amount,
+            difference: 0,
+            contact_id: loan.contact_id,
+        };
+
+        if (input.disbursement.method === 'cash') {
+            await supabase.from('cash_transactions').insert({
+                ...financialTxData,
+                type: loan.type === 'payable' ? 'income' : 'expense',
+            });
+        } else {
+            await supabase.from('bank_transactions').insert({
+                ...financialTxData,
+                type: loan.type === 'payable' ? 'deposit' : 'withdrawal',
+                bank_id: input.disbursement.bank_id,
+            });
+        }
+
+        await logActivity(`Added new ${loan.type} loan for ${loan.principal_amount}`);
+        return loan;
 
     } catch(error) {
         return handleApiError(error);
