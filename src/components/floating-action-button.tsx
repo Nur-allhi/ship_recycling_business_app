@@ -20,7 +20,7 @@ type TransactionType = 'cash' | 'bank' | 'stock' | 'transfer' | 'ap_ar';
 const fabActions = [
     { type: 'ap_ar' as TransactionType, icon: UserPlus, label: 'A/R & A/P', title: 'New A/R or A/P Entry', description: 'Record a new payable or receivable item.' },
     { type: 'transfer' as TransactionType, icon: ArrowRightLeft, label: 'Transfer', title: 'Transfer Funds', description: 'Move money between your cash and bank accounts.' },
-    { type: 'stock' as TransactionType, icon: Boxes, label: 'Stock Transaction', title: 'Stock Transaction', description: 'Record a new stock purchase or sale.' },
+    { type: 'stock' as TransactionType, icon: Boxes, label: 'Stock Transaction', title: 'Stock Transaction', description: 'Record a stock purchase or sale.' },
     { type: 'bank' as TransactionType, icon: Landmark, label: 'Bank', title: 'New Bank Transaction', description: 'Record a new deposit or withdrawal from a bank account.' },
     { type: 'cash' as TransactionType, icon: Wallet, label: 'Cash', title: 'New Cash Transaction', description: 'Record a new income or expense using cash.' },
 ];
@@ -55,7 +55,7 @@ export function FloatingActionButton() {
     return (
         <>
             <div className="fixed bottom-6 right-6 z-40">
-                <div className="relative flex flex-col items-center gap-2">
+                <div className="relative flex flex-col items-end gap-2">
                     <AnimatePresence>
                         {isOpen && fabActions.map((action, index) => (
                             <motion.div
@@ -64,7 +64,7 @@ export function FloatingActionButton() {
                                 animate={{ opacity: 1, y: 0 }}
                                 exit={{ opacity: 0, y: 10 * (index + 1) }}
                                 transition={{ duration: 0.2, delay: index * 0.05 }}
-                                className="flex items-center gap-2 w-full justify-end"
+                                className="flex items-center gap-2"
                             >
                                 <span className="bg-card text-card-foreground text-sm px-3 py-1 rounded-md shadow-lg">{action.label}</span>
                                 <Button
@@ -100,31 +100,15 @@ export function FloatingActionButton() {
 
             <DialogComponent open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                 <DialogContentComponent className="sm:max-w-xl p-0 overflow-hidden flex flex-col h-[90dvh]">
-                    {isMobile ? (
-                        <>
-                             <DrawerHeader className="p-4 pb-0 text-left shrink-0">
-                                {activeAction && <DrawerTitle>{activeAction.title}</DrawerTitle>}
-                                {activeAction && <DrawerDescription>{activeAction.description}</DrawerDescription>}
-                            </DrawerHeader>
-                            <div className="flex-grow overflow-y-auto">
-                                <Suspense fallback={<div className="h-full flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>}>
-                                    {renderForm()}
-                                </Suspense>
-                            </div>
-                        </>
-                    ) : (
-                        <>
-                            <DialogHeader className="p-4 sm:p-6 pb-0 text-left shrink-0">
-                                {activeAction && <DialogTitle>{activeAction.title}</DialogTitle>}
-                                {activeAction && <DialogDescription>{activeAction.description}</DialogDescription>}
-                            </DialogHeader>
-                             <div className="flex-grow overflow-y-auto">
-                                <Suspense fallback={<div className="h-full flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>}>
-                                    {renderForm()}
-                                </Suspense>
-                            </div>
-                        </>
-                    )}
+                    <DialogHeader className="p-4 sm:p-6 pb-0 text-left shrink-0">
+                      {activeAction && <DialogTitle>{activeAction.title}</DialogTitle>}
+                      {activeAction && <DialogDescription>{activeAction.description}</DialogDescription>}
+                    </DialogHeader>
+                    <div className="flex-grow overflow-y-auto">
+                        <Suspense fallback={<div className="h-full flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>}>
+                            {renderForm()}
+                        </Suspense>
+                    </div>
                 </DialogContentComponent>
             </DialogComponent>
         </>
