@@ -23,12 +23,17 @@ export function useAppActions() {
     const { queueOrSync } = useDataSyncer();
     const { updateBalances } = useBalanceCalculator();
     
-    const performAdminAction = async <T>(action: () => Promise<T>): Promise<T | undefined> => {
+    const performAdminAction = async <T,>(action: () => Promise<T | undefined>): Promise<T | undefined> => {
         if (user?.role !== 'admin') {
             toast.error("Permission Denied", { description: "You do not have permission to perform this action." });
             return undefined;
         }
-        return await action();
+        try {
+            return await action();
+        } catch(e: any) {
+            toast.error("Operation Failed", { description: e.message });
+            return undefined;
+        }
     };
 
     const addCashTransaction = async (tx: Omit<CashTransaction, 'id' | 'createdAt' | 'deletedAt'>) => {
@@ -287,8 +292,9 @@ export function useAppActions() {
             const tempId = `temp_contact_${Date.now()}`;
             const newContact: Contact = { id: tempId, name, type, createdAt: new Date().toISOString() };
             await db.contacts.add(newContact);
-            queueOrSync({ action: 'appendData', payload: { tableName: 'contacts', data: { name, type }, localId: tempId, select: '*' }});
-            return newContact;
+            const savedContact = await queueOrSync({ action: 'appendData', payload: { tableName: 'contacts', data: { name, type }, localId: tempId, select: '*' }});
+            // The result from queueOrSync might be complex, so we ensure we return a clean contact object
+            return { id: savedContact?.id || tempId, name, type, createdAt: new Date().toISOString() };
         });
     };
   
@@ -475,6 +481,17 @@ export function useAppActions() {
         });
     };
 
+    const addLoan = async (loan: Omit<Loan, 'id' | 'status' | 'created_at'>) => {
+        return performAdminAction(async () => {
+            const tempId = `temp_loan_${Date.now()}`;
+            const newLoan: Loan = { ...loan, id: tempId, status: 'active', created_at: new Date().toISOString() };
+            await db.loans.add(newLoan);
+            await updateBalances();
+            queueOrSync({ action: 'addLoan', payload: { loanData: loan, localId: tempId } });
+            return newLoan;
+        });
+    };
+
     return {
         addCashTransaction,
         addBankTransaction,
@@ -509,5 +526,8 @@ export function useAppActions() {
         handleExport,
         handleImport,
         handleDeleteAllData,
+        addLoan,
     };
 }
+
+    

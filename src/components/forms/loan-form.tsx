@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useForm, Controller } from 'react-hook-form';
@@ -15,7 +16,7 @@ import { toast } from 'sonner';
 import { CalendarIcon, Plus, Loader2 } from 'lucide-react';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { format } from 'date-fns';
+import { format, formatISO } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Card, CardContent, CardFooter } from '../ui/card';
 
@@ -40,8 +41,7 @@ interface LoanFormProps {
 }
 
 export function LoanForm({ setDialogOpen }: LoanFormProps) {
-  // We will need `addLoan` from `useAppActions` soon.
-  const { addContact } = useAppActions();
+  const { addLoan, addContact } = useAppActions();
   const { contacts } = useAppContext();
   const [issueDatePickerOpen, setIssueDatePickerOpen] = useState(false);
   const [dueDatePickerOpen, setDueDatePickerOpen] = useState(false);
@@ -66,23 +66,29 @@ export function LoanForm({ setDialogOpen }: LoanFormProps) {
   }, [contacts, loanType]);
 
   const onSubmit = async (data: FormData) => {
-    // This is a placeholder for now.
-    // In a future step, we will implement `addLoan` action.
     try {
         let finalContactId: string;
-        if (data.contact_id === 'new') {
+        if (data.contact_id === 'new' && data.newContact) {
              const contactType = data.type === 'payable' ? 'vendor' : 'client';
-             const newContact = await addContact(data.newContact!, contactType);
+             const newContact = await addContact(data.newContact, contactType);
+             if (!newContact) throw new Error("Failed to create new contact.");
              finalContactId = newContact.id;
         } else {
             finalContactId = data.contact_id;
         }
 
-        // Placeholder for the real action
-        console.log("Submitting loan data:", { ...data, contact_id: finalContactId });
-        await new Promise(res => setTimeout(res, 1000));
+        const loanData = {
+          contact_id: finalContactId,
+          type: data.type,
+          principal_amount: data.principal_amount,
+          interest_rate: data.interest_rate,
+          issue_date: formatISO(data.issue_date),
+          due_date: data.due_date ? formatISO(data.due_date) : undefined,
+        }
+
+        await addLoan(loanData);
         
-        toast.success("Loan Recorded Successfully (Placeholder)");
+        toast.success("Loan Recorded Successfully");
         setDialogOpen(false);
     } catch (error: any) {
         toast.error("Operation Failed", { description: error.message });
@@ -174,3 +180,5 @@ export function LoanForm({ setDialogOpen }: LoanFormProps) {
     </Card>
   );
 }
+
+    

@@ -6,7 +6,7 @@ import { cookies } from 'next/headers';
 import { z } from 'zod';
 import { getSession } from '@/app/auth/actions';
 import { startOfMonth, subMonths, endOfMonth } from 'date-fns';
-import type { MonthlySnapshot } from '@/lib/types';
+import type { MonthlySnapshot, Loan } from '@/lib/types';
 
 // This is the privileged client for server-side operations.
 const createAdminSupabaseClient = () => {
@@ -749,5 +749,26 @@ export async function getOrCreateSnapshot(date: string): Promise<MonthlySnapshot
         return handleApiError(error);
     }
 }
+
+export async function addLoan(loanData: Omit<Loan, 'id' | 'status' | 'created_at'>) {
+    try {
+        const session = await getSession();
+        if (!session || session.role !== 'admin') throw new Error("Only admins can add loans.");
+        const supabase = createAdminSupabaseClient();
+        
+        const { data, error } = await supabase.from('loans').insert({
+            ...loanData,
+            status: 'active',
+        }).select().single();
+
+        if (error) throw error;
+        await logActivity(`Added new ${loanData.type} loan for ${loanData.principal_amount}`);
+        return data;
+
+    } catch(error) {
+        return handleApiError(error);
+    }
+}
+    
 
     
