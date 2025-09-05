@@ -13,7 +13,7 @@ interface DashboardTabProps {
 }
 
 export function DashboardTab({ setActiveTab }: DashboardTabProps) {
-  const { cashBalance, bankBalance, stockItems, stockTransactions, currency, isLoading } = useAppContext()
+  const { cashBalance, bankBalance, currency, isLoading, stockItems } = useAppContext()
 
   const formatCurrency = (amount: number) => {
     if (currency === 'BDT') {
@@ -22,53 +22,17 @@ export function DashboardTab({ setActiveTab }: DashboardTabProps) {
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: currency, currencyDisplay: 'symbol' }).format(amount)
   }
 
-  // Calculate current stock balance by considering all transactions
+  // Correctly use the centrally calculated stock values from the context.
   const { currentStockWeight, currentStockValue } = useMemo(() => {
-    // Start with initial stock
-    const stockBalance: Record<string, { weight: number, totalValue: number }> = {};
-    
-    // Add initial stock items
-    (stockItems || []).forEach(item => {
-      if (!stockBalance[item.name]) {
-        stockBalance[item.name] = { weight: 0, totalValue: 0 };
-      }
-      stockBalance[item.name].weight += item.weight;
-      stockBalance[item.name].totalValue += item.weight * item.purchasePricePerKg;
-    });
-    
-    // Process all stock transactions
-    (stockTransactions || []).forEach(tx => {
-      if (!stockBalance[tx.stockItemName]) {
-        stockBalance[tx.stockItemName] = { weight: 0, totalValue: 0 };
-      }
-      
-      const item = stockBalance[tx.stockItemName];
-      const currentAvgPrice = item.weight > 0 ? item.totalValue / item.weight : 0;
-      
-      if (tx.type === 'purchase') {
-        // Add purchased stock
-        item.weight += tx.weight;
-        item.totalValue += tx.weight * tx.pricePerKg;
-      } else {
-        // Subtract sold stock
-        item.weight -= tx.weight;
-        // Subtract value using average cost method
-        item.totalValue -= tx.weight * currentAvgPrice;
-      }
-    });
-    
-    // Calculate totals
-    const totalCurrentWeight = Object.values(stockBalance).reduce((acc, item) => acc + Math.max(0, item.weight), 0);
-    const totalCurrentValue = Object.values(stockBalance).reduce((acc, item) => acc + Math.max(0, item.totalValue), 0);
+    const totalCurrentWeight = (stockItems || []).reduce((acc, item) => acc + Math.max(0, item.weight), 0);
+    const totalCurrentValue = (stockItems || []).reduce((acc, item) => acc + (Math.max(0, item.weight) * item.purchasePricePerKg), 0);
     
     return {
       currentStockWeight: totalCurrentWeight,
       currentStockValue: totalCurrentValue
     };
-  }, [stockItems, stockTransactions]);
+  }, [stockItems]);
 
-  const totalStockValue = currentStockValue;
-  const totalStockWeight = currentStockWeight;
   const totalBalance = cashBalance + bankBalance
 
   const renderValue = (value: string | number, isCurrency = true) => {
@@ -107,7 +71,7 @@ export function DashboardTab({ setActiveTab }: DashboardTabProps) {
         <StatCard title="Total Balance" value={totalBalance} subtext="Cash + Bank combined" icon={LineChart} />
         <StatCard title="Cash Balance" value={cashBalance} subtext="In-hand currency" icon={Wallet} onClick={() => setActiveTab('cash')} />
         <StatCard title="Bank Balance" value={bankBalance} subtext="Managed by financial institutions" icon={Landmark} onClick={() => setActiveTab('bank')} />
-        <StatCard title="Stock Quantity" value={`${totalStockWeight.toFixed(2)} kg`} subtext={`Total Value: ${formatCurrency(totalStockValue)}`} icon={Boxes} onClick={() => setActiveTab('stock')} />
+        <StatCard title="Stock Quantity" value={`${currentStockWeight.toFixed(2)} kg`} subtext={`Total Value: ${formatCurrency(currentStockValue)}`} icon={Boxes} onClick={() => setActiveTab('stock')} />
       </div>
     </div>
   )

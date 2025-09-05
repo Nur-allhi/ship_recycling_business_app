@@ -157,65 +157,23 @@ export function StockTab() {
     setSelectedTxs([]);
   }
 
-  const totalStockValue = (stockItems || []).reduce((acc, item) => acc + (item.weight * item.purchasePricePerKg), 0);
-  const totalStockWeight = (stockItems || []).reduce((acc, item) => acc + item.weight, 0);
-  const weightedAveragePrice = totalStockWeight > 0 ? totalStockValue / totalStockWeight : 0;
-  
-  // Calculate current stock balance by considering all transactions
   const { currentStockWeight, currentStockValue, currentStockItems } = useMemo(() => {
-    // Start with initial stock
-    const stockBalance: Record<string, { weight: number, totalValue: number }> = {};
-    
-    // Add initial stock items
-    (stockItems || []).forEach(item => {
-      if (!stockBalance[item.name]) {
-        stockBalance[item.name] = { weight: 0, totalValue: 0 };
-      }
-      stockBalance[item.name].weight += item.weight;
-      stockBalance[item.name].totalValue += item.weight * item.purchasePricePerKg;
-    });
-    
-    // Process all stock transactions
-    (stockTransactions || []).forEach(tx => {
-      if (!stockBalance[tx.stockItemName]) {
-        stockBalance[tx.stockItemName] = { weight: 0, totalValue: 0 };
-      }
-      
-      const item = stockBalance[tx.stockItemName];
-      const currentAvgPrice = item.weight > 0 ? item.totalValue / item.weight : 0;
-      
-      if (tx.type === 'purchase') {
-        // Add purchased stock
-        item.weight += tx.weight;
-        item.totalValue += tx.weight * tx.pricePerKg;
-      } else {
-        // Subtract sold stock
-        item.weight -= tx.weight;
-        // Subtract value using average cost method
-        item.totalValue -= tx.weight * currentAvgPrice;
-      }
-    });
-    
-    // Calculate totals and create current stock items array
-    const totalCurrentWeight = Object.values(stockBalance).reduce((acc, item) => acc + Math.max(0, item.weight), 0);
-    const totalCurrentValue = Object.values(stockBalance).reduce((acc, item) => acc + Math.max(0, item.totalValue), 0);
-    
-    // Create array of current stock items (only items with positive weight)
-    const currentItems = Object.entries(stockBalance)
-      .filter(([_, item]) => item.weight > 0)
-      .map(([name, item]) => ({
-        name,
+    const items = (stockItems || []).map(item => ({
+        name: item.name,
         weight: item.weight,
-        avgPrice: item.weight > 0 ? item.totalValue / item.weight : 0,
-        totalValue: item.totalValue
-      }));
+        avgPrice: item.purchasePricePerKg,
+        totalValue: item.weight * item.purchasePricePerKg
+    }));
+    
+    const totalWeight = items.reduce((acc, item) => acc + item.weight, 0);
+    const totalValue = items.reduce((acc, item) => acc + item.totalValue, 0);
     
     return {
-      currentStockWeight: totalCurrentWeight,
-      currentStockValue: totalCurrentValue,
-      currentStockItems: currentItems
+        currentStockWeight: totalWeight,
+        currentStockValue: totalValue,
+        currentStockItems: items.filter(item => item.weight > 0)
     };
-  }, [stockItems, stockTransactions]);
+}, [stockItems]);
   
   const { totalPurchaseWeight, totalSaleWeight, totalPurchaseValue, totalSaleValue } = useMemo(() => {
     return filteredByMonth.reduce((acc, tx) => {
