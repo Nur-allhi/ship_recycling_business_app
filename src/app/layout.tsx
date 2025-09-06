@@ -3,36 +3,7 @@
 
 import './globals.css';
 import { Toaster } from 'sonner';
-import { AppProvider, useAppContext } from '@/app/context/app-context';
-import LogoutOverlayWrapper from '@/components/logout-overlay-wrapper';
-import { cn } from '@/lib/utils';
-import { AppLoading } from '@/components/app-loading';
-
-function LayoutContent({ children }: { children: React.ReactNode }) {
-    const { fontSize, isLoading, isInitialLoadComplete } = useAppContext();
-
-    const fontClasses = {
-        sm: 'text-sm',
-        base: 'text-base',
-        lg: 'text-xl',
-    };
-
-    if (isLoading || !isInitialLoadComplete) {
-        return (
-            <div className={cn('antialiased', fontClasses[fontSize] || 'text-base')}>
-                <AppLoading />
-            </div>
-        )
-    }
-    
-    return (
-        <div className={cn('antialiased', fontClasses[fontSize] || 'text-base')}>
-            {children}
-            <LogoutOverlayWrapper />
-            <Toaster richColors />
-        </div>
-    );
-}
+import { AppProvider } from '@/app/context/app-context';
 
 export default function RootLayout({
   children,
@@ -53,7 +24,8 @@ export default function RootLayout({
       </head>
       <body>
         <AppProvider>
-            <LayoutContent>{children}</LayoutContent>
+          {children}
+          <Toaster richColors />
         </AppProvider>
       </body>
     </html>
