@@ -520,19 +520,29 @@ export function useAppActions() {
         return performAdminAction(async () => {
             const tempId = `temp_loan_${Date.now()}`;
             const tempFinancialId = `temp_loan_fin_${Date.now()}`;
-            const newLoan: Loan = { ...loan, id: tempId, status: 'active', created_at: new Date().toISOString(), payments: [] };
+            
+            const loanDataForDb = { ...loan };
+            if (newContact) {
+                // When creating a new contact, we use a placeholder ID for the local DB
+                // but send the name/type to the server to create the real one.
+                const tempContactId = `temp_contact_${Date.now()}`;
+                await db.contacts.add({ id: tempContactId, name: newContact.name, type: newContact.type, createdAt: new Date().toISOString() });
+                loanDataForDb.contact_id = tempContactId;
+            }
+
+            const newLoan: Loan = { ...loanDataForDb, id: tempId, status: 'active', created_at: new Date().toISOString(), payments: [] };
             
             await db.loans.add(newLoan);
 
             const financialTxData = {
                 id: tempFinancialId,
                 date: loan.issue_date,
-                description: `Loan ${loan.type === 'payable' ? 'received from' : 'given to'} contact ID ${loan.contact_id}`,
+                description: `Loan ${loan.type === 'payable' ? 'received from' : 'given to'} contact ID ${loanDataForDb.contact_id}`,
                 category: loan.type === 'payable' ? 'Loan In' : 'Loan Out',
                 expected_amount: loan.principal_amount,
                 actual_amount: loan.principal_amount,
                 difference: 0,
-                contact_id: loan.contact_id,
+                contact_id: loanDataForDb.contact_id,
                 linkedLoanId: tempId, // Link financial tx to loan
                 createdAt: new Date().toISOString(),
             };
@@ -543,18 +553,19 @@ export function useAppActions() {
                 await db.bank_transactions.add({ ...financialTxData, type: loan.type === 'payable' ? 'deposit' : 'withdrawal', bank_id: disbursement.bank_id! });
             }
 
-            const payload: any = { 
-                loanData: loan, 
-                disbursement, 
-                localId: tempId, 
-                localFinancialId: tempFinancialId 
-            };
-            
+            const payloadData = { ...loan };
             if (newContact) {
-                payload.newContactName = newContact.name;
-                payload.newContactType = newContact.type;
+                payloadData.contact_id = 'new'; // Signal to server to create a new contact
             }
 
+            const payload: any = { 
+                loanData: payloadData, 
+                disbursement, 
+                localId: tempId, 
+                localFinancialId: tempFinancialId,
+                ...(newContact && { newContactName: newContact.name, newContactType: newContact.type })
+            };
+            
             queueOrSync({ action: 'addLoan', payload });
             return newLoan;
         });
