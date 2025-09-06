@@ -109,7 +109,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                     wastagePercentage: 0, showStockValue: false, lastSync: null
                 });
                 
-                const [categoriesData, contactsData, banksData, cashTxs, bankTxs, stockTxs, ledgerData, ledgerPaymentsData, snapshotsData, initialStockData, loansData, loanPaymentsData] = await Promise.all([
+                const [categoriesRes, contactsData, banksData, cashTxs, bankTxs, stockTxs, ledgerData, ledgerPaymentsData, snapshotsData, initialStockData, loansData, loanPaymentsData] = await Promise.all([
                     server.readData({ tableName: 'categories', select: '*' }),
                     server.readData({ tableName: 'contacts', select: '*' }),
                     server.readData({ tableName: 'banks', select: '*' }),
@@ -123,6 +123,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                     server.readData({ tableName: 'loans', select: '*' }),
                     server.readData({ tableName: 'loan_payments', select: '*' }),
                 ]);
+
+                const categoriesData = (Array.isArray(categoriesRes) ? categoriesRes : []) as Category[];
                 
                 const ledgerTxsWithPayments = (ledgerData || []).map((tx: any) => ({
                     ...tx,
@@ -164,12 +166,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 ];
 
                 for (const cat of essentialCategories) {
-                    const categories = Array.isArray(categoriesData) ? (categoriesData as unknown as Category[]) : [];
-                    const exists = categories.some((c) => c.name === cat.name && c.type === cat.type);
+                    const exists = categoriesData.some((c) => c.name === cat.name && c.type === cat.type);
                     if (!exists) {
                         const newCat = await server.appendData({ tableName: 'categories', data: cat, select: '*' });
-                        if (newCat && Array.isArray(categoriesData)) {
-                            ((categoriesData as unknown) as Category[]).push((newCat as unknown) as Category);
+                        if (newCat) {
+                            categoriesData.push(newCat as Category);
                         }
                     }
                 }
@@ -355,3 +356,5 @@ export function useAppContext() {
     }
     return context;
 }
+
+    
