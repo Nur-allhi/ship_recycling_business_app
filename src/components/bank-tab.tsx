@@ -66,27 +66,31 @@ export function BankTab() {
   const isAdmin = user?.role === 'admin';
 
   const fetchSnapshot = useCallback(async () => {
-    if (!isOnline) {
-        const localSnapshot = await db.monthly_snapshots.where('snapshot_date').equals(toYYYYMMDD(startOfMonth(currentMonth))).first();
-        setMonthlySnapshot(localSnapshot || null);
-        setIsSnapshotLoading(false);
-        return;
-    }
-    
     setIsSnapshotLoading(true);
-    try {
-        const snapshot = await server.getOrCreateSnapshot(currentMonth.toISOString());
-        setMonthlySnapshot(snapshot);
-        if (snapshot) {
-            await db.monthly_snapshots.put(snapshot);
+    const localSnapshot = await db.monthly_snapshots.where('snapshot_date').equals(toYYYYMMDD(startOfMonth(currentMonth))).first();
+    
+    if (localSnapshot) {
+        setMonthlySnapshot(localSnapshot);
+    } else {
+        // If no local snapshot, try to fetch from server ONLY IF online.
+        if (isOnline && user?.role === 'admin') {
+            try {
+                const serverSnapshot = await server.getOrCreateSnapshot(currentMonth.toISOString());
+                setMonthlySnapshot(serverSnapshot);
+                if (serverSnapshot) {
+                    await db.monthly_snapshots.put(serverSnapshot);
+                }
+            } catch(e) {
+                handleApiError(e);
+                setMonthlySnapshot(null);
+            }
+        } else {
+            // Offline or not admin, so we can't create a snapshot.
+            setMonthlySnapshot(null);
         }
-    } catch(e) {
-        handleApiError(e);
-        setMonthlySnapshot(null);
-    } finally {
-        setIsSnapshotLoading(false);
     }
-  }, [currentMonth, handleApiError, isOnline]);
+    setIsSnapshotLoading(false);
+  }, [currentMonth, handleApiError, isOnline, user?.role]);
 
   useEffect(() => {
     fetchSnapshot();
@@ -605,3 +609,5 @@ export function BankTab() {
     </>
   )
 }
+
+    
