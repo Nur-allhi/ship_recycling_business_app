@@ -20,6 +20,7 @@ import { InitialBalanceDialog } from '@/components/initial-balance-dialog';
 import Logo from '@/components/logo';
 import { AppLoading } from '@/components/app-loading';
 import { FloatingActionButton } from '@/components/floating-action-button';
+import { AnimatePresence, motion } from 'framer-motion';
 
 const fontClasses = {
   sm: 'text-sm',
@@ -55,6 +56,29 @@ function ShipShapeLedger() {
   
   if (!user) {
     return <AppLoading message="Please wait..." />;
+  }
+  
+  const renderTabContent = () => {
+    return (
+        <AnimatePresence mode="wait">
+            <motion.div
+                key={activeTab}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.2 }}
+                className="mt-6"
+            >
+                {activeTab === 'dashboard' && <DashboardTab setActiveTab={setActiveTab} />}
+                {activeTab === 'cash' && <CashTab />}
+                {activeTab === 'bank' && <BankTab />}
+                {activeTab === 'credit' && <CreditTab />}
+                {activeTab === 'stock' && <StockTab />}
+                {activeTab === 'loans' && <LoansTab />}
+                {activeTab === 'settings' && <SettingsTab />}
+            </motion.div>
+        </AnimatePresence>
+    )
   }
 
   return (
@@ -144,27 +168,7 @@ function ShipShapeLedger() {
                     </TabsList>
                 </div>
              )}
-            <TabsContent forceMount value="dashboard" className="mt-6 animate-slide-in-up">
-                <DashboardTab setActiveTab={setActiveTab} />
-            </TabsContent>
-             <TabsContent forceMount value="cash" className="mt-6 animate-slide-in-up">
-                <CashTab />
-            </TabsContent>
-            <TabsContent forceMount value="bank" className="mt-6 animate-slide-in-up">
-                <BankTab />
-            </TabsContent>
-            <TabsContent forceMount value="credit" className="mt-6 animate-slide-in-up">
-                <CreditTab />
-            </TabsContent>
-            <TabsContent forceMount value="stock" className="mt-6 animate-slide-in-up">
-                <StockTab />
-            </TabsContent>
-             <TabsContent forceMount value="loans" className="mt-6 animate-slide-in-up">
-                <LoansTab />
-            </TabsContent>
-            <TabsContent forceMount value="settings" className="mt-6 animate-slide-in-up">
-                <SettingsTab />
-            </TabsContent>
+             {renderTabContent()}
           </Tabs>
         </main>
         {isAdmin && <FloatingActionButton />}
