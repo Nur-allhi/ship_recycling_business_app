@@ -58,6 +58,7 @@ export function useDataSyncer() {
                     deleteAllData: server.deleteAllData,
                     emptyRecycleBin: server.emptyRecycleBin,
                     addLoan: server.addLoan,
+                    recordLoanPayment: server.recordLoanPayment,
                 };
 
                 const actionFn = actionMap[item.action];
@@ -118,6 +119,13 @@ export function useDataSyncer() {
                                 await db.table(finTable).where({ id: localFinancialId }).modify({ id: result.financialTx.id, linkedLoanId: result.loan.id });
                             }
                             break;
+                        case 'recordLoanPayment':
+                            if (result && item.payload.localPaymentId && item.payload.localFinancialId) {
+                                await db.loan_payments.where({ id: item.payload.localPaymentId }).modify({ id: result.savedPayment.id });
+                                const finTable = result.financialTx.bank_id ? 'bank_transactions' : 'cash_transactions';
+                                await db.table(finTable).where({ id: item.payload.localFinancialId }).modify({ id: result.financialTx.id });
+                            }
+                            break;
                     }
                 }
 
@@ -157,3 +165,5 @@ export function useDataSyncer() {
         queueOrSync,
     };
 }
+
+    

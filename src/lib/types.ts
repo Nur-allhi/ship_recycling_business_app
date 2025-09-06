@@ -94,7 +94,7 @@ export interface LedgerTransaction {
   paid_amount: number;
   status: 'unpaid' | 'partially paid' | 'paid';
   contact_id: string;
-  contact_name: string;
+  contact_name?: string;
   deletedAt?: string;
   installments: PaymentInstallment[];
 }
@@ -138,6 +138,7 @@ export interface Loan {
   due_date?: string;
   status: 'active' | 'paid' | 'defaulted';
   created_at: string;
+  payments: LoanPayment[]; // Include payments for easier access in UI
 }
 
 export interface LoanPayment {
@@ -152,12 +153,3 @@ export interface LoanPayment {
     
 
     
-
-
-
-    
-
-
-
-
-

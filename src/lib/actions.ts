@@ -6,7 +6,7 @@ import { cookies } from 'next/headers';
 import { z } from 'zod';
 import { getSession } from '@/app/auth/actions';
 import { startOfMonth, subMonths, endOfMonth } from 'date-fns';
-import type { MonthlySnapshot, Loan } from '@/lib/types';
+import type { MonthlySnapshot, Loan, LoanPayment } from '@/lib/types';
 
 // This is the privileged client for server-side operations.
 const createAdminSupabaseClient = () => {
@@ -404,7 +404,7 @@ async function applyPaymentToLedger(supabase: any, contactId: string, paymentAmo
 
 
 const RecordPaymentAgainstTotalInputSchema = z.object({
-    contact_id: z.string(), contact_name: z.string(), payment_amount: z.number(), payment_date: z.string(),
+    contact_id: z.string(), payment_amount: z.number(), payment_date: z.string(),
     payment_method: z.enum(['cash', 'bank']), ledger_type: z.enum(['payable', 'receivable']),
     bank_id: z.string().optional(), description: z.string(),
 });
@@ -434,7 +434,7 @@ export async function recordPaymentAgainstTotal(input: z.infer<typeof RecordPaym
         }
         
         await applyPaymentToLedger(supabase, input.contact_id, input.payment_amount, input.payment_date, input.payment_method);
-        await logActivity(`Recorded payment of ${input.payment_amount} ${input.ledger_type === 'payable' ? 'to' : 'from'} ${input.contact_name} via ${input.payment_method}`);
+        await logActivity(`Recorded payment of ${input.payment_amount} ${input.ledger_type === 'payable' ? 'to' : 'from'} contact ID ${input.contact_id} via ${input.payment_method}`);
         return { success: true, financialTxId };
     } catch (error: any) {
         return handleApiError(error);
@@ -445,7 +445,7 @@ export async function recordPaymentAgainstTotal(input: z.infer<typeof RecordPaym
 const RecordDirectPaymentInputSchema = z.object({
   payment_method: z.enum(['cash', 'bank']), bank_id: z.string().optional(), date: z.string(),
   amount: z.number(), category: z.enum(['A/R Settlement', 'A/P Settlement']), description: z.string(),
-  contact_id: z.string(), contact_name: z.string(),
+  contact_id: z.string(),
 });
 
 export async function recordDirectPayment(input: z.infer<typeof RecordDirectPaymentInputSchema>) {
@@ -454,7 +454,7 @@ export async function recordDirectPayment(input: z.infer<typeof RecordDirectPaym
         if (!session || session.role !== 'admin') throw new Error("Only admins can record payments.");
         const supabase = createAdminSupabaseClient();
         await applyPaymentToLedger(supabase, input.contact_id, input.amount, input.date, input.payment_method);
-        await logActivity(`Recorded ${input.category} of ${input.amount} for ${input.contact_name}`);
+        await logActivity(`Recorded ${input.category} of ${input.amount} for contact ${input.contact_id}`);
         return { success: true };
     } catch (error: any) {
         return handleApiError(error);
@@ -826,4 +826,69 @@ export async function addLoan(input: z.infer<typeof AddLoanSchema>) {
         return handleApiError(error);
     }
 }
+
+const RecordLoanPaymentSchema = z.object({
+    loan_id: z.string(),
+    amount: z.number().positive(),
+    payment_date: z.string(),
+    payment_method: z.enum(['cash', 'bank']),
+    bank_id: z.string().optional(),
+    notes: z.string().optional(),
+});
+
+export async function recordLoanPayment(input: z.infer<typeof RecordLoanPaymentSchema>) {
+    try {
+        const session = await getSession();
+        if (!session || session.role !== 'admin') throw new Error("Only admins can record loan payments.");
+
+        const supabase = createAdminSupabaseClient();
+        const { loan_id, amount, payment_date, payment_method, bank_id, notes } = input;
+
+        const { data: loan, error: loanError } = await supabase.from('loans').select('*, loan_payments(amount)').eq('id', loan_id).single();
+        if (loanError || !loan) throw new Error("Loan not found.");
+
+        const financialTxData = {
+            date: payment_date,
+            description: `Payment for loan from ${loan.contact_id}`,
+            category: 'Loan Payment',
+            expected_amount: amount,
+            actual_amount: amount,
+            difference: 0,
+            contact_id: loan.contact_id,
+            linkedLoanId: loan.id,
+        };
+
+        let savedFinancialTx;
+        if (payment_method === 'cash') {
+            const { data, error } = await supabase.from('cash_transactions').insert({ ...financialTxData, type: loan.type === 'payable' ? 'expense' : 'income' }).select().single();
+            if(error) throw error;
+            savedFinancialTx = data;
+        } else {
+            const { data, error } = await supabase.from('bank_transactions').insert({ ...financialTxData, type: loan.type === 'payable' ? 'withdrawal' : 'deposit', bank_id: bank_id! }).select().single();
+             if(error) throw error;
+            savedFinancialTx = data;
+        }
+
+        const { data: savedPayment, error: paymentError } = await supabase.from('loan_payments').insert({
+            loan_id,
+            payment_date,
+            amount,
+            notes,
+            linked_transaction_id: savedFinancialTx.id
+        }).select().single();
+        if (paymentError) throw paymentError;
+
+        const totalPaid = loan.loan_payments.reduce((sum, p) => sum + p.amount, 0) + savedPayment.amount;
+        if (totalPaid >= loan.principal_amount) {
+            await supabase.from('loans').update({ status: 'paid' }).eq('id', loan_id);
+        }
+        
+        await logActivity(`Recorded payment of ${amount} for loan ${loan_id}`);
+        return { savedPayment, financialTx: savedFinancialTx };
+    } catch(error) {
+        return handleApiError(error);
+    }
+}
+    
+
     

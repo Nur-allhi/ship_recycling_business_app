@@ -129,6 +129,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                     installments: (installmentsData || []).filter((ins: any) => ins.ap_ar_transaction_id === tx.id)
                 }));
                 
+                 const loansWithPayments = (loansData || []).map((loan: any) => ({
+                    ...loan,
+                    payments: (loanPaymentsData || []).filter((p: any) => p.loan_id === loan.id)
+                }));
+                
                 const essentialCategories = [
                     { name: 'A/R Settlement', type: 'cash', direction: 'credit', is_deletable: false },
                     { name: 'A/P Settlement', type: 'cash', direction: 'debit', is_deletable: false },
@@ -150,6 +155,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                     { name: 'Loan Out', type: 'cash', direction: 'debit', is_deletable: false },
                     { name: 'Loan In', type: 'bank', direction: 'credit', is_deletable: false },
                     { name: 'Loan Out', type: 'bank', direction: 'debit', is_deletable: false },
+                    { name: 'Loan Payment', type: 'cash', direction: null, is_deletable: false },
+                    { name: 'Loan Payment', type: 'bank', direction: null, is_deletable: false },
                 ];
 
                 for (const cat of essentialCategories) {
@@ -170,7 +177,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                     await bulkPut('stock_transactions', stockTxs); await bulkPut('ap_ar_transactions', ledgerTxsWithInstallments);
                     await bulkPut('payment_installments', installmentsData);
                     await bulkPut('monthly_snapshots', snapshotsData); await bulkPut('initial_stock', initialStockData);
-                    await bulkPut('loans', loansData); await bulkPut('loan_payments', loanPaymentsData);
+                    await bulkPut('loans', loansWithPayments); await bulkPut('loan_payments', loanPaymentsData);
                     await db.app_state.update(1, { lastSync: new Date().toISOString() });
                 });
             }
@@ -344,3 +351,5 @@ export function useAppContext() {
     }
     return context;
 }
+
+    

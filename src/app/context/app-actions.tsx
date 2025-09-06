@@ -14,7 +14,6 @@ import { getSession } from '../auth/actions';
 // Helper to format date as YYYY-MM-DD string, preserving the local date
 const toYYYYMMDD = (date: Date) => {
     const d = new Date(date);
-    // Adjust for timezone offset to prevent the date from changing
     d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
     return d.toISOString().split('T')[0];
 };
@@ -485,11 +484,11 @@ export function useAppActions() {
         });
     };
     
-    const addLoan = async (loan: Omit<Loan, 'id' | 'status' | 'created_at'>, disbursement: { method: 'cash' | 'bank', bank_id?: string }) => {
+    const addLoan = async (loan: Omit<Loan, 'id' | 'status' | 'created_at' | 'payments'>, disbursement: { method: 'cash' | 'bank', bank_id?: string }) => {
         return performAdminAction(async () => {
             const tempId = `temp_loan_${Date.now()}`;
             const tempFinancialId = `temp_loan_fin_${Date.now()}`;
-            const newLoan: Loan = { ...loan, id: tempId, status: 'active', created_at: new Date().toISOString() };
+            const newLoan: Loan = { ...loan, id: tempId, status: 'active', created_at: new Date().toISOString(), payments: [] };
             
             await db.loans.add(newLoan);
 
@@ -516,6 +515,60 @@ export function useAppActions() {
 
             queueOrSync({ action: 'addLoan', payload: { loanData: loan, disbursement, localId: tempId, localFinancialId: tempFinancialId } });
             return newLoan;
+        });
+    };
+
+    const recordLoanPayment = async (payload: { loan_id: string, amount: number, payment_date: string, payment_method: 'cash' | 'bank', bank_id?: string, notes?: string }) => {
+        return performAdminAction(async () => {
+            const { loan_id, amount, payment_date, payment_method, bank_id, notes } = payload;
+            
+            const loan = await db.loans.get(loan_id);
+            if (!loan) throw new Error("Loan not found locally.");
+            
+            const tempPaymentId = `temp_loan_payment_${Date.now()}`;
+            const tempFinancialId = `temp_loan_fin_${Date.now()}`;
+            
+            const newPayment: LoanPayment = {
+                id: tempPaymentId,
+                loan_id: loan_id,
+                payment_date: payment_date,
+                amount: amount,
+                notes: notes,
+                created_at: new Date().toISOString(),
+                linked_transaction_id: tempFinancialId,
+            };
+            await db.loan_payments.add(newPayment);
+
+            const financialTxData = {
+                id: tempFinancialId,
+                date: payment_date,
+                description: `Payment for loan ${loan_id}`,
+                category: 'Loan Payment',
+                expected_amount: amount,
+                actual_amount: amount,
+                difference: 0,
+                contact_id: loan.contact_id,
+                linkedLoanId: loan_id,
+                createdAt: new Date().toISOString(),
+            };
+
+            if (payment_method === 'cash') {
+                await db.cash_transactions.add({ ...financialTxData, type: loan.type === 'payable' ? 'expense' : 'income' });
+            } else {
+                await db.bank_transactions.add({ ...financialTxData, type: loan.type === 'payable' ? 'withdrawal' : 'deposit', bank_id: bank_id! });
+            }
+            
+            // Optimistically update loan status
+            const payments = await db.loan_payments.where({ loan_id }).toArray();
+            const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
+            if (totalPaid >= loan.principal_amount) {
+                await db.loans.update(loan_id, { status: 'paid' });
+            }
+            
+            await updateBalances();
+            
+            queueOrSync({ action: 'recordLoanPayment', payload: { ...payload, localPaymentId: tempPaymentId, localFinancialId: tempFinancialId } });
+            toast.success("Loan payment recorded locally.");
         });
     };
 
@@ -554,5 +607,8 @@ export function useAppActions() {
         handleImport,
         handleDeleteAllData,
         addLoan,
+        recordLoanPayment,
     };
 }
+
+    
