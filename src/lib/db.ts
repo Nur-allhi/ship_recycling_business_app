@@ -1,6 +1,6 @@
 
 import Dexie, { type EntityTable } from 'dexie';
-import type { CashTransaction, BankTransaction, StockTransaction, StockItem, Category, Contact, LedgerTransaction, LedgerPayment, Bank, MonthlySnapshot, User, Loan, LoanPayment } from '@/lib/types';
+import type { CashTransaction, BankTransaction, StockTransaction, StockItem, Category, Contact, LedgerTransaction, LedgerPayment, Bank, MonthlySnapshot, User, Loan, LoanPayment, ActivityLog } from '@/lib/types';
 
 interface AppState {
     id: number; // Singleton, always 1
@@ -34,6 +34,7 @@ export class AppDatabase extends Dexie {
     monthly_snapshots!: EntityTable<MonthlySnapshot, 'id'>;
     loans!: EntityTable<Loan, 'id'>;
     loan_payments!: EntityTable<LoanPayment, 'id'>;
+    activity_log!: EntityTable<ActivityLog, 'id'>;
     sync_queue!: EntityTable<SyncQueueItem, 'id'>;
 
     constructor() {
@@ -54,7 +55,8 @@ export class AppDatabase extends Dexie {
             monthly_snapshots: '++id, snapshot_date',
             loans: '++id, contact_id, type, status',
             loan_payments: '++id, loan_id, payment_date',
-            sync_queue: '++id, timestamp', // Correctly defining the index without changing primary key
+            activity_log: '++id, created_at',
+            sync_queue: '++id, timestamp',
         });
     }
 }

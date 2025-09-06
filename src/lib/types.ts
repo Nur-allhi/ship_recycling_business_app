@@ -99,7 +99,7 @@ export interface LedgerTransaction {
 }
     
 export interface ActivityLog {
-    id: string;
+    id: number;
     created_at: string;
     user_id: string;
     username: string;
