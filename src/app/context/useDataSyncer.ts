@@ -104,7 +104,6 @@ export function useDataSyncer() {
     const queueOrSync = useCallback(async (item: Omit<SyncQueueItem, 'timestamp' | 'id'>) => {
         const id = await db.sync_queue.add({ ...item, timestamp: Date.now() } as SyncQueueItem);
         if (isOnline) {
-            // No longer passing ID here to avoid complexity. The processQueue will pick it up.
             processSyncQueue();
         } else {
             toast.info("You are offline. Change saved locally and will sync later.");
