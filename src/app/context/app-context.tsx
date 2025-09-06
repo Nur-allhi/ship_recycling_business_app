@@ -47,16 +47,11 @@ interface AppData {
   ledgerTransactions: LedgerTransaction[];
   loans: Loan[];
   loanPayments: LoanPayment[];
-  deletedCashTransactions: CashTransaction[];
-  deletedBankTransactions: BankTransaction[];
-  deletedStockTransactions: StockTransaction[];
-  deletedLedgerTransactions: LedgerTransaction[];
   cashCategories: Category[];
   bankCategories: Category[];
   contacts: Contact[];
   banks: Bank[];
   loadedMonths: Record<string, boolean>;
-  isBinLoading: boolean; // New dedicated loading state
 }
 
 interface AppContextType extends AppData {
@@ -68,9 +63,7 @@ interface AppContextType extends AppData {
   processSyncQueue: (specificItemId?: number) => Promise<void>;
   openInitialBalanceDialog: () => void;
   closeInitialBalanceDialog: () => void;
-  loadRecycleBinData: () => Promise<void>;
   setLoadedMonths: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
-  setDeletedItems: React.Dispatch<React.SetStateAction<{ cash: any[]; bank: any[]; stock: any[]; ap_ar: any[]; }>>;
   setUser: (user: User | null) => void;
 }
 
@@ -90,8 +83,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const { isSyncing, syncQueueCount, processSyncQueue } = useDataSyncer();
     const { cashBalance, bankBalance, stockItems: calculatedStockItems, totalPayables, totalReceivables, updateBalances } = useBalanceCalculator();
     
-    const [deletedItems, setDeletedItems] = useState<{ cash: any[], bank: any[], stock: any[], ap_ar: any[] }>({ cash: [], bank: [], stock: [], ap_ar: [] });
-    const [isBinLoading, setIsBinLoading] = useState(true);
     const [loadedMonths, setLoadedMonths] = useState<Record<string, boolean>>({});
     const [isInitialBalanceDialogOpen, setIsInitialBalanceDialogOpen] = useState(false);
     
@@ -254,27 +245,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }, [user, isLoading, pathname, router, isInitialLoadComplete]);
 
 
-    const loadRecycleBinData = useCallback(async () => {
-        if (!isOnline) {
-             toast.error("Cannot load recycle bin data while offline.");
-             return;
-        }
-        setIsBinLoading(true);
-        try {
-            const [cash, bank, stock, ap_ar] = await Promise.all([
-                server.readDeletedData({ tableName: 'cash_transactions', select: '*' }),
-                server.readDeletedData({ tableName: 'bank_transactions', select: '*' }),
-                server.readDeletedData({ tableName: 'stock_transactions', select: '*' }),
-                server.readDeletedData({ tableName: 'ap_ar_transactions', select: '*' }),
-            ]);
-            setDeletedItems({ cash: cash || [], bank: bank || [], stock: stock || [], ap_ar: ap_ar || [] });
-        } catch (error) {
-            handleApiError(error);
-        } finally {
-            setIsBinLoading(false);
-        }
-    }, [handleApiError, isOnline]);
-
     const openInitialBalanceDialog = () => setIsInitialBalanceDialogOpen(true);
     const closeInitialBalanceDialog = () => setIsInitialBalanceDialogOpen(false);
 
@@ -298,28 +268,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         // State
         cashBalance, bankBalance, stockItems: calculatedStockItems, totalPayables, totalReceivables,
         isLoading, isOnline, user, isInitialLoadComplete, isLoggingOut, isAuthenticating,
-        isSyncing, syncQueueCount, isInitialBalanceDialogOpen, isBinLoading,
+        isSyncing, syncQueueCount, isInitialBalanceDialogOpen,
         // Live Data
         ...liveData,
-        // Deleted Items
-        deletedCashTransactions: deletedItems.cash,
-        deletedBankTransactions: deletedItems.bank,
-        deletedStockTransactions: deletedItems.stock,
-        deletedLedgerTransactions: deletedItems.ap_ar,
         // Misc
         loadedMonths,
         // Setters & Functions
         setLoadedMonths,
-        setDeletedItems,
         login, logout, reloadData, updateBalances, handleApiError,
         processSyncQueue, openInitialBalanceDialog, closeInitialBalanceDialog,
-        loadRecycleBinData, setUser,
+        setUser,
     }), [
         cashBalance, bankBalance, calculatedStockItems, totalPayables, totalReceivables,
         isLoading, isOnline, user, isInitialLoadComplete, isLoggingOut, isAuthenticating,
-        isSyncing, syncQueueCount, isInitialBalanceDialogOpen, isBinLoading, liveData, deletedItems,
+        isSyncing, syncQueueCount, isInitialBalanceDialogOpen, liveData,
         loadedMonths, login, logout, reloadData, updateBalances, handleApiError,
-        processSyncQueue, loadRecycleBinData, setUser
+        processSyncQueue, setUser
     ]);
 
     return (

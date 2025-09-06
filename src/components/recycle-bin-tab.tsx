@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
@@ -14,32 +13,45 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { ResponsiveSelect } from "./ui/responsive-select";
 import { DeleteConfirmationDialog } from "./delete-confirmation-dialog";
 import { toast } from "sonner";
+import * as server from "@/lib/actions";
+import type { CashTransaction, BankTransaction, StockTransaction, LedgerTransaction } from "@/lib/types";
 
 
 export function RecycleBinTab() {
-    const { 
-        deletedCashTransactions, 
-        deletedBankTransactions, 
-        deletedStockTransactions,
-        deletedLedgerTransactions,
-        currency,
-        user,
-        loadRecycleBinData,
-        isBinLoading, // Use the new loading state
-    } = useAppContext();
-    const { 
-        restoreTransaction,
-        emptyRecycleBin,
-    } = useAppActions();
+    const { currency, user } = useAppContext();
+    const { restoreTransaction, emptyRecycleBin } = useAppActions();
+
+    const [deletedItems, setDeletedItems] = useState<{ cash: CashTransaction[], bank: BankTransaction[], stock: StockTransaction[], ap_ar: LedgerTransaction[] }>({ cash: [], bank: [], stock: [], ap_ar: [] });
+    const [isLoading, setIsLoading] = useState(true);
     const [activeTab, setActiveTab] = useState('cash');
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
     const isMobile = useIsMobile();
 
     const fetchData = useCallback(async () => {
-        if (user) {
-            await loadRecycleBinData();
+        if (!user || user.role !== 'admin') {
+            setIsLoading(false);
+            return;
         }
-    }, [loadRecycleBinData, user]);
+        setIsLoading(true);
+        try {
+            const [cash, bank, stock, ap_ar] = await Promise.all([
+                server.readDeletedData({ tableName: 'cash_transactions', select: '*' }),
+                server.readDeletedData({ tableName: 'bank_transactions', select: '*' }),
+                server.readDeletedData({ tableName: 'stock_transactions', select: '*' }),
+                server.readDeletedData({ tableName: 'ap_ar_transactions', select: '*' }),
+            ]);
+            setDeletedItems({
+                cash: (cash as CashTransaction[]) || [],
+                bank: (bank as BankTransaction[]) || [],
+                stock: (stock as StockTransaction[]) || [],
+                ap_ar: (ap_ar as LedgerTransaction[]) || []
+            });
+        } catch (error: any) {
+            toast.error("Failed to load recycle bin", { description: error.message });
+        } finally {
+            setIsLoading(false);
+        }
+    }, [user]);
 
     useEffect(() => {
         fetchData();
@@ -52,27 +64,39 @@ export function RecycleBinTab() {
         return new Intl.NumberFormat('en-US', { style: 'currency', currency: currency, currencyDisplay: 'symbol' }).format(amount)
     }
 
-    const handleEmptyRecycleBin = () => {
+    const handleEmptyRecycleBin = async () => {
         try {
-            emptyRecycleBin();
+            await emptyRecycleBin();
             setIsDeleteDialogOpen(false);
+            // After emptying, refresh the data to show an empty bin
+            fetchData();
         } catch (error) {
             toast.error("Failed to empty recycle bin.");
         }
     }
+    
+    const handleRestore = async (txType: 'cash' | 'bank' | 'stock' | 'ap_ar', id: string) => {
+        try {
+            await restoreTransaction(txType, id);
+            // Refresh data after restoring
+            fetchData();
+        } catch(e) {
+            // Error is already handled by restoreTransaction
+        }
+    }
 
     const hasDeletedItems = [
-        ...deletedCashTransactions, 
-        ...deletedBankTransactions, 
-        ...deletedStockTransactions, 
-        ...deletedLedgerTransactions
+        ...deletedItems.cash, 
+        ...deletedItems.bank, 
+        ...deletedItems.stock, 
+        ...deletedItems.ap_ar
     ].length > 0;
     
     const tabItems = [
-        { value: 'cash', label: `Cash (${deletedCashTransactions.length})` },
-        { value: 'bank', label: `Bank (${deletedBankTransactions.length})` },
-        { value: 'stock', label: `Stock (${deletedStockTransactions.length})` },
-        { value: 'ap_ar', label: `A/R & A/P (${deletedLedgerTransactions.length})` },
+        { value: 'cash', label: `Cash (${deletedItems.cash.length})` },
+        { value: 'bank', label: `Bank (${deletedItems.bank.length})` },
+        { value: 'stock', label: `Stock (${deletedItems.stock.length})` },
+        { value: 'ap_ar', label: `A/R & A/P (${deletedItems.ap_ar.length})` },
     ];
 
     if(user?.role !== 'admin') {
@@ -98,7 +122,7 @@ export function RecycleBinTab() {
                     </TableRow>
                 </TableHeader>
                 <TableBody>
-                    {isBinLoading ? (
+                    {isLoading ? (
                         <TableRow><TableCell colSpan={columns.length + 1} className="text-center h-24"><Loader2 className="mx-auto h-6 w-6 animate-spin" /></TableCell></TableRow>
                     ) : items.length > 0 ? items.map(item => (
                         <TableRow key={item.id}>
@@ -106,7 +130,7 @@ export function RecycleBinTab() {
                                 <TableCell key={col.key}>{col.render ? col.render(item) : item[col.key]}</TableCell>
                             ))}
                             <TableCell className="text-right">
-                                <Button variant="ghost" size="icon" onClick={() => restoreTransaction(txType, item.id)}>
+                                <Button variant="ghost" size="icon" onClick={() => handleRestore(txType, item.id)}>
                                     <Undo2 className="h-4 w-4"/>
                                 </Button>
                             </TableCell>
@@ -130,8 +154,8 @@ export function RecycleBinTab() {
                             </CardDescription>
                         </div>
                         <div className="flex items-center gap-2">
-                             <Button variant="ghost" size="icon" onClick={fetchData} disabled={isBinLoading}>
-                                {isBinLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                             <Button variant="ghost" size="icon" onClick={fetchData} disabled={isLoading}>
+                                {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
                             </Button>
                              {hasDeletedItems && (
                                 <Button variant="destructive" size="sm" onClick={() => setIsDeleteDialogOpen(true)}>
@@ -160,21 +184,21 @@ export function RecycleBinTab() {
                             </TabsList>
                         )}
                         <TabsContent value="cash" className="mt-4">
-                            {renderTable(deletedCashTransactions, [
+                            {renderTable(deletedItems.cash, [
                                 { key: 'deletedAt', header: 'Deleted On', render: (tx) => tx.deletedAt ? format(new Date(tx.deletedAt), "dd-MM-yyyy") : 'N/A' },
                                 { key: 'description', header: 'Description' },
                                 { key: 'actual_amount', header: 'Amount', render: (tx) => <span className={tx.type === 'income' ? 'text-accent' : 'text-destructive'}>{formatCurrency(tx.actual_amount)}</span> },
                             ], 'cash')}
                         </TabsContent>
                         <TabsContent value="bank" className="mt-4">
-                             {renderTable(deletedBankTransactions, [
+                             {renderTable(deletedItems.bank, [
                                 { key: 'deletedAt', header: 'Deleted On', render: (tx) => tx.deletedAt ? format(new Date(tx.deletedAt), "dd-MM-yyyy") : 'N/A' },
                                 { key: 'description', header: 'Description' },
                                 { key: 'actual_amount', header: 'Amount', render: (tx) => <span className={tx.type === 'deposit' ? 'text-accent' : 'text-destructive'}>{formatCurrency(tx.actual_amount)}</span> },
                             ], 'bank')}
                         </TabsContent>
                         <TabsContent value="stock" className="mt-4">
-                            {renderTable(deletedStockTransactions, [
+                            {renderTable(deletedItems.stock, [
                                 { key: 'deletedAt', header: 'Deleted On', render: (tx) => tx.deletedAt ? format(new Date(tx.deletedAt), "dd-MM-yyyy") : 'N/A' },
                                 { key: 'stockItemName', header: 'Item' },
                                 { key: 'weight', header: 'Weight', render: (tx) => `${tx.weight} kg` },
@@ -182,7 +206,7 @@ export function RecycleBinTab() {
                             ], 'stock')}
                         </TabsContent>
                         <TabsContent value="ap_ar" className="mt-4">
-                           {renderTable(deletedLedgerTransactions, [
+                           {renderTable(deletedItems.ap_ar, [
                                 { key: 'deletedAt', header: 'Deleted On', render: (tx) => tx.deletedAt ? format(new Date(tx.deletedAt), "dd-MM-yyyy") : 'N/A' },
                                 { key: 'description', header: 'Description' },
                                 { key: 'amount', header: 'Amount', render: (tx) => formatCurrency(tx.amount) },
@@ -195,7 +219,7 @@ export function RecycleBinTab() {
                 isOpen={isDeleteDialogOpen}
                 setIsOpen={setIsDeleteDialogOpen}
                 onConfirm={handleEmptyRecycleBin}
-                itemCount={deletedCashTransactions.length + deletedBankTransactions.length + deletedStockTransactions.length + deletedLedgerTransactions.length}
+                itemCount={deletedItems.cash.length + deletedItems.bank.length + deletedItems.stock.length + deletedItems.ap_ar.length}
                 isPermanent={true}
             />
         </>
