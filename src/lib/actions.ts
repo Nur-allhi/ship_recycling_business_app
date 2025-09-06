@@ -117,7 +117,7 @@ export async function readDeletedData(input: z.infer<typeof ReadDataInputSchema>
             if (error.code === '42P01') return [];
             throw new Error(error.message);
         }
-        return data;
+        return data as any[];
     } catch (error) {
         return handleApiError(error);
     }
@@ -296,7 +296,7 @@ export async function batchImportData(dataToImport: z.infer<typeof ImportDataSch
         if (!session || session.role !== 'admin') throw new Error("Only admins can import data.");
 
         const supabase = createAdminSupabaseClient();
-        const tables = ['ledger_payments', 'ap_ar_transactions', 'cash_transactions', 'bank_transactions', 'stock_transactions', 'initial_stock', 'categories', 'contacts', 'banks', 'monthly_snapshots', 'loans', 'loan_payments'];
+        const tables = ['loan_payments', 'ledger_payments', 'cash_transactions', 'bank_transactions', 'stock_transactions', 'ap_ar_transactions', 'loans', 'contacts', 'initial_stock', 'categories', 'banks', 'monthly_snapshots', 'activity_log'];
 
         for (const table of tables) {
              const { error: deleteError } = await supabase.from(table).delete().gt('created_at', '1970-01-01');
@@ -913,3 +913,5 @@ export async function recordLoanPayment(input: z.infer<typeof RecordLoanPaymentS
         return handleApiError(error);
     }
 }
+
+    

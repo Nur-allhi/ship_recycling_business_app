@@ -120,27 +120,30 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const liveData = useLiveDBData();
 
     const seedEssentialCategories = async (existingCategories: Category[]): Promise<Category[]> => {
-        const finalCategories = [...existingCategories];
-        let wasModified = false;
-    
-        for (const cat of essentialCategories) {
-            const exists = finalCategories.some(c => c.name === cat.name && c.type === cat.type);
-            if (!exists) {
-                try {
-                    console.log(`Seeding category: ${cat.name}`);
-                    const newCat = await server.appendData({ tableName: 'categories', data: cat, select: '*' });
-                    if (newCat) {
-                        finalCategories.push(newCat);
-                        wasModified = true;
-                    }
-                } catch(e) {
-                    console.error("Could not create essential category:", cat.name, e);
-                }
-            }
+        const categoriesToCreate = essentialCategories.filter(essentialCat => 
+            !existingCategories.some(existingCat => 
+                existingCat.name === essentialCat.name && existingCat.type === essentialCat.type
+            )
+        );
+
+        if (categoriesToCreate.length === 0) {
+            return existingCategories;
         }
-    
-        // No need for wasModified check, just return the final list.
-        return finalCategories;
+
+        console.log(`Seeding ${categoriesToCreate.length} essential categories...`);
+
+        const creationPromises = categoriesToCreate.map(cat => 
+            server.appendData({ tableName: 'categories', data: cat, select: '*' })
+        );
+        
+        try {
+            const newCategories = await Promise.all(creationPromises);
+            return [...existingCategories, ...newCategories.filter(Boolean)];
+        } catch(e) {
+            console.error("Could not create one or more essential categories:", e);
+            // Return what we have, better than nothing.
+            return existingCategories;
+        }
     };
 
     const reloadData = useCallback(async (options?: { force?: boolean, needsInitialBalance?: boolean }) => {
@@ -179,7 +182,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 ]);
                 
                 // This is the critical fix: Ensure categories are created and combined correctly.
-                const finalCategories = await seedEssentialCategories(categoriesRes);
+                const finalCategories = await seedEssentialCategories(categoriesRes || []);
 
                 const ledgerTxsWithPayments = (ledgerData || []).map((tx: any) => ({
                     ...tx,
@@ -373,3 +376,5 @@ export function useAppContext() {
     }
     return context;
 }
+
+    
