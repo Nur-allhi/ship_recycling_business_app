@@ -58,30 +58,31 @@ export function CashTab() {
   const isAdmin = user?.role === 'admin';
 
   const fetchSnapshot = useCallback(async () => {
-    // Only fetch from server if online
-    if (!isOnline) {
-        // Attempt to load from local DB if it exists, otherwise just stop loading
-        const localSnapshot = await db.monthly_snapshots.where('snapshot_date').equals(toYYYYMMDD(startOfMonth(currentMonth))).first();
-        setMonthlySnapshot(localSnapshot || null);
-        setIsSnapshotLoading(false);
-        return;
-    }
-
     setIsSnapshotLoading(true);
-    try {
-        const snapshot = await server.getOrCreateSnapshot(currentMonth.toISOString());
-        setMonthlySnapshot(snapshot);
-        // Also save the fetched snapshot to local DB for offline access
-        if (snapshot) {
-            await db.monthly_snapshots.put(snapshot);
+    const localSnapshot = await db.monthly_snapshots.where('snapshot_date').equals(toYYYYMMDD(startOfMonth(currentMonth))).first();
+    
+    if (localSnapshot) {
+        setMonthlySnapshot(localSnapshot);
+    } else {
+        // If no local snapshot, try to fetch from server ONLY IF online and an admin.
+        if (isOnline && user?.role === 'admin') {
+            try {
+                const serverSnapshot = await server.getOrCreateSnapshot(currentMonth.toISOString());
+                setMonthlySnapshot(serverSnapshot);
+                if (serverSnapshot) {
+                    await db.monthly_snapshots.put(serverSnapshot);
+                }
+            } catch(e) {
+                handleApiError(e);
+                setMonthlySnapshot(null); // Fallback to null on error
+            }
+        } else {
+            // Offline or not an admin, so we can't create a snapshot. Fallback to local calculation.
+            setMonthlySnapshot(null);
         }
-    } catch(e) {
-        handleApiError(e);
-        setMonthlySnapshot(null);
-    } finally {
-        setIsSnapshotLoading(false);
     }
-  }, [currentMonth, handleApiError, isOnline]);
+    setIsSnapshotLoading(false);
+  }, [currentMonth, handleApiError, isOnline, user?.role]);
 
   useEffect(() => {
     fetchSnapshot();
@@ -557,3 +558,5 @@ export function CashTab() {
     </>
   )
 }
+
+    
