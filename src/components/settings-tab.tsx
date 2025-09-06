@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useRef, useState, useMemo, ReactNode, useEffect, useCallback } from "react"
@@ -10,7 +11,7 @@ import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { Badge } from "@/components/ui/badge"
-import { Plus, Trash2, Users, Settings, Palette, FileCog, Recycle, Lock, Loader2, ArrowUpCircle, ArrowDownCircle, RefreshCw } from "lucide-react"
+import { Plus, Trash2, Users, Settings, Palette, FileCog, Recycle, Loader2, ArrowUpCircle, ArrowDownCircle, RefreshCw, Contact2, History } from "lucide-react"
 import { toast } from "sonner"
 import { ResponsiveSelect } from "@/components/ui/responsive-select"
 import { RecycleBinTab } from "./recycle-bin-tab"
@@ -139,6 +140,7 @@ function GeneralSettings() {
       setBanks(prev => prev.filter(b => b.id !== tempId));
     } finally {
       setIsAddingBank(false);
+      fetchData(); // Refetch data
     }
   }
 
@@ -165,6 +167,7 @@ function GeneralSettings() {
         setCategories(prev => prev.filter(c => c.id !== tempId));
     } finally {
         setIsAddingCategory(false);
+        fetchData(); // Refetch data
     }
   }
 
@@ -333,9 +336,9 @@ export function SettingsTab() {
   const navItems: {id: SettingsPage, label: string, icon: React.ElementType, adminOnly: boolean, component: ReactNode}[] = [
     { id: 'appearance', label: 'Appearance', icon: Palette, adminOnly: false, component: <AppearanceSettings /> },
     { id: 'general', label: 'General', icon: Settings, adminOnly: true, component: <GeneralSettings /> },
-    { id: 'contacts', label: 'Contacts', icon: Contact, adminOnly: false, component: <ContactsTab /> },
+    { id: 'contacts', label: 'Contacts', icon: Contact2, adminOnly: false, component: <ContactsTab /> },
     { id: 'users', label: 'Users', icon: Users, adminOnly: true, component: <UserManagementTab /> },
-    { id: 'activity_log', label: 'Activity Log', icon: Activity, adminOnly: true, component: <ActivityLogTab /> },
+    { id: 'activity_log', label: 'Activity Log', icon: History, adminOnly: true, component: <ActivityLogTab /> },
     { id: 'recycle_bin', label: 'Recycle Bin', icon: Recycle, adminOnly: true, component: <RecycleBinTab /> },
     { id: 'export_import', label: 'Export/Import', icon: FileCog, adminOnly: false, component: <ExportImportTab /> },
   ]
