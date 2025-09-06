@@ -17,18 +17,20 @@ function LayoutContent({ children }: { children: React.ReactNode }) {
         lg: 'text-xl',
     };
 
-    return (
-        <body className={cn('antialiased', fontClasses[fontSize] || 'text-base')}>
-            {(isLoading || !isInitialLoadComplete) ? (
+    if (isLoading || !isInitialLoadComplete) {
+        return (
+            <div className={cn('antialiased', fontClasses[fontSize] || 'text-base')}>
                 <AppLoading />
-            ) : (
-                <>
-                    {children}
-                    <LogoutOverlayWrapper />
-                    <Toaster richColors />
-                </>
-            )}
-        </body>
+            </div>
+        )
+    }
+    
+    return (
+        <div className={cn('antialiased', fontClasses[fontSize] || 'text-base')}>
+            {children}
+            <LogoutOverlayWrapper />
+            <Toaster richColors />
+        </div>
     );
 }
 
@@ -49,9 +51,11 @@ export default function RootLayout({
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link href="https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@400;700&family=Roboto+Mono:wght@400;700&display=swap" rel="stylesheet" />
       </head>
-      <AppProvider>
-        <LayoutContent>{children}</LayoutContent>
-      </AppProvider>
+      <body>
+        <AppProvider>
+            <LayoutContent>{children}</LayoutContent>
+        </AppProvider>
+      </body>
     </html>
   );
 }
