@@ -1,14 +1,11 @@
 
 "use client";
 
-import React, { useState, useMemo } from 'react';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from './ui/card';
+import React from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
-import { useAppContext } from '@/app/context/app-context';
-import { useIsMobile } from '@/hooks/use-mobile';
 import { PayablesList } from './payables-list';
 import { ReceivablesList } from './receivables-list';
-import { ResponsiveSelect } from './ui/responsive-select';
+import { useAppContext } from '@/app/context/app-context';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '@/lib/db';
 
@@ -16,7 +13,7 @@ export function CreditTab() {
     const { currency } = useAppContext();
     const ledgerTransactions = useLiveQuery(() => db.ap_ar_transactions.toArray());
 
-    const { totalPayables, totalReceivables } = useMemo(() => {
+    const { totalPayables, totalReceivables } = React.useMemo(() => {
         if (!ledgerTransactions) return { totalPayables: 0, totalReceivables: 0 };
         const payables = ledgerTransactions.filter(tx => tx.type === 'payable').reduce((acc, tx) => acc + (tx.amount - tx.paid_amount), 0);
         const receivables = ledgerTransactions.filter(tx => tx.type === 'receivable').reduce((acc, tx) => acc + (tx.amount - tx.paid_amount), 0);
@@ -24,10 +21,7 @@ export function CreditTab() {
         const advancesReceivable = ledgerTransactions.filter(tx => tx.type === 'advance' && tx.amount > 0).reduce((acc, tx) => acc + tx.amount, 0);
         return { totalPayables: payables - advancesPayable, totalReceivables: receivables - advancesReceivable };
     }, [ledgerTransactions]);
-    
-    const [mobileView, setMobileView] = useState<'payables' | 'receivables'>('payables');
-    const isMobile = useIsMobile();
-    
+
     const formatCurrency = (amount: number): string => {
         if (amount < 0) {
             return `-${formatCurrency(Math.abs(amount))}`;
@@ -63,32 +57,19 @@ export function CreditTab() {
             <ReceivablesList />
         </div>
     );
-    
-    if (isMobile) {
-        return (
-            <div className="space-y-4">
-                <ResponsiveSelect 
-                    value={mobileView}
-                    onValueChange={(value) => setMobileView(value as any)}
-                    title="Select View"
-                    items={[
-                        { value: 'payables', label: `Payables (${formatCurrency(totalPayables)})` },
-                        { value: 'receivables', label: `Receivables (${formatCurrency(totalReceivables)})` },
-                    ]}
-                />
-                {mobileView === 'payables' ? payablesContent : receivablesContent}
-            </div>
-        )
-    }
 
     return (
-       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="space-y-6">
+       <Tabs defaultValue="payables" className="w-full">
+            <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="payables">Accounts Payable</TabsTrigger>
+                <TabsTrigger value="receivables">Accounts Receivable</TabsTrigger>
+            </TabsList>
+            <TabsContent value="payables" className="mt-4">
                 {payablesContent}
-            </div>
-            <div className="space-y-6">
+            </TabsContent>
+            <TabsContent value="receivables" className="mt-4">
                 {receivablesContent}
-            </div>
-       </div>
+            </TabsContent>
+       </Tabs>
     )
 }
