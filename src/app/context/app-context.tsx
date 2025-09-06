@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useMemo } from 'react';
@@ -40,9 +41,6 @@ interface AppData {
   cashCategories: Category[];
   bankCategories: Category[];
   contacts: Contact[];
-  loans: Loan[];
-  loanPayments: LoanPayment[];
-  stockItems: StockItem[];
   blockingOperation: BlockingOperation;
 }
 
@@ -107,13 +105,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     
     const [isInitialBalanceDialogOpen, setIsInitialBalanceDialogOpen] = useState(false);
     
+    // Low-frequency data that is safe to keep in context
     const appState = useLiveQuery(() => db.app_state.get(1), []);
     const banks = useLiveQuery(() => db.banks.toArray(), []);
     const allCategories = useLiveQuery(() => db.categories.toArray(), []);
     const contacts = useLiveQuery(() => db.contacts.toArray(), []);
-    const loans = useLiveQuery(() => db.loans.toArray(), []);
-    const loanPayments = useLiveQuery(() => db.loan_payments.toArray(), []);
-    const stockItems = useLiveQuery(() => db.initial_stock.toArray(), []);
 
     const { cashCategories, bankCategories } = useMemo(() => {
         const dbCash: Category[] = [];
@@ -184,23 +180,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
                 const [contactsData, banksData, cashTxs, bankTxs, stockTxs, ledgerData, ledgerPaymentsData, snapshotsData, initialStockData, loansData, loanPaymentsData] = otherData;
 
-                const ledgerTxsWithPayments = (ledgerData || []).map((tx: any) => ({
-                    ...tx,
-                    installments: (ledgerPaymentsData || []).filter((ins: any) => ins.ap_ar_transaction_id === tx.id)
-                }));
-                 const loansWithPayments = (loansData || []).map((loan: any) => ({
-                    ...loan,
-                    payments: (loanPaymentsData || []).filter((p: any) => p.loan_id === loan.id)
-                }));
-                
                 await db.transaction('rw', db.tables, async () => {
                     await bulkPut('categories', categoriesData); await bulkPut('contacts', contactsData);
                     await bulkPut('banks', banksData);
                     await bulkPut('cash_transactions', cashTxs); await bulkPut('bank_transactions', bankTxs);
-                    await bulkPut('stock_transactions', stockTxs); await bulkPut('ap_ar_transactions', ledgerTxsWithPayments);
+                    await bulkPut('stock_transactions', stockTxs); await bulkPut('ap_ar_transactions', ledgerData);
                     await bulkPut('ledger_payments', ledgerPaymentsData);
                     await bulkPut('monthly_snapshots', snapshotsData); await bulkPut('initial_stock', initialStockData);
-                    await bulkPut('loans', loansWithPayments); await bulkPut('loan_payments', loanPaymentsData);
+                    await bulkPut('loans', loansData); await bulkPut('loan_payments', loanPaymentsData);
                     await db.app_state.update(1, { lastSync: new Date().toISOString() });
                 });
             }
@@ -287,7 +274,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         // State
         isLoading, isOnline, user, isInitialLoadComplete, isLoggingOut, isAuthenticating,
         isSyncing, syncQueueCount, isInitialBalanceDialogOpen, blockingOperation,
-        // Live Data
+        // Live Data (Low-frequency)
         fontSize: appState?.fontSize ?? 'base',
         currency: appState?.currency ?? 'BDT',
         showStockValue: appState?.showStockValue ?? false,
@@ -295,9 +282,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         cashCategories: cashCategories || [],
         bankCategories: bankCategories || [],
         contacts: contacts || [],
-        loans: loans || [],
-        loanPayments: loanPayments || [],
-        stockItems: stockItems || [],
         // Functions
         login, logout, reloadData, handleApiError,
         processSyncQueue, openInitialBalanceDialog, closeInitialBalanceDialog,
@@ -305,10 +289,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }), [
         isLoading, isOnline, user, isInitialLoadComplete, isLoggingOut, isAuthenticating,
         isSyncing, syncQueueCount, isInitialBalanceDialogOpen, blockingOperation,
-        appState, banks, cashCategories, bankCategories,
+        appState, banks, cashCategories, bankCategories, contacts,
         login, logout, reloadData, handleApiError,
         processSyncQueue, setUser, queueOrSync,
-        contacts, loans, loanPayments, stockItems
     ]);
 
     return (

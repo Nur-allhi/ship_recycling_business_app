@@ -1,8 +1,8 @@
+
 "use client";
 import { useCallback } from 'react';
 import { toast } from 'sonner';
 import { db } from '@/lib/db';
-import type { User } from '@/lib/db';
 import { useDataSyncer } from './useDataSyncer';
 import { useSessionManager } from './useSessionManager';
 import type { CashTransaction, BankTransaction, StockTransaction, Contact, LedgerTransaction, LedgerPayment, StockItem, Loan, LoanPayment } from '@/lib/types';
