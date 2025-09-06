@@ -76,7 +76,7 @@ export interface Contact {
 }
 
 
-export interface PaymentInstallment {
+export interface LedgerPayment {
   id: string;
   ap_ar_transaction_id: string;
   amount: number;
@@ -96,7 +96,7 @@ export interface LedgerTransaction {
   contact_id: string;
   contact_name?: string;
   deletedAt?: string;
-  installments: PaymentInstallment[];
+  installments: LedgerPayment[];
 }
     
 export interface ActivityLog {

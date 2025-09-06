@@ -272,7 +272,7 @@ export async function exportAllData() {
         if (!session) throw new Error("SESSION_EXPIRED");
         
         const supabase = createAdminSupabaseClient();
-        const tables = ['banks', 'cash_transactions', 'bank_transactions', 'stock_transactions', 'initial_stock', 'categories', 'contacts', 'ap_ar_transactions', 'payment_installments', 'loans', 'loan_payments'];
+        const tables = ['banks', 'cash_transactions', 'bank_transactions', 'stock_transactions', 'initial_stock', 'categories', 'contacts', 'ap_ar_transactions', 'ledger_payments', 'loans', 'loan_payments'];
         const exportedData: Record<string, any[]> = {};
         
         for (const tableName of tables) {
@@ -296,14 +296,14 @@ export async function batchImportData(dataToImport: z.infer<typeof ImportDataSch
         if (!session || session.role !== 'admin') throw new Error("Only admins can import data.");
 
         const supabase = createAdminSupabaseClient();
-        const tables = ['payment_installments', 'ap_ar_transactions', 'cash_transactions', 'bank_transactions', 'stock_transactions', 'initial_stock', 'categories', 'contacts', 'banks', 'monthly_snapshots', 'loans', 'loan_payments'];
+        const tables = ['ledger_payments', 'ap_ar_transactions', 'cash_transactions', 'bank_transactions', 'stock_transactions', 'initial_stock', 'categories', 'contacts', 'banks', 'monthly_snapshots', 'loans', 'loan_payments'];
 
         for (const table of tables) {
              const { error: deleteError } = await supabase.from(table).delete().gt('created_at', '1970-01-01');
              if (deleteError && deleteError.code !== '42P01') throw new Error(`Failed to clear ${table}: ${deleteError.message}`);
         }
 
-        const importOrder = ['banks', 'categories', 'contacts', 'initial_stock', 'cash_transactions', 'bank_transactions', 'stock_transactions', 'ap_ar_transactions', 'payment_installments', 'monthly_snapshots', 'loans', 'loan_payments'];
+        const importOrder = ['banks', 'categories', 'contacts', 'initial_stock', 'cash_transactions', 'bank_transactions', 'stock_transactions', 'ap_ar_transactions', 'ledger_payments', 'monthly_snapshots', 'loans', 'loan_payments'];
 
         for (const tableName of importOrder) {
             const records = dataToImport[tableName];
@@ -326,11 +326,9 @@ export async function deleteAllData() {
 
         const supabase = createAdminSupabaseClient();
         
-        // Correct order for deletion to respect foreign key constraints.
-        // Tables with foreign keys must be cleared before the tables they reference.
         const tablesToDelete = [
             'loan_payments',
-            'payment_installments',
+            'ledger_payments',
             'cash_transactions', 
             'bank_transactions', 
             'stock_transactions', 
@@ -342,7 +340,7 @@ export async function deleteAllData() {
             'banks', 
             'activity_log', 
             'monthly_snapshots',
-            'sync_queue', // Added to ensure sync queue is cleared on server if it exists
+            'sync_queue',
         ];
 
         for (const tableName of tablesToDelete) {
@@ -357,7 +355,6 @@ export async function deleteAllData() {
         if(userError) throw userError;
 
         for(const user of users.users) {
-            // Do not delete the current admin user who is performing the action.
             if (user.id !== session.id) {
                  await supabase.auth.admin.deleteUser(user.id);
             }
@@ -412,7 +409,7 @@ async function applyPaymentToLedger(supabase: any, contactId: string, paymentAmo
                 .eq('id', tx.id);
             if (updateError) throw updateError;
             
-            const { error: installmentError } = await supabase.from('payment_installments').insert({
+            const { error: installmentError } = await supabase.from('ledger_payments').insert({
                 ap_ar_transaction_id: tx.id,
                 amount: paymentForThisTx,
                 date: paymentDate,

@@ -85,7 +85,7 @@ CREATE TABLE ap_ar_transactions (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE TABLE payment_installments (
+CREATE TABLE ledger_payments (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     ap_ar_transaction_id UUID NOT NULL REFERENCES ap_ar_transactions(id) ON DELETE CASCADE,
@@ -154,7 +154,7 @@ ALTER TABLE cash_transactions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE bank_transactions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE stock_transactions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE ap_ar_transactions ENABLE ROW LEVEL SECURITY;
-ALTER TABLE payment_installments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE ledger_payments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE vendors ENABLE ROW LEVEL SECURITY;
 ALTER TABLE clients ENABLE ROW LEVEL SECURITY;
 ALTER TABLE banks ENABLE ROW LEVEL SECURITY;
@@ -167,7 +167,7 @@ CREATE POLICY "Allow all for authenticated users" ON cash_transactions FOR ALL U
 CREATE POLICY "Allow all for authenticated users" ON bank_transactions FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow all for authenticated users" ON stock_transactions FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow all for authenticated users" ON ap_ar_transactions FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Allow all for authenticated users" ON payment_installments FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all for authenticated users" ON ledger_payments FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow all for authenticated users" ON vendors FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow all for authenticated users" ON clients FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow all for authenticated users" ON banks FOR ALL USING (true) WITH CHECK (true);
@@ -190,5 +190,4 @@ BEGIN
     DELETE FROM ap_ar_transactions WHERE "deletedAt" IS NOT NULL;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
-
 ```

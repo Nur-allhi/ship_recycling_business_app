@@ -7,7 +7,7 @@ import type { SyncQueueItem, User } from '@/lib/db';
 import { useDataSyncer } from './useDataSyncer';
 import { useBalanceCalculator } from './useBalanceCalculator';
 import { useSessionManager } from './useSessionManager';
-import type { CashTransaction, BankTransaction, StockTransaction, Contact, LedgerTransaction, PaymentInstallment, StockItem, Loan, LoanPayment } from '@/lib/types';
+import type { CashTransaction, BankTransaction, StockTransaction, Contact, LedgerTransaction, LedgerPayment, StockItem, Loan, LoanPayment } from '@/lib/types';
 import * as server from '@/lib/actions'; 
 import { getSession } from '../auth/actions';
 
@@ -344,7 +344,7 @@ export function useAppActions() {
                 
                 await db.ap_ar_transactions.update(tx.id, { paid_amount: newPaidAmount, status: newStatus });
                 
-                const installment: PaymentInstallment = {
+                const installment: LedgerPayment = {
                     id: `temp_inst_${Date.now()}`,
                     ap_ar_transaction_id: tx.id,
                     amount: paymentForThisTx,
@@ -352,7 +352,7 @@ export function useAppActions() {
                     payment_method: paymentMethod,
                     createdAt: new Date().toISOString(),
                 };
-                await db.payment_installments.add(installment);
+                await db.ledger_payments.add(installment);
                 
                 amountToSettle -= paymentForThisTx;
             }
@@ -478,9 +478,8 @@ export function useAppActions() {
     };
 
     const handleDeleteAllData = () => {
-        return performAdminAction(() => {
+        performAdminAction(() => {
             queueOrSync({ action: 'deleteAllData', payload: {} });
-            // The logout process will show the toast messages
             logout();
         });
     };

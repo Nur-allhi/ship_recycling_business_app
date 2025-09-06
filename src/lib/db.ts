@@ -1,6 +1,6 @@
 
 import Dexie, { type EntityTable } from 'dexie';
-import type { CashTransaction, BankTransaction, StockTransaction, StockItem, Category, Contact, LedgerTransaction, PaymentInstallment, Bank, MonthlySnapshot, User, Loan, LoanPayment } from '@/lib/types';
+import type { CashTransaction, BankTransaction, StockTransaction, StockItem, Category, Contact, LedgerTransaction, LedgerPayment, Bank, MonthlySnapshot, User, Loan, LoanPayment } from '@/lib/types';
 
 interface AppState {
     id: number; // Singleton, always 1
@@ -14,7 +14,7 @@ interface AppState {
 
 export interface SyncQueueItem {
     id?: number;
-    action: 'appendData' | 'updateData' | 'deleteData' | 'restoreData' | 'recordPaymentAgainstTotal' | 'recordDirectPayment' | 'transferFunds' | 'setInitialBalances' | 'deleteCategory' | 'addStockTransaction' | 'addInitialStockItem' | 'batchImportData' | 'deleteAllData' | 'updateStockTransaction' | 'recordAdvancePayment' | 'deleteContact' | 'emptyRecycleBin' | 'addLoan' | 'addLoanPayment';
+    action: 'appendData' | 'updateData' | 'deleteData' | 'restoreData' | 'recordPaymentAgainstTotal' | 'recordDirectPayment' | 'transferFunds' | 'setInitialBalances' | 'deleteCategory' | 'addStockTransaction' | 'addInitialStockItem' | 'batchImportData' | 'deleteAllData' | 'updateStockTransaction' | 'recordAdvancePayment' | 'deleteContact' | 'emptyRecycleBin' | 'addLoan' | 'recordLoanPayment';
     payload: any;
     timestamp: number;
 }
@@ -26,7 +26,7 @@ export class AppDatabase extends Dexie {
     bank_transactions!: EntityTable<BankTransaction, 'id'>;
     stock_transactions!: EntityTable<StockTransaction, 'id'>;
     ap_ar_transactions!: EntityTable<LedgerTransaction, 'id'>;
-    payment_installments!: EntityTable<PaymentInstallment, 'id'>;
+    ledger_payments!: EntityTable<LedgerPayment, 'id'>;
     
     banks!: EntityTable<Bank, 'id'>;
     categories!: EntityTable<Category, 'id'>;
@@ -39,13 +39,13 @@ export class AppDatabase extends Dexie {
 
     constructor() {
         super('ShipShapeLedgerDB');
-        this.version(11).stores({
+        this.version(12).stores({
             app_state: 'id',
             cash_transactions: '++id, date, category, linkedStockTxId, linkedLoanId, advance_id, contact_id',
             bank_transactions: '++id, date, bank_id, category, linkedStockTxId, linkedLoanId, advance_id, contact_id',
             stock_transactions: '++id, date, stockItemName, type, contact_id',
             ap_ar_transactions: '++id, date, type, contact_id, status',
-            payment_installments: '++id, ap_ar_transaction_id, date',
+            ledger_payments: '++id, ap_ar_transaction_id, date',
 
             banks: '++id, name',
             categories: '++id, type, name',
@@ -55,6 +55,11 @@ export class AppDatabase extends Dexie {
             loans: '++id, contact_id, type, status',
             loan_payments: '++id, loan_id, payment_date',
             sync_queue: '++id, timestamp, payload.localId',
+        });
+
+        // Drop old table in version 12
+        this.version(11).stores({
+             payment_installments: null
         });
     }
 }

@@ -1,3 +1,4 @@
+
 # New Database Schema (Version 2.0)
 
 This file documents the new, refactored SQL structure for the application. It includes a unified `contacts` table, a dedicated module for `loans`, and a `monthly_snapshots` table for performance optimization.
@@ -80,6 +81,20 @@ CREATE POLICY "Allow all for authenticated users" ON loan_payments FOR ALL USING
 CREATE POLICY "Authenticated users can view snapshots" ON monthly_snapshots FOR SELECT TO authenticated USING (true);
 CREATE POLICY "Admins can manage snapshots" ON monthly_snapshots FOR ALL TO authenticated USING (get_user_role(auth.uid()) = 'admin') WITH CHECK (get_user_role(auth.uid()) = 'admin');
 
+-- New table for payments against A/P and A/R ledger items
+CREATE TABLE ledger_payments (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    ap_ar_transaction_id UUID NOT NULL REFERENCES ap_ar_transactions(id) ON DELETE CASCADE,
+    amount NUMERIC NOT NULL,
+    date TIMESTAMPTZ NOT NULL,
+    payment_method TEXT NOT NULL CHECK (payment_method IN ('cash', 'bank'))
+);
+
+-- Secure the new table
+ALTER TABLE ledger_payments ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Allow all for authenticated users" ON ledger_payments FOR ALL USING (true) WITH CHECK (true);
+
 ```
 
 ---
@@ -133,6 +148,10 @@ BEGIN
       UPDATE bank_transactions SET contact_id = bank_transactions.contact_id;
    END IF;
 END $$;
+
+-- Step 4: Rename the old payment_installments table to ledger_payments
+ALTER TABLE payment_installments RENAME TO ledger_payments;
+
 ```
 
 ---

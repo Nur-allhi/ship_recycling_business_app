@@ -109,7 +109,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                     wastagePercentage: 0, showStockValue: false, lastSync: null
                 });
                 
-                const [categoriesData, contactsData, banksData, cashTxs, bankTxs, stockTxs, ledgerData, installmentsData, snapshotsData, initialStockData, loansData, loanPaymentsData] = await Promise.all([
+                const [categoriesData, contactsData, banksData, cashTxs, bankTxs, stockTxs, ledgerData, ledgerPaymentsData, snapshotsData, initialStockData, loansData, loanPaymentsData] = await Promise.all([
                     server.readData({ tableName: 'categories', select: '*' }),
                     server.readData({ tableName: 'contacts', select: '*' }),
                     server.readData({ tableName: 'banks', select: '*' }),
@@ -117,16 +117,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                     server.readData({ tableName: 'bank_transactions', select: '*' }),
                     server.readData({ tableName: 'stock_transactions', select: '*' }),
                     server.readData({ tableName: 'ap_ar_transactions', select: '*' }),
-                    server.readData({ tableName: 'payment_installments', select: '*' }),
+                    server.readData({ tableName: 'ledger_payments', select: '*' }),
                     server.readData({ tableName: 'monthly_snapshots', select: '*' }),
                     server.readData({ tableName: 'initial_stock', select: '*' }),
                     server.readData({ tableName: 'loans', select: '*' }),
                     server.readData({ tableName: 'loan_payments', select: '*' }),
                 ]);
                 
-                const ledgerTxsWithInstallments = (ledgerData || []).map((tx: any) => ({
+                const ledgerTxsWithPayments = (ledgerData || []).map((tx: any) => ({
                     ...tx,
-                    installments: (installmentsData || []).filter((ins: any) => ins.ap_ar_transaction_id === tx.id)
+                    installments: (ledgerPaymentsData || []).filter((ins: any) => ins.ap_ar_transaction_id === tx.id)
                 }));
                 
                  const loansWithPayments = (loansData || []).map((loan: any) => ({
@@ -174,8 +174,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                     await bulkPut('categories', categoriesData); await bulkPut('contacts', contactsData);
                     await bulkPut('banks', banksData);
                     await bulkPut('cash_transactions', cashTxs); await bulkPut('bank_transactions', bankTxs);
-                    await bulkPut('stock_transactions', stockTxs); await bulkPut('ap_ar_transactions', ledgerTxsWithInstallments);
-                    await bulkPut('payment_installments', installmentsData);
+                    await bulkPut('stock_transactions', stockTxs); await bulkPut('ap_ar_transactions', ledgerTxsWithPayments);
+                    await bulkPut('ledger_payments', ledgerPaymentsData);
                     await bulkPut('monthly_snapshots', snapshotsData); await bulkPut('initial_stock', initialStockData);
                     await bulkPut('loans', loansWithPayments); await bulkPut('loan_payments', loanPaymentsData);
                     await db.app_state.update(1, { lastSync: new Date().toISOString() });
