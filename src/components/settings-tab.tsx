@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useRef, useState, useMemo, ReactNode, useEffect, useCallback } from "react"
@@ -140,7 +139,6 @@ function GeneralSettings() {
       setBanks(prev => prev.filter(b => b.id !== tempId));
     } finally {
       setIsAddingBank(false);
-      fetchData(); // Refetch data
     }
   }
 
