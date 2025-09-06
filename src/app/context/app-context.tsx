@@ -71,6 +71,7 @@ interface AppContextType extends AppData {
   setLoadedMonths: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
   setUser: (user: User | null) => void;
   setBlockingOperation: (op: BlockingOperation) => void;
+  queueOrSync: (item: import('@/lib/db').SyncQueueItem) => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -117,7 +118,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setIsOnline
     } = useSessionManager();
 
-    const { isSyncing, syncQueueCount, processSyncQueue } = useDataSyncer();
+    const { isSyncing, syncQueueCount, processSyncQueue, queueOrSync } = useDataSyncer();
     const { cashBalance, bankBalance, stockItems: calculatedStockItems, totalPayables, totalReceivables, updateBalances } = useBalanceCalculator();
     
     const [loadedMonths, setLoadedMonths] = useState<Record<string, boolean>>({});
@@ -138,7 +139,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         }
 
         console.log(`Seeding ${categoriesToCreate.length} essential categories...`);
-
+        
         try {
             const creationPromises = categoriesToCreate.map(cat => 
                 server.appendData({ tableName: 'categories', data: cat, select: '*' })
@@ -172,7 +173,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                     wastagePercentage: 0, showStockValue: false, lastSync: null
                 });
                 
-                const [categoriesData, contactsData, banksData, cashTxs, bankTxs, stockTxs, ledgerData, ledgerPaymentsData, snapshotsData, initialStockData, loansData, loanPaymentsData] = await Promise.all([
+                let [categoriesData, contactsData, banksData, cashTxs, bankTxs, stockTxs, ledgerData, ledgerPaymentsData, snapshotsData, initialStockData, loansData, loanPaymentsData] = await Promise.all([
                     server.readData({ tableName: 'categories', select: '*' }),
                     server.readData({ tableName: 'contacts', select: '*' }),
                     server.readData({ tableName: 'banks', select: '*' }),
@@ -187,7 +188,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                     server.readData({ tableName: 'loan_payments', select: '*' }),
                 ]);
                 
-                const finalCategories = await seedEssentialCategories(categoriesData || []);
+                categoriesData = await seedEssentialCategories(categoriesData || []);
 
                 const ledgerTxsWithPayments = (ledgerData || []).map((tx: any) => ({
                     ...tx,
@@ -201,7 +202,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 
 
                 await db.transaction('rw', db.tables, async () => {
-                    await bulkPut('categories', finalCategories); await bulkPut('contacts', contactsData);
+                    await bulkPut('categories', categoriesData); await bulkPut('contacts', contactsData);
                     await bulkPut('banks', banksData);
                     await bulkPut('cash_transactions', cashTxs); await bulkPut('bank_transactions', bankTxs);
                     await bulkPut('stock_transactions', stockTxs); await bulkPut('ap_ar_transactions', ledgerTxsWithPayments);
@@ -314,13 +315,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setLoadedMonths,
         login, logout, reloadData, updateBalances, handleApiError,
         processSyncQueue, openInitialBalanceDialog, closeInitialBalanceDialog,
-        setUser, setBlockingOperation,
+        setUser, setBlockingOperation, queueOrSync,
     }), [
         cashBalance, bankBalance, calculatedStockItems, totalPayables, totalReceivables,
         isLoading, isOnline, user, isInitialLoadComplete, isLoggingOut, isAuthenticating,
         isSyncing, syncQueueCount, isInitialBalanceDialogOpen, liveData,
         loadedMonths, login, logout, reloadData, updateBalances, handleApiError,
-        processSyncQueue, setUser, blockingOperation
+        processSyncQueue, setUser, blockingOperation, queueOrSync
     ]);
 
     return (
@@ -381,3 +382,5 @@ export function useAppContext() {
     }
     return context;
 }
+
+    

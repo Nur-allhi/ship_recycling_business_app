@@ -150,7 +150,7 @@ export function useDataSyncer() {
     }, [isSyncing, handleApiError]);
 
     const queueOrSync = useCallback(async (item: Omit<SyncQueueItem, 'timestamp' | 'id'>) => {
-        const id = await db.sync_queue.add({ ...item, timestamp: Date.now() });
+        const id = await db.sync_queue.add({ ...item, timestamp: Date.now() } as SyncQueueItem);
         if (isOnline) {
             processSyncQueue(id); 
         } else {
@@ -165,5 +165,7 @@ export function useDataSyncer() {
         queueOrSync,
     };
 }
+
+    
 
     

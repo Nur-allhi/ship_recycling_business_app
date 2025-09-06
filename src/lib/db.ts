@@ -47,9 +47,9 @@ export class AppDatabase extends Dexie {
             ap_ar_transactions: '++id, date, type, contact_id, status',
             ledger_payments: '++id, ap_ar_transaction_id, date',
 
-            banks: '++id, name',
-            categories: '++id, type, name',
-            contacts: '++id, name, type',
+            banks: 'id, name',
+            categories: 'id, type, name',
+            contacts: 'id, name, type',
             initial_stock: '++id, name',
             monthly_snapshots: '++id, snapshot_date',
             loans: '++id, contact_id, type, status',
@@ -86,3 +86,5 @@ export async function clearAllData() {
         }
     }));
 }
+
+    
