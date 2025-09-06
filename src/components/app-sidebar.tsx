@@ -1,4 +1,3 @@
-
 "use client";
 
 import {
@@ -7,7 +6,6 @@ import {
   SidebarMenuItem,
   SidebarMenuButton,
   SidebarFooter,
-  SidebarContent,
   useSidebar,
   SidebarGroup,
   SidebarGroupLabel,
@@ -68,7 +66,8 @@ export function AppSidebar({ activeTab, setActiveTab }: AppSidebarProps) {
                     <span className="text-lg font-semibold">Ha-Mim Iron Mart</span>
                 </div>
             </SidebarHeader>
-            <SidebarContent>
+            
+            <div className="flex-grow overflow-y-auto">
                 {navGroups.map((group) => (
                     <SidebarGroup key={group.title}>
                         <SidebarGroupLabel>{group.title}</SidebarGroupLabel>
@@ -88,7 +87,8 @@ export function AppSidebar({ activeTab, setActiveTab }: AppSidebarProps) {
                         </SidebarMenu>
                     </SidebarGroup>
                 ))}
-            </SidebarContent>
+            </div>
+
             <SidebarFooter>
                 <SidebarMenu>
                     <SidebarMenuItem>
