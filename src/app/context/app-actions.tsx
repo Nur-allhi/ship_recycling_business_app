@@ -99,12 +99,15 @@ export function useAppActions() {
                 }
             } else if (tx.paymentMethod === 'credit') {
                 const ledgerTempId = `temp_ledger_${Date.now()}`;
+                const contact = contacts.find(c => c.id === tx.contact_id);
+
                 const ledgerData: LedgerTransaction = {
                     id: ledgerTempId,
                     type: tx.type === 'purchase' ? 'payable' : 'receivable',
                     description: tx.description || `${tx.stockItemName} (${tx.weight}kg)`,
                     amount: tx.actual_amount, date: tx.date, contact_id: tx.contact_id!,
-                    status: 'unpaid', paid_amount: 0, installments: []
+                    status: 'unpaid', paid_amount: 0, installments: [],
+                    contact_name: contact?.name,
                 };
                 await db.ap_ar_transactions.add(ledgerData);
             }
@@ -116,7 +119,7 @@ export function useAppActions() {
         });
     };
 
-    const addLedgerTransaction = async (tx: Omit<LedgerTransaction, 'id' | 'deletedAt' | 'status' | 'paid_amount' | 'installments' | 'contact_name'>) => {
+    const addLedgerTransaction = async (tx: Omit<LedgerTransaction, 'id' | 'deletedAt' | 'status' | 'paid_amount' | 'installments'>) => {
         return performAdminAction(async () => {
             const contact = contacts.find(c => c.id === tx.contact_id);
             if (!contact) {
@@ -405,6 +408,7 @@ export function useAppActions() {
                 paid_amount: 0,
                 status: 'paid',
                 contact_id: contact_id,
+                contact_name: contact.name,
                 installments: []
             };
             await db.ap_ar_transactions.add(advanceLedgerEntry);
@@ -512,7 +516,7 @@ export function useAppActions() {
         }
     };
     
-    const addLoan = async (loan: Omit<Loan, 'id' | 'status' | 'created_at' | 'payments'>, disbursement: { method: 'cash' | 'bank', bank_id?: string }) => {
+    const addLoan = async (loan: Omit<Loan, 'id' | 'status' | 'created_at' | 'payments'>, disbursement: { method: 'cash' | 'bank', bank_id?: string }, newContact?: {name: string, type: 'vendor' | 'client'}) => {
         return performAdminAction(async () => {
             const tempId = `temp_loan_${Date.now()}`;
             const tempFinancialId = `temp_loan_fin_${Date.now()}`;
@@ -539,7 +543,19 @@ export function useAppActions() {
                 await db.bank_transactions.add({ ...financialTxData, type: loan.type === 'payable' ? 'deposit' : 'withdrawal', bank_id: disbursement.bank_id! });
             }
 
-            queueOrSync({ action: 'addLoan', payload: { loanData: loan, disbursement, localId: tempId, localFinancialId: tempFinancialId } });
+            const payload: any = { 
+                loanData: loan, 
+                disbursement, 
+                localId: tempId, 
+                localFinancialId: tempFinancialId 
+            };
+            
+            if (newContact) {
+                payload.newContactName = newContact.name;
+                payload.newContactType = newContact.type;
+            }
+
+            queueOrSync({ action: 'addLoan', payload });
             return newLoan;
         });
     };

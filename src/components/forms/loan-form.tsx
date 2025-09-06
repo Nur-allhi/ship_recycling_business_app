@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useForm, Controller } from 'react-hook-form';
@@ -77,20 +78,14 @@ export function LoanForm({ setDialogOpen }: LoanFormProps) {
   const onSubmit = async (data: FormData) => {
     setIsSubmitting(true);
     try {
-        let finalContactId: string;
+        let finalContactId: string = data.contact_id;
+        let newContactData;
+
         if (data.contact_id === 'new' && data.newContact) {
              const contactType = data.type === 'payable' ? 'vendor' : 'client';
-             toast.info("Creating new contact...");
-             const newContact = await addContact(data.newContact, contactType);
-             if (!newContact) {
-                toast.error("Failed to create new contact.");
-                setIsSubmitting(false);
-                return;
-             }
-             finalContactId = newContact.id;
-             toast.success("Contact created successfully.");
-        } else {
-            finalContactId = data.contact_id;
+             newContactData = { name: data.newContact, type: contactType };
+             // We pass the name and type to the addLoan action, not the temp ID.
+             finalContactId = 'new';
         }
 
         const loanData = {
@@ -108,7 +103,7 @@ export function LoanForm({ setDialogOpen }: LoanFormProps) {
         }
         
         toast.info("Recording loan...");
-        await addLoan(loanData, disbursementData);
+        await addLoan(loanData, disbursementData, newContactData);
         
         toast.success("Loan Recorded Successfully");
         setDialogOpen(false);

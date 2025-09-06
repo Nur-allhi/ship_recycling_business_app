@@ -788,6 +788,8 @@ const AddLoanSchema = z.object({
         method: z.enum(['cash', 'bank']),
         bank_id: z.string().optional(),
     }),
+    newContactName: z.string().optional(),
+    newContactType: z.enum(['vendor', 'client']).optional(),
     localId: z.string(),
     localFinancialId: z.string(),
 });
@@ -800,12 +802,25 @@ export async function addLoan(input: z.infer<typeof AddLoanSchema>) {
 
         // Validate input with the new strict schema
         const parsedInput = AddLoanSchema.parse(input);
-        const { loanData, disbursement } = parsedInput;
+        const { loanData, disbursement, newContactName, newContactType } = parsedInput;
         
         const supabase = createAdminSupabaseClient();
         
+        let finalContactId = loanData.contact_id;
+
+        if (newContactName && newContactType) {
+            const { data: newContact, error: contactError } = await supabase
+                .from('contacts')
+                .insert({ name: newContactName, type: newContactType })
+                .select('id')
+                .single();
+            if (contactError) throw new Error(`Failed to create new contact: ${contactError.message}`);
+            finalContactId = newContact.id;
+        }
+        
         const { data: loan, error: loanError } = await supabase.from('loans').insert({
             ...loanData,
+            contact_id: finalContactId,
             status: 'active',
         }).select().single();
 
