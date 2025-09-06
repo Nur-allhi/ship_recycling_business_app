@@ -52,11 +52,13 @@ interface AppSidebarProps {
 
 export function AppSidebar({ activeTab, setActiveTab }: AppSidebarProps) {
     const { logout } = useAppContext();
-    const { setOpen } = useSidebar();
+    const { setOpen, isMobile } = useSidebar();
 
     const handleItemClick = (tab: string) => {
         setActiveTab(tab);
-        setOpen(false); // Always close on selection
+        if (isMobile) {
+            setOpen(false);
+        }
     }
 
     return (
@@ -64,7 +66,7 @@ export function AppSidebar({ activeTab, setActiveTab }: AppSidebarProps) {
             <SidebarHeader>
                  <div className="flex items-center gap-2">
                     <Logo className="h-8 w-8 text-primary shrink-0" />
-                    <span className="text-lg font-semibold group-data-[state=collapsed]:hidden">Ha-Mim Iron Mart</span>
+                    <span className="text-lg font-semibold transition-opacity duration-200 group-data-[state=collapsed]:opacity-0">Ha-Mim Iron Mart</span>
                 </div>
             </SidebarHeader>
             
