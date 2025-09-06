@@ -16,12 +16,14 @@ interface DashboardTabProps {
 }
 
 export function DashboardTab({ setActiveTab }: DashboardTabProps) {
-  const { currency, isLoading } = useAppContext()
+  const { currency } = useAppContext()
   
-  const cashTransactions = useLiveQuery(() => db.cash_transactions.toArray(), []);
-  const bankTransactions = useLiveQuery(() => db.bank_transactions.toArray(), []);
-  const stockItems = useLiveQuery(() => db.initial_stock.toArray(), []);
-  const stockTransactions = useLiveQuery(() => db.stock_transactions.toArray(), []);
+  const cashTransactions = useLiveQuery(() => db.cash_transactions.toArray());
+  const bankTransactions = useLiveQuery(() => db.bank_transactions.toArray());
+  const stockItems = useLiveQuery(() => db.initial_stock.toArray());
+  const stockTransactions = useLiveQuery(() => db.stock_transactions.toArray());
+
+  const isLoading = !cashTransactions || !bankTransactions || !stockItems || !stockTransactions;
   
   const cashBalance = useMemo(() => 
     (cashTransactions || []).reduce((acc, tx) => acc + (tx.type === 'income' ? tx.actual_amount : -tx.actual_amount), 0), 

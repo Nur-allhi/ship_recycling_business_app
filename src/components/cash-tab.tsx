@@ -42,12 +42,12 @@ type SortKey = keyof CashTransaction | 'debit' | 'credit' | null;
 type SortDirection = 'asc' | 'desc';
 
 export function CashTab() {
-  const { currency, user, banks, isLoading, handleApiError, isOnline, contacts, loans } = useAppContext()
-  const cashTransactions = useLiveQuery(() => db.cash_transactions.toArray(), []);
+  const { currency, user, banks, handleApiError, isOnline, contacts, loans } = useAppContext()
+  const cashTransactions = useLiveQuery(() => db.cash_transactions.toArray());
   const cashBalance = useLiveQuery(() => 
     db.cash_transactions.toArray().then(txs => 
       txs.reduce((acc, tx) => acc + (tx.type === 'income' ? tx.actual_amount : -tx.actual_amount), 0)
-    ), 0);
+    ), []);
 
   const { transferFunds, deleteCashTransaction, deleteMultipleCashTransactions } = useAppActions();
   const [isTransferSheetOpen, setIsTransferSheetOpen] = useState(false)
@@ -64,6 +64,7 @@ export function CashTab() {
   const [isSnapshotLoading, setIsSnapshotLoading] = useState(true);
   const isMobile = useIsMobile();
   const isAdmin = user?.role === 'admin';
+  const isLoading = cashTransactions === undefined;
 
   const fetchSnapshot = useCallback(async () => {
     setIsSnapshotLoading(true);
@@ -481,7 +482,7 @@ export function CashTab() {
             <div className="flex-1">
               <CardTitle>Cash Ledger</CardTitle>
               <CardDescription>
-                View your cash-in-hand transactions. Current balance: <span className="font-bold text-primary">{formatCurrency(cashBalance ?? 0)}</span>
+                View your cash-in-hand transactions. Current balance: <span className="font-bold text-primary">{isLoading ? <Loader2 className="inline-block h-4 w-4 animate-spin" /> : formatCurrency(cashBalance ?? 0)}</span>
               </CardDescription>
             </div>
             <div className="flex items-center gap-2 self-center justify-center sm:self-auto">

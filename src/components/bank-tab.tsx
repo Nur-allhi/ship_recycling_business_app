@@ -49,12 +49,12 @@ type SortKey = keyof BankTransaction | 'debit' | 'credit' | null;
 type SortDirection = 'asc' | 'desc';
 
 export function BankTab() {
-  const { currency, user, banks, isLoading, handleApiError, isOnline, contacts, loans } = useAppContext()
-  const bankTransactions = useLiveQuery(() => db.bank_transactions.toArray(), []);
+  const { currency, user, banks, handleApiError, isOnline, contacts, loans } = useAppContext()
+  const bankTransactions = useLiveQuery(() => db.bank_transactions.toArray());
   const bankBalance = useLiveQuery(() => 
     db.bank_transactions.toArray().then(txs => 
       txs.reduce((acc, tx) => acc + (tx.type === 'deposit' ? tx.actual_amount : -tx.actual_amount), 0)
-    ), 0);
+    ), []);
   const { transferFunds, deleteBankTransaction, deleteMultipleBankTransactions } = useAppActions();
   const [isTransferSheetOpen, setIsTransferSheetOpen] = useState(false)
   const [editSheetState, setEditSheetState] = useState<{isOpen: boolean, transaction: BankTransaction | null}>({ isOpen: false, transaction: null});
@@ -71,6 +71,7 @@ export function BankTab() {
   const [isSnapshotLoading, setIsSnapshotLoading] = useState(true);
   const isMobile = useIsMobile();
   const isAdmin = user?.role === 'admin';
+  const isLoading = bankTransactions === undefined;
 
   const fetchSnapshot = useCallback(async () => {
     setIsSnapshotLoading(true);
@@ -535,7 +536,7 @@ export function BankTab() {
                 <div className="flex-1">
                     <CardTitle>Bank Ledger</CardTitle>
                     <CardDescription>
-                        View your bank account transactions. Current balance: <span className="font-bold text-primary">{formatCurrency(displayBalance)}</span>
+                        View your bank account transactions. Current balance: <span className="font-bold text-primary">{isLoading ? <Loader2 className="inline-block h-4 w-4 animate-spin" /> : formatCurrency(displayBalance)}</span>
                     </CardDescription>
                 </div>
                 <div className="flex items-center flex-wrap gap-2 justify-center self-stretch sm:self-center">
