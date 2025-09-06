@@ -9,19 +9,41 @@ import {
   SidebarFooter,
   SidebarContent,
   useSidebar,
+  SidebarGroup,
+  SidebarGroupLabel,
 } from "@/components/ui/sidebar";
-import { Wallet, Landmark, Boxes, Settings, LogOut, CreditCard, LineChart, Handshake, PanelLeft } from 'lucide-react';
+import { Wallet, Landmark, Boxes, Settings, LogOut, CreditCard, LineChart, Handshake } from 'lucide-react';
 import { useAppContext } from "@/app/context/app-context";
 import Logo from "./logo";
 
-const navItems = [
-    { value: 'dashboard', label: 'Dashboard', icon: LineChart },
-    { value: 'cash', label: 'Cash', icon: Wallet },
-    { value: 'bank', label: 'Bank', icon: Landmark },
-    { value: 'credit', label: 'A/R & A/P', icon: CreditCard },
-    { value: 'stock', label: 'Stock', icon: Boxes },
-    { value: 'loans', label: 'Loans', icon: Handshake },
-    { value: 'settings', label: 'Settings', icon: Settings },
+const navGroups = [
+    {
+        title: 'Overview',
+        items: [
+            { value: 'dashboard', label: 'Dashboard', icon: LineChart },
+        ]
+    },
+    {
+        title: 'Ledgers',
+        items: [
+            { value: 'cash', label: 'Cash', icon: Wallet },
+            { value: 'bank', label: 'Bank', icon: Landmark },
+            { value: 'stock', label: 'Stock', icon: Boxes },
+        ]
+    },
+    {
+        title: 'Accounts',
+        items: [
+            { value: 'credit', label: 'A/R & A/P', icon: CreditCard },
+            { value: 'loans', label: 'Loans', icon: Handshake },
+        ]
+    },
+    {
+        title: 'System',
+        items: [
+            { value: 'settings', label: 'Settings', icon: Settings },
+        ]
+    }
 ];
 
 interface AppSidebarProps {
@@ -47,20 +69,25 @@ export function AppSidebar({ activeTab, setActiveTab }: AppSidebarProps) {
                 </div>
             </SidebarHeader>
             <SidebarContent>
-                <SidebarMenu>
-                    {navItems.map(item => (
-                        <SidebarMenuItem key={item.value}>
-                            <SidebarMenuButton 
-                                onClick={() => handleItemClick(item.value)}
-                                isActive={activeTab === item.value}
-                                tooltip={{children: item.label}}
-                            >
-                                <item.icon />
-                                <span>{item.label}</span>
-                            </SidebarMenuButton>
-                        </SidebarMenuItem>
-                    ))}
-                </SidebarMenu>
+                {navGroups.map((group) => (
+                    <SidebarGroup key={group.title}>
+                        <SidebarGroupLabel>{group.title}</SidebarGroupLabel>
+                        <SidebarMenu>
+                            {group.items.map(item => (
+                                <SidebarMenuItem key={item.value}>
+                                    <SidebarMenuButton
+                                        onClick={() => handleItemClick(item.value)}
+                                        isActive={activeTab === item.value}
+                                        tooltip={{children: item.label}}
+                                    >
+                                        <item.icon />
+                                        <span>{item.label}</span>
+                                    </SidebarMenuButton>
+                                </SidebarMenuItem>
+                            ))}
+                        </SidebarMenu>
+                    </SidebarGroup>
+                ))}
             </SidebarContent>
             <SidebarFooter>
                 <SidebarMenu>
