@@ -314,7 +314,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         isLoading, isOnline, user, isInitialLoadComplete, isLoggingOut, isAuthenticating,
         isSyncing, syncQueueCount, isInitialBalanceDialogOpen, liveData, deletedItems,
         loadedMonths, login, logout, reloadData, updateBalances, handleApiError,
-        processSyncQueue, loadRecycleBinData, setUser, setDeletedItems
+        processSyncQueue, loadRecycleBinData, setUser
     ]);
 
     return (

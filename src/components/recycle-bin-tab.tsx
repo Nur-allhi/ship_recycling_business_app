@@ -37,7 +37,7 @@ export function RecycleBinTab() {
 
     const fetchData = useCallback(async () => {
         setIsLoading(true);
-        if (user?.role === 'admin') {
+        if (user) {
             await loadRecycleBinData();
         }
         setIsLoading(false);
