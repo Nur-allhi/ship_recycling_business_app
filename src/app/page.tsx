@@ -15,7 +15,7 @@ import { InitialBalanceDialog } from '@/components/initial-balance-dialog';
 import { AppLoading } from '@/components/app-loading';
 import { FloatingActionButton } from '@/components/floating-action-button';
 import { AnimatePresence, motion } from 'framer-motion';
-import { SidebarProvider, Sidebar, SidebarTrigger, useSidebar } from '@/components/ui/sidebar';
+import { SidebarProvider, Sidebar, useSidebar } from '@/components/ui/sidebar';
 import { AppSidebar } from '@/components/app-sidebar';
 
 const fontClasses = {
@@ -58,12 +58,6 @@ function MainContent() {
             </Sidebar>
             
             <div className={cn("flex-1 flex flex-col transition-all duration-300 ease-in-out", state === 'collapsed' ? 'md:ml-12' : 'md:ml-64')}>
-                 <header className="flex items-center gap-2 p-4 border-b">
-                    <SidebarTrigger />
-                    <h2 className="text-lg font-semibold text-muted-foreground">
-                        Welcome, {user.username} ({roleDisplayName})
-                    </h2>
-                </header>
                 <main className="flex-grow p-4 md:p-6 lg:p-8 overflow-y-auto">
                     <AnimatePresence mode="wait">
                         <motion.div

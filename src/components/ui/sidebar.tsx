@@ -58,7 +58,7 @@ const SidebarProvider = React.forwardRef<
 >(
   (
     {
-      defaultOpen = true,
+      defaultOpen = false, // Default to collapsed on desktop
       open: openProp,
       onOpenChange: setOpenProp,
       className,
@@ -176,7 +176,7 @@ const Sidebar = React.forwardRef<
     },
     ref
   ) => {
-    const { isMobile, state, openMobile, setOpenMobile } = useSidebar()
+    const { isMobile, state, openMobile, setOpenMobile, setOpen } = useSidebar()
 
     if (collapsible === "none") {
       return (
@@ -226,6 +226,8 @@ const Sidebar = React.forwardRef<
         data-collapsible={state === "collapsed" ? collapsible : ""}
         data-variant={variant}
         data-side={side}
+        onMouseEnter={() => setOpen(true)}
+        onMouseLeave={() => setOpen(false)}
         {...props}
       >
         {children}
@@ -239,7 +241,11 @@ const SidebarTrigger = React.forwardRef<
   React.ElementRef<typeof Button>,
   React.ComponentProps<typeof Button>
 >(({ className, onClick, ...props }, ref) => {
-  const { toggleSidebar } = useSidebar()
+  const { toggleSidebar, isMobile } = useSidebar()
+
+  if (!isMobile) {
+    return null
+  }
 
   return (
     <Button
