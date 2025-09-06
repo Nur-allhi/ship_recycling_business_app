@@ -41,7 +41,7 @@ export function RecycleBinTab() {
             await loadRecycleBinData();
         }
         setIsLoading(false);
-    }, [loadRecycleBinData, user?.role]);
+    }, [loadRecycleBinData, user]);
 
     useEffect(() => {
         fetchData();
