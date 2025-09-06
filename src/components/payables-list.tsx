@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useMemo } from "react";
@@ -34,30 +33,22 @@ export function PayablesList() {
     const isAdmin = user?.role === 'admin';
 
     const payablesByContact = useMemo(() => {
-        const vendors = contacts.filter(c => c.type === 'vendor' || c.type === 'both');
         const groups: Record<string, { total_due: number, total_paid: number, total_advance: number, contact_name: string }> = {};
 
-        // Initialize all vendors in the groups object
-        vendors.forEach(vendor => {
-            groups[vendor.id] = {
-                contact_name: vendor.name,
-                total_due: 0,
-                total_paid: 0,
-                total_advance: 0,
-            };
-        });
-
         ledgerTransactions.forEach(tx => {
-            // Only process transactions for existing vendors or new ones from ledger
-             if (tx.type === 'payable' || (tx.type === 'advance' && vendors.some(v => v.id === tx.contact_id))) {
+            const contact = contacts.find(c => c.id === tx.contact_id);
+            if (!contact || (contact.type !== 'vendor' && contact.type !== 'both')) return;
+
+            if (tx.type === 'payable' || tx.type === 'advance') {
                 if (!groups[tx.contact_id]) {
                     groups[tx.contact_id] = {
-                        contact_name: tx.contact_name,
+                        contact_name: contact.name,
                         total_due: 0,
                         total_paid: 0,
                         total_advance: 0,
                     };
                 }
+                
                 if (tx.type === 'payable') {
                     groups[tx.contact_id].total_due += tx.amount;
                     groups[tx.contact_id].total_paid += tx.paid_amount;
@@ -67,18 +58,21 @@ export function PayablesList() {
             }
         });
         
-        return Object.entries(groups).map(([contact_id, group]) => {
-            const net_balance = group.total_due - group.total_paid - group.total_advance;
-            return {
-                contact_id,
-                contact_name: group.contact_name,
-                total_due: group.total_due,
-                total_paid: group.total_paid,
-                total_advance: group.total_advance,
-                net_balance: net_balance,
-                type: 'payable' as const,
-            };
-        }).sort((a, b) => b.net_balance - a.net_balance);
+        return Object.entries(groups)
+            .map(([contact_id, group]) => {
+                const net_balance = group.total_due - group.total_paid - group.total_advance;
+                return {
+                    contact_id,
+                    contact_name: group.contact_name,
+                    total_due: group.total_due,
+                    total_paid: group.total_paid,
+                    total_advance: group.total_advance,
+                    net_balance: net_balance,
+                    type: 'payable' as const,
+                };
+            })
+            .filter(c => c.total_due > 0 || c.total_advance > 0)
+            .sort((a, b) => b.net_balance - a.net_balance);
 
     }, [ledgerTransactions, contacts]);
     

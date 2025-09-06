@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useMemo } from "react";
@@ -34,25 +33,16 @@ export function ReceivablesList() {
     const isAdmin = user?.role === 'admin';
 
     const receivablesByContact = useMemo(() => {
-        const clients = contacts.filter(c => c.type === 'client' || c.type === 'both');
         const groups: Record<string, { total_due: number, total_paid: number, total_advance: number, contact_name: string }> = {};
 
-        // Initialize all clients in the groups object
-        clients.forEach(client => {
-            groups[client.id] = {
-                contact_name: client.name,
-                total_due: 0,
-                total_paid: 0,
-                total_advance: 0,
-            };
-        });
-
         ledgerTransactions.forEach(tx => {
-            // Only process transactions for existing clients or new ones from ledger
-            if (tx.type === 'receivable' || (tx.type === 'advance' && clients.some(c => c.id === tx.contact_id))) {
+            const contact = contacts.find(c => c.id === tx.contact_id);
+            if (!contact || (contact.type !== 'client' && contact.type !== 'both')) return;
+
+            if (tx.type === 'receivable' || tx.type === 'advance') {
                  if (!groups[tx.contact_id]) {
                     groups[tx.contact_id] = {
-                        contact_name: tx.contact_name,
+                        contact_name: contact.name,
                         total_due: 0,
                         total_paid: 0,
                         total_advance: 0,
@@ -67,18 +57,21 @@ export function ReceivablesList() {
             }
         });
         
-        return Object.entries(groups).map(([contact_id, group]) => {
-            const net_balance = group.total_due - group.total_paid - group.total_advance;
-            return {
-                contact_id,
-                contact_name: group.contact_name,
-                total_due: group.total_due,
-                total_paid: group.total_paid,
-                total_advance: group.total_advance,
-                net_balance: net_balance,
-                type: 'receivable' as const,
-            };
-        }).sort((a,b) => b.net_balance - a.net_balance);
+        return Object.entries(groups)
+            .map(([contact_id, group]) => {
+                const net_balance = group.total_due - group.total_paid - group.total_advance;
+                return {
+                    contact_id,
+                    contact_name: group.contact_name,
+                    total_due: group.total_due,
+                    total_paid: group.total_paid,
+                    total_advance: group.total_advance,
+                    net_balance: net_balance,
+                    type: 'receivable' as const,
+                };
+            })
+            .filter(c => c.total_due > 0 || c.total_advance > 0)
+            .sort((a,b) => b.net_balance - a.net_balance);
 
     }, [ledgerTransactions, contacts]);
     
