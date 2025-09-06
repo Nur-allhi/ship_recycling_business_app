@@ -297,9 +297,9 @@ export function CashTab() {
                     const loan = loans.find(l => l.id === tx.linkedLoanId);
                     if (loan) {
                         const contact = contacts.find(c => c.id === loan.contact_id);
-                        description = loan.type === 'payable' ? 'Loan Received' : 'Loan Disbursed';
+                        description = loan.type === 'payable' ? 'Loan Received from' : 'Loan Disbursed to';
                         if (contact) {
-                            subDescription = `From/To: ${contact.name}`;
+                            description += ` ${contact.name}`;
                         }
                     }
                 } else if (tx.contact_id) {
@@ -384,9 +384,9 @@ export function CashTab() {
               const loan = loans.find(l => l.id === tx.linkedLoanId);
               if (loan) {
                   const contact = contacts.find(c => c.id === loan.contact_id);
-                  description = loan.type === 'payable' ? 'Loan Received' : 'Loan Disbursed';
+                  description = loan.type === 'payable' ? 'Loan Received from' : 'Loan Disbursed to';
                   if (contact) {
-                      subDescription = `From/To: ${contact.name}`;
+                      description += ` ${contact.name}`;
                   }
               }
           } else if (tx.contact_id) {
@@ -477,62 +477,64 @@ export function CashTab() {
               </Button>
             </div>
           </div>
-          {isAdmin && <div className="flex flex-col items-center justify-center gap-2 pt-4">
-              <div className="flex flex-wrap items-center justify-center gap-2">
-                  <Button size="sm" variant={isSelectionMode ? "secondary" : "outline"} onClick={toggleSelectionMode}>
-                      <CheckSquare className="mr-2 h-4 w-4" />
-                      {isSelectionMode ? 'Cancel' : 'Select'}
-                  </Button>
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button size="sm" variant="outline" onClick={() => setShowActions(!showActions)}>
-                           {showActions ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+          {isAdmin && (
+            <div className="flex flex-col items-center justify-center gap-2 pt-4">
+                <div className="flex flex-wrap items-center justify-center gap-2">
+                    <Button size="sm" variant={isSelectionMode ? "secondary" : "outline"} onClick={toggleSelectionMode}>
+                        <CheckSquare className="mr-2 h-4 w-4" />
+                        {isSelectionMode ? 'Cancel' : 'Select'}
+                    </Button>
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button size="sm" variant="outline" onClick={() => setShowActions(!showActions)}>
+                             {showActions ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>{showActions ? 'Hide' : 'Show'} Actions</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                    <Sheet open={isTransferSheetOpen} onOpenChange={setIsTransferSheetOpen}>
+                        <SheetTrigger asChild>
+                            <Button size="sm" variant="outline"><ArrowRightLeft className="mr-2 h-4 w-4" />Transfer</Button>
+                        </SheetTrigger>
+                        <SheetContent>
+                            <SheetHeader>
+                            <SheetTitle>Transfer Funds</SheetTitle>
+                            <SheetDescription>Move money from cash to your bank account.</SheetDescription>
+                            </SheetHeader>
+                            <form onSubmit={handleTransferSubmit} className="space-y-4 mt-4">
+                                <div className="space-y-2">
+                                    <Label htmlFor="amount">Amount</Label>
+                                    <Input id="amount" name="amount" type="number" step="0.01" placeholder="0.00" required />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="bank_id">To Bank Account</Label>
+                                    <ResponsiveSelect 
+                                      value={selectedTransferBankId}
+                                      onValueChange={setSelectedTransferBankId}
+                                      title="Select a Bank Account" 
+                                      items={(banks || []).map(b => ({value: b.id, label: b.name}))} 
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="description">Description (Optional)</Label>
+                                    <Input id="description" name="description" placeholder="e.g., Weekly deposit" />
+                                </div>
+                                <Button type="submit" className="w-full">Transfer to Bank</Button>
+                            </form>
+                        </SheetContent>
+                    </Sheet>
+                    {selectedTxs.length > 0 && (
+                        <Button size="sm" variant="destructive" onClick={handleMultiDeleteClick}>
+                            <Trash2 className="mr-2 h-4 w-4" /> ({selectedTxs.length})
                         </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>{showActions ? 'Hide' : 'Show'} Actions</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                  <Sheet open={isTransferSheetOpen} onOpenChange={setIsTransferSheetOpen}>
-                      <SheetTrigger asChild>
-                          <Button size="sm" variant="outline"><ArrowRightLeft className="mr-2 h-4 w-4" />Transfer</Button>
-                      </SheetTrigger>
-                      <SheetContent>
-                          <SheetHeader>
-                          <SheetTitle>Transfer Funds</SheetTitle>
-                          <SheetDescription>Move money from cash to your bank account.</SheetDescription>
-                          </SheetHeader>
-                          <form onSubmit={handleTransferSubmit} className="space-y-4 mt-4">
-                              <div className="space-y-2">
-                                  <Label htmlFor="amount">Amount</Label>
-                                  <Input id="amount" name="amount" type="number" step="0.01" placeholder="0.00" required />
-                              </div>
-                              <div className="space-y-2">
-                                  <Label htmlFor="bank_id">To Bank Account</Label>
-                                  <ResponsiveSelect 
-                                    value={selectedTransferBankId}
-                                    onValueChange={setSelectedTransferBankId}
-                                    title="Select a Bank Account" 
-                                    items={(banks || []).map(b => ({value: b.id, label: b.name}))} 
-                                  />
-                              </div>
-                              <div className="space-y-2">
-                                  <Label htmlFor="description">Description (Optional)</Label>
-                                  <Input id="description" name="description" placeholder="e.g., Weekly deposit" />
-                              </div>
-                              <Button type="submit" className="w-full">Transfer to Bank</Button>
-                          </form>
-                      </SheetContent>
-                  </Sheet>
-                  {selectedTxs.length > 0 && (
-                      <Button size="sm" variant="destructive" onClick={handleMultiDeleteClick}>
-                          <Trash2 className="mr-2 h-4 w-4" /> ({selectedTxs.length})
-                      </Button>
-                  )}
-              </div>
-          </div>}
+                    )}
+                </div>
+            </div>
+          )}
         </CardHeader>
         <CardContent>
            {isMobile ? renderMobileView() : renderDesktopView()}
