@@ -20,7 +20,7 @@ const toYYYYMMDD = (date: Date) => {
 export function useAppActions() {
     const { logout } = useSessionManager();
     const { queueOrSync } = useDataSyncer();
-    const { setBlockingOperation, reloadData } = useAppContext();
+    const { setBlockingOperation, reloadData, contacts } = useAppContext();
     
     const performAdminAction = async <T,>(action: () => Promise<T>): Promise<T | undefined> => {
         const session = await getSession();
@@ -116,10 +116,24 @@ export function useAppActions() {
         });
     };
 
-    const addLedgerTransaction = async (tx: Omit<LedgerTransaction, 'id' | 'deletedAt' | 'status' | 'paid_amount' | 'installments'>) => {
+    const addLedgerTransaction = async (tx: Omit<LedgerTransaction, 'id' | 'deletedAt' | 'status' | 'paid_amount' | 'installments' | 'contact_name'>) => {
         return performAdminAction(async () => {
+            const contact = contacts.find(c => c.id === tx.contact_id);
+            if (!contact) {
+                toast.error("Contact could not be found for this transaction.");
+                return;
+            }
+
             const tempId = `temp_ledger_${Date.now()}`;
-            const dataToSave: LedgerTransaction = { ...tx, status: 'unpaid', paid_amount: 0, installments: [], id: tempId };
+            const dataToSave: LedgerTransaction = { 
+                ...tx, 
+                contact_name: contact.name,
+                status: 'unpaid', 
+                paid_amount: 0, 
+                installments: [], 
+                id: tempId 
+            };
+            
             await db.ap_ar_transactions.add(dataToSave);
             
             const { installments, id, ...syncData } = dataToSave;
