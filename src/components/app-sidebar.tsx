@@ -13,6 +13,7 @@ import {
 import { Wallet, Landmark, Boxes, Settings, LogOut, CreditCard, LineChart, Handshake } from 'lucide-react';
 import { useAppContext } from "@/app/context/app-context";
 import Logo from "./logo";
+import { cn } from "@/lib/utils";
 
 const navGroups = [
     {
@@ -62,8 +63,8 @@ export function AppSidebar({ activeTab, setActiveTab }: AppSidebarProps) {
         <>
             <SidebarHeader>
                  <div className="flex items-center gap-2">
-                    <Logo className="h-8 w-8 text-primary" />
-                    <span className="text-lg font-semibold">Ha-Mim Iron Mart</span>
+                    <Logo className="h-8 w-8 text-primary shrink-0" />
+                    <span className="text-lg font-semibold group-data-[state=collapsed]:hidden">Ha-Mim Iron Mart</span>
                 </div>
             </SidebarHeader>
             
