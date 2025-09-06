@@ -36,6 +36,8 @@ export function PayablesList() {
     const payablesByContact = useMemo(() => {
         const groups: Record<string, { total_due: number, total_paid: number, total_advance: number, contact_name: string }> = {};
 
+        if (!ledgerTransactions || !contacts) return [];
+
         ledgerTransactions.forEach(tx => {
             // Only consider 'payable' or 'advance' for this list
             if (tx.type !== 'payable' && tx.type !== 'advance') return;

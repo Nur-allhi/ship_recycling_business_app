@@ -36,6 +36,8 @@ export function ReceivablesList() {
     const receivablesByContact = useMemo(() => {
         const groups: Record<string, { total_due: number, total_paid: number, total_advance: number, contact_name: string }> = {};
 
+        if (!ledgerTransactions || !contacts) return [];
+
         ledgerTransactions.forEach(tx => {
             if (tx.type !== 'receivable' && tx.type !== 'advance') return;
             const contact = contacts.find(c => c.id === tx.contact_id);
