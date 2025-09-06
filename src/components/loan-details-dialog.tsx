@@ -19,7 +19,7 @@ import { Input } from './ui/input';
 import { RadioGroup, RadioGroupItem } from './ui/radio-group';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { Calendar } from './ui/calendar';
-import { CalendarIcon, Loader2 } from 'lucide-react';
+import { CalendarIcon, Loader2, Printer } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { useAppContext } from '@/app/context/app-context';
@@ -30,6 +30,8 @@ import { Separator } from './ui/separator';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
 import type { Loan } from '@/lib/types';
 import { Badge } from './ui/badge';
+import { generateLoanStatementPdf } from '@/lib/pdf-utils';
+
 
 const paymentSchema = z.object({
   paymentMethod: z.enum(['cash', 'bank'], { required_error: "Please select a payment method." }),
@@ -56,7 +58,7 @@ interface LoanDetailsDialogProps {
 }
 
 export function LoanDetailsDialog({ isOpen, setIsOpen, loan }: LoanDetailsDialogProps) {
-  const { currency, banks, user } = useAppContext();
+  const { currency, banks, user, contacts } = useAppContext();
   const { recordLoanPayment } = useAppActions();
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
   const isAdmin = user?.role === 'admin';
@@ -88,8 +90,6 @@ export function LoanDetailsDialog({ isOpen, setIsOpen, loan }: LoanDetailsDialog
         notes: data.notes,
       });
       toast.success("Payment Recorded");
-      // The dialog will be closed by the parent component re-rendering
-      // or we can close it here if needed
       setIsOpen(false);
     } catch (error: any) {
       toast.error('Failed to Record Payment', { description: error.message });
@@ -102,6 +102,11 @@ export function LoanDetailsDialog({ isOpen, setIsOpen, loan }: LoanDetailsDialog
     }
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: currency, currencyDisplay: 'symbol' }).format(amount)
   }
+  
+  const handleExportPdf = () => {
+    const contact = contacts.find(c => c.id === loan.contact_id);
+    generateLoanStatementPdf(loan, contact?.name || 'Unknown', currency);
+  };
 
   const bankAccountItems = banks.map(b => ({ value: b.id, label: b.name }));
 
@@ -247,6 +252,10 @@ export function LoanDetailsDialog({ isOpen, setIsOpen, loan }: LoanDetailsDialog
                         </div>
                     )}
                     <DialogFooter>
+                         <Button type="button" variant="outline" onClick={handleExportPdf}>
+                            <Printer className="mr-2 h-4 w-4" />
+                            Print Statement
+                        </Button>
                         <Button type="submit" disabled={isSubmitting}>
                             {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
                             Record Payment
@@ -255,6 +264,15 @@ export function LoanDetailsDialog({ isOpen, setIsOpen, loan }: LoanDetailsDialog
                 </form>
             </>
         )}
+         {!isAdmin || outstandingBalance <= 0 && (
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={handleExportPdf}>
+                    <Printer className="mr-2 h-4 w-4" />
+                    Print Statement
+                </Button>
+                 <Button type="button" onClick={() => setIsOpen(false)}>Close</Button>
+              </DialogFooter>
+            )}
       </DialogContent>
     </Dialog>
   );
