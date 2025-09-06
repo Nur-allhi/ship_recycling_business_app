@@ -857,6 +857,8 @@ const RecordLoanPaymentSchema = z.object({
     payment_method: z.enum(['cash', 'bank']),
     bank_id: z.string().optional(),
     notes: z.string().optional(),
+    localPaymentId: z.string(),
+    localFinancialId: z.string(),
 });
 
 export async function recordLoanPayment(input: z.infer<typeof RecordLoanPaymentSchema>) {

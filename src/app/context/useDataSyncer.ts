@@ -35,7 +35,7 @@ export function useDataSyncer() {
         for (const item of queue) {
             try {
                 let result: any;
-                const { localId, localFinancialId, localLedgerId, localCashId, localBankId, localPaymentId, ...payloadWithoutId } = item.payload || {};
+                const { localId, ...payloadWithoutId } = item.payload || {};
                 
                 const actionMap: { [key: string]: (payload: any) => Promise<any> } = {
                     appendData: server.appendData,
@@ -61,38 +61,39 @@ export function useDataSyncer() {
 
                 const actionFn = actionMap[item.action];
                 if (actionFn) {
-                    result = await actionFn(payloadWithoutId);
+                    // Pass the whole item.payload to server actions
+                    result = await actionFn(item.payload);
                 } else {
                      console.warn(`Unknown sync action: ${item.action}`);
                 }
                 
                 await db.transaction('rw', db.tables, async () => {
-                     if (item.action === 'appendData' && result?.id && localId) {
-                        const tableName = payloadWithoutId.tableName;
-                        const oldRecord = await db.table(tableName).get(localId);
+                     if (item.action === 'appendData' && result?.id && item.payload.localId) {
+                        const tableName = item.payload.tableName;
+                        const oldRecord = await db.table(tableName).get(item.payload.localId);
                         if (oldRecord) {
-                            await db.table(tableName).delete(localId);
+                            await db.table(tableName).delete(item.payload.localId);
                             // Ensure the returned data is merged with any existing fields not returned from server
                             await db.table(tableName).add({ ...oldRecord, ...result });
                         }
-                    } else if (result?.stockTx && result?.stockTx.id && localId) { // addStockTransaction
-                        await db.stock_transactions.update(localId, { id: result.stockTx.id });
+                    } else if (item.action === 'addStockTransaction' && result?.stockTx && result?.stockTx.id && item.payload.localId) { // addStockTransaction
+                        await db.stock_transactions.update(item.payload.localId, { id: result.stockTx.id });
                         if (result.financialTx) {
                             const finTable = result.financialTx.bank_id ? 'bank_transactions' : 'cash_transactions';
-                            const finLocalId = result.financialTx.bank_id ? payloadWithoutId.localBankId : payloadWithoutId.localCashId;
+                            const finLocalId = result.financialTx.bank_id ? item.payload.localBankId : item.payload.localCashId;
                              if(finLocalId) await db.table(finTable).where({ id: finLocalId }).modify({ id: result.financialTx.id, linkedStockTxId: result.stockTx.id });
                         }
-                    } else if (result?.loan && result?.loan.id && localId) { // addLoan
-                        await db.loans.update(localId, { id: result.loan.id });
+                    } else if (item.action === 'addLoan' && result?.loan && result?.loan.id && item.payload.localId) { // addLoan
+                        await db.loans.update(item.payload.localId, { id: result.loan.id });
                          if(result.financialTx) {
                            const finTable = result.financialTx.bank_id ? 'bank_transactions' : 'cash_transactions';
-                           if(localFinancialId) await db.table(finTable).where({id: localFinancialId}).modify({id: result.financialTx.id, linkedLoanId: result.loan.id});
+                           if(item.payload.localFinancialId) await db.table(finTable).where({id: item.payload.localFinancialId}).modify({id: result.financialTx.id, linkedLoanId: result.loan.id});
                          }
-                    } else if (result?.savedPayment && result?.savedPayment.id && localPaymentId) { // recordLoanPayment
-                        await db.loan_payments.update(localPaymentId, { id: result.savedPayment.id });
-                        if (result.financialTx && localFinancialId) {
+                    } else if (item.action === 'recordLoanPayment' && result?.savedPayment && result?.savedPayment.id && item.payload.localPaymentId) { // recordLoanPayment
+                        await db.loan_payments.update(item.payload.localPaymentId, { id: result.savedPayment.id });
+                        if (result.financialTx && item.payload.localFinancialId) {
                             const finTable = result.financialTx.bank_id ? 'bank_transactions' : 'cash_transactions';
-                            await db.table(finTable).update(localFinancialId, { id: result.financialTx.id });
+                            await db.table(finTable).update(item.payload.localFinancialId, { id: result.financialTx.id });
                         }
                     }
 
