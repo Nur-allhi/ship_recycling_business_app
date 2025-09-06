@@ -53,45 +53,44 @@ function ShipShapeLedger() {
     <SidebarProvider>
         <div className={cn('min-h-screen bg-background text-foreground', fontClasses[fontSize] || 'text-base')}>
             {isAdmin && <InitialBalanceDialog isOpen={isInitialBalanceDialogOpen} />}
+            
             <Sidebar>
                 <AppSidebar activeTab={activeTab} setActiveTab={setActiveTab} />
             </Sidebar>
 
-            <SidebarInset>
-                 <div className="container mx-auto p-4 md:p-6 lg:p-8">
-                    <header className="mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                        <div className="flex items-center gap-2 w-full">
-                             <SidebarTrigger className="md:hidden"/>
-                             <div className="flex-1">
-                                <div className="flex items-center gap-3 mb-1">
-                                    <Logo className="h-10 w-10 text-primary hidden sm:block" />
-                                    <div>
-                                        <h1 className="text-2xl sm:text-3xl font-bold text-primary">
-                                        Ha-Mim Iron Mart
-                                        </h1>
-                                    </div>
+            <SidebarInset className="flex flex-col min-h-screen">
+                <header className="p-4 md:p-6 lg:p-8 flex-shrink-0">
+                    <div className="flex items-center gap-2 w-full">
+                        <SidebarTrigger className="md:hidden"/>
+                        <div className="flex-1">
+                            <div className="flex items-center gap-3 mb-1">
+                                <Logo className="h-10 w-10 text-primary hidden sm:block" />
+                                <div>
+                                    <h1 className="text-2xl sm:text-3xl font-bold text-primary">
+                                    Ha-Mim Iron Mart
+                                    </h1>
                                 </div>
-                                <p className="text-muted-foreground text-sm sm:text-base">
-                                Welcome {roleDisplayName}
-                                </p>
                             </div>
+                            <p className="text-muted-foreground text-sm sm:text-base">
+                            Welcome {roleDisplayName}
+                            </p>
                         </div>
-                    </header>
-                    <main>
-                         <AnimatePresence mode="wait">
-                            <motion.div
-                                key={activeTab}
-                                initial={{ opacity: 0, y: 15 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                exit={{ opacity: 0, y: -15 }}
-                                transition={{ duration: 0.25 }}
-                            >
-                                {renderTabContent(activeTab)}
-                            </motion.div>
-                        </AnimatePresence>
-                    </main>
-                    {isAdmin && <FloatingActionButton />}
-                </div>
+                    </div>
+                </header>
+                <main className="flex-grow container mx-auto px-4 md:px-6 lg:px-8">
+                    <AnimatePresence mode="wait">
+                        <motion.div
+                            key={activeTab}
+                            initial={{ opacity: 0, y: 15 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -15 }}
+                            transition={{ duration: 0.25 }}
+                        >
+                            {renderTabContent(activeTab)}
+                        </motion.div>
+                    </AnimatePresence>
+                </main>
+                {isAdmin && <FloatingActionButton />}
             </SidebarInset>
         </div>
     </SidebarProvider>

@@ -30,14 +30,12 @@ interface AppSidebarProps {
 }
 
 export function AppSidebar({ activeTab, setActiveTab }: AppSidebarProps) {
-    const { logout, user } = useAppContext();
-    const { setOpen, isMobile } = useSidebar();
+    const { logout } = useAppContext();
+    const { setOpen } = useSidebar();
 
     const handleItemClick = (tab: string) => {
         setActiveTab(tab);
-        if (isMobile) {
-            setOpen(false);
-        }
+        setOpen(false); // Always close on selection
     }
 
     return (
