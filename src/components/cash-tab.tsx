@@ -30,6 +30,7 @@ import { Badge } from "./ui/badge"
 import * as server from "@/lib/actions";
 import { db } from "@/lib/db"
 import { useBalanceCalculator } from "../app/context/useBalanceCalculator"
+import { motion, AnimatePresence } from "framer-motion"
 
 const toYYYYMMDD = (date: Date) => {
     const d = new Date(date);
@@ -274,6 +275,7 @@ export function CashTab() {
             {showActions && <TableHead className="text-center">Actions</TableHead>}
           </TableRow>
         </TableHeader>
+        <AnimatePresence>
         <TableBody>
           {isLoading || isSnapshotLoading ? (
             <TableRow><TableCell colSpan={isSelectionMode ? 8 : 7} className="h-24 text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin" /></TableCell></TableRow>
@@ -299,7 +301,15 @@ export function CashTab() {
                 }
                 
                 return (
-              <TableRow key={tx.id} data-state={selectedTxIds.includes(tx.id) && "selected"}>
+              <motion.tr 
+                key={tx.id} 
+                layout
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 10 }}
+                transition={{ duration: 0.3 }}
+                data-state={selectedTxIds.includes(tx.id) && "selected"}
+              >
                 {isSelectionMode && (
                   <TableCell className="text-center">
                       <Checkbox 
@@ -348,7 +358,7 @@ export function CashTab() {
                       </div>
                   </TableCell>
                 )}
-              </TableRow>
+              </motion.tr>
             )})
           ) : (
             <TableRow>
@@ -356,12 +366,14 @@ export function CashTab() {
             </TableRow>
           )}
         </TableBody>
+        </AnimatePresence>
       </Table>
       </div>
   );
 
   const renderMobileView = () => (
     <div className="space-y-4">
+      <AnimatePresence>
       {isLoading ? (
         <div className="flex justify-center items-center h-24"><Loader2 className="h-6 w-6 animate-spin" /></div>
       ) : sortedTransactions.length > 0 ? (
@@ -386,7 +398,16 @@ export function CashTab() {
           }
 
           return (
-          <Card key={tx.id} className="relative animate-fade-in">
+          <motion.div 
+            key={tx.id}
+            layout
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 10 }}
+            transition={{ duration: 0.3 }}
+            className="relative"
+          >
+          <Card>
              {isSelectionMode && (
                 <Checkbox 
                     onCheckedChange={(checked) => handleSelectRow(tx, Boolean(checked))}
@@ -436,12 +457,14 @@ export function CashTab() {
                 </div>
             </CardContent>
           </Card>
+          </motion.div>
         )})
       ) : (
         <div className="text-center text-muted-foreground py-12">
             No cash transactions found for {format(currentMonth, 'MMMM yyyy')}.
         </div>
       )}
+      </AnimatePresence>
     </div>
   )
 

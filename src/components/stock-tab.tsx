@@ -26,6 +26,7 @@ import { ResponsiveSelect } from "@/components/ui/responsive-select"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { Badge } from "./ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { motion, AnimatePresence } from "framer-motion"
 
 type SortKey = keyof StockTransaction | 'totalValue' | null;
 type SortDirection = 'asc' | 'desc';
@@ -70,7 +71,7 @@ export function StockTab() {
   };
 
   const sortedTransactions = useMemo(() => {
-    if (!sortKey) return stockTransactions;
+    if (!sortKey || !stockTransactions) return stockTransactions || [];
 
     return [...stockTransactions].sort((a, b) => {
       const aValue = sortKey === 'totalValue' ? a.weight * a.pricePerKg : a[sortKey as keyof StockTransaction];
@@ -232,12 +233,21 @@ export function StockTab() {
             {showActions && <TableHead className="text-center">Actions</TableHead>}
           </TableRow>
         </TableHeader>
+        <AnimatePresence>
         <TableBody>
           {isMonthLoading ? (
             <TableRow><TableCell colSpan={isSelectionMode ? 9 : 8} className="h-24 text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin" /></TableCell></TableRow>
           ) : paginatedTransactions.length > 0 ? (
             paginatedTransactions.map((tx: StockTransaction) => (
-              <TableRow key={tx.id} data-state={selectedTxIds.includes(tx.id) && "selected"}>
+              <motion.tr 
+                key={tx.id} 
+                layout
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 10 }}
+                transition={{ duration: 0.3 }}
+                data-state={selectedTxIds.includes(tx.id) && "selected"}
+              >
                 {isSelectionMode && (
                     <TableCell className="text-center">
                         <Checkbox 
@@ -289,23 +299,34 @@ export function StockTab() {
                     </div>
                   </TableCell>
                 )}
-              </TableRow>
+              </motion.tr>
             ))
           ) : (
             <TableRow><TableCell colSpan={isSelectionMode ? (showActions ? (showStockValue ? 9 : 8) : (showStockValue ? 8 : 7)) : (showActions ? (showStockValue ? 8 : 7) : (showStockValue ? 7 : 6))} className="text-center h-24">No stock transactions for {format(currentMonth, "MMMM yyyy")}.</TableCell></TableRow>
           )}
         </TableBody>
+        </AnimatePresence>
       </Table>
       </div>
   );
 
   const renderMobileHistory = () => (
     <div className="space-y-4">
+      <AnimatePresence>
       {isMonthLoading ? (
         <div className="flex justify-center items-center h-24"><Loader2 className="h-6 w-6 animate-spin" /></div>
       ) : paginatedTransactions.length > 0 ? (
         paginatedTransactions.map((tx: StockTransaction) => (
-            <Card key={tx.id} className="relative animate-fade-in">
+            <motion.div 
+              key={tx.id}
+              layout
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 10 }}
+              transition={{ duration: 0.3 }}
+              className="relative"
+            >
+            <Card>
                 {isSelectionMode && (
                     <Checkbox 
                         onCheckedChange={(checked) => handleSelectRow(tx, Boolean(checked))}
@@ -359,12 +380,14 @@ export function StockTab() {
                     </div>
                 </CardContent>
             </Card>
+            </motion.div>
         ))
       ) : (
         <div className="text-center text-muted-foreground py-12">
             No stock transactions for {format(currentMonth, "MMMM yyyy")}.
         </div>
       )}
+      </AnimatePresence>
     </div>
   )
 

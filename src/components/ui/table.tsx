@@ -2,6 +2,7 @@
 import * as React from "react"
 
 import { cn } from "@/lib/utils"
+import { motion } from "framer-motion"
 
 const Table = React.forwardRef<
   HTMLTableElement,
@@ -29,7 +30,7 @@ const TableBody = React.forwardRef<
   HTMLTableSectionElement,
   React.HTMLAttributes<HTMLTableSectionElement>
 >(({ className, ...props }, ref) => (
-  <tbody
+  <motion.tbody
     ref={ref}
     className={cn("[&_tr:last-child]:border-0", className)}
     {...props}
