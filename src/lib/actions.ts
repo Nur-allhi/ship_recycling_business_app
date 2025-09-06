@@ -325,35 +325,42 @@ export async function deleteAllData() {
         if (!session || session.role !== 'admin') throw new Error("Only admins can delete all data.");
 
         const supabase = createAdminSupabaseClient();
-        const { data: users, error: userError } = await supabase.auth.admin.listUsers();
-        if(userError) throw userError;
-
-        for(const user of users.users) {
-            if (user.id !== session.id) {
-                 await supabase.auth.admin.deleteUser(user.id);
-            }
-        }
         
-        // Correct order for deletion to respect foreign key constraints
-        const tables = [
+        // Correct order for deletion to respect foreign key constraints.
+        // Tables with foreign keys must be cleared before the tables they reference.
+        const tablesToDelete = [
             'loan_payments',
             'payment_installments',
-            'ap_ar_transactions', 
             'cash_transactions', 
             'bank_transactions', 
             'stock_transactions', 
+            'ap_ar_transactions', 
             'loans',
             'contacts', 
             'initial_stock',
             'categories', 
             'banks', 
             'activity_log', 
-            'monthly_snapshots'
+            'monthly_snapshots',
+            'sync_queue', // Added to ensure sync queue is cleared on server if it exists
         ];
 
-        for (const tableName of tables) {
+        for (const tableName of tablesToDelete) {
             const { error } = await supabase.from(tableName).delete().gt('created_at', '1970-01-01');
-            if (error && error.code !== '42P01') throw new Error(`Failed to delete data from ${tableName}.`);
+            // We ignore '42P01' which means the table doesn't exist, which is fine.
+            if (error && error.code !== '42P01') {
+                 throw new Error(`Failed to delete data from ${tableName}: ${error.message}`);
+            }
+        }
+
+        const { data: users, error: userError } = await supabase.auth.admin.listUsers();
+        if(userError) throw userError;
+
+        for(const user of users.users) {
+            // Do not delete the current admin user who is performing the action.
+            if (user.id !== session.id) {
+                 await supabase.auth.admin.deleteUser(user.id);
+            }
         }
         
         await logActivity("DELETED ALL DATA AND USERS.");

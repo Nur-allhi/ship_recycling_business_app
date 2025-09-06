@@ -19,7 +19,7 @@ const toYYYYMMDD = (date: Date) => {
 };
 
 export function useAppActions() {
-    const { user, isOnline } = useSessionManager();
+    const { user, isOnline, logout } = useSessionManager();
     const { queueOrSync } = useDataSyncer();
     const { updateBalances } = useBalanceCalculator();
     
@@ -479,8 +479,9 @@ export function useAppActions() {
 
     const handleDeleteAllData = () => {
         return performAdminAction(() => {
-            toast.info("Deleting all data. You will be logged out.");
             queueOrSync({ action: 'deleteAllData', payload: {} });
+            // The logout process will show the toast messages
+            logout();
         });
     };
     
@@ -560,7 +561,7 @@ export function useAppActions() {
             
             // Optimistically update loan status
             const payments = await db.loan_payments.where({ loan_id }).toArray();
-            const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
+            const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0) + amount;
             if (totalPaid >= loan.principal_amount) {
                 await db.loans.update(loan_id, { status: 'paid' });
             }

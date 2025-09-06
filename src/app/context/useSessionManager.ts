@@ -19,20 +19,20 @@ export function useSessionManager() {
 
     const logout = useCallback(async () => {
         setIsLoggingOut(true);
+        toast.info("Logging you out and clearing data...");
         try {
             await serverLogout();
+        } catch (error) {
+            // Log the error but continue with client-side cleanup
+            console.error("Server logout failed, proceeding with client-side cleanup:", error);
+        } finally {
+            // Always perform client-side cleanup
             await db.app_state.update(1, { user: null });
             await clearAllData();
             setUser(null);
-            toast.success("Logged out successfully!");
-            // Full page reload to ensure all state is cleared
-            window.location.href = '/login';
-        } catch (error) {
-            console.error("Logout failed:", error);
-            toast.error("Logout Failed", { description: "Could not properly log you out. Please try clearing your cookies and refreshing the page." });
-            window.location.href = '/login';
-        } finally {
             setIsLoggingOut(false);
+            // Full page reload to ensure all state is cleared and redirect to login
+            window.location.href = '/login';
         }
     }, []);
 
