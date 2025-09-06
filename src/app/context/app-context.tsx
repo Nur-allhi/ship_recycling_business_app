@@ -42,6 +42,11 @@ interface AppData {
   bankCategories: Category[];
   contacts: Contact[];
   blockingOperation: BlockingOperation;
+  loans: Loan[];
+  loanPayments: LoanPayment[];
+  stockItems: StockItem[];
+  cashTransactions: CashTransaction[];
+  bankTransactions: BankTransaction[];
 }
 
 interface AppContextType extends AppData {
@@ -54,7 +59,7 @@ interface AppContextType extends AppData {
   closeInitialBalanceDialog: () => void;
   setUser: (user: User | null) => void;
   setBlockingOperation: (op: BlockingOperation) => void;
-  queueOrSync: (item: import('@/lib/db').SyncQueueItem) => Promise<void>;
+  queueOrSync: (item: Omit<import('@/lib/db').SyncQueueItem, 'id' | 'timestamp'>) => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -105,11 +110,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     
     const [isInitialBalanceDialogOpen, setIsInitialBalanceDialogOpen] = useState(false);
     
-    // Low-frequency data that is safe to keep in context
     const appState = useLiveQuery(() => db.app_state.get(1), []);
     const banks = useLiveQuery(() => db.banks.toArray(), []);
     const allCategories = useLiveQuery(() => db.categories.toArray(), []);
     const contacts = useLiveQuery(() => db.contacts.toArray(), []);
+    const loans = useLiveQuery(() => db.loans.toArray(), []);
+    const loanPayments = useLiveQuery(() => db.loan_payments.toArray(), []);
+    const stockItems = useLiveQuery(() => db.initial_stock.toArray(), []);
+    const cashTransactions = useLiveQuery(() => db.cash_transactions.toArray(), []);
+    const bankTransactions = useLiveQuery(() => db.bank_transactions.toArray(), []);
 
     const { cashCategories, bankCategories } = useMemo(() => {
         const dbCash: Category[] = [];
@@ -131,16 +140,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
         if (categoriesToCreate.length > 0) {
             console.log(`Seeding ${categoriesToCreate.length} essential categories...`);
-            const creationPromises = categoriesToCreate.map(cat => 
-                server.appendData({ tableName: 'categories', data: cat, select: '*' })
-            );
-            const newCategories = await Promise.all(creationPromises);
-            newCategories.forEach(newCat => {
-                if (newCat) finalCategories.push(newCat as Category);
-            });
+            try {
+                const creationPromises = categoriesToCreate.map(cat => 
+                    server.appendData({ tableName: 'categories', data: cat, select: '*' })
+                );
+                const newCategories = await Promise.all(creationPromises);
+                newCategories.forEach(newCat => {
+                    if (newCat) finalCategories.push(newCat as Category);
+                });
+            } catch(e) {
+                console.error("Failed to seed essential categories", e);
+                handleApiError(e);
+            }
         }
         return finalCategories;
-    }, []);
+    }, [handleApiError]);
 
     const reloadData = useCallback(async (options?: { force?: boolean, needsInitialBalance?: boolean }) => {
         if (isSyncing) {
@@ -152,7 +166,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         try {
             const session = await getSessionFromCookie();
             if (!session) {
-                setIsLoading(false);
                 setUser(null);
                 return;
             }
@@ -172,21 +185,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 server.readData({ tableName: 'initial_stock', select: '*' }),
                 server.readData({ tableName: 'loans', select: '*' }),
                 server.readData({ tableName: 'loan_payments', select: '*' }),
+                server.readData({ tableName: 'activity_log', select: '*' }),
             ]);
             
             categoriesData = await seedEssentialCategories(categoriesData || []);
 
-            const [contactsData, banksData, cashTxs, bankTxs, stockTxs, ledgerData, ledgerPaymentsData, snapshotsData, initialStockData, loansData, loanPaymentsData] = otherData;
+            const [contactsData, banksData, cashTxs, bankTxs, stockTxs, ledgerData, ledgerPaymentsData, snapshotsData, initialStockData, loansData, loanPaymentsData, activityLogData] = otherData;
             
             await db.transaction('rw', db.tables, async () => {
-                // Critical: Clear old data before putting new data
-                await clearAllData(false); // false = don't clear app_state
-
-                await db.app_state.put({
-                    id: 1, user: session, fontSize: appState?.fontSize ?? 'base', currency: appState?.currency ?? 'BDT',
-                    showStockValue: appState?.showStockValue ?? false, lastSync: null
-                });
-
+                await clearAllData(false);
+                await db.app_state.put({ id: 1, user: session, fontSize: appState?.fontSize ?? 'base', currency: appState?.currency ?? 'BDT', showStockValue: appState?.showStockValue ?? false, lastSync: null });
                 await bulkPut('categories', categoriesData); await bulkPut('contacts', contactsData);
                 await bulkPut('banks', banksData);
                 await bulkPut('cash_transactions', cashTxs); await bulkPut('bank_transactions', bankTxs);
@@ -194,6 +202,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 await bulkPut('ledger_payments', ledgerPaymentsData);
                 await bulkPut('monthly_snapshots', snapshotsData); await bulkPut('initial_stock', initialStockData);
                 await bulkPut('loans', loansData); await bulkPut('loan_payments', loanPaymentsData);
+                await bulkPut('activity_log', activityLogData);
                 await db.app_state.update(1, { lastSync: new Date().toISOString() });
             });
 
@@ -215,7 +224,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             const session = await getSessionFromCookie();
             if (session) {
                 setUser(session);
-                // Only reload data if there's a user, otherwise login flow will handle it.
+                // The main reload on first load.
                 await reloadData(); 
             } else {
                 setUser(null);
@@ -223,9 +232,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             setIsInitialLoadComplete(true);
             setIsLoading(false);
         };
-        checkSessionAndLoad();
+        
+        if (!isInitialLoadComplete) {
+          checkSessionAndLoad();
+        }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []); // Only run once on mount
+    }, [isInitialLoadComplete]);
 
     useEffect(() => { setHasMounted(true); }, []);
 
@@ -238,9 +250,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             processSyncQueue();
         };
         const handleOffline = () => setIsOnline(false);
-        setIsOnline(navigator.onLine);
+        
         window.addEventListener('online', handleOnline);
         window.addEventListener('offline', handleOffline);
+        
+        // Initial check
+        handleOffline();
+        if (navigator.onLine) handleOnline();
+
         return () => {
             window.removeEventListener('online', handleOnline);
             window.removeEventListener('offline', handleOffline);
@@ -258,10 +275,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }, [user, isLoading, pathname, router, isInitialLoadComplete]);
 
 
-    const openInitialBalanceDialog = () => setIsInitialBalanceDialogOpen(true);
-    const closeInitialBalanceDialog = () => setIsInitialBalanceDialogOpen(false);
+    const openInitialBalanceDialog = useCallback(() => setIsInitialBalanceDialogOpen(true), []);
+    const closeInitialBalanceDialog = useCallback(() => setIsInitialBalanceDialogOpen(false), []);
 
-    const OnlineStatusIndicator = () => {
+    const OnlineStatusIndicator = useMemo(() => {
         if (!hasMounted || isOnline) return null;
         return (
             <div className="fixed bottom-4 right-4 z-50 animate-fade-in">
@@ -274,13 +291,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 </div>
             </div>
         );
-    };
+    }, [hasMounted, isOnline, isSyncing]);
     
     const contextValue = useMemo(() => ({
-        // State
         isLoading, isOnline, user, isInitialLoadComplete, isLoggingOut, isAuthenticating,
         isSyncing, syncQueueCount, isInitialBalanceDialogOpen, blockingOperation,
-        // Live Data (Low-frequency)
         fontSize: appState?.fontSize ?? 'base',
         currency: appState?.currency ?? 'BDT',
         showStockValue: appState?.showStockValue ?? false,
@@ -288,22 +303,26 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         cashCategories: cashCategories || [],
         bankCategories: bankCategories || [],
         contacts: contacts || [],
-        // Functions
+        loans: loans || [],
+        loanPayments: loanPayments || [],
+        stockItems: stockItems || [],
+        cashTransactions: cashTransactions || [],
+        bankTransactions: bankTransactions || [],
         login, logout, reloadData, handleApiError,
         processSyncQueue, openInitialBalanceDialog, closeInitialBalanceDialog,
         setUser, setBlockingOperation, queueOrSync,
     }), [
         isLoading, isOnline, user, isInitialLoadComplete, isLoggingOut, isAuthenticating,
         isSyncing, syncQueueCount, isInitialBalanceDialogOpen, blockingOperation,
-        appState, banks, cashCategories, bankCategories, contacts,
+        appState, banks, cashCategories, bankCategories, contacts, loans, loanPayments, stockItems, cashTransactions, bankTransactions,
         login, logout, reloadData, handleApiError,
-        processSyncQueue, setUser, queueOrSync,
+        processSyncQueue, openInitialBalanceDialog, closeInitialBalanceDialog, setUser, setBlockingOperation, queueOrSync
     ]);
 
     return (
         <AppContext.Provider value={contextValue}>
             <OnlineStatusIndicator />
-            {isLoading && !isInitialLoadComplete ? <AppLoading /> : children}
+            {(isLoading || !isInitialLoadComplete) ? <AppLoading /> : children}
         </AppContext.Provider>
     );
 }
@@ -315,4 +334,3 @@ export function useAppContext() {
     }
     return context;
 }
-

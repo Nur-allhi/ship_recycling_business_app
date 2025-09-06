@@ -1,7 +1,7 @@
 
 "use client"
 
-import { useRef, useState, useMemo, ReactNode, useEffect, useCallback } from "react"
+import { useRef, useState, useMemo, ReactNode, useCallback } from "react"
 import { useAppContext } from "@/app/context/app-context"
 import { useAppActions } from "@/app/context/app-actions"
 import { Button } from "@/components/ui/button"
@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { Badge } from "@/components/ui/badge"
-import { Plus, Trash2, Users, Settings, Palette, FileCog, Recycle, Loader2, ArrowUpCircle, ArrowDownCircle, RefreshCw, Contact2, History, Lock } from "lucide-react"
+import { Plus, Trash2, Users, Settings, Palette, FileCog, Recycle, Loader2, ArrowUpCircle, ArrowDownCircle, Lock, Contact2, History } from "lucide-react"
 import { toast } from "sonner"
 import { ResponsiveSelect } from "@/components/ui/responsive-select"
 import { RecycleBinTab } from "./recycle-bin-tab"
@@ -20,8 +20,6 @@ import { ContactsTab } from "./contacts-tab"
 import { ActivityLogTab } from "./activity-log-tab"
 import { RadioGroup, RadioGroupItem } from "./ui/radio-group"
 import { UserManagementTab } from "./user-management-tab"
-import * as server from "@/lib/actions"
-import type { Bank, Category } from "@/lib/types"
 import { useLiveQuery } from "dexie-react-hooks"
 import { db } from "@/lib/db"
 
@@ -105,23 +103,23 @@ function GeneralSettings() {
   const [newCategoryDirection, setNewCategoryDirection] = useState<'credit' | 'debit' | undefined>();
   const newBankNameRef = useRef<HTMLInputElement>(null);
 
-  const handleAddBank = async () => {
+  const handleAddBank = useCallback(async () => {
     const name = newBankNameRef.current?.value.trim();
     if (!name) return;
-
+    
     setIsAddingBank(true);
     try {
       await addBank(name);
       if (newBankNameRef.current) newBankNameRef.current.value = "";
-      toast.success("Bank Added Successfully", { description: "It will be available everywhere shortly."})
+      toast.success("Bank Added Successfully");
     } catch (e: any) {
       toast.error("Failed to add bank", { description: e.message });
     } finally {
       setIsAddingBank(false);
     }
-  }
+  }, [addBank]);
 
-  const handleAddCategory = async () => {
+  const handleAddCategory = useCallback(async () => {
     const name = newCategoryNameRef.current?.value.trim();
     if (!name) { toast.error('Category name required'); return; }
     if (!newCategoryDirection) { toast.error('Category direction required'); return; }
@@ -131,22 +129,22 @@ function GeneralSettings() {
         await addCategory(newCategoryType, name, newCategoryDirection);
         if(newCategoryNameRef.current) newCategoryNameRef.current.value = "";
         setNewCategoryDirection(undefined);
-        toast.success("Category Added Successfully", { description: "It will be available everywhere shortly."})
+        toast.success("Category Added Successfully");
     } catch(e: any) {
         toast.error("Failed to add category", { description: e.message });
     } finally {
         setIsAddingCategory(false);
     }
-  }
+  }, [addCategory, newCategoryDirection, newCategoryType]);
 
-  const handleDeleteCategory = async (id: string) => {
+  const handleDeleteCategory = useCallback(async (id: string) => {
     try {
         await deleteCategoryAction(id);
         toast.success("Category Deleted");
     } catch (e:any) {
         toast.error("Failed to delete category", { description: e.message });
     }
-  }
+  }, [deleteCategoryAction]);
 
   const { cashCategories, bankCategories } = useMemo(() => {
     const allCategories = categories || [];
@@ -173,19 +171,14 @@ function GeneralSettings() {
             </CardHeader>
             <CardContent>
                 <Button onClick={openInitialBalanceDialog}>
-                    <RefreshCw className="mr-2 h-4 w-4" />
                     Set / Reset Initial Balances
                 </Button>
             </CardContent>
         </Card>
         <Card>
             <CardHeader>
-                <div className="flex justify-between items-center">
-                    <div>
-                        <CardTitle>Bank Accounts</CardTitle>
-                        <CardDescription>Manage your bank accounts.</CardDescription>
-                    </div>
-                </div>
+                <CardTitle>Bank Accounts</CardTitle>
+                <CardDescription>Manage your bank accounts.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
                     <div>
@@ -210,12 +203,8 @@ function GeneralSettings() {
         </Card>
         <Card>
             <CardHeader>
-            <div className="flex justify-between items-center">
-                <div>
-                    <CardTitle>Category Management</CardTitle>
-                    <CardDescription>Customize categories for your cash and bank transactions.</CardDescription>
-                </div>
-            </div>
+            <CardTitle>Category Management</CardTitle>
+            <CardDescription>Customize categories for your cash and bank transactions.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
             <div>
@@ -298,21 +287,30 @@ export function SettingsTab() {
   const isAdmin = user?.role === 'admin';
   const [activePage, setActivePage] = useState<SettingsPage>('appearance');
 
-  const navItems: {id: SettingsPage, label: string, icon: React.ElementType, adminOnly: boolean, component: ReactNode}[] = [
-    { id: 'appearance', label: 'Appearance', icon: Palette, adminOnly: false, component: <AppearanceSettings /> },
-    { id: 'general', label: 'General', icon: Settings, adminOnly: true, component: <GeneralSettings /> },
-    { id: 'contacts', label: 'Contacts', icon: Contact2, adminOnly: false, component: <ContactsTab /> },
-    { id: 'users', label: 'Users', icon: Users, adminOnly: true, component: <UserManagementTab /> },
-    { id: 'activity_log', label: 'Activity Log', icon: History, adminOnly: true, component: <ActivityLogTab /> },
-    { id: 'recycle_bin', label: 'Recycle Bin', icon: Recycle, adminOnly: true, component: <RecycleBinTab /> },
-    { id: 'export_import', label: 'Export/Import', icon: FileCog, adminOnly: false, component: <ExportImportTab /> },
+  const navItems: {id: SettingsPage, label: string, icon: React.ElementType, adminOnly: boolean}[] = [
+    { id: 'appearance', label: 'Appearance', icon: Palette, adminOnly: false },
+    { id: 'general', label: 'General', icon: Settings, adminOnly: true },
+    { id: 'contacts', label: 'Contacts', icon: Contact2, adminOnly: false },
+    { id: 'users', label: 'Users', icon: Users, adminOnly: true },
+    { id: 'activity_log', label: 'Activity Log', icon: History, adminOnly: true },
+    { id: 'recycle_bin', label: 'Recycle Bin', icon: Recycle, adminOnly: true },
+    { id: 'export_import', label: 'Export/Import', icon: FileCog, adminOnly: false },
   ]
   
   const filteredNavItems = navItems.filter(item => !item.adminOnly || isAdmin);
 
-  const activeComponent = useMemo(() => {
-    return navItems.find(item => item.id === activePage)?.component;
-  }, [activePage, navItems]);
+  const renderActivePage = () => {
+    switch (activePage) {
+        case 'appearance': return <AppearanceSettings />;
+        case 'general': return <GeneralSettings />;
+        case 'contacts': return <ContactsTab />;
+        case 'users': return <UserManagementTab />;
+        case 'activity_log': return <ActivityLogTab />;
+        case 'recycle_bin': return <RecycleBinTab />;
+        case 'export_import': return <ExportImportTab />;
+        default: return <AppearanceSettings />;
+    }
+  };
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
@@ -331,8 +329,10 @@ export function SettingsTab() {
                 ))}
             </nav>
         </aside>
-        <main key={activePage} className="md:col-span-3 animate-fade-in">
-           {activeComponent}
+        <main className="md:col-span-3">
+           <div key={activePage} className="animate-fade-in">
+             {renderActivePage()}
+           </div>
         </main>
     </div>
   );

@@ -11,7 +11,7 @@ import type { User } from '@/lib/types';
 export function useSessionManager() {
     const router = useRouter();
     const [user, setUser] = useState<User | null>(null);
-    const [isLoading, setIsLoading] = useState(true);
+    const [isLoading, setIsLoading] = useState(false);
     const [isAuthenticating, setIsAuthenticating] = useState(false);
     const [isLoggingOut, setIsLoggingOut] = useState(false);
     const [isOnline, setIsOnline] = useState(true);
@@ -23,17 +23,14 @@ export function useSessionManager() {
         try {
             await serverLogout();
         } catch (error) {
-            // Log the error but continue with client-side cleanup
             console.error("Server logout failed, proceeding with client-side cleanup:", error);
         } finally {
-            // Always perform client-side cleanup
-            await clearAllData(true); // Clear everything including app state
+            await clearAllData(true); 
             setUser(null);
             setIsLoggingOut(false);
-            // Full page reload to ensure all state is cleared and redirect to login
-            window.location.href = '/login';
+            router.replace('/login');
         }
-    }, []);
+    }, [router]);
 
     const handleApiError = useCallback((error: any) => {
         const isAuthError = error.message.includes('JWT') || error.message.includes('Unauthorized') || error.message.includes("SESSION_EXPIRED");
@@ -52,8 +49,8 @@ export function useSessionManager() {
             const result = await serverLogin(credentials);
             if (result.success && result.session) {
                 toast.success("Login Successful", { description: "Welcome back!" });
-                // Use the router for a soft navigation
-                router.push('/');
+                setIsInitialLoadComplete(false); // This will trigger a reload in the main context
+                router.replace('/');
             }
             return result;
         } catch (error: any) {
