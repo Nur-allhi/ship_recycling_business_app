@@ -40,12 +40,9 @@ interface AppData {
   cashCategories: Category[];
   bankCategories: Category[];
   contacts: Contact[];
-  ledgerTransactions: LedgerTransaction[];
   loans: Loan[];
   loanPayments: LoanPayment[];
   stockItems: StockItem[];
-  cashTransactions: CashTransaction[];
-  bankTransactions: BankTransaction[];
   blockingOperation: BlockingOperation;
 }
 
@@ -110,18 +107,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     
     const [isInitialBalanceDialogOpen, setIsInitialBalanceDialogOpen] = useState(false);
     
-    // Global data that is small and safe to query live
     const appState = useLiveQuery(() => db.app_state.get(1), []);
     const banks = useLiveQuery(() => db.banks.toArray(), []);
     const allCategories = useLiveQuery(() => db.categories.toArray(), []);
     const contacts = useLiveQuery(() => db.contacts.toArray(), []);
-    const ledgerTransactions = useLiveQuery(() => db.ap_ar_transactions.toArray(), []);
     const loans = useLiveQuery(() => db.loans.toArray(), []);
     const loanPayments = useLiveQuery(() => db.loan_payments.toArray(), []);
     const stockItems = useLiveQuery(() => db.initial_stock.toArray(), []);
-    const cashTransactions = useLiveQuery(() => db.cash_transactions.toArray(), []);
-    const bankTransactions = useLiveQuery(() => db.bank_transactions.toArray(), []);
-
 
     const { cashCategories, bankCategories } = useMemo(() => {
         const dbCash: Category[] = [];
@@ -143,7 +135,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
         if (categoriesToCreate.length > 0) {
             console.log(`Seeding ${categoriesToCreate.length} essential categories...`);
-            // This is the key fix: use Promise.all to await the resolution of all creation promises.
             const creationPromises = categoriesToCreate.map(cat => 
                 server.appendData({ tableName: 'categories', data: cat, select: '*' })
             );
@@ -304,12 +295,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         cashCategories: cashCategories || [],
         bankCategories: bankCategories || [],
         contacts: contacts || [],
-        ledgerTransactions: ledgerTransactions || [],
         loans: loans || [],
         loanPayments: loanPayments || [],
         stockItems: stockItems || [],
-        cashTransactions: cashTransactions || [],
-        bankTransactions: bankTransactions || [],
         // Functions
         login, logout, reloadData, handleApiError,
         processSyncQueue, openInitialBalanceDialog, closeInitialBalanceDialog,
@@ -320,7 +308,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         appState, banks, cashCategories, bankCategories,
         login, logout, reloadData, handleApiError,
         processSyncQueue, setUser, queueOrSync,
-        contacts, ledgerTransactions, loans, loanPayments, stockItems, cashTransactions, bankTransactions
+        contacts, loans, loanPayments, stockItems
     ]);
 
     return (

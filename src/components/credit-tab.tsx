@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState, useMemo } from 'react';
@@ -20,7 +19,9 @@ export function CreditTab() {
         if (!ledgerTransactions) return { totalPayables: 0, totalReceivables: 0 };
         const payables = ledgerTransactions.filter(tx => tx.type === 'payable').reduce((acc, tx) => acc + (tx.amount - tx.paid_amount), 0);
         const receivables = ledgerTransactions.filter(tx => tx.type === 'receivable').reduce((acc, tx) => acc + (tx.amount - tx.paid_amount), 0);
-        return { totalPayables: payables, totalReceivables: receivables };
+        const advancesPayable = ledgerTransactions.filter(tx => tx.type === 'advance' && tx.amount < 0).reduce((acc, tx) => acc + Math.abs(tx.amount), 0);
+        const advancesReceivable = ledgerTransactions.filter(tx => tx.type === 'advance' && tx.amount > 0).reduce((acc, tx) => acc + tx.amount, 0);
+        return { totalPayables: payables - advancesPayable, totalReceivables: receivables - advancesReceivable };
     }, [ledgerTransactions]);
     
     const [mobileView, setMobileView] = useState<'payables' | 'receivables'>('payables');
