@@ -1,18 +1,27 @@
 
 "use client";
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { toast } from 'sonner';
 import { db } from '@/lib/db';
 import type { SyncQueueItem } from '@/lib/db';
-import { useLiveQuery } from 'dexie-react-hooks';
 import * as server from '@/lib/actions';
 import { useSessionManager } from './useSessionManager';
 
 export function useDataSyncer() {
     const { handleApiError, isOnline } = useSessionManager();
     const [isSyncing, setIsSyncing] = useState(false);
-    const syncQueueCount = useLiveQuery(() => db.sync_queue.count(), []) ?? 0;
+    const [syncQueueCount, setSyncQueueCount] = useState(0);
+    
+    useEffect(() => {
+        const updateCount = async () => {
+            const count = await db.sync_queue.count();
+            setSyncQueueCount(count);
+        };
+        updateCount();
+        const interval = setInterval(updateCount, 2000);
+        return () => clearInterval(interval);
+    }, []);
 
     const processSyncQueue = useCallback(async (specificItemId?: number) => {
         if (isSyncing && !specificItemId) return;
@@ -165,7 +174,3 @@ export function useDataSyncer() {
         queueOrSync,
     };
 }
-
-    
-
-    

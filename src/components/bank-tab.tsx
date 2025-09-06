@@ -36,6 +36,7 @@ import { useIsMobile } from "@/hooks/use-mobile"
 import { Badge } from "./ui/badge"
 import * as server from "@/lib/actions";
 import { db } from "@/lib/db"
+import { useBalanceCalculator } from "../app/context/useBalanceCalculator"
 
 const toYYYYMMDD = (date: Date) => {
     const d = new Date(date);
@@ -47,7 +48,8 @@ type SortKey = keyof BankTransaction | 'debit' | 'credit' | null;
 type SortDirection = 'asc' | 'desc';
 
 export function BankTab() {
-  const { bankBalance, bankTransactions, currency, user, banks, isLoading, handleApiError, isOnline, contacts, loans } = useAppContext()
+  const { bankTransactions, currency, user, banks, isLoading, handleApiError, isOnline, contacts, loans } = useAppContext()
+  const { bankBalance } = useBalanceCalculator();
   const { transferFunds, deleteBankTransaction, deleteMultipleBankTransactions } = useAppActions();
   const [isTransferSheetOpen, setIsTransferSheetOpen] = useState(false)
   const [editSheetState, setEditSheetState] = useState<{isOpen: boolean, transaction: BankTransaction | null}>({ isOpen: false, transaction: null});
@@ -170,7 +172,7 @@ export function BankTab() {
              if(dateA !== dateB) return sortDirection === 'desc' ? dateB - dateA : dateA - dateB;
               // Secondary sort for date
              return sortDirection === 'desc' 
-                ? new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime() 
+                ? new Date(b.createdAt).getTime() - new Date(b.createdAt).getTime() 
                 : new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
         } else if (sortKey) {
             aValue = a[sortKey as keyof BankTransaction];
@@ -609,5 +611,3 @@ export function BankTab() {
     </>
   )
 }
-
-    

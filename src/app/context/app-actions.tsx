@@ -1,11 +1,10 @@
 
 "use client";
-import { useCallback, useState } from 'react';
+import { useCallback } from 'react';
 import { toast } from 'sonner';
 import { db } from '@/lib/db';
-import type { SyncQueueItem, User } from '@/lib/db';
+import type { User } from '@/lib/db';
 import { useDataSyncer } from './useDataSyncer';
-import { useBalanceCalculator } from './useBalanceCalculator';
 import { useSessionManager } from './useSessionManager';
 import type { CashTransaction, BankTransaction, StockTransaction, Contact, LedgerTransaction, LedgerPayment, StockItem, Loan, LoanPayment } from '@/lib/types';
 import * as server from '@/lib/actions'; 
@@ -20,10 +19,9 @@ const toYYYYMMDD = (date: Date) => {
 };
 
 export function useAppActions() {
-    const { user, isOnline, logout } = useSessionManager();
+    const { logout } = useSessionManager();
     const { queueOrSync } = useDataSyncer();
-    const { updateBalances } = useBalanceCalculator();
-    const { setBlockingOperation } = useAppContext();
+    const { setBlockingOperation, reloadData } = useAppContext();
     
     const performAdminAction = async <T,>(action: () => Promise<T>): Promise<T | undefined> => {
         const session = await getSession();
@@ -45,7 +43,6 @@ export function useAppActions() {
             const newTxData: CashTransaction = { ...tx, id: tempId, createdAt: new Date().toISOString() };
             
             await db.cash_transactions.add(newTxData);
-            await updateBalances();
 
             if (tx.category === 'A/R Settlement' || tx.category === 'A/P Settlement') {
                 const payload = {
@@ -65,7 +62,6 @@ export function useAppActions() {
             const newTxData: BankTransaction = { ...tx, id: tempId, createdAt: new Date().toISOString() };
             
             await db.bank_transactions.add(newTxData);
-            await updateBalances();
             
             if (tx.category === 'A/R Settlement' || tx.category === 'A/P Settlement') {
                 const payload = {
@@ -114,8 +110,6 @@ export function useAppActions() {
                 await db.ap_ar_transactions.add(ledgerData);
             }
             
-            await updateBalances();
-            
             queueOrSync({
                 action: 'addStockTransaction',
                 payload: { stockTx: tx, localId: stockTempId }
@@ -128,7 +122,6 @@ export function useAppActions() {
             const tempId = `temp_ledger_${Date.now()}`;
             const dataToSave: LedgerTransaction = { ...tx, status: 'unpaid', paid_amount: 0, installments: [], id: tempId };
             await db.ap_ar_transactions.add(dataToSave);
-            await updateBalances();
             
             const { installments, id, ...syncData } = dataToSave;
             queueOrSync({ action: 'appendData', payload: { tableName: 'ap_ar_transactions', data: syncData, localId: tempId, logDescription: `Added A/P or A/R: ${tx.description}`, select: '*' } });
@@ -138,7 +131,6 @@ export function useAppActions() {
     const editCashTransaction = async (originalTx: CashTransaction, updatedTxData: Partial<Omit<CashTransaction, 'id' | 'date' | 'createdAt'>>) => {
         return performAdminAction(async () => {
             await db.cash_transactions.update(originalTx.id, updatedTxData);
-            await updateBalances();
             queueOrSync({ action: 'updateData', payload: { tableName: 'cash_transactions', id: originalTx.id, data: updatedTxData, logDescription: `Edited cash tx: ${originalTx.id}` }});
             toast.success("Cash transaction updated locally.");
         });
@@ -147,7 +139,6 @@ export function useAppActions() {
     const editBankTransaction = async (originalTx: BankTransaction, updatedTxData: Partial<Omit<BankTransaction, 'id'| 'date' | 'createdAt'>>) => {
         return performAdminAction(async () => {
             await db.bank_transactions.update(originalTx.id, updatedTxData);
-            await updateBalances();
             queueOrSync({ action: 'updateData', payload: { tableName: 'bank_transactions', id: originalTx.id, data: updatedTxData, logDescription: `Edited bank tx: ${originalTx.id}` }});
             toast.success("Bank transaction updated locally.");
         });
@@ -176,7 +167,6 @@ export function useAppActions() {
                 await db.bank_transactions.update(linkedBank.id, { actual_amount: newActualAmount, expected_amount: newActualAmount, difference: 0 });
             }
 
-            await updateBalances();
             queueOrSync({ action: 'updateStockTransaction', payload: { stockTxId: originalTx.id, updates: finalUpdates } });
             toast.success("Stock transaction updated locally.");
         });
@@ -210,9 +200,8 @@ export function useAppActions() {
                 }
             }
             
-            await updateBalances();
         });
-    }, [queueOrSync, updateBalances]);
+    }, [queueOrSync]);
     
     const setFontSize = (size: 'sm' | 'base' | 'lg') => db.app_state.update(1, { fontSize: size });
     const setWastagePercentage = (percentage: number) => performAdminAction(() => db.app_state.update(1, { wastagePercentage: percentage }));
@@ -257,7 +246,6 @@ export function useAppActions() {
                 await db.cash_transactions.add({ id: tempCashId, date, type: 'income', category: 'Funds Transfer', description: toDesc, actual_amount: amount, expected_amount: amount, difference: 0, createdAt: new Date().toISOString() });
             }
             
-            await updateBalances();
             queueOrSync({ action: 'transferFunds', payload: { from, amount, date, bankId, description, localCashId: tempCashId, localBankId: tempBankId } });
             toast.success("Transfer recorded locally.");
         });
@@ -276,7 +264,6 @@ export function useAppActions() {
                 await db.bank_transactions.add({ id: `temp_init_bank_${bankId}_${Date.now()}`, date: isoDate, type: 'deposit', category: 'Initial Balance', description: 'Initial bank balance', actual_amount: amount, expected_amount: amount, difference: 0, bank_id: bankId, createdAt: new Date().toISOString() });
             }
             
-            await updateBalances();
             queueOrSync({ action: 'setInitialBalances', payload: { cash, bankTotals, date: isoDate } });
         });
     };
@@ -285,7 +272,6 @@ export function useAppActions() {
       return performAdminAction(async () => {
         const newItem: StockItem = { ...item, id: `temp_init_stock_${Date.now()}`, purchasePricePerKg: item.pricePerKg };
         await db.initial_stock.add(newItem as any);
-        await updateBalances();
         queueOrSync({ action: 'addInitialStockItem', payload: { item } });
       });
     };
@@ -359,7 +345,6 @@ export function useAppActions() {
                 amountToSettle -= paymentForThisTx;
             }
 
-            await updateBalances();
             queueOrSync({ 
                 action: 'recordPaymentAgainstTotal', 
                 payload: { contact_id: contactId, payment_amount: paymentAmount, payment_date: isoDate, payment_method: paymentMethod, ledger_type: ledgerType, bank_id: bankId, description: desc, localFinancialId: tempFinancialId }
@@ -415,8 +400,6 @@ export function useAppActions() {
                 await db.bank_transactions.add({ ...financialTxData, type: ledger_type === 'payable' ? 'withdrawal' : 'deposit', bank_id: bank_id! });
             }
             
-            await updateBalances();
-            
             queueOrSync({
                 action: 'recordAdvancePayment',
                 payload: { ...payload, date: isoDate, localLedgerId: tempLedgerId, localFinancialId: tempFinancialId }
@@ -439,9 +422,8 @@ export function useAppActions() {
 
             queueOrSync({ action: 'restoreData', payload: { tableName, id } });
             toast.success("Item restoration queued. Please refresh data later.");
-            await updateBalances();
         });
-    }, [queueOrSync, updateBalances]);
+    }, [queueOrSync]);
     
     const emptyRecycleBin = useCallback(() => {
         return performAdminAction(async () => {
@@ -468,11 +450,15 @@ export function useAppActions() {
             const reader = new FileReader();
             reader.onload = async (event) => {
                 try {
+                    setBlockingOperation({ isActive: true, message: "Importing data... Do not close the app."});
                     const data = JSON.parse(event.target?.result as string);
-                    queueOrSync({ action: 'batchImportData', payload: { data } });
-                    toast.info("Data import has been queued. The app will reload once completed.");
-                } catch (e) {
-                    toast.error("Import failed", { description: "Invalid file format." });
+                    await server.batchImportData(data); // Directly call, don't queue
+                    toast.info("Data import successful! Reloading data...");
+                    await reloadData({ force: true });
+                } catch (e: any) {
+                    toast.error("Import failed", { description: e.message });
+                } finally {
+                    setBlockingOperation({ isActive: false, message: "" });
                 }
             };
             reader.readAsText(file);
@@ -489,11 +475,11 @@ export function useAppActions() {
         setBlockingOperation({ isActive: true, message: "Deleting all data... Please wait." });
         try {
             await server.deleteAllData();
-            toast.success("All data has been deleted.");
+            toast.success("All data has been deleted from the server.");
         } catch (error: any) {
             toast.error("Operation Failed", { description: error.message });
         } finally {
-            // The logout will clear the blocking operation state and redirect.
+            // Logout will clear local data and reset the app state
             logout();
         }
     };
@@ -524,8 +510,6 @@ export function useAppActions() {
             } else {
                 await db.bank_transactions.add({ ...financialTxData, type: loan.type === 'payable' ? 'deposit' : 'withdrawal', bank_id: disbursement.bank_id! });
             }
-
-            await updateBalances();
 
             queueOrSync({ action: 'addLoan', payload: { loanData: loan, disbursement, localId: tempId, localFinancialId: tempFinancialId } });
             return newLoan;
@@ -578,8 +562,6 @@ export function useAppActions() {
             if (totalPaid >= loan.principal_amount) {
                 await db.loans.update(loan_id, { status: 'paid' });
             }
-            
-            await updateBalances();
             
             queueOrSync({ action: 'recordLoanPayment', payload: { ...payload, localPaymentId: tempPaymentId, localFinancialId: tempFinancialId } });
             toast.success("Loan payment recorded locally.");

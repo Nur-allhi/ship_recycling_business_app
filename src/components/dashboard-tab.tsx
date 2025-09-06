@@ -7,13 +7,15 @@ import { Wallet, Landmark, Boxes, LineChart } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Skeleton } from "@/components/ui/skeleton";
 import { useMemo } from "react";
+import { useBalanceCalculator } from "@/app/context/useBalanceCalculator";
 
 interface DashboardTabProps {
   setActiveTab: (tab: string) => void;
 }
 
 export function DashboardTab({ setActiveTab }: DashboardTabProps) {
-  const { cashBalance, bankBalance, currency, isLoading, stockItems } = useAppContext()
+  const { currency, isLoading } = useAppContext()
+  const { cashBalance, bankBalance, stockItems } = useBalanceCalculator();
 
   const formatCurrency = (amount: number) => {
     if (currency === 'BDT') {

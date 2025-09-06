@@ -9,9 +9,11 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { PayablesList } from './payables-list';
 import { ReceivablesList } from './receivables-list';
 import { ResponsiveSelect } from './ui/responsive-select';
+import { useBalanceCalculator } from '../app/context/useBalanceCalculator';
 
 export function CreditTab() {
-    const { totalPayables, totalReceivables, currency } = useAppContext();
+    const { currency } = useAppContext();
+    const { totalPayables, totalReceivables } = useBalanceCalculator();
     const [mobileView, setMobileView] = useState<'payables' | 'receivables'>('payables');
     const isMobile = useIsMobile();
     
@@ -79,5 +81,3 @@ export function CreditTab() {
        </div>
     )
 }
-
-    

@@ -11,7 +11,6 @@ import { WifiOff, RefreshCw } from 'lucide-react';
 import { AppLoading } from '@/components/app-loading';
 import { useSessionManager } from './useSessionManager';
 import { useDataSyncer } from './useDataSyncer';
-import { useBalanceCalculator } from './useBalanceCalculator';
 import * as server from '@/lib/actions';
 import { getSession as getSessionFromCookie } from '@/app/auth/actions';
 
@@ -23,12 +22,6 @@ type BlockingOperation = {
 type FontSize = 'sm' | 'base' | 'lg';
 
 interface AppData {
-  // From useBalanceCalculator
-  cashBalance: number;
-  bankBalance: number;
-  stockItems: StockItem[] | undefined;
-  totalPayables: number;
-  totalReceivables: number;
   // From useSessionManager
   isLoading: boolean;
   isOnline: boolean;
@@ -63,7 +56,6 @@ interface AppContextType extends AppData {
   login: (credentials: Parameters<typeof server.login>[0]) => Promise<any>;
   logout: () => Promise<void>;
   reloadData: (options?: { force?: boolean; needsInitialBalance?: boolean }) => Promise<void>;
-  updateBalances: () => Promise<void>;
   handleApiError: (error: unknown) => void;
   processSyncQueue: (specificItemId?: number) => Promise<void>;
   openInitialBalanceDialog: () => void;
@@ -119,7 +111,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     } = useSessionManager();
 
     const { isSyncing, syncQueueCount, processSyncQueue, queueOrSync } = useDataSyncer();
-    const { cashBalance, bankBalance, stockItems: calculatedStockItems, totalPayables, totalReceivables, updateBalances } = useBalanceCalculator();
     
     const [loadedMonths, setLoadedMonths] = useState<Record<string, boolean>>({});
     const [isInitialBalanceDialogOpen, setIsInitialBalanceDialogOpen] = useState(false);
@@ -213,7 +204,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 });
             }
 
-            await updateBalances();
             processSyncQueue();
 
         } catch (error: any) {
@@ -221,7 +211,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         } finally {
             setIsLoading(false);
         }
-    }, [handleApiError, setIsLoading, setUser, updateBalances, processSyncQueue, seedEssentialCategories]);
+    }, [handleApiError, setIsLoading, setUser, processSyncQueue, seedEssentialCategories]);
 
     useEffect(() => {
         const checkSessionAndLoad = async () => {
@@ -231,11 +221,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 setUser(session);
                 const localUser = await db.app_state.get(1);
                 if (localUser?.user?.id === session.id) {
-                    // User is the same, no full reload needed, just ensure balances are good.
-                    await updateBalances();
                     setIsLoading(false);
                 } else {
-                    // New user or forced reload, trigger full data load.
                     await reloadData();
                 }
             } else {
@@ -304,7 +291,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     
     const contextValue = useMemo(() => ({
         // State
-        cashBalance, bankBalance, stockItems: calculatedStockItems, totalPayables, totalReceivables,
         isLoading, isOnline, user, isInitialLoadComplete, isLoggingOut, isAuthenticating,
         isSyncing, syncQueueCount, isInitialBalanceDialogOpen, blockingOperation,
         // Live Data
@@ -313,14 +299,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         loadedMonths,
         // Setters & Functions
         setLoadedMonths,
-        login, logout, reloadData, updateBalances, handleApiError,
+        login, logout, reloadData, handleApiError,
         processSyncQueue, openInitialBalanceDialog, closeInitialBalanceDialog,
         setUser, setBlockingOperation, queueOrSync,
     }), [
-        cashBalance, bankBalance, calculatedStockItems, totalPayables, totalReceivables,
         isLoading, isOnline, user, isInitialLoadComplete, isLoggingOut, isAuthenticating,
         isSyncing, syncQueueCount, isInitialBalanceDialogOpen, liveData,
-        loadedMonths, login, logout, reloadData, updateBalances, handleApiError,
+        loadedMonths, login, logout, reloadData, handleApiError,
         processSyncQueue, setUser, blockingOperation, queueOrSync
     ]);
 
@@ -382,5 +367,3 @@ export function useAppContext() {
     }
     return context;
 }
-
-    

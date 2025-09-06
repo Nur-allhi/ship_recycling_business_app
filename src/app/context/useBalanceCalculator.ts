@@ -1,9 +1,10 @@
 
 "use client";
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { db } from '@/lib/db';
 import type { StockItem } from '@/lib/types';
+import { useLiveQuery } from 'dexie-react-hooks';
 
 export function useBalanceCalculator() {
     const [cashBalance, setCashBalance] = useState(0);
@@ -12,14 +13,16 @@ export function useBalanceCalculator() {
     const [totalPayables, setTotalPayables] = useState(0);
     const [totalReceivables, setTotalReceivables] = useState(0);
 
-    const updateBalances = useCallback(async () => {
-        const [allCash, allBank, allLedger, allStock, allInitialStock] = await Promise.all([
-            db.cash_transactions.toArray(),
-            db.bank_transactions.toArray(),
-            db.ap_ar_transactions.toArray(),
-            db.stock_transactions.toArray(),
-            db.initial_stock.toArray(),
-        ]);
+    const allCash = useLiveQuery(() => db.cash_transactions.toArray(), []);
+    const allBank = useLiveQuery(() => db.bank_transactions.toArray(), []);
+    const allLedger = useLiveQuery(() => db.ap_ar_transactions.toArray(), []);
+    const allStock = useLiveQuery(() => db.stock_transactions.toArray(), []);
+    const allInitialStock = useLiveQuery(() => db.initial_stock.toArray(), []);
+
+    useEffect(() => {
+        if (allCash === undefined || allBank === undefined || allLedger === undefined || allStock === undefined || allInitialStock === undefined) {
+            return;
+        }
 
         const cash = allCash.reduce((acc, tx) => acc + (tx.type === 'income' ? tx.actual_amount : -tx.actual_amount), 0);
         setCashBalance(cash);
@@ -33,11 +36,9 @@ export function useBalanceCalculator() {
         const receivables = allLedger.filter(tx => tx.type === 'receivable').reduce((acc, tx) => acc + (tx.amount - tx.paid_amount), 0);
         setTotalReceivables(receivables);
         
-        // This is a simplified stock calculation for the dashboard.
-        // It now CORRECTLY includes the initial stock.
         const stockPortfolio: Record<string, { weight: number, purchasePricePerKg: number, totalValue: number }> = {};
         
-        (allInitialStock || []).forEach(item => {
+        allInitialStock.forEach(item => {
             if (!stockPortfolio[item.name]) {
                 stockPortfolio[item.name] = { weight: 0, purchasePricePerKg: 0, totalValue: 0 };
             }
@@ -45,7 +46,7 @@ export function useBalanceCalculator() {
             stockPortfolio[item.name].totalValue += item.weight * item.purchasePricePerKg;
         });
 
-        (allStock || []).forEach(tx => {
+        allStock.forEach(tx => {
             if (!stockPortfolio[tx.stockItemName]) {
                 stockPortfolio[tx.stockItemName] = { weight: 0, purchasePricePerKg: 0, totalValue: 0 };
             }
@@ -72,7 +73,7 @@ export function useBalanceCalculator() {
 
         setStockItems(currentStockItems);
 
-    }, []);
+    }, [allCash, allBank, allLedger, allStock, allInitialStock]);
 
     return {
         cashBalance,
@@ -80,6 +81,5 @@ export function useBalanceCalculator() {
         stockItems,
         totalPayables,
         totalReceivables,
-        updateBalances,
     };
 }

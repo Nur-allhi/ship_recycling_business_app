@@ -29,6 +29,7 @@ import { useIsMobile } from "@/hooks/use-mobile"
 import { Badge } from "./ui/badge"
 import * as server from "@/lib/actions";
 import { db } from "@/lib/db"
+import { useBalanceCalculator } from "../app/context/useBalanceCalculator"
 
 const toYYYYMMDD = (date: Date) => {
     const d = new Date(date);
@@ -40,7 +41,8 @@ type SortKey = keyof CashTransaction | 'debit' | 'credit' | null;
 type SortDirection = 'asc' | 'desc';
 
 export function CashTab() {
-  const { cashBalance, cashTransactions, currency, user, banks, isLoading, handleApiError, isOnline, contacts, loans } = useAppContext()
+  const { cashTransactions, currency, user, banks, isLoading, handleApiError, isOnline, contacts, loans } = useAppContext()
+  const { cashBalance } = useBalanceCalculator();
   const { transferFunds, deleteCashTransaction, deleteMultipleCashTransactions } = useAppActions();
   const [isTransferSheetOpen, setIsTransferSheetOpen] = useState(false)
   const [editSheetState, setEditSheetState] = useState<{isOpen: boolean, transaction: CashTransaction | null}>({ isOpen: false, transaction: null});
@@ -64,25 +66,11 @@ export function CashTab() {
     if (localSnapshot) {
         setMonthlySnapshot(localSnapshot);
     } else {
-        // If no local snapshot, try to fetch from server ONLY IF online and an admin.
-        if (isOnline && user?.role === 'admin') {
-            try {
-                const serverSnapshot = await server.getOrCreateSnapshot(currentMonth.toISOString());
-                setMonthlySnapshot(serverSnapshot);
-                if (serverSnapshot) {
-                    await db.monthly_snapshots.put(serverSnapshot);
-                }
-            } catch(e) {
-                handleApiError(e);
-                setMonthlySnapshot(null); // Fallback to null on error
-            }
-        } else {
-            // Offline or not an admin, so we can't create a snapshot. Fallback to local calculation.
-            setMonthlySnapshot(null);
-        }
+        // Fallback to local calculation if no snapshot is available or offline
+        setMonthlySnapshot(null);
     }
     setIsSnapshotLoading(false);
-  }, [currentMonth, handleApiError, isOnline, user?.role]);
+  }, [currentMonth]);
 
   useEffect(() => {
     fetchSnapshot();
@@ -558,5 +546,3 @@ export function CashTab() {
     </>
   )
 }
-
-    
