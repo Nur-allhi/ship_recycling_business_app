@@ -323,12 +323,114 @@ export function BankTab() {
             {showActions && <TableHead className="text-center">Actions</TableHead>}
             </TableRow>
         </TableHeader>
-        <AnimatePresence>
         <TableBody>
             {isLoading || isSnapshotLoading ? (
               <TableRow><TableCell colSpan={isSelectionMode ? 9 : 8} className="h-24 text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin" /></TableCell></TableRow>
             ) : sortedTransactions.length > 0 ? (
-            sortedTransactions.map((tx: any) => {
+            <AnimatePresence initial={false}>
+              {sortedTransactions.map((tx: any) => {
+                let description = tx.description;
+                let subDescription = null;
+
+                if (tx.linkedLoanId) {
+                    const loan = loans.find(l => l.id === tx.linkedLoanId);
+                    if (loan) {
+                        const contact = contacts.find(c => c.id === loan.contact_id);
+                        description = loan.type === 'payable' ? 'Loan Received' : 'Loan Disbursed';
+                        if (contact) {
+                            subDescription = `From/To: ${contact.name}`;
+                        }
+                    }
+                } else if (tx.contact_id) {
+                    const contact = contacts.find(c => c.id === tx.contact_id);
+                    if (contact) {
+                        subDescription = `(${contact.name})`;
+                    }
+                }
+
+                return (
+                  <motion.tr 
+                      key={tx.id} 
+                      layout
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: 10 }}
+                      transition={{ duration: 0.3 }}
+                      data-state={selectedTxIds.includes(tx.id) && "selected"}
+                  >
+                  {isSelectionMode && (
+                    <TableCell className="text-center">
+                        <Checkbox 
+                            onCheckedChange={(checked) => handleSelectRow(tx, Boolean(checked))}
+                            checked={selectedTxIds.includes(tx.id)}
+                            aria-label="Select row"
+                        />
+                    </TableCell>
+                  )}
+                  <TableCell className="text-center">
+                    <div className="flex items-center justify-center gap-2">
+                      <span className="font-mono">{format(new Date(tx.date), 'dd-MM-yyyy')}</span>
+                      {tx.lastEdited && (
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger>
+                              <History className="h-3 w-3 text-muted-foreground" />
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>Edited on: {new Date(tx.lastEdited).toLocaleString()}</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      )}
+                    </div>
+                  </TableCell>
+                  <TableCell className="font-medium text-left">
+                    {description}
+                    {subDescription && <span className="text-xs text-muted-foreground block">{subDescription}</span>}
+                  </TableCell>
+                  <TableCell className="text-center">{tx.category}</TableCell>
+                  {selectedBankId === 'all' && (
+                      <TableCell className="text-center">
+                          {(banks || []).find(b => b.id === tx.bank_id)?.name || 'N/A'}
+                      </TableCell>
+                  )}
+                  <TableCell className="text-right font-mono text-destructive">{formatCurrency(tx.type === 'withdrawal' ? tx.actual_amount : 0)}</TableCell>
+                  <TableCell className="text-right font-mono text-accent">{formatCurrency(tx.type === 'deposit' ? tx.actual_amount : 0)}</TableCell>
+                  <TableCell className="text-right font-mono font-semibold">{formatCurrency(tx.balance)}</TableCell>
+                  {showActions && (
+                    <TableCell className="text-center">
+                        <div className="flex items-center justify-center gap-2">
+                          <Button variant="ghost" size="icon" onClick={() => handleEditClick(tx)}>
+                              <Pencil className="h-4 w-4" />
+                              <span className="sr-only">Edit</span>
+                          </Button>
+                          <Button variant="ghost" size="icon" onClick={() => handleDeleteClick(tx)}>
+                              <Trash2 className="h-4 w-4" />
+                              <span className="sr-only">Delete</span>
+                          </Button>
+                        </div>
+                    </TableCell>
+                  )}
+                  </motion.tr>
+              )})}
+            </AnimatePresence>
+            ) : (
+            <TableRow>
+                <TableCell colSpan={isSelectionMode ? (showActions ? 10 : 9) : (showActions ? 9 : 8)} className="text-center h-24">No bank transactions found for {format(currentMonth, 'MMMM yyyy')}.</TableCell>
+            </TableRow>
+            )}
+        </TableBody>
+        </Table>
+    </div>
+  );
+
+  const renderMobileView = () => (
+    <div className="space-y-4">
+      {isLoading ? (
+        <div className="flex justify-center items-center h-24"><Loader2 className="h-6 w-6 animate-spin" /></div>
+      ) : sortedTransactions.length > 0 ? (
+        <AnimatePresence initial={false}>
+          {sortedTransactions.map((tx: BankTransaction) => {
               let description = tx.description;
               let subDescription = null;
 
@@ -347,181 +449,79 @@ export function BankTab() {
                       subDescription = `(${contact.name})`;
                   }
               }
-
-              return (
-                <motion.tr 
-                    key={tx.id} 
-                    layout
-                    initial={{ opacity: 0, y: -10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: 10 }}
-                    transition={{ duration: 0.3 }}
-                    data-state={selectedTxIds.includes(tx.id) && "selected"}
-                >
-                {isSelectionMode && (
-                  <TableCell className="text-center">
-                      <Checkbox 
-                          onCheckedChange={(checked) => handleSelectRow(tx, Boolean(checked))}
-                          checked={selectedTxIds.includes(tx.id)}
-                          aria-label="Select row"
-                      />
-                  </TableCell>
+            return (
+            <motion.div 
+              key={tx.id} 
+              layout
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 10 }}
+              transition={{ duration: 0.3 }}
+              className="relative"
+            >
+            <Card>
+              {isSelectionMode && (
+                  <Checkbox 
+                      onCheckedChange={(checked) => handleSelectRow(tx, Boolean(checked))}
+                      checked={selectedTxIds.includes(tx.id)}
+                      aria-label="Select row"
+                      className="absolute top-4 left-4"
+                  />
                 )}
-                <TableCell className="text-center">
-                   <div className="flex items-center justify-center gap-2">
-                    <span className="font-mono">{format(new Date(tx.date), 'dd-MM-yyyy')}</span>
-                    {tx.lastEdited && (
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger>
-                            <History className="h-3 w-3 text-muted-foreground" />
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            <p>Edited on: {new Date(tx.lastEdited).toLocaleString()}</p>
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-                    )}
+              <CardContent className="p-4 space-y-2">
+                  <div className="flex justify-between items-start">
+                      <div className={`font-semibold text-lg font-mono ${tx.type === 'deposit' ? 'text-accent' : 'text-destructive'}`}>
+                          {formatCurrency(tx.actual_amount)}
+                      </div>
+                      <Badge variant={tx.type === 'deposit' ? 'default' : 'destructive'} className="capitalize bg-opacity-20 text-opacity-100">
+                          {tx.type}
+                      </Badge>
                   </div>
-                </TableCell>
-                <TableCell className="font-medium text-left">
-                  {description}
-                  {subDescription && <span className="text-xs text-muted-foreground block">{subDescription}</span>}
-                </TableCell>
-                <TableCell className="text-center">{tx.category}</TableCell>
-                {selectedBankId === 'all' && (
-                    <TableCell className="text-center">
-                        {(banks || []).find(b => b.id === tx.bank_id)?.name || 'N/A'}
-                    </TableCell>
-                )}
-                <TableCell className="text-right font-mono text-destructive">{formatCurrency(tx.type === 'withdrawal' ? tx.actual_amount : 0)}</TableCell>
-                <TableCell className="text-right font-mono text-accent">{formatCurrency(tx.type === 'deposit' ? tx.actual_amount : 0)}</TableCell>
-                <TableCell className="text-right font-mono font-semibold">{formatCurrency(tx.balance)}</TableCell>
-                {showActions && (
-                  <TableCell className="text-center">
-                      <div className="flex items-center justify-center gap-2">
-                        <Button variant="ghost" size="icon" onClick={() => handleEditClick(tx)}>
-                            <Pencil className="h-4 w-4" />
-                            <span className="sr-only">Edit</span>
-                        </Button>
-                        <Button variant="ghost" size="icon" onClick={() => handleDeleteClick(tx)}>
-                            <Trash2 className="h-4 w-4" />
-                            <span className="sr-only">Delete</span>
-                        </Button>
+                  <div className="font-medium text-base">{description}</div>
+                  {subDescription && <div className="text-sm text-muted-foreground font-semibold">{subDescription}</div>}
+                  <div className="text-sm text-muted-foreground">{tx.category}</div>
+                  {selectedBankId === 'all' && (
+                      <div className="text-sm text-muted-foreground font-semibold">
+                          {(banks || []).find(b => b.id === tx.bank_id)?.name || 'N/A'}
                       </div>
-                  </TableCell>
-                )}
-                </motion.tr>
-            )})
-            ) : (
-            <TableRow>
-                <TableCell colSpan={isSelectionMode ? (showActions ? 10 : 9) : (showActions ? 9 : 8)} className="text-center h-24">No bank transactions found for {format(currentMonth, 'MMMM yyyy')}.</TableCell>
-            </TableRow>
-            )}
-        </TableBody>
+                  )}
+                  <div className="flex justify-between items-center pt-2">
+                      <div className="text-xs text-muted-foreground flex items-center gap-1 font-mono">
+                          {format(new Date(tx.date), 'dd-MM-yyyy')}
+                          {tx.lastEdited && (
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger>
+                                  <History className="h-3 w-3" />
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p>Edited on: {new Date(tx.lastEdited).toLocaleString()}</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          )}
+                      </div>
+                      {showActions && (
+                        <div className="flex gap-1">
+                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEditClick(tx)}>
+                                <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleDeleteClick(tx)}>
+                                <Trash2 className="h-4 w-4" />
+                            </Button>
+                        </div>
+                      )}
+                  </div>
+              </CardContent>
+            </Card>
+            </motion.div>
+          )})}
         </AnimatePresence>
-        </Table>
-    </div>
-  );
-
-  const renderMobileView = () => (
-    <div className="space-y-4">
-    <AnimatePresence>
-      {isLoading ? (
-        <div className="flex justify-center items-center h-24"><Loader2 className="h-6 w-6 animate-spin" /></div>
-      ) : sortedTransactions.length > 0 ? (
-        sortedTransactions.map((tx: BankTransaction) => {
-            let description = tx.description;
-            let subDescription = null;
-
-            if (tx.linkedLoanId) {
-                const loan = loans.find(l => l.id === tx.linkedLoanId);
-                if (loan) {
-                    const contact = contacts.find(c => c.id === loan.contact_id);
-                    description = loan.type === 'payable' ? 'Loan Received' : 'Loan Disbursed';
-                    if (contact) {
-                        subDescription = `From/To: ${contact.name}`;
-                    }
-                }
-            } else if (tx.contact_id) {
-                const contact = contacts.find(c => c.id === tx.contact_id);
-                if (contact) {
-                    subDescription = `(${contact.name})`;
-                }
-            }
-          return (
-          <motion.div 
-            key={tx.id} 
-            layout
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 10 }}
-            transition={{ duration: 0.3 }}
-            className="relative"
-          >
-          <Card>
-             {isSelectionMode && (
-                <Checkbox 
-                    onCheckedChange={(checked) => handleSelectRow(tx, Boolean(checked))}
-                    checked={selectedTxIds.includes(tx.id)}
-                    aria-label="Select row"
-                    className="absolute top-4 left-4"
-                />
-              )}
-            <CardContent className="p-4 space-y-2">
-                <div className="flex justify-between items-start">
-                    <div className={`font-semibold text-lg font-mono ${tx.type === 'deposit' ? 'text-accent' : 'text-destructive'}`}>
-                        {formatCurrency(tx.actual_amount)}
-                    </div>
-                     <Badge variant={tx.type === 'deposit' ? 'default' : 'destructive'} className="capitalize bg-opacity-20 text-opacity-100">
-                        {tx.type}
-                    </Badge>
-                </div>
-                <div className="font-medium text-base">{description}</div>
-                {subDescription && <div className="text-sm text-muted-foreground font-semibold">{subDescription}</div>}
-                <div className="text-sm text-muted-foreground">{tx.category}</div>
-                 {selectedBankId === 'all' && (
-                    <div className="text-sm text-muted-foreground font-semibold">
-                        {(banks || []).find(b => b.id === tx.bank_id)?.name || 'N/A'}
-                    </div>
-                )}
-                <div className="flex justify-between items-center pt-2">
-                    <div className="text-xs text-muted-foreground flex items-center gap-1 font-mono">
-                        {format(new Date(tx.date), 'dd-MM-yyyy')}
-                        {tx.lastEdited && (
-                           <TooltipProvider>
-                            <Tooltip>
-                              <TooltipTrigger>
-                                <History className="h-3 w-3" />
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                <p>Edited on: {new Date(tx.lastEdited).toLocaleString()}</p>
-                              </TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
-                        )}
-                    </div>
-                    {showActions && (
-                      <div className="flex gap-1">
-                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEditClick(tx)}>
-                              <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleDeleteClick(tx)}>
-                              <Trash2 className="h-4 w-4" />
-                          </Button>
-                      </div>
-                    )}
-                </div>
-            </CardContent>
-          </Card>
-          </motion.div>
-        )})
       ) : (
         <div className="text-center text-muted-foreground py-12">
             No bank transactions found for {format(currentMonth, 'MMMM yyyy')}.
         </div>
       )}
-      </AnimatePresence>
     </div>
   )
 

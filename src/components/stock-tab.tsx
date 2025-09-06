@@ -233,161 +233,161 @@ export function StockTab() {
             {showActions && <TableHead className="text-center">Actions</TableHead>}
           </TableRow>
         </TableHeader>
-        <AnimatePresence>
         <TableBody>
           {isMonthLoading ? (
             <TableRow><TableCell colSpan={isSelectionMode ? 9 : 8} className="h-24 text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin" /></TableCell></TableRow>
           ) : paginatedTransactions.length > 0 ? (
-            paginatedTransactions.map((tx: StockTransaction) => (
-              <motion.tr 
-                key={tx.id} 
-                layout
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 10 }}
-                transition={{ duration: 0.3 }}
-                data-state={selectedTxIds.includes(tx.id) && "selected"}
-              >
-                {isSelectionMode && (
-                    <TableCell className="text-center">
-                        <Checkbox 
-                            onCheckedChange={(checked) => handleSelectRow(tx, Boolean(checked))}
-                            checked={selectedTxIds.includes(tx.id)}
-                            aria-label="Select row"
-                        />
-                    </TableCell>
-                )}
-                <TableCell className="text-center">
-                   <div className="flex items-center justify-center gap-2">
-                    <span className="font-mono">{format(new Date(tx.date), 'dd-MM-yyyy')}</span>
-                    {tx.lastEdited && (
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger>
-                            <History className="h-3 w-3 text-muted-foreground" />
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            <p>Edited on: {new Date(tx.lastEdited).toLocaleString()}</p>
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-                    )}
-                  </div>
-                </TableCell>
-                <TableCell className="text-left">{tx.description}</TableCell>
-                <TableCell className="font-medium text-center">{tx.stockItemName}</TableCell>
-                <TableCell className="text-center font-mono">{tx.weight.toFixed(2)} kg</TableCell>
-                <TableCell className="text-center">
-                  <span className={`capitalize px-2 py-1 text-xs font-semibold rounded-full flex items-center justify-center w-fit mx-auto ${tx.type === 'purchase' ? 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300' : 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300'}`}>
-                    {tx.type === 'purchase' ? <ArrowDownCircle className="mr-1 h-3 w-3" /> : <ArrowUpCircle className="mr-1 h-3 w-3" />}
-                    {tx.type}
-                  </span>
-                </TableCell>
-                <TableCell className="text-center font-mono">{formatCurrency(tx.pricePerKg)}</TableCell>
-                {showStockValue && <TableCell className={`text-center font-semibold font-mono ${tx.type === 'purchase' ? 'text-destructive' : 'text-accent'}`}>{formatCurrency(tx.actual_amount)}</TableCell>}
-                {showActions && (
+            <AnimatePresence initial={false}>
+              {paginatedTransactions.map((tx: StockTransaction) => (
+                <motion.tr 
+                  key={tx.id} 
+                  layout
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 10 }}
+                  transition={{ duration: 0.3 }}
+                  data-state={selectedTxIds.includes(tx.id) && "selected"}
+                >
+                  {isSelectionMode && (
+                      <TableCell className="text-center">
+                          <Checkbox 
+                              onCheckedChange={(checked) => handleSelectRow(tx, Boolean(checked))}
+                              checked={selectedTxIds.includes(tx.id)}
+                              aria-label="Select row"
+                          />
+                      </TableCell>
+                  )}
                   <TableCell className="text-center">
                     <div className="flex items-center justify-center gap-2">
-                      <Button variant="ghost" size="icon" onClick={() => handleEditClick(tx)}>
-                          <Pencil className="h-4 w-4" />
-                          <span className="sr-only">Edit</span>
-                      </Button>
-                       <Button variant="ghost" size="icon" onClick={() => handleDeleteClick(tx)}>
-                          <Trash2 className="h-4 w-4" />
-                          <span className="sr-only">Delete</span>
-                      </Button>
+                      <span className="font-mono">{format(new Date(tx.date), 'dd-MM-yyyy')}</span>
+                      {tx.lastEdited && (
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger>
+                              <History className="h-3 w-3 text-muted-foreground" />
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>Edited on: {new Date(tx.lastEdited).toLocaleString()}</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      )}
                     </div>
                   </TableCell>
-                )}
-              </motion.tr>
-            ))
+                  <TableCell className="text-left">{tx.description}</TableCell>
+                  <TableCell className="font-medium text-center">{tx.stockItemName}</TableCell>
+                  <TableCell className="text-center font-mono">{tx.weight.toFixed(2)} kg</TableCell>
+                  <TableCell className="text-center">
+                    <span className={`capitalize px-2 py-1 text-xs font-semibold rounded-full flex items-center justify-center w-fit mx-auto ${tx.type === 'purchase' ? 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300' : 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300'}`}>
+                      {tx.type === 'purchase' ? <ArrowDownCircle className="mr-1 h-3 w-3" /> : <ArrowUpCircle className="mr-1 h-3 w-3" />}
+                      {tx.type}
+                    </span>
+                  </TableCell>
+                  <TableCell className="text-center font-mono">{formatCurrency(tx.pricePerKg)}</TableCell>
+                  {showStockValue && <TableCell className={`text-center font-semibold font-mono ${tx.type === 'purchase' ? 'text-destructive' : 'text-accent'}`}>{formatCurrency(tx.actual_amount)}</TableCell>}
+                  {showActions && (
+                    <TableCell className="text-center">
+                      <div className="flex items-center justify-center gap-2">
+                        <Button variant="ghost" size="icon" onClick={() => handleEditClick(tx)}>
+                            <Pencil className="h-4 w-4" />
+                            <span className="sr-only">Edit</span>
+                        </Button>
+                        <Button variant="ghost" size="icon" onClick={() => handleDeleteClick(tx)}>
+                            <Trash2 className="h-4 w-4" />
+                            <span className="sr-only">Delete</span>
+                        </Button>
+                      </div>
+                    </TableCell>
+                  )}
+                </motion.tr>
+              ))}
+            </AnimatePresence>
           ) : (
             <TableRow><TableCell colSpan={isSelectionMode ? (showActions ? (showStockValue ? 9 : 8) : (showStockValue ? 8 : 7)) : (showActions ? (showStockValue ? 8 : 7) : (showStockValue ? 7 : 6))} className="text-center h-24">No stock transactions for {format(currentMonth, "MMMM yyyy")}.</TableCell></TableRow>
           )}
         </TableBody>
-        </AnimatePresence>
       </Table>
       </div>
   );
 
   const renderMobileHistory = () => (
     <div className="space-y-4">
-      <AnimatePresence>
       {isMonthLoading ? (
         <div className="flex justify-center items-center h-24"><Loader2 className="h-6 w-6 animate-spin" /></div>
       ) : paginatedTransactions.length > 0 ? (
-        paginatedTransactions.map((tx: StockTransaction) => (
-            <motion.div 
-              key={tx.id}
-              layout
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 10 }}
-              transition={{ duration: 0.3 }}
-              className="relative"
-            >
-            <Card>
-                {isSelectionMode && (
-                    <Checkbox 
-                        onCheckedChange={(checked) => handleSelectRow(tx, Boolean(checked))}
-                        checked={selectedTxIds.includes(tx.id)}
-                        aria-label="Select row"
-                        className="absolute top-4 left-4"
-                    />
-                )}
-                <CardContent className="p-4 space-y-2">
-                    <div className="flex justify-between items-start">
-                        <div className={`font-semibold text-lg font-mono ${tx.type === 'sale' ? 'text-accent' : 'text-destructive'}`}>
-                            {formatCurrency(tx.actual_amount)}
-                        </div>
-                        <Badge variant={tx.type === 'sale' ? 'default' : 'destructive'} className="capitalize bg-opacity-20 text-opacity-100">
-                          {tx.type}
-                        </Badge>
-                    </div>
-                    <div className="font-medium text-base">{tx.stockItemName}</div>
-                    <p className="text-sm text-muted-foreground">{tx.description}</p>
-                    <div className="flex justify-between text-sm pt-2 font-mono">
-                        <span>{tx.weight.toFixed(2)} kg</span>
-                        <span>@ {formatCurrency(tx.pricePerKg)}/kg</span>
-                    </div>
-
-                    <div className="flex justify-between items-center pt-2">
-                        <div className="text-xs text-muted-foreground flex items-center gap-1 font-mono">
-                            {format(new Date(tx.date), 'dd-MM-yyyy')}
-                            {tx.lastEdited && (
-                            <TooltipProvider>
-                                <Tooltip>
-                                <TooltipTrigger>
-                                    <History className="h-3 w-3" />
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                    <p>Edited on: {new Date(tx.lastEdited).toLocaleString()}</p>
-                                </TooltipContent>
-                                </Tooltip>
-                            </TooltipProvider>
-                            )}
-                        </div>
-                        {showActions && (
-                          <div className="flex gap-1">
-                              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEditClick(tx)}>
-                                  <Pencil className="h-4 w-4" />
-                              </Button>
-                              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleDeleteClick(tx)}>
-                                  <Trash2 className="h-4 w-4" />
-                              </Button>
+        <AnimatePresence initial={false}>
+          {paginatedTransactions.map((tx: StockTransaction) => (
+              <motion.div 
+                key={tx.id}
+                layout
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 10 }}
+                transition={{ duration: 0.3 }}
+                className="relative"
+              >
+              <Card>
+                  {isSelectionMode && (
+                      <Checkbox 
+                          onCheckedChange={(checked) => handleSelectRow(tx, Boolean(checked))}
+                          checked={selectedTxIds.includes(tx.id)}
+                          aria-label="Select row"
+                          className="absolute top-4 left-4"
+                      />
+                  )}
+                  <CardContent className="p-4 space-y-2">
+                      <div className="flex justify-between items-start">
+                          <div className={`font-semibold text-lg font-mono ${tx.type === 'sale' ? 'text-accent' : 'text-destructive'}`}>
+                              {formatCurrency(tx.actual_amount)}
                           </div>
-                        )}
-                    </div>
-                </CardContent>
-            </Card>
-            </motion.div>
-        ))
+                          <Badge variant={tx.type === 'sale' ? 'default' : 'destructive'} className="capitalize bg-opacity-20 text-opacity-100">
+                            {tx.type}
+                          </Badge>
+                      </div>
+                      <div className="font-medium text-base">{tx.stockItemName}</div>
+                      <p className="text-sm text-muted-foreground">{tx.description}</p>
+                      <div className="flex justify-between text-sm pt-2 font-mono">
+                          <span>{tx.weight.toFixed(2)} kg</span>
+                          <span>@ {formatCurrency(tx.pricePerKg)}/kg</span>
+                      </div>
+
+                      <div className="flex justify-between items-center pt-2">
+                          <div className="text-xs text-muted-foreground flex items-center gap-1 font-mono">
+                              {format(new Date(tx.date), 'dd-MM-yyyy')}
+                              {tx.lastEdited && (
+                              <TooltipProvider>
+                                  <Tooltip>
+                                  <TooltipTrigger>
+                                      <History className="h-3 w-3" />
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                      <p>Edited on: {new Date(tx.lastEdited).toLocaleString()}</p>
+                                  </TooltipContent>
+                                  </Tooltip>
+                              </TooltipProvider>
+                              )}
+                          </div>
+                          {showActions && (
+                            <div className="flex gap-1">
+                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEditClick(tx)}>
+                                    <Pencil className="h-4 w-4" />
+                                </Button>
+                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleDeleteClick(tx)}>
+                                    <Trash2 className="h-4 w-4" />
+                                </Button>
+                            </div>
+                          )}
+                      </div>
+                  </CardContent>
+              </Card>
+              </motion.div>
+          ))}
+        </AnimatePresence>
       ) : (
         <div className="text-center text-muted-foreground py-12">
             No stock transactions for {format(currentMonth, "MMMM yyyy")}.
         </div>
       )}
-      </AnimatePresence>
     </div>
   )
 
