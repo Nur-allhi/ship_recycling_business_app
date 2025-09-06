@@ -149,8 +149,9 @@ BEGIN
    END IF;
 END $$;
 
+-- This part is no longer needed as we are creating the table with the correct name from the start.
 -- Step 4: Rename the old payment_installments table to ledger_payments
-ALTER TABLE payment_installments RENAME TO ledger_payments;
+-- ALTER TABLE payment_installments RENAME TO ledger_payments;
 
 ```
 

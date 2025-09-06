@@ -76,7 +76,7 @@ This enables tracking partial payments against A/R and A/P items.
 
 ```sql
 -- Create a new table to store each installment payment
-CREATE TABLE payment_installments (
+CREATE TABLE ledger_payments (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     ap_ar_transaction_id UUID NOT NULL REFERENCES ap_ar_transactions(id) ON DELETE CASCADE,
@@ -104,11 +104,11 @@ ADD CONSTRAINT ap_ar_transactions_status_check
 CHECK (status IN ('unpaid', 'partially paid', 'paid'));
 
 -- SECURE: Enable RLS for the new table
-ALTER TABLE payment_installments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE ledger_payments ENABLE ROW LEVEL SECURITY;
 
 -- SECURE: Policy to allow authenticated users to manage their own installment payments
 CREATE POLICY "Authenticated users can manage payment installments"
-ON payment_installments FOR ALL
+ON ledger_payments FOR ALL
 USING (true)
 WITH CHECK (true);
 ```

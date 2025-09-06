@@ -39,7 +39,7 @@ export class AppDatabase extends Dexie {
 
     constructor() {
         super('ShipShapeLedgerDB');
-        this.version(12).stores({
+        this.version(13).stores({
             app_state: 'id',
             cash_transactions: '++id, date, category, linkedStockTxId, linkedLoanId, advance_id, contact_id',
             bank_transactions: '++id, date, bank_id, category, linkedStockTxId, linkedLoanId, advance_id, contact_id',
@@ -58,8 +58,11 @@ export class AppDatabase extends Dexie {
         });
 
         // Drop old table in version 12
-        this.version(11).stores({
+        this.version(12).stores({
              payment_installments: null
+        }).upgrade(tx => {
+             // This is a dummy upgrade function to make the version change.
+             // The actual table rename should be handled by a migration script on the real database.
         });
     }
 }
