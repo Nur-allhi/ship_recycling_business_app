@@ -65,7 +65,7 @@ export function BankForm({ setDialogOpen }: BankFormProps) {
   const isExpense = categoryInfo?.direction === 'debit';
   const isSettlement = categoryName === 'A/R Settlement' || categoryName === 'A/P Settlement';
   const settlementContactType = categoryName === 'A/P Settlement' ? 'Vendor' : 'Client';
-  const settlementContacts = contacts.filter(c => c.type === (settlementContactType === 'Vendor' ? 'vendor' : 'client') || c.type === 'both');
+  const settlementContacts = (contacts || []).filter(c => c.type === (settlementContactType === 'Vendor' ? 'vendor' : 'client') || c.type === 'both');
 
   useEffect(() => {
     if (!showAdvancedFields && typeof watchedAmount === 'number') {
@@ -131,7 +131,7 @@ export function BankForm({ setDialogOpen }: BankFormProps) {
 
   const bankAccountItems = useMemo(() => (banks || []).map(b => ({ value: b.id, label: b.name })), [banks]);
   const settlementContactItems = useMemo(() => (settlementContacts || []).map(c => ({ value: c.id, label: c.name })), [settlementContacts]);
-  const vendorContactItems = useMemo(() => contacts.filter(c => c.type === 'vendor' || c.type === 'both').map(c => ({ value: c.id, label: c.name })), [contacts]);
+  const vendorContactItems = useMemo(() => (contacts || []).filter(c => c.type === 'vendor' || c.type === 'both').map(c => ({ value: c.id, label: c.name })), [contacts]);
   
   return (
     <Card className="border-0 shadow-none overflow-y-auto pb-8">

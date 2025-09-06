@@ -144,8 +144,8 @@ export function StockForm({ setDialogOpen }: StockFormProps) {
   const stockItemsForPurchase = useMemo(() => (stockItems || []).map(item => ({ value: item.name, label: item.name })), [stockItems]);
   const bankAccountItems = useMemo(() => (banks || []).map(b => ({ value: b.id, label: b.name })), [banks]);
   
-  const vendorContactItems = useMemo(() => [...contacts.filter(c => c.type === 'vendor' || c.type === 'both').map(c => ({ value: c.id, label: c.name })), { value: 'new', label: <span className="flex items-center gap-2"><Plus className="h-4 w-4"/>Add New</span>}], [contacts]);
-  const clientContactItems = useMemo(() => [...contacts.filter(c => c.type === 'client' || c.type === 'both').map(c => ({ value: c.id, label: c.name })), { value: 'new', label: <span className="flex items-center gap-2"><Plus className="h-4 w-4"/>Add New</span>}], [contacts]);
+  const vendorContactItems = useMemo(() => [...(contacts || []).filter(c => c.type === 'vendor' || c.type === 'both').map(c => ({ value: c.id, label: c.name })), { value: 'new', label: <span className="flex items-center gap-2"><Plus className="h-4 w-4"/>Add New</span>}], [contacts]);
+  const clientContactItems = useMemo(() => [...(contacts || []).filter(c => c.type === 'client' || c.type === 'both').map(c => ({ value: c.id, label: c.name })), { value: 'new', label: <span className="flex items-center gap-2"><Plus className="h-4 w-4"/>Add New</span>}], [contacts]);
   const currentStockContactItems = stockType === 'purchase' ? vendorContactItems : clientContactItems;
 
   const steps = [

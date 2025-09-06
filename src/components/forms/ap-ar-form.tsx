@@ -55,12 +55,12 @@ export function ApArForm({ setDialogOpen }: ApArFormProps) {
   const contact_id = watch('contact_id');
 
   const vendorContactItems = useMemo(() => [
-    ...contacts.filter(c => c.type === 'vendor' || c.type === 'both').map(c => ({ value: c.id, label: c.name })),
+    ...(contacts || []).filter(c => c.type === 'vendor' || c.type === 'both').map(c => ({ value: c.id, label: c.name })),
     { value: 'new', label: <span className="flex items-center gap-2"><Plus className="h-4 w-4" />Add New Vendor</span> }
   ], [contacts]);
 
   const clientContactItems = useMemo(() => [
-    ...contacts.filter(c => c.type === 'client' || c.type === 'both').map(c => ({ value: c.id, label: c.name })),
+    ...(contacts || []).filter(c => c.type === 'client' || c.type === 'both').map(c => ({ value: c.id, label: c.name })),
     { value: 'new', label: <span className="flex items-center gap-2"><Plus className="h-4 w-4" />Add New Client</span> }
   ], [contacts]);
 
