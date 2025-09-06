@@ -6,7 +6,7 @@ import { cookies } from 'next/headers';
 import { z } from 'zod';
 import { getSession } from '@/app/auth/actions';
 import { startOfMonth, subMonths, endOfMonth } from 'date-fns';
-import type { MonthlySnapshot, Loan, LoanPayment } from '@/lib/types';
+import type { MonthlySnapshot, Loan, LoanPayment, Category } from '@/lib/types';
 
 // This is the privileged client for server-side operations.
 const createAdminSupabaseClient = () => {
@@ -62,7 +62,7 @@ const ReadDataInputSchema = z.object({
 });
 
 
-export async function readData(input: z.infer<typeof ReadDataInputSchema>) {
+export async function readData(input: z.infer<typeof ReadDataInputSchema>): Promise<any[]> {
   try {
     const session = await getSession();
     if (!session) throw new Error("SESSION_EXPIRED");
@@ -93,7 +93,7 @@ export async function readData(input: z.infer<typeof ReadDataInputSchema>) {
         }
         throw new Error(error.message);
     }
-    return data;
+    return data || [];
   } catch (error) {
     return handleApiError(error);
   }
@@ -340,7 +340,6 @@ export async function deleteAllData() {
             'banks', 
             'activity_log', 
             'monthly_snapshots',
-            'sync_queue',
         ];
 
         for (const tableName of tablesToDelete) {
@@ -914,6 +913,3 @@ export async function recordLoanPayment(input: z.infer<typeof RecordLoanPaymentS
         return handleApiError(error);
     }
 }
-    
-
-    

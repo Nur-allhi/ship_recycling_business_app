@@ -120,16 +120,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const liveData = useLiveDBData();
 
     const seedEssentialCategories = async (existingCategories: Category[]): Promise<Category[]> => {
-        let finalCategories = [...existingCategories];
+        const finalCategories = [...existingCategories];
         let wasModified = false;
-
+    
         for (const cat of essentialCategories) {
             const exists = finalCategories.some(c => c.name === cat.name && c.type === cat.type);
             if (!exists) {
                 try {
+                    console.log(`Seeding category: ${cat.name}`);
                     const newCat = await server.appendData({ tableName: 'categories', data: cat, select: '*' });
                     if (newCat) {
-                        finalCategories.push(newCat as Category);
+                        finalCategories.push(newCat);
                         wasModified = true;
                     }
                 } catch(e) {
@@ -137,7 +138,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 }
             }
         }
-        return wasModified ? finalCategories : existingCategories;
+    
+        // No need for wasModified check, just return the final list.
+        return finalCategories;
     };
 
     const reloadData = useCallback(async (options?: { force?: boolean, needsInitialBalance?: boolean }) => {
@@ -174,11 +177,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                     server.readData({ tableName: 'loans', select: '*' }),
                     server.readData({ tableName: 'loan_payments', select: '*' }),
                 ]);
-
-                const serverCategories: Category[] = (Array.isArray(categoriesRes) ? categoriesRes : []) as Category[];
                 
                 // This is the critical fix: Ensure categories are created and combined correctly.
-                const finalCategories = await seedEssentialCategories(serverCategories);
+                const finalCategories = await seedEssentialCategories(categoriesRes);
 
                 const ledgerTxsWithPayments = (ledgerData || []).map((tx: any) => ({
                     ...tx,
@@ -372,5 +373,3 @@ export function useAppContext() {
     }
     return context;
 }
-
-    
