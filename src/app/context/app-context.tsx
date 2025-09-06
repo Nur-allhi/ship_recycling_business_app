@@ -135,6 +135,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 }));
                 
                 const essentialCategories = [
+                    { name: 'Cash In', type: 'cash', direction: 'credit', is_deletable: false },
+                    { name: 'Cash Out', type: 'cash', direction: 'debit', is_deletable: false },
+                    { name: 'Deposit', type: 'bank', direction: 'credit', is_deletable: false },
+                    { name: 'Withdrawal', type: 'bank', direction: 'debit', is_deletable: false },
                     { name: 'A/R Settlement', type: 'cash', direction: 'credit', is_deletable: false },
                     { name: 'A/P Settlement', type: 'cash', direction: 'debit', is_deletable: false },
                     { name: 'A/R Settlement', type: 'bank', direction: 'credit', is_deletable: false },
@@ -351,5 +355,3 @@ export function useAppContext() {
     }
     return context;
 }
-
-    
