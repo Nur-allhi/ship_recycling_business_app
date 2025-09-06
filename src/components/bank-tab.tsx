@@ -47,7 +47,7 @@ type SortKey = keyof BankTransaction | 'debit' | 'credit' | null;
 type SortDirection = 'asc' | 'desc';
 
 export function BankTab() {
-  const { bankBalance, bankTransactions, currency, user, banks, isLoading, handleApiError, isOnline, contacts } = useAppContext()
+  const { bankBalance, bankTransactions, currency, user, banks, isLoading, handleApiError, isOnline, contacts, loans } = useAppContext()
   const { transferFunds, deleteBankTransaction, deleteMultipleBankTransactions } = useAppActions();
   const [isTransferSheetOpen, setIsTransferSheetOpen] = useState(false)
   const [editSheetState, setEditSheetState] = useState<{isOpen: boolean, transaction: BankTransaction | null}>({ isOpen: false, transaction: null});
@@ -321,7 +321,25 @@ export function BankTab() {
               <TableRow><TableCell colSpan={isSelectionMode ? 9 : 8} className="h-24 text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin" /></TableCell></TableRow>
             ) : sortedTransactions.length > 0 ? (
             sortedTransactions.map((tx: any) => {
-              const contactName = tx.contact_id ? contacts.find(c => c.id === tx.contact_id)?.name : null;
+              let description = tx.description;
+              let subDescription = null;
+
+              if (tx.linkedLoanId) {
+                  const loan = loans.find(l => l.id === tx.linkedLoanId);
+                  if (loan) {
+                      const contact = contacts.find(c => c.id === loan.contact_id);
+                      description = loan.type === 'payable' ? 'Loan Received' : 'Loan Disbursed';
+                      if (contact) {
+                          subDescription = `From/To: ${contact.name}`;
+                      }
+                  }
+              } else if (tx.contact_id) {
+                  const contact = contacts.find(c => c.id === tx.contact_id);
+                  if (contact) {
+                      subDescription = `(${contact.name})`;
+                  }
+              }
+
               return (
                 <TableRow key={tx.id} data-state={selectedTxIds.includes(tx.id) && "selected"}>
                 {isSelectionMode && (
@@ -351,8 +369,8 @@ export function BankTab() {
                   </div>
                 </TableCell>
                 <TableCell className="font-medium text-left">
-                  {tx.description}
-                  {contactName && <span className="text-xs text-muted-foreground block">({contactName})</span>}
+                  {description}
+                  {subDescription && <span className="text-xs text-muted-foreground block">{subDescription}</span>}
                 </TableCell>
                 <TableCell className="text-center">{tx.category}</TableCell>
                 {selectedBankId === 'all' && (
@@ -395,7 +413,24 @@ export function BankTab() {
         <div className="flex justify-center items-center h-24"><Loader2 className="h-6 w-6 animate-spin" /></div>
       ) : sortedTransactions.length > 0 ? (
         sortedTransactions.map((tx: BankTransaction) => {
-          const contactName = tx.contact_id ? contacts.find(c => c.id === tx.contact_id)?.name : null;
+            let description = tx.description;
+            let subDescription = null;
+
+            if (tx.linkedLoanId) {
+                const loan = loans.find(l => l.id === tx.linkedLoanId);
+                if (loan) {
+                    const contact = contacts.find(c => c.id === loan.contact_id);
+                    description = loan.type === 'payable' ? 'Loan Received' : 'Loan Disbursed';
+                    if (contact) {
+                        subDescription = `From/To: ${contact.name}`;
+                    }
+                }
+            } else if (tx.contact_id) {
+                const contact = contacts.find(c => c.id === tx.contact_id);
+                if (contact) {
+                    subDescription = `(${contact.name})`;
+                }
+            }
           return (
           <Card key={tx.id} className="relative animate-fade-in">
              {isSelectionMode && (
@@ -415,8 +450,8 @@ export function BankTab() {
                         {tx.type}
                     </Badge>
                 </div>
-                <div className="font-medium text-base">{tx.description}</div>
-                {contactName && <div className="text-sm text-muted-foreground font-semibold">({contactName})</div>}
+                <div className="font-medium text-base">{description}</div>
+                {subDescription && <div className="text-sm text-muted-foreground font-semibold">{subDescription}</div>}
                 <div className="text-sm text-muted-foreground">{tx.category}</div>
                  {selectedBankId === 'all' && (
                     <div className="text-sm text-muted-foreground font-semibold">

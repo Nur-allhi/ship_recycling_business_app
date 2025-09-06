@@ -40,7 +40,7 @@ type SortKey = keyof CashTransaction | 'debit' | 'credit' | null;
 type SortDirection = 'asc' | 'desc';
 
 export function CashTab() {
-  const { cashBalance, cashTransactions, currency, user, banks, isLoading, handleApiError, isOnline, contacts } = useAppContext()
+  const { cashBalance, cashTransactions, currency, user, banks, isLoading, handleApiError, isOnline, contacts, loans } = useAppContext()
   const { transferFunds, deleteCashTransaction, deleteMultipleCashTransactions } = useAppActions();
   const [isTransferSheetOpen, setIsTransferSheetOpen] = useState(false)
   const [editSheetState, setEditSheetState] = useState<{isOpen: boolean, transaction: CashTransaction | null}>({ isOpen: false, transaction: null});
@@ -290,8 +290,26 @@ export function CashTab() {
             <TableRow><TableCell colSpan={isSelectionMode ? 8 : 7} className="h-24 text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin" /></TableCell></TableRow>
           ) : sortedTransactions.length > 0 ? (
             sortedTransactions.map((tx: any) => {
-              const contactName = tx.contact_id ? contacts.find(c => c.id === tx.contact_id)?.name : null;
-              return (
+                let description = tx.description;
+                let subDescription = null;
+
+                if (tx.linkedLoanId) {
+                    const loan = loans.find(l => l.id === tx.linkedLoanId);
+                    if (loan) {
+                        const contact = contacts.find(c => c.id === loan.contact_id);
+                        description = loan.type === 'payable' ? 'Loan Received' : 'Loan Disbursed';
+                        if (contact) {
+                            subDescription = `From/To: ${contact.name}`;
+                        }
+                    }
+                } else if (tx.contact_id) {
+                    const contact = contacts.find(c => c.id === tx.contact_id);
+                    if (contact) {
+                        subDescription = `(${contact.name})`;
+                    }
+                }
+                
+                return (
               <TableRow key={tx.id} data-state={selectedTxIds.includes(tx.id) && "selected"}>
                 {isSelectionMode && (
                   <TableCell className="text-center">
@@ -320,8 +338,8 @@ export function CashTab() {
                   </div>
                 </TableCell>
                 <TableCell className="font-medium text-left">
-                  {tx.description}
-                  {contactName && <span className="text-xs text-muted-foreground block">({contactName})</span>}
+                  {description}
+                  {subDescription && <span className="text-xs text-muted-foreground block">{subDescription}</span>}
                 </TableCell>
                 <TableCell className="text-center">{tx.category}</TableCell>
                 <TableCell className="text-right font-mono text-destructive">{formatCurrency(tx.type === 'expense' ? tx.actual_amount : 0)}</TableCell>
@@ -359,7 +377,25 @@ export function CashTab() {
         <div className="flex justify-center items-center h-24"><Loader2 className="h-6 w-6 animate-spin" /></div>
       ) : sortedTransactions.length > 0 ? (
         sortedTransactions.map((tx: any) => {
-          const contactName = tx.contact_id ? contacts.find(c => c.id === tx.contact_id)?.name : null;
+          let description = tx.description;
+          let subDescription = null;
+
+          if (tx.linkedLoanId) {
+              const loan = loans.find(l => l.id === tx.linkedLoanId);
+              if (loan) {
+                  const contact = contacts.find(c => c.id === loan.contact_id);
+                  description = loan.type === 'payable' ? 'Loan Received' : 'Loan Disbursed';
+                  if (contact) {
+                      subDescription = `From/To: ${contact.name}`;
+                  }
+              }
+          } else if (tx.contact_id) {
+              const contact = contacts.find(c => c.id === tx.contact_id);
+              if (contact) {
+                  subDescription = `(${contact.name})`;
+              }
+          }
+
           return (
           <Card key={tx.id} className="relative animate-fade-in">
              {isSelectionMode && (
@@ -379,9 +415,9 @@ export function CashTab() {
                         {tx.type}
                     </Badge>
                 </div>
-                <div className="font-medium text-base">{tx.description}</div>
+                <div className="font-medium text-base">{description}</div>
+                {subDescription && <div className="text-sm text-muted-foreground font-semibold">{subDescription}</div>}
                 <div className="text-sm text-muted-foreground">{tx.category}</div>
-                {contactName && <div className="text-sm text-muted-foreground font-semibold">({contactName})</div>}
                 <div className="flex justify-between items-center pt-2">
                     <div className="text-xs text-muted-foreground flex items-center gap-1 font-mono">
                         {format(new Date(tx.date), 'dd-MM-yyyy')}
