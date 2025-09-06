@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useMemo } from "react";
@@ -36,24 +37,23 @@ export function ReceivablesList() {
         const groups: Record<string, { total_due: number, total_paid: number, total_advance: number, contact_name: string }> = {};
 
         ledgerTransactions.forEach(tx => {
+            if (tx.type !== 'receivable' && tx.type !== 'advance') return;
             const contact = contacts.find(c => c.id === tx.contact_id);
-            if (!contact || (contact.type !== 'client' && contact.type !== 'both')) return;
+            if (!contact) return;
 
-            if (tx.type === 'receivable' || tx.type === 'advance') {
-                 if (!groups[tx.contact_id]) {
-                    groups[tx.contact_id] = {
-                        contact_name: contact.name,
-                        total_due: 0,
-                        total_paid: 0,
-                        total_advance: 0,
-                    };
-                }
-                if (tx.type === 'receivable') {
-                    groups[tx.contact_id].total_due += tx.amount;
-                    groups[tx.contact_id].total_paid += tx.paid_amount;
-                } else if (tx.type === 'advance') {
-                    groups[tx.contact_id].total_advance += Math.abs(tx.amount);
-                }
+             if (!groups[tx.contact_id]) {
+                groups[tx.contact_id] = {
+                    contact_name: contact.name,
+                    total_due: 0,
+                    total_paid: 0,
+                    total_advance: 0,
+                };
+            }
+            if (tx.type === 'receivable') {
+                groups[tx.contact_id].total_due += tx.amount;
+                groups[tx.contact_id].total_paid += tx.paid_amount;
+            } else if (tx.type === 'advance') {
+                groups[tx.contact_id].total_advance += Math.abs(tx.amount);
             }
         });
         
@@ -70,7 +70,7 @@ export function ReceivablesList() {
                     type: 'receivable' as const,
                 };
             })
-            .filter(c => c.total_due > 0 || c.total_advance > 0)
+            .filter(c => c.net_balance !== 0 || c.total_due > 0)
             .sort((a,b) => b.net_balance - a.net_balance);
 
     }, [ledgerTransactions, contacts]);
@@ -159,7 +159,7 @@ export function ReceivablesList() {
                         )})
                     ) : (
                         <TableRow>
-                            <TableCell colSpan={isAdmin ? 3 : 2} className="text-center h-24">No clients found.</TableCell>
+                            <TableCell colSpan={isAdmin ? 3 : 2} className="text-center h-24">No receivables found.</TableCell>
                         </TableRow>
                     )}
                 </TableBody>
@@ -214,7 +214,7 @@ export function ReceivablesList() {
                     )
                 })
             ) : (
-                 <div className="text-center text-muted-foreground py-12">No clients found.</div>
+                 <div className="text-center text-muted-foreground py-12">No receivables found.</div>
             )}
         </div>
     );

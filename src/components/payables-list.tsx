@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useMemo } from "react";
@@ -36,25 +37,26 @@ export function PayablesList() {
         const groups: Record<string, { total_due: number, total_paid: number, total_advance: number, contact_name: string }> = {};
 
         ledgerTransactions.forEach(tx => {
-            const contact = contacts.find(c => c.id === tx.contact_id);
-            if (!contact || (contact.type !== 'vendor' && contact.type !== 'both')) return;
+            // Only consider 'payable' or 'advance' for this list
+            if (tx.type !== 'payable' && tx.type !== 'advance') return;
 
-            if (tx.type === 'payable' || tx.type === 'advance') {
-                if (!groups[tx.contact_id]) {
-                    groups[tx.contact_id] = {
-                        contact_name: contact.name,
-                        total_due: 0,
-                        total_paid: 0,
-                        total_advance: 0,
-                    };
-                }
-                
-                if (tx.type === 'payable') {
-                    groups[tx.contact_id].total_due += tx.amount;
-                    groups[tx.contact_id].total_paid += tx.paid_amount;
-                } else if (tx.type === 'advance') {
-                    groups[tx.contact_id].total_advance += Math.abs(tx.amount);
-                }
+            const contact = contacts.find(c => c.id === tx.contact_id);
+            if (!contact) return;
+
+            if (!groups[tx.contact_id]) {
+                groups[tx.contact_id] = {
+                    contact_name: contact.name,
+                    total_due: 0,
+                    total_paid: 0,
+                    total_advance: 0,
+                };
+            }
+            
+            if (tx.type === 'payable') {
+                groups[tx.contact_id].total_due += tx.amount;
+                groups[tx.contact_id].total_paid += tx.paid_amount;
+            } else if (tx.type === 'advance') {
+                groups[tx.contact_id].total_advance += Math.abs(tx.amount);
             }
         });
         
@@ -71,7 +73,7 @@ export function PayablesList() {
                     type: 'payable' as const,
                 };
             })
-            .filter(c => c.total_due > 0 || c.total_advance > 0)
+            .filter(c => c.net_balance !== 0 || c.total_due > 0) // Only show if there is a balance or history
             .sort((a, b) => b.net_balance - a.net_balance);
 
     }, [ledgerTransactions, contacts]);
@@ -160,7 +162,7 @@ export function PayablesList() {
                         )})
                     ) : (
                         <TableRow>
-                            <TableCell colSpan={isAdmin ? 3 : 2} className="text-center h-24">No vendors found.</TableCell>
+                            <TableCell colSpan={isAdmin ? 3 : 2} className="text-center h-24">No payables found.</TableCell>
                         </TableRow>
                     )}
                 </TableBody>
@@ -214,7 +216,7 @@ export function PayablesList() {
                     )
                 })
             ) : (
-                 <div className="text-center text-muted-foreground py-12">No vendors found.</div>
+                 <div className="text-center text-muted-foreground py-12">No payables found.</div>
             )}
         </div>
     );

@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useMemo, useEffect, useRef } from 'react';
@@ -111,7 +112,7 @@ export function CashForm({ setDialogOpen }: CashFormProps) {
   };
 
   const categoryItems = useMemo(() => {
-    const filteredCategories = (cashCategories || []).filter(c => c.name !== 'Stock Purchase' && c.name !== 'Stock Sale');
+    const filteredCategories = (cashCategories || []).filter(c => c.name !== 'Stock Purchase' && c.name !== 'Stock Sale' && c.name !== 'Loan In' && c.name !== 'Loan Out');
     if (!cashTransactions || cashTransactions.length === 0) {
         return filteredCategories.map(c => ({ value: c.name, label: c.name }));
     }

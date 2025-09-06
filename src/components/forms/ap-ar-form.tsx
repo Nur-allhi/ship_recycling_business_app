@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useForm, Controller } from 'react-hook-form';
@@ -72,8 +73,9 @@ export function ApArForm({ setDialogOpen }: ApArFormProps) {
         let finalContactId: string;
         const contactType = data.ledgerType === 'payable' ? 'vendor' : 'client';
 
-        if (data.contact_id === 'new') {
-            const newContact = await addContact(data.newContact!, contactType);
+        if (data.contact_id === 'new' && data.newContact) {
+            const newContact = await addContact(data.newContact, contactType);
+            if (!newContact) throw new Error("Failed to create new contact.");
             finalContactId = newContact.id;
         } else {
             finalContactId = data.contact_id;

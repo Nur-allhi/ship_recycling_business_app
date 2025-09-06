@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useMemo, useEffect, useRef } from 'react';
@@ -113,7 +114,7 @@ export function BankForm({ setDialogOpen }: BankFormProps) {
   };
 
   const categoryItems = useMemo(() => {
-    const filteredCategories = (bankCategories || []).filter(c => c.name !== 'Stock Purchase' && c.name !== 'Stock Sale');
+    const filteredCategories = (bankCategories || []).filter(c => c.name !== 'Stock Purchase' && c.name !== 'Stock Sale' && c.name !== 'Loan In' && c.name !== 'Loan Out');
     if (!bankTransactions || bankTransactions.length === 0) {
         return filteredCategories.map(c => ({ value: c.name, label: c.name }));
     }

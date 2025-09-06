@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useMemo, useEffect } from 'react';
@@ -106,9 +107,10 @@ export function StockForm({ setDialogOpen }: StockFormProps) {
     try {
         let finalContactId: string | undefined;
 
-        if (data.contact_id === 'new') {
+        if (data.contact_id === 'new' && data.newContact) {
             const contactType = data.stockType === 'purchase' ? 'vendor' : 'client';
-            const newContact = await addContact(data.newContact!, contactType);
+            const newContact = await addContact(data.newContact, contactType);
+            if (!newContact) throw new Error("Failed to create new contact.");
             finalContactId = newContact.id;
         } else if (data.contact_id) {
             finalContactId = data.contact_id;

@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useMemo, useState } from "react";
@@ -34,38 +35,40 @@ export function LoansPayableList() {
                 <CardDescription>Money you have borrowed from others.</CardDescription>
             </CardHeader>
             <CardContent>
-                <Table>
-                    <TableHeader>
-                        <TableRow>
-                            <TableHead>Lender</TableHead>
-                            <TableHead>Principal</TableHead>
-                            <TableHead>Issue Date</TableHead>
-                            <TableHead>Status</TableHead>
-                            <TableHead className="text-right">Actions</TableHead>
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {payableLoans.length > 0 ? (
-                            payableLoans.map(loan => (
-                                <TableRow key={loan.id}>
-                                    <TableCell className="font-medium">{loan.contactName}</TableCell>
-                                    <TableCell>{formatCurrency(loan.principal_amount)}</TableCell>
-                                    <TableCell>{format(new Date(loan.issue_date), 'dd-MM-yyyy')}</TableCell>
-                                    <TableCell><Badge className="capitalize">{loan.status}</Badge></TableCell>
-                                    <TableCell className="text-right">
-                                        <Button variant="outline" size="sm">View Details</Button>
+                <div className="border rounded-lg overflow-hidden">
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Lender</TableHead>
+                                <TableHead>Principal</TableHead>
+                                <TableHead>Issue Date</TableHead>
+                                <TableHead>Status</TableHead>
+                                <TableHead className="text-right">Actions</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {payableLoans.length > 0 ? (
+                                payableLoans.map(loan => (
+                                    <TableRow key={loan.id}>
+                                        <TableCell className="font-medium">{loan.contactName}</TableCell>
+                                        <TableCell>{formatCurrency(loan.principal_amount)}</TableCell>
+                                        <TableCell>{format(new Date(loan.issue_date), 'dd-MM-yyyy')}</TableCell>
+                                        <TableCell><Badge className="capitalize">{loan.status}</Badge></TableCell>
+                                        <TableCell className="text-right">
+                                            <Button variant="outline" size="sm">View Details</Button>
+                                        </TableCell>
+                                    </TableRow>
+                                ))
+                            ) : (
+                                <TableRow>
+                                    <TableCell colSpan={5} className="text-center h-24 text-muted-foreground">
+                                        No payable loans recorded yet.
                                     </TableCell>
                                 </TableRow>
-                            ))
-                        ) : (
-                            <TableRow>
-                                <TableCell colSpan={5} className="text-center h-24 text-muted-foreground">
-                                    No payable loans recorded yet.
-                                </TableCell>
-                            </TableRow>
-                        )}
-                    </TableBody>
-                </Table>
+                            )}
+                        </TableBody>
+                    </Table>
+                </div>
             </CardContent>
         </Card>
     );

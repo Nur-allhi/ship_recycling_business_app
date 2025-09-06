@@ -67,7 +67,7 @@ export function ExportImportTab() {
                </Button>
                {isAdmin && 
                 <Button onClick={handleExport} variant="outline">
-                  Create Full Backup (.zip)
+                  Create Full Backup (.json)
                 </Button>
                }
             </div>
@@ -90,8 +90,8 @@ export function ExportImportTab() {
                   </AlertDescription>
                 </Alert>
                 <div className="space-y-2">
-                  <Label htmlFor="import-file">Backup File (.zip)</Label>
-                  <Input id="import-file" type="file" ref={fileInputRef} onChange={onFileChange} accept=".zip" />
+                  <Label htmlFor="import-file">Backup File (.json)</Label>
+                  <Input id="import-file" type="file" ref={fileInputRef} onChange={onFileChange} accept=".json" />
                 </div>
 
                 <AlertDialog>
