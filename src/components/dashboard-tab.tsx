@@ -7,7 +7,9 @@ import { Wallet, Landmark, Boxes, LineChart } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Skeleton } from "@/components/ui/skeleton";
 import { useMemo } from "react";
-import { useBalanceCalculator } from "@/app/context/useBalanceCalculator";
+import { useLiveQuery } from "dexie-react-hooks";
+import { db } from "@/lib/db";
+
 
 interface DashboardTabProps {
   setActiveTab: (tab: string) => void;
@@ -15,7 +17,19 @@ interface DashboardTabProps {
 
 export function DashboardTab({ setActiveTab }: DashboardTabProps) {
   const { currency, isLoading } = useAppContext()
-  const { cashBalance, bankBalance, stockItems } = useBalanceCalculator();
+  
+  const cashBalance = useLiveQuery(() => 
+    db.cash_transactions.toArray().then(txs => 
+      txs.reduce((acc, tx) => acc + (tx.type === 'income' ? tx.actual_amount : -tx.actual_amount), 0)
+    ), 0);
+  
+  const bankBalance = useLiveQuery(() =>
+    db.bank_transactions.toArray().then(txs =>
+      txs.reduce((acc, tx) => acc + (tx.type === 'deposit' ? tx.actual_amount : -tx.actual_amount), 0)
+    ), 0);
+  
+  const stockItems = useLiveQuery(() => db.initial_stock.toArray(), []);
+  const stockTransactions = useLiveQuery(() => db.stock_transactions.toArray(), []);
 
   const formatCurrency = (amount: number) => {
     if (currency === 'BDT') {
@@ -24,18 +38,48 @@ export function DashboardTab({ setActiveTab }: DashboardTabProps) {
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: currency, currencyDisplay: 'symbol' }).format(amount)
   }
 
-  // Correctly use the centrally calculated stock values from the context.
   const { currentStockWeight, currentStockValue } = useMemo(() => {
-    const totalCurrentWeight = (stockItems || []).reduce((acc, item) => acc + Math.max(0, item.weight), 0);
-    const totalCurrentValue = (stockItems || []).reduce((acc, item) => acc + (Math.max(0, item.weight) * item.purchasePricePerKg), 0);
+    const stockPortfolio: Record<string, { weight: number, totalValue: number }> = {};
+    
+    (stockItems || []).forEach(item => {
+        if (!stockPortfolio[item.name]) {
+            stockPortfolio[item.name] = { weight: 0, totalValue: 0 };
+        }
+        stockPortfolio[item.name].weight += item.weight;
+        stockPortfolio[item.name].totalValue += item.weight * item.purchasePricePerKg;
+    });
+
+    (stockTransactions || []).forEach(tx => {
+        if (!stockPortfolio[tx.stockItemName]) {
+            stockPortfolio[tx.stockItemName] = { weight: 0, totalValue: 0 };
+        }
+        
+        const item = stockPortfolio[tx.stockItemName];
+        const currentAvgPrice = item.weight > 0 ? item.totalValue / item.weight : 0;
+
+        if (tx.type === 'purchase') {
+            item.weight += tx.weight;
+            item.totalValue += tx.weight * tx.pricePerKg;
+        } else {
+            item.weight -= tx.weight;
+            item.totalValue -= tx.weight * currentAvgPrice;
+        }
+    });
+    
+    let totalWeight = 0;
+    let totalValue = 0;
+    Object.values(stockPortfolio).forEach(item => {
+        totalWeight += item.weight;
+        totalValue += item.totalValue;
+    });
     
     return {
-      currentStockWeight: totalCurrentWeight,
-      currentStockValue: totalCurrentValue
+      currentStockWeight: totalWeight,
+      currentStockValue: totalValue
     };
-  }, [stockItems]);
+  }, [stockItems, stockTransactions]);
 
-  const totalBalance = cashBalance + bankBalance
+  const totalBalance = (cashBalance ?? 0) + (bankBalance ?? 0)
 
   const renderValue = (value: string | number, isCurrency = true) => {
     if (isLoading) {
@@ -71,8 +115,8 @@ export function DashboardTab({ setActiveTab }: DashboardTabProps) {
     <div className="space-y-6">
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <StatCard title="Total Balance" value={totalBalance} subtext="Cash + Bank combined" icon={LineChart} />
-        <StatCard title="Cash Balance" value={cashBalance} subtext="In-hand currency" icon={Wallet} onClick={() => setActiveTab('cash')} />
-        <StatCard title="Bank Balance" value={bankBalance} subtext="Managed by financial institutions" icon={Landmark} onClick={() => setActiveTab('bank')} />
+        <StatCard title="Cash Balance" value={cashBalance ?? 0} subtext="In-hand currency" icon={Wallet} onClick={() => setActiveTab('cash')} />
+        <StatCard title="Bank Balance" value={bankBalance ?? 0} subtext="Managed by financial institutions" icon={Landmark} onClick={() => setActiveTab('bank')} />
         <StatCard title="Stock Quantity" value={`${currentStockWeight.toFixed(2)} kg`} subtext={`Total Value: ${formatCurrency(currentStockValue)}`} icon={Boxes} onClick={() => setActiveTab('stock')} />
       </div>
     </div>

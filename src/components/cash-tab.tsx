@@ -29,7 +29,6 @@ import { useIsMobile } from "@/hooks/use-mobile"
 import { Badge } from "./ui/badge"
 import * as server from "@/lib/actions";
 import { db } from "@/lib/db"
-import { useBalanceCalculator } from "../app/context/useBalanceCalculator"
 import { motion, AnimatePresence } from "framer-motion"
 import { useLiveQuery } from "dexie-react-hooks"
 
@@ -45,7 +44,11 @@ type SortDirection = 'asc' | 'desc';
 export function CashTab() {
   const { currency, user, banks, isLoading, handleApiError, isOnline, contacts, loans } = useAppContext()
   const cashTransactions = useLiveQuery(() => db.cash_transactions.toArray(), []);
-  const { cashBalance } = useBalanceCalculator();
+  const cashBalance = useLiveQuery(() => 
+    db.cash_transactions.toArray().then(txs => 
+      txs.reduce((acc, tx) => acc + (tx.type === 'income' ? tx.actual_amount : -tx.actual_amount), 0)
+    ), 0);
+
   const { transferFunds, deleteCashTransaction, deleteMultipleCashTransactions } = useAppActions();
   const [isTransferSheetOpen, setIsTransferSheetOpen] = useState(false)
   const [editSheetState, setEditSheetState] = useState<{isOpen: boolean, transaction: CashTransaction | null}>({ isOpen: false, transaction: null});
@@ -277,26 +280,26 @@ export function CashTab() {
             {showActions && <TableHead className="text-center">Actions</TableHead>}
           </TableRow>
         </TableHeader>
-        <TableBody>
+        <motion.tbody>
+          <AnimatePresence initial={false}>
           {isLoading || isSnapshotLoading ? (
             <TableRow><TableCell colSpan={isSelectionMode ? 8 : 7} className="h-24 text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin" /></TableCell></TableRow>
           ) : sortedTransactions.length > 0 ? (
-            <AnimatePresence initial={false}>
-              {sortedTransactions.map((tx: any) => {
+              sortedTransactions.map((tx: any) => {
                   let description = tx.description;
                   let subDescription = null;
 
                   if (tx.linkedLoanId) {
-                      const loan = loans.find(l => l.id === tx.linkedLoanId);
+                      const loan = (loans || []).find(l => l.id === tx.linkedLoanId);
                       if (loan) {
-                          const contact = contacts.find(c => c.id === loan.contact_id);
+                          const contact = (contacts || []).find(c => c.id === loan.contact_id);
                           description = loan.type === 'payable' ? 'Loan Received from' : 'Loan Disbursed to';
                           if (contact) {
                               description += ` ${contact.name}`;
                           }
                       }
                   } else if (tx.contact_id) {
-                      const contact = contacts.find(c => c.id === tx.contact_id);
+                      const contact = (contacts || []).find(c => c.id === tx.contact_id);
                       if (contact) {
                           subDescription = `(${contact.name})`;
                       }
@@ -361,14 +364,14 @@ export function CashTab() {
                     </TableCell>
                   )}
                 </motion.tr>
-              )})}
-            </AnimatePresence>
+              )})
           ) : (
             <TableRow>
               <TableCell colSpan={isSelectionMode ? (showActions ? 8 : 7) : (showActions ? 7 : 6)} className="text-center h-24">No cash transactions found for {format(currentMonth, 'MMMM yyyy')}.</TableCell>
             </TableRow>
           )}
-        </TableBody>
+          </AnimatePresence>
+        </motion.tbody>
       </Table>
       </div>
   );
@@ -384,16 +387,16 @@ export function CashTab() {
             let subDescription = null;
 
             if (tx.linkedLoanId) {
-                const loan = loans.find(l => l.id === tx.linkedLoanId);
+                const loan = (loans || []).find(l => l.id === tx.linkedLoanId);
                 if (loan) {
-                    const contact = contacts.find(c => c.id === loan.contact_id);
+                    const contact = (contacts || []).find(c => c.id === loan.contact_id);
                     description = loan.type === 'payable' ? 'Loan Received from' : 'Loan Disbursed to';
                     if (contact) {
                         description += ` ${contact.name}`;
                     }
                 }
             } else if (tx.contact_id) {
-                const contact = contacts.find(c => c.id === tx.contact_id);
+                const contact = (contacts || []).find(c => c.id === tx.contact_id);
                 if (contact) {
                     subDescription = `(${contact.name})`;
                 }
@@ -478,7 +481,7 @@ export function CashTab() {
             <div className="flex-1">
               <CardTitle>Cash Ledger</CardTitle>
               <CardDescription>
-                View your cash-in-hand transactions. Current balance: <span className="font-bold text-primary">{formatCurrency(cashBalance)}</span>
+                View your cash-in-hand transactions. Current balance: <span className="font-bold text-primary">{formatCurrency(cashBalance ?? 0)}</span>
               </CardDescription>
             </div>
             <div className="flex items-center gap-2 self-center justify-center sm:self-auto">

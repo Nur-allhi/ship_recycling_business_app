@@ -36,7 +36,6 @@ import { useIsMobile } from "@/hooks/use-mobile"
 import { Badge } from "./ui/badge"
 import * as server from "@/lib/actions";
 import { db } from "@/lib/db"
-import { useBalanceCalculator } from "../app/context/useBalanceCalculator"
 import { motion, AnimatePresence } from "framer-motion"
 import { useLiveQuery } from "dexie-react-hooks"
 
@@ -52,7 +51,10 @@ type SortDirection = 'asc' | 'desc';
 export function BankTab() {
   const { currency, user, banks, isLoading, handleApiError, isOnline, contacts, loans } = useAppContext()
   const bankTransactions = useLiveQuery(() => db.bank_transactions.toArray(), []);
-  const { bankBalance } = useBalanceCalculator();
+  const bankBalance = useLiveQuery(() => 
+    db.bank_transactions.toArray().then(txs => 
+      txs.reduce((acc, tx) => acc + (tx.type === 'deposit' ? tx.actual_amount : -tx.actual_amount), 0)
+    ), 0);
   const { transferFunds, deleteBankTransaction, deleteMultipleBankTransactions } = useAppActions();
   const [isTransferSheetOpen, setIsTransferSheetOpen] = useState(false)
   const [editSheetState, setEditSheetState] = useState<{isOpen: boolean, transaction: BankTransaction | null}>({ isOpen: false, transaction: null});
@@ -278,7 +280,7 @@ export function BankTab() {
   
   const displayBalance = useMemo(() => {
     if (selectedBankId === 'all') {
-      return bankBalance;
+      return bankBalance ?? 0;
     }
     return (bankTransactions || [])
         .filter(tx => tx.bank_id === selectedBankId)
@@ -323,26 +325,26 @@ export function BankTab() {
             {showActions && <TableHead className="text-center">Actions</TableHead>}
             </TableRow>
         </TableHeader>
-        <TableBody>
+        <motion.tbody>
+          <AnimatePresence initial={false}>
             {isLoading || isSnapshotLoading ? (
               <TableRow><TableCell colSpan={isSelectionMode ? 9 : 8} className="h-24 text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin" /></TableCell></TableRow>
             ) : sortedTransactions.length > 0 ? (
-            <AnimatePresence initial={false}>
-              {sortedTransactions.map((tx: any) => {
+              sortedTransactions.map((tx: any) => {
                 let description = tx.description;
                 let subDescription = null;
 
                 if (tx.linkedLoanId) {
-                    const loan = loans.find(l => l.id === tx.linkedLoanId);
+                    const loan = (loans || []).find(l => l.id === tx.linkedLoanId);
                     if (loan) {
-                        const contact = contacts.find(c => c.id === loan.contact_id);
+                        const contact = (contacts || []).find(c => c.id === loan.contact_id);
                         description = loan.type === 'payable' ? 'Loan Received' : 'Loan Disbursed';
                         if (contact) {
                             subDescription = `From/To: ${contact.name}`;
                         }
                     }
                 } else if (tx.contact_id) {
-                    const contact = contacts.find(c => c.id === tx.contact_id);
+                    const contact = (contacts || []).find(c => c.id === tx.contact_id);
                     if (contact) {
                         subDescription = `(${contact.name})`;
                     }
@@ -412,14 +414,14 @@ export function BankTab() {
                     </TableCell>
                   )}
                   </motion.tr>
-              )})}
-            </AnimatePresence>
+              )})
             ) : (
             <TableRow>
                 <TableCell colSpan={isSelectionMode ? (showActions ? 10 : 9) : (showActions ? 9 : 8)} className="text-center h-24">No bank transactions found for {format(currentMonth, 'MMMM yyyy')}.</TableCell>
             </TableRow>
             )}
-        </TableBody>
+            </AnimatePresence>
+        </motion.tbody>
         </Table>
     </div>
   );
@@ -435,16 +437,16 @@ export function BankTab() {
               let subDescription = null;
 
               if (tx.linkedLoanId) {
-                  const loan = loans.find(l => l.id === tx.linkedLoanId);
+                  const loan = (loans || []).find(l => l.id === tx.linkedLoanId);
                   if (loan) {
-                      const contact = contacts.find(c => c.id === loan.contact_id);
+                      const contact = (contacts || []).find(c => c.id === loan.contact_id);
                       description = loan.type === 'payable' ? 'Loan Received' : 'Loan Disbursed';
                       if (contact) {
                           subDescription = `From/To: ${contact.name}`;
                       }
                   }
               } else if (tx.contact_id) {
-                  const contact = contacts.find(c => c.id === tx.contact_id);
+                  const contact = (contacts || []).find(c => c.id === tx.contact_id);
                   if (contact) {
                       subDescription = `(${contact.name})`;
                   }

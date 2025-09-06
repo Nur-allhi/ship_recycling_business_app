@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from './ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { useAppContext } from '@/app/context/app-context';
@@ -9,11 +9,20 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { PayablesList } from './payables-list';
 import { ReceivablesList } from './receivables-list';
 import { ResponsiveSelect } from './ui/responsive-select';
-import { useBalanceCalculator } from '../app/context/useBalanceCalculator';
+import { useLiveQuery } from 'dexie-react-hooks';
+import { db } from '@/lib/db';
 
 export function CreditTab() {
     const { currency } = useAppContext();
-    const { totalPayables, totalReceivables } = useBalanceCalculator();
+    const ledgerTransactions = useLiveQuery(() => db.ap_ar_transactions.toArray());
+
+    const { totalPayables, totalReceivables } = useMemo(() => {
+        if (!ledgerTransactions) return { totalPayables: 0, totalReceivables: 0 };
+        const payables = ledgerTransactions.filter(tx => tx.type === 'payable').reduce((acc, tx) => acc + (tx.amount - tx.paid_amount), 0);
+        const receivables = ledgerTransactions.filter(tx => tx.type === 'receivable').reduce((acc, tx) => acc + (tx.amount - tx.paid_amount), 0);
+        return { totalPayables: payables, totalReceivables: receivables };
+    }, [ledgerTransactions]);
+    
     const [mobileView, setMobileView] = useState<'payables' | 'receivables'>('payables');
     const isMobile = useIsMobile();
     

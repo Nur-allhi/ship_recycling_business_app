@@ -1,7 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useMemo } from 'react';
-import type { User, Bank, Category, MonthlySnapshot } from '@/lib/types';
+import type { User, Bank, Category, MonthlySnapshot, Contact, LedgerTransaction, Loan, LoanPayment, StockItem, CashTransaction, BankTransaction } from '@/lib/types';
 import { toast } from 'sonner';
 import { useRouter, usePathname } from 'next/navigation';
 import { useLiveQuery } from 'dexie-react-hooks';
@@ -39,6 +39,13 @@ interface AppData {
   banks: Bank[];
   cashCategories: Category[];
   bankCategories: Category[];
+  contacts: Contact[];
+  ledgerTransactions: LedgerTransaction[];
+  loans: Loan[];
+  loanPayments: LoanPayment[];
+  stockItems: StockItem[];
+  cashTransactions: CashTransaction[];
+  bankTransactions: BankTransaction[];
   blockingOperation: BlockingOperation;
 }
 
@@ -107,6 +114,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const appState = useLiveQuery(() => db.app_state.get(1), []);
     const banks = useLiveQuery(() => db.banks.toArray(), []);
     const allCategories = useLiveQuery(() => db.categories.toArray(), []);
+    const contacts = useLiveQuery(() => db.contacts.toArray(), []);
+    const ledgerTransactions = useLiveQuery(() => db.ap_ar_transactions.toArray(), []);
+    const loans = useLiveQuery(() => db.loans.toArray(), []);
+    const loanPayments = useLiveQuery(() => db.loan_payments.toArray(), []);
+    const stockItems = useLiveQuery(() => db.initial_stock.toArray(), []);
+    const cashTransactions = useLiveQuery(() => db.cash_transactions.toArray(), []);
+    const bankTransactions = useLiveQuery(() => db.bank_transactions.toArray(), []);
+
 
     const { cashCategories, bankCategories } = useMemo(() => {
         const dbCash: Category[] = [];
@@ -288,6 +303,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         banks: banks || [],
         cashCategories: cashCategories || [],
         bankCategories: bankCategories || [],
+        contacts: contacts || [],
+        ledgerTransactions: ledgerTransactions || [],
+        loans: loans || [],
+        loanPayments: loanPayments || [],
+        stockItems: stockItems || [],
+        cashTransactions: cashTransactions || [],
+        bankTransactions: bankTransactions || [],
         // Functions
         login, logout, reloadData, handleApiError,
         processSyncQueue, openInitialBalanceDialog, closeInitialBalanceDialog,
@@ -297,7 +319,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         isSyncing, syncQueueCount, isInitialBalanceDialogOpen, blockingOperation,
         appState, banks, cashCategories, bankCategories,
         login, logout, reloadData, handleApiError,
-        processSyncQueue, setUser, queueOrSync
+        processSyncQueue, setUser, queueOrSync,
+        contacts, ledgerTransactions, loans, loanPayments, stockItems, cashTransactions, bankTransactions
     ]);
 
     return (
