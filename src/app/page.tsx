@@ -17,7 +17,6 @@ import { FloatingActionButton } from '@/components/floating-action-button';
 import { AnimatePresence, motion } from 'framer-motion';
 import { SidebarProvider, Sidebar, SidebarTrigger, SidebarInset } from '@/components/ui/sidebar';
 import { AppSidebar } from '@/components/app-sidebar';
-import Logo from '@/components/logo';
 
 const fontClasses = {
   sm: 'text-sm',
@@ -59,25 +58,13 @@ function ShipShapeLedger() {
             </Sidebar>
 
             <SidebarInset className="flex flex-col min-h-screen">
-                <header className="p-4 md:p-6 lg:p-8 flex-shrink-0">
-                    <div className="flex items-center gap-2 w-full">
-                        <SidebarTrigger className="md:hidden"/>
-                        <div className="flex-1">
-                            <div className="flex items-center gap-3 mb-1">
-                                <Logo className="h-10 w-10 text-primary hidden sm:block" />
-                                <div>
-                                    <h1 className="text-2xl sm:text-3xl font-bold text-primary">
-                                    Ha-Mim Iron Mart
-                                    </h1>
-                                </div>
-                            </div>
-                            <p className="text-muted-foreground text-sm sm:text-base">
-                            Welcome {roleDisplayName}
-                            </p>
-                        </div>
+                <main className="flex-grow p-4 md:p-6 lg:p-8">
+                     <div className="flex items-center gap-2 mb-4">
+                        <SidebarTrigger />
+                        <h2 className="text-lg font-semibold text-muted-foreground">
+                            Welcome, {user.username} ({roleDisplayName})
+                        </h2>
                     </div>
-                </header>
-                <main className="flex-grow container mx-auto px-4 md:px-6 lg:px-8">
                     <AnimatePresence mode="wait">
                         <motion.div
                             key={activeTab}
