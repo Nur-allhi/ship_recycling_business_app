@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useMemo, useState } from "react";
@@ -16,6 +15,7 @@ export function LoansReceivableList() {
     const [selectedLoan, setSelectedLoan] = useState<Loan | null>(null);
 
     const receivableLoans = useMemo(() => {
+        if (!loans || !contacts || !loanPayments) return [];
         return loans
             .filter(loan => loan.type === 'receivable')
             .map(loan => {
