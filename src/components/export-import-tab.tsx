@@ -22,7 +22,6 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Alert, AlertTitle, AlertDescription } from "./ui/alert";
-import { PdfExportDialog } from "./pdf-export-dialog";
 
 
 export function ExportImportTab() {
@@ -30,7 +29,6 @@ export function ExportImportTab() {
   const { user } = useAppContext();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [isPdfDialogOpen, setIsPdfDialogOpen] = useState(false);
   const isAdmin = user?.role === 'admin';
 
   const onFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -53,28 +51,23 @@ export function ExportImportTab() {
     <>
       <Card>
         <CardHeader>
-          <CardTitle>Export / Import Data</CardTitle>
+          <CardTitle>Data Management</CardTitle>
           <CardDescription>
-            Export your ledger data to PDF or create a full backup. Admins can restore from a backup.
+            Create a full backup of your data. Admins can restore from a backup or delete all data.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-8">
-          <div className="space-y-4">
-            <h3 className="font-semibold text-lg flex items-center"><Download className="mr-2 h-5 w-5" /> Export Data</h3>
-            <div className="flex flex-col sm:flex-row gap-4">
-               <Button onClick={() => setIsPdfDialogOpen(true)}>
-                  <FileText className="mr-2 h-4 w-4" /> Export to PDF
-               </Button>
-               {isAdmin && 
+          {isAdmin && 
+            <div className="space-y-4">
+                <h3 className="font-semibold text-lg flex items-center"><Download className="mr-2 h-5 w-5" /> Export Full Backup</h3>
+                <p className="text-sm text-muted-foreground">
+                    Create a full data backup as a JSON file for restoration purposes.
+                </p>
                 <Button onClick={handleExport} variant="outline">
                   Create Full Backup (.json)
                 </Button>
-               }
             </div>
-            <p className="text-sm text-muted-foreground">
-                Export specific ledgers to PDF. Admins can create a full data backup for restoration purposes.
-            </p>
-          </div>
+            }
 
           {isAdmin && (
             <>
@@ -151,7 +144,8 @@ export function ExportImportTab() {
 
         </CardContent>
       </Card>
-      <PdfExportDialog isOpen={isPdfDialogOpen} setIsOpen={setIsPdfDialogOpen} />
     </>
   );
 }
+
+    

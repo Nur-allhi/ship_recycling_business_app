@@ -17,7 +17,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { ArrowRightLeft, Pencil, History, Trash2, CheckSquare, ChevronLeft, ChevronRight, Eye, EyeOff, ArrowUpDown, Loader2 } from "lucide-react"
+import { ArrowRightLeft, Pencil, History, Trash2, CheckSquare, ChevronLeft, ChevronRight, Eye, EyeOff, ArrowUpDown, Loader2, Printer } from "lucide-react"
 import type { CashTransaction, MonthlySnapshot } from "@/lib/types"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetTrigger } from "@/components/ui/sheet"
 import { EditTransactionSheet } from "./edit-transaction-sheet"
@@ -31,6 +31,7 @@ import * as server from "@/lib/actions";
 import { db } from "@/lib/db"
 import { motion, AnimatePresence } from "framer-motion"
 import { useLiveQuery } from "dexie-react-hooks"
+import { generateCashLedgerPdf } from "@/lib/pdf-utils"
 
 const toYYYYMMDD = (date: Date) => {
     const d = new Date(date);
@@ -241,6 +242,10 @@ export function CashTab() {
   }
   const goToNextMonth = () => {
     setCurrentMonth(addMonths(currentMonth, 1));
+  }
+  
+  const handlePrint = () => {
+    generateCashLedgerPdf(sortedTransactions, currentMonth, currency, cashBalance ?? 0);
   }
 
   const renderSortArrow = (key: SortKey) => {
@@ -514,6 +519,18 @@ export function CashTab() {
                         </TooltipContent>
                       </Tooltip>
                     </TooltipProvider>
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                           <Button size="sm" variant="outline" onClick={handlePrint}>
+                               <Printer className="h-4 w-4" />
+                           </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                           <p>Print this month's ledger</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
                     <Sheet open={isTransferSheetOpen} onOpenChange={setIsTransferSheetOpen}>
                         <SheetTrigger asChild>
                             <Button size="sm" variant="outline"><ArrowRightLeft className="mr-2 h-4 w-4" />Transfer</Button>
@@ -575,3 +592,5 @@ export function CashTab() {
     </>
   )
 }
+
+    

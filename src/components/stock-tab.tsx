@@ -16,7 +16,7 @@ import {
   TableFooter as TableFoot,
 } from "@/components/ui/table"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { ArrowUpCircle, ArrowDownCircle, Pencil, History, Trash2, CheckSquare, ChevronLeft, ChevronRight, Eye, EyeOff, ArrowUpDown, Loader2, DollarSign } from "lucide-react"
+import { ArrowUpCircle, ArrowDownCircle, Pencil, History, Trash2, CheckSquare, ChevronLeft, ChevronRight, Eye, EyeOff, ArrowUpDown, Loader2, DollarSign, Printer } from "lucide-react"
 import type { StockItem, StockTransaction } from "@/lib/types"
 import { EditTransactionSheet } from "./edit-transaction-sheet"
 import { DeleteConfirmationDialog } from "./delete-confirmation-dialog"
@@ -29,6 +29,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { motion, AnimatePresence } from "framer-motion"
 import { useLiveQuery } from "dexie-react-hooks"
 import { db } from "@/lib/db"
+import { generateStockLedgerPdf } from "@/lib/pdf-utils"
 
 type SortKey = keyof StockTransaction | 'totalValue' | null;
 type SortDirection = 'asc' | 'desc';
@@ -148,6 +149,10 @@ export function StockTab() {
   const toggleSelectionMode = () => {
     setIsSelectionMode(!isSelectionMode);
     setSelectedTxs([]);
+  }
+  
+  const handlePrint = () => {
+    generateStockLedgerPdf(filteredByMonth, currentMonth, currency);
   }
 
   const { currentStockWeight, currentStockValue, currentStockItems } = useMemo(() => {
@@ -525,6 +530,18 @@ export function StockTab() {
                                         </TooltipContent>
                                     </Tooltip>
                                 </TooltipProvider>
+                                <TooltipProvider>
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                        <Button size="sm" variant="outline" onClick={handlePrint}>
+                                            <Printer className="h-4 w-4" />
+                                        </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent>
+                                        <p>Print this month's ledger</p>
+                                        </TooltipContent>
+                                    </Tooltip>
+                                </TooltipProvider>
                                 {selectedTxs.length > 0 && (
                                     <Button size="sm" variant="destructive" onClick={handleMultiDeleteClick}>
                                         <Trash2 className="mr-2 h-4 w-4" /> ({selectedTxs.length})
@@ -608,3 +625,5 @@ export function StockTab() {
     </>
   )
 }
+
+    

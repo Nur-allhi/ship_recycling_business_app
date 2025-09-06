@@ -25,7 +25,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { ArrowRightLeft, Pencil, History, Trash2, CheckSquare, ChevronLeft, ChevronRight, Eye, EyeOff, ArrowUpDown, Loader2 } from "lucide-react"
+import { ArrowRightLeft, Pencil, History, Trash2, CheckSquare, ChevronLeft, ChevronRight, Eye, EyeOff, ArrowUpDown, Loader2, Printer } from "lucide-react"
 import type { BankTransaction, MonthlySnapshot } from "@/lib/types"
 import { EditTransactionSheet } from "./edit-transaction-sheet"
 import { DeleteConfirmationDialog } from "./delete-confirmation-dialog"
@@ -38,6 +38,7 @@ import * as server from "@/lib/actions";
 import { db } from "@/lib/db"
 import { motion, AnimatePresence } from "framer-motion"
 import { useLiveQuery } from "dexie-react-hooks"
+import { generateBankLedgerPdf } from "@/lib/pdf-utils"
 
 const toYYYYMMDD = (date: Date) => {
     const d = new Date(date);
@@ -267,6 +268,11 @@ export function BankTab() {
     setCurrentMonth(addMonths(currentMonth, 1));
   }
   
+  const handlePrint = () => {
+    const selectedBank = banks.find(b => b.id === selectedBankId);
+    generateBankLedgerPdf(sortedTransactions, currentMonth, currency, displayBalance, selectedBank?.name ?? 'All Banks');
+  }
+
   const renderSortArrow = (key: SortKey) => {
     if (sortKey !== key) return <ArrowUpDown className="ml-2 h-4 w-4 opacity-50" />;
     return sortDirection === 'desc' ? '▼' : '▲';
@@ -577,6 +583,18 @@ export function BankTab() {
                         </TooltipContent>
                       </Tooltip>
                     </TooltipProvider>
+                     <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                           <Button size="sm" variant="outline" onClick={handlePrint}>
+                               <Printer className="h-4 w-4" />
+                           </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                           <p>Print this month's ledger</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
                     <Sheet open={isTransferSheetOpen} onOpenChange={setIsTransferSheetOpen}>
                         <SheetTrigger asChild>
                             <Button size="sm" variant="outline"><ArrowRightLeft className="mr-2 h-4 w-4" />Transfer</Button>
@@ -637,3 +655,5 @@ export function BankTab() {
     </>
   )
 }
+
+    
