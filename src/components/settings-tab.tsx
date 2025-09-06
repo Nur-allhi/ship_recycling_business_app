@@ -86,6 +86,8 @@ function GeneralSettings() {
   const [banks, setBanks] = useState<Bank[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isAddingBank, setIsAddingBank] = useState(false);
+  const [isAddingCategory, setIsAddingCategory] = useState(false);
 
   const newCategoryNameRef = useRef<HTMLInputElement>(null);
   const [newCategoryType, setNewCategoryType] = useState<'cash' | 'bank'>('cash');
@@ -116,10 +118,17 @@ function GeneralSettings() {
   const handleAddBank = async () => {
     const name = newBankNameRef.current?.value.trim();
     if (name) {
-      await addBank(name);
-      if (newBankNameRef.current) newBankNameRef.current.value = "";
-      toast.success("Bank Added");
-      await fetchData(); // Refresh data
+      setIsAddingBank(true);
+      try {
+        await addBank(name);
+        if (newBankNameRef.current) newBankNameRef.current.value = "";
+        toast.success("Bank Added");
+        await fetchData(); // Refresh data
+      } catch (e: any) {
+        toast.error("Failed to add bank", { description: e.message });
+      } finally {
+        setIsAddingBank(false);
+      }
     }
   }
 
@@ -128,11 +137,18 @@ function GeneralSettings() {
     if (!name) { toast.error('Category name required'); return; }
     if (!newCategoryDirection) { toast.error('Category direction required'); return; }
     
-    await addCategory(newCategoryType, name, newCategoryDirection);
-    if(newCategoryNameRef.current) newCategoryNameRef.current.value = "";
-    setNewCategoryDirection(undefined);
-    toast.success("Category Added");
-    await fetchData(); // Refresh data
+    setIsAddingCategory(true);
+    try {
+        await addCategory(newCategoryType, name, newCategoryDirection);
+        if(newCategoryNameRef.current) newCategoryNameRef.current.value = "";
+        setNewCategoryDirection(undefined);
+        toast.success("Category Added");
+        await fetchData(); // Refresh data
+    } catch (e: any) {
+        toast.error("Failed to add category", { description: e.message });
+    } finally {
+        setIsAddingCategory(false);
+    }
   }
 
   const handleDeleteCategory = async (id: string) => {
@@ -204,8 +220,8 @@ function GeneralSettings() {
                     <h3 className="font-semibold mb-2">Add New Bank Account</h3>
                     <div className="flex gap-2">
                         <Input placeholder="New bank account name" ref={newBankNameRef} />
-                        <Button size="icon" onClick={handleAddBank}>
-                        <Plus className="h-4 w-4" />
+                        <Button size="icon" onClick={handleAddBank} disabled={isAddingBank}>
+                            {isAddingBank ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
                         </Button>
                     </div>
                     </div>
@@ -243,8 +259,8 @@ function GeneralSettings() {
                         <Label className="flex items-center gap-2 cursor-pointer"><RadioGroupItem value="debit" /> Debit (Money Out)</Label>
                     </RadioGroup>
                 </div>
-                <Button size="sm" onClick={handleAddCategory}>
-                    <Plus className="mr-2 h-4 w-4" />
+                <Button size="sm" onClick={handleAddCategory} disabled={isAddingCategory}>
+                   {isAddingCategory ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
                     Add Category
                 </Button>
                 </div>
