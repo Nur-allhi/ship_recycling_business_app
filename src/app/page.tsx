@@ -63,7 +63,7 @@ function ShipShapeLedger() {
         <div className="mt-6">
             <AnimatePresence mode="wait">
                 <motion.div
-                    key={activeTab}
+                    key="dashboard"
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -10 }}
