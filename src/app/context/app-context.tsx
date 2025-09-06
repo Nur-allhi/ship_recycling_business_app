@@ -2,7 +2,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useMemo } from 'react';
-import type { User, Bank, Category, MonthlySnapshot, Contact, LedgerTransaction, Loan, LoanPayment, StockItem, CashTransaction, BankTransaction } from '@/lib/types';
+import type { User, Bank, Category, MonthlySnapshot, Contact, LedgerTransaction, Loan, LoanPayment, StockItem, CashTransaction, BankTransaction, ActivityLog } from '@/lib/types';
 import { toast } from 'sonner';
 import { useRouter, usePathname } from 'next/navigation';
 import { useLiveQuery } from 'dexie-react-hooks';
@@ -47,6 +47,7 @@ interface AppData {
   stockItems: StockItem[];
   cashTransactions: CashTransaction[];
   bankTransactions: BankTransaction[];
+  activityLog: ActivityLog[];
 }
 
 interface AppContextType extends AppData {
@@ -119,6 +120,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const stockItems = useLiveQuery(() => db.initial_stock.toArray(), []);
     const cashTransactions = useLiveQuery(() => db.cash_transactions.toArray(), []);
     const bankTransactions = useLiveQuery(() => db.bank_transactions.toArray(), []);
+    const activityLog = useLiveQuery(() => db.activity_log.toArray(), []);
 
     const { cashCategories, bankCategories } = useMemo(() => {
         const dbCash: Category[] = [];
@@ -157,7 +159,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }, [handleApiError]);
 
     const reloadData = useCallback(async (options?: { force?: boolean, needsInitialBalance?: boolean }) => {
-        if (isSyncing) {
+        if (isSyncing && !options?.force) {
             toast.info("Sync in progress. Data will load shortly.");
             return;
         }
@@ -170,7 +172,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 return;
             }
             
-            setUser(session);
+            if(!user || user.id !== session.id) {
+                setUser(session);
+            }
             
             let [categoriesData, ...otherData] = await Promise.all([
                 server.readData({ tableName: 'categories', select: '*' }),
@@ -215,8 +219,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             handleApiError(error);
         } finally {
             setIsLoading(false);
+            if (!isInitialLoadComplete) {
+                setIsInitialLoadComplete(true);
+            }
         }
-    }, [handleApiError, setIsLoading, setUser, processSyncQueue, seedEssentialCategories, appState, isSyncing]);
+    }, [isSyncing, setIsLoading, setUser, user, seedEssentialCategories, appState, processSyncQueue, handleApiError, isInitialLoadComplete, setIsInitialLoadComplete]);
+
 
     useEffect(() => {
         const checkSessionAndLoad = async () => {
@@ -224,20 +232,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             const session = await getSessionFromCookie();
             if (session) {
                 setUser(session);
-                // The main reload on first load.
-                await reloadData(); 
+                // Initial load on first entering the app
+                if (!isInitialLoadComplete) {
+                    await reloadData();
+                }
             } else {
                 setUser(null);
+                setIsInitialLoadComplete(true);
             }
-            setIsInitialLoadComplete(true);
             setIsLoading(false);
         };
         
-        if (!isInitialLoadComplete) {
+        if (!user && !isInitialLoadComplete) {
           checkSessionAndLoad();
         }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [isInitialLoadComplete]);
+    }, [isInitialLoadComplete, reloadData, setIsLoading, setUser, user]);
 
     useEffect(() => { setHasMounted(true); }, []);
 
@@ -279,15 +288,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const closeInitialBalanceDialog = useCallback(() => setIsInitialBalanceDialogOpen(false), []);
 
     const OnlineStatusIndicator = () => (
-        <div className="fixed bottom-4 right-4 z-50 animate-fade-in">
-            <div className="flex items-center gap-2 rounded-full bg-background px-3 py-2 text-foreground shadow-lg border">
-                {isSyncing ? (
-                    <><RefreshCw className="h-5 w-5 animate-spin" /><span className="font-semibold text-sm">Syncing...</span></>
-                ) : (
-                    <><WifiOff className="h-5 w-5 text-destructive" /><span className="font-semibold text-sm">Offline</span></>
-                )}
+      <>
+        {!isOnline && (
+            <div className="fixed bottom-4 right-4 z-50 animate-fade-in">
+                <div className="flex items-center gap-2 rounded-full bg-background px-3 py-2 text-foreground shadow-lg border">
+                    {isSyncing ? (
+                        <><RefreshCw className="h-5 w-5 animate-spin" /><span className="font-semibold text-sm">Syncing...</span></>
+                    ) : (
+                        <><WifiOff className="h-5 w-5 text-destructive" /><span className="font-semibold text-sm">Offline</span></>
+                    )}
+                </div>
             </div>
-        </div>
+        )}
+      </>
     );
     
     const contextValue = useMemo(() => ({
@@ -305,20 +318,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         stockItems: stockItems || [],
         cashTransactions: cashTransactions || [],
         bankTransactions: bankTransactions || [],
+        activityLog: activityLog || [],
         login, logout, reloadData, handleApiError,
         processSyncQueue, openInitialBalanceDialog, closeInitialBalanceDialog,
         setUser, setBlockingOperation, queueOrSync,
     }), [
         isLoading, isOnline, user, isInitialLoadComplete, isLoggingOut, isAuthenticating,
         isSyncing, syncQueueCount, isInitialBalanceDialogOpen, blockingOperation,
-        appState, banks, cashCategories, bankCategories, contacts, loans, loanPayments, stockItems, cashTransactions, bankTransactions,
+        appState, banks, cashCategories, bankCategories, contacts, loans, loanPayments, stockItems, cashTransactions, bankTransactions, activityLog,
         login, logout, reloadData, handleApiError,
         processSyncQueue, openInitialBalanceDialog, closeInitialBalanceDialog, setUser, setBlockingOperation, queueOrSync
     ]);
 
     return (
         <AppContext.Provider value={contextValue}>
-            {hasMounted && !isOnline && <OnlineStatusIndicator />}
+            <OnlineStatusIndicator />
             {(isLoading || !isInitialLoadComplete) ? <AppLoading /> : children}
         </AppContext.Provider>
     );

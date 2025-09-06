@@ -28,7 +28,7 @@ export function useSessionManager() {
             await clearAllData(true); 
             setUser(null);
             setIsLoggingOut(false);
-            router.replace('/login');
+            router.push('/login');
         }
     }, [router]);
 
@@ -49,12 +49,12 @@ export function useSessionManager() {
             const result = await serverLogin(credentials);
             if (result.success && result.session) {
                 toast.success("Login Successful", { description: "Welcome back!" });
-                setIsInitialLoadComplete(false); // This will trigger a reload in the main context
-                router.replace('/');
+                setUser(result.session); // This will trigger the reload in the main context
+                router.push('/');
             }
             return result;
-        } catch (error: any) {
-            toast.error('Login Failed', { description: error.message });
+        } catch (error) {
+            toast.error('Login Failed', { description: (error as Error).message });
             throw error;
         } finally {
             setIsAuthenticating(false);

@@ -67,12 +67,13 @@ export function useDataSyncer() {
                 }
                 
                 await db.transaction('rw', db.tables, async () => {
-                    if (result?.id && localId) {
+                     if (item.action === 'appendData' && result?.id && localId) {
                         const tableName = payloadWithoutId.tableName;
                         const oldRecord = await db.table(tableName).get(localId);
                         if (oldRecord) {
                             await db.table(tableName).delete(localId);
-                            await db.table(tableName).add({ ...oldRecord, id: result.id });
+                            // Ensure the returned data is merged with any existing fields not returned from server
+                            await db.table(tableName).add({ ...oldRecord, ...result });
                         }
                     } else if (result?.stockTx && result?.stockTx.id && localId) { // addStockTransaction
                         await db.stock_transactions.update(localId, { id: result.stockTx.id });
