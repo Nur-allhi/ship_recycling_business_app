@@ -480,16 +480,22 @@ export function useAppActions() {
     };
 
     const handleDeleteAllData = async () => {
-        await performAdminAction(async () => {
-            setBlockingOperation({ isActive: true, message: "Deleting all data... Please wait." });
-            try {
-                await server.deleteAllData();
-                toast.success("All data has been deleted.");
-            } finally {
-                // The logout will clear the blocking operation state.
-                logout();
-            }
-        });
+        const session = await getSession();
+        if (session?.role !== 'admin') {
+            toast.error("Permission Denied", { description: "You do not have permission to perform this action." });
+            return;
+        }
+
+        setBlockingOperation({ isActive: true, message: "Deleting all data... Please wait." });
+        try {
+            await server.deleteAllData();
+            toast.success("All data has been deleted.");
+        } catch (error: any) {
+            toast.error("Operation Failed", { description: error.message });
+        } finally {
+            // The logout will clear the blocking operation state and redirect.
+            logout();
+        }
     };
     
     const addLoan = async (loan: Omit<Loan, 'id' | 'status' | 'created_at' | 'payments'>, disbursement: { method: 'cash' | 'bank', bank_id?: string }) => {
