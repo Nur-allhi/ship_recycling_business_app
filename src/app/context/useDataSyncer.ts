@@ -35,7 +35,7 @@ export function useDataSyncer() {
         for (const item of queue) {
             try {
                 let result: any;
-                const { localId, localFinancialId, localLedgerId, localCashId, localBankId, ...payloadWithoutId } = item.payload || {};
+                const { localId, localFinancialId, localLedgerId, localCashId, localBankId, localPaymentId, ...payloadWithoutId } = item.payload || {};
                 
                 const actionMap: { [key: string]: (payload: any) => Promise<any> } = {
                     appendData: server.appendData,
@@ -65,24 +65,38 @@ export function useDataSyncer() {
                 } else {
                      console.warn(`Unknown sync action: ${item.action}`);
                 }
-
-                // Post-sync local DB updates for ID reconciliation
-                if (result && result.id && localId) {
-                    const tableName = payloadWithoutId.tableName;
-                    const oldRecord = await db.table(tableName).get(localId);
-                    if (oldRecord) {
-                        await db.table(tableName).delete(localId);
-                        await db.table(tableName).add({ ...oldRecord, id: result.id });
+                
+                await db.transaction('rw', db.tables, async () => {
+                    if (result?.id && localId) {
+                        const tableName = payloadWithoutId.tableName;
+                        const oldRecord = await db.table(tableName).get(localId);
+                        if (oldRecord) {
+                            await db.table(tableName).delete(localId);
+                            await db.table(tableName).add({ ...oldRecord, id: result.id });
+                        }
+                    } else if (result?.stockTx && result?.stockTx.id && localId) { // addStockTransaction
+                        await db.stock_transactions.update(localId, { id: result.stockTx.id });
+                        if (result.financialTx) {
+                            const finTable = result.financialTx.bank_id ? 'bank_transactions' : 'cash_transactions';
+                            const finLocalId = result.financialTx.bank_id ? payloadWithoutId.localBankId : payloadWithoutId.localCashId;
+                             if(finLocalId) await db.table(finTable).where({ id: finLocalId }).modify({ id: result.financialTx.id, linkedStockTxId: result.stockTx.id });
+                        }
+                    } else if (result?.loan && result?.loan.id && localId) { // addLoan
+                        await db.loans.update(localId, { id: result.loan.id });
+                         if(result.financialTx) {
+                           const finTable = result.financialTx.bank_id ? 'bank_transactions' : 'cash_transactions';
+                           if(localFinancialId) await db.table(finTable).where({id: localFinancialId}).modify({id: result.financialTx.id, linkedLoanId: result.loan.id});
+                         }
+                    } else if (result?.savedPayment && result?.savedPayment.id && localPaymentId) { // recordLoanPayment
+                        await db.loan_payments.update(localPaymentId, { id: result.savedPayment.id });
+                        if (result.financialTx && localFinancialId) {
+                            const finTable = result.financialTx.bank_id ? 'bank_transactions' : 'cash_transactions';
+                            await db.table(finTable).update(localFinancialId, { id: result.financialTx.id });
+                        }
                     }
-                } else if (result && result.stockTx && result.stockTx.id && localId) { // For addStockTransaction
-                    await db.stock_transactions.update(localId, { id: result.stockTx.id });
-                    if (result.financialTx) {
-                        const finTable = result.financialTx.bank_id ? 'bank_transactions' : 'cash_transactions';
-                        await db.table(finTable).where({ linkedStockTxId: localId }).modify({ id: result.financialTx.id, linkedStockTxId: result.stockTx.id });
-                    }
-                }
 
-                if (item.id) await db.sync_queue.delete(item.id);
+                    if (item.id) await db.sync_queue.delete(item.id);
+                });
 
             } catch (error) {
                 failedItems++;

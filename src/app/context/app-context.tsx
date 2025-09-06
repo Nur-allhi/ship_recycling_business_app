@@ -143,6 +143,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }, []);
 
     const reloadData = useCallback(async (options?: { force?: boolean, needsInitialBalance?: boolean }) => {
+        if (isSyncing) {
+            toast.info("Sync in progress. Data will load shortly.");
+            return;
+        }
+
         setIsLoading(true);
         try {
             const session = await getSessionFromCookie();
@@ -202,7 +207,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         } finally {
             setIsLoading(false);
         }
-    }, [handleApiError, setIsLoading, setUser, processSyncQueue, seedEssentialCategories, appState]);
+    }, [handleApiError, setIsLoading, setUser, processSyncQueue, seedEssentialCategories, appState, isSyncing]);
 
     useEffect(() => {
         const checkSessionAndLoad = async () => {
