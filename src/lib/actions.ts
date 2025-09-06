@@ -783,7 +783,7 @@ export async function addLoan(input: z.infer<typeof AddLoanSchema>) {
             actual_amount: loan.principal_amount,
             difference: 0,
             contact_id: loan.contact_id,
-            linkedLoanId: loan.id,
+            linkedLoanId: loan.id, // Corrected from linkedLoanID
         };
         
         let savedFinancialTx;
