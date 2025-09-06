@@ -47,7 +47,7 @@ type SortKey = keyof BankTransaction | 'debit' | 'credit' | null;
 type SortDirection = 'asc' | 'desc';
 
 export function BankTab() {
-  const { bankBalance, bankTransactions, currency, user, banks, isLoading, handleApiError, isOnline } = useAppContext()
+  const { bankBalance, bankTransactions, currency, user, banks, isLoading, handleApiError, isOnline, contacts } = useAppContext()
   const { transferFunds, deleteBankTransaction, deleteMultipleBankTransactions } = useAppActions();
   const [isTransferSheetOpen, setIsTransferSheetOpen] = useState(false)
   const [editSheetState, setEditSheetState] = useState<{isOpen: boolean, transaction: BankTransaction | null}>({ isOpen: false, transaction: null});
@@ -320,7 +320,9 @@ export function BankTab() {
             {isLoading || isSnapshotLoading ? (
               <TableRow><TableCell colSpan={isSelectionMode ? 9 : 8} className="h-24 text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin" /></TableCell></TableRow>
             ) : sortedTransactions.length > 0 ? (
-            sortedTransactions.map((tx: any) => (
+            sortedTransactions.map((tx: any) => {
+              const contactName = tx.contact_id ? contacts.find(c => c.id === tx.contact_id)?.name : null;
+              return (
                 <TableRow key={tx.id} data-state={selectedTxIds.includes(tx.id) && "selected"}>
                 {isSelectionMode && (
                   <TableCell className="text-center">
@@ -348,7 +350,10 @@ export function BankTab() {
                     )}
                   </div>
                 </TableCell>
-                <TableCell className="font-medium text-left">{tx.description}</TableCell>
+                <TableCell className="font-medium text-left">
+                  {tx.description}
+                  {contactName && <span className="text-xs text-muted-foreground block">({contactName})</span>}
+                </TableCell>
                 <TableCell className="text-center">{tx.category}</TableCell>
                 {selectedBankId === 'all' && (
                     <TableCell className="text-center">
@@ -373,7 +378,7 @@ export function BankTab() {
                   </TableCell>
                 )}
                 </TableRow>
-            ))
+            )})
             ) : (
             <TableRow>
                 <TableCell colSpan={isSelectionMode ? (showActions ? 10 : 9) : (showActions ? 9 : 8)} className="text-center h-24">No bank transactions found for {format(currentMonth, 'MMMM yyyy')}.</TableCell>
@@ -389,7 +394,9 @@ export function BankTab() {
       {isLoading ? (
         <div className="flex justify-center items-center h-24"><Loader2 className="h-6 w-6 animate-spin" /></div>
       ) : sortedTransactions.length > 0 ? (
-        sortedTransactions.map((tx: BankTransaction) => (
+        sortedTransactions.map((tx: BankTransaction) => {
+          const contactName = tx.contact_id ? contacts.find(c => c.id === tx.contact_id)?.name : null;
+          return (
           <Card key={tx.id} className="relative animate-fade-in">
              {isSelectionMode && (
                 <Checkbox 
@@ -409,6 +416,7 @@ export function BankTab() {
                     </Badge>
                 </div>
                 <div className="font-medium text-base">{tx.description}</div>
+                {contactName && <div className="text-sm text-muted-foreground font-semibold">({contactName})</div>}
                 <div className="text-sm text-muted-foreground">{tx.category}</div>
                  {selectedBankId === 'all' && (
                     <div className="text-sm text-muted-foreground font-semibold">
@@ -444,7 +452,7 @@ export function BankTab() {
                 </div>
             </CardContent>
           </Card>
-        ))
+        )})
       ) : (
         <div className="text-center text-muted-foreground py-12">
             No bank transactions found for {format(currentMonth, 'MMMM yyyy')}.

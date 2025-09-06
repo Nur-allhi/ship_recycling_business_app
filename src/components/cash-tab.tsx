@@ -40,7 +40,7 @@ type SortKey = keyof CashTransaction | 'debit' | 'credit' | null;
 type SortDirection = 'asc' | 'desc';
 
 export function CashTab() {
-  const { cashBalance, cashTransactions, currency, user, banks, isLoading, handleApiError, isOnline } = useAppContext()
+  const { cashBalance, cashTransactions, currency, user, banks, isLoading, handleApiError, isOnline, contacts } = useAppContext()
   const { transferFunds, deleteCashTransaction, deleteMultipleCashTransactions } = useAppActions();
   const [isTransferSheetOpen, setIsTransferSheetOpen] = useState(false)
   const [editSheetState, setEditSheetState] = useState<{isOpen: boolean, transaction: CashTransaction | null}>({ isOpen: false, transaction: null});
@@ -289,7 +289,9 @@ export function CashTab() {
           {isLoading || isSnapshotLoading ? (
             <TableRow><TableCell colSpan={isSelectionMode ? 8 : 7} className="h-24 text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin" /></TableCell></TableRow>
           ) : sortedTransactions.length > 0 ? (
-            sortedTransactions.map((tx: any) => (
+            sortedTransactions.map((tx: any) => {
+              const contactName = tx.contact_id ? contacts.find(c => c.id === tx.contact_id)?.name : null;
+              return (
               <TableRow key={tx.id} data-state={selectedTxIds.includes(tx.id) && "selected"}>
                 {isSelectionMode && (
                   <TableCell className="text-center">
@@ -317,7 +319,10 @@ export function CashTab() {
                     )}
                   </div>
                 </TableCell>
-                <TableCell className="font-medium text-left">{tx.description}</TableCell>
+                <TableCell className="font-medium text-left">
+                  {tx.description}
+                  {contactName && <span className="text-xs text-muted-foreground block">({contactName})</span>}
+                </TableCell>
                 <TableCell className="text-center">{tx.category}</TableCell>
                 <TableCell className="text-right font-mono text-destructive">{formatCurrency(tx.type === 'expense' ? tx.actual_amount : 0)}</TableCell>
                 <TableCell className="text-right font-mono text-accent">{formatCurrency(tx.type === 'income' ? tx.actual_amount : 0)}</TableCell>
@@ -337,7 +342,7 @@ export function CashTab() {
                   </TableCell>
                 )}
               </TableRow>
-            ))
+            )})
           ) : (
             <TableRow>
               <TableCell colSpan={isSelectionMode ? (showActions ? 8 : 7) : (showActions ? 7 : 6)} className="text-center h-24">No cash transactions found for {format(currentMonth, 'MMMM yyyy')}.</TableCell>
@@ -353,7 +358,9 @@ export function CashTab() {
       {isLoading ? (
         <div className="flex justify-center items-center h-24"><Loader2 className="h-6 w-6 animate-spin" /></div>
       ) : sortedTransactions.length > 0 ? (
-        sortedTransactions.map((tx: any) => (
+        sortedTransactions.map((tx: any) => {
+          const contactName = tx.contact_id ? contacts.find(c => c.id === tx.contact_id)?.name : null;
+          return (
           <Card key={tx.id} className="relative animate-fade-in">
              {isSelectionMode && (
                 <Checkbox 
@@ -374,7 +381,7 @@ export function CashTab() {
                 </div>
                 <div className="font-medium text-base">{tx.description}</div>
                 <div className="text-sm text-muted-foreground">{tx.category}</div>
-
+                {contactName && <div className="text-sm text-muted-foreground font-semibold">({contactName})</div>}
                 <div className="flex justify-between items-center pt-2">
                     <div className="text-xs text-muted-foreground flex items-center gap-1 font-mono">
                         {format(new Date(tx.date), 'dd-MM-yyyy')}
@@ -404,7 +411,7 @@ export function CashTab() {
                 </div>
             </CardContent>
           </Card>
-        ))
+        )})
       ) : (
         <div className="text-center text-muted-foreground py-12">
             No cash transactions found for {format(currentMonth, 'MMMM yyyy')}.
