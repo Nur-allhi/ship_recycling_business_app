@@ -334,7 +334,23 @@ export async function deleteAllData() {
             }
         }
         
-        const tables = ['payment_installments', 'ap_ar_transactions', 'cash_transactions', 'bank_transactions', 'stock_transactions', 'initial_stock', 'categories', 'contacts', 'banks', 'activity_log', 'monthly_snapshots', 'loans', 'loan_payments'];
+        // Correct order for deletion to respect foreign key constraints
+        const tables = [
+            'loan_payments',
+            'payment_installments',
+            'ap_ar_transactions', 
+            'cash_transactions', 
+            'bank_transactions', 
+            'stock_transactions', 
+            'loans',
+            'contacts', 
+            'initial_stock',
+            'categories', 
+            'banks', 
+            'activity_log', 
+            'monthly_snapshots'
+        ];
+
         for (const tableName of tables) {
             const { error } = await supabase.from(tableName).delete().gt('created_at', '1970-01-01');
             if (error && error.code !== '42P01') throw new Error(`Failed to delete data from ${tableName}.`);
