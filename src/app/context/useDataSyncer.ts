@@ -7,26 +7,16 @@ import { db } from '@/lib/db';
 import type { SyncQueueItem } from '@/lib/db';
 import * as server from '@/lib/actions';
 import { useSessionManager } from './useSessionManager';
+import { useLiveQuery } from 'dexie-react-hooks';
 
 export function useDataSyncer() {
     const { handleApiError, isOnline } = useSessionManager();
     const [isSyncing, setIsSyncing] = useState(false);
-    const [syncQueueCount, setSyncQueueCount] = useState(0);
-    
-    useEffect(() => {
-        const updateCount = async () => {
-            const count = await db.sync_queue.count();
-            setSyncQueueCount(count);
-        };
-        updateCount();
-        const interval = setInterval(updateCount, 2000);
-        return () => clearInterval(interval);
-    }, []);
+    const syncQueueCount = useLiveQuery(() => db.sync_queue.count(), 0) || 0;
 
     const processSyncQueue = useCallback(async (specificItemId?: number) => {
-        if (isSyncing && !specificItemId) return;
-        setIsSyncing(true);
-
+        if (isSyncing || !isOnline) return;
+        
         let queue: SyncQueueItem[] = [];
         if (specificItemId) {
             const item = await db.sync_queue.get(specificItemId);
@@ -36,10 +26,9 @@ export function useDataSyncer() {
         }
 
         if (queue.length === 0) {
-            setIsSyncing(false);
             return;
         }
-
+        setIsSyncing(true);
         if (!specificItemId) toast.info(`Syncing ${queue.length} items...`);
 
         let failedItems = 0;
@@ -77,64 +66,19 @@ export function useDataSyncer() {
                      console.warn(`Unknown sync action: ${item.action}`);
                 }
 
-                // Post-sync local DB updates
-                if (result) {
-                    switch (item.action) {
-                        case 'appendData':
-                            if (result && result.id && localId) {
-                                await db.table(payloadWithoutId.tableName).where({ id: localId }).modify({ id: result.id });
-                            }
-                            break;
-                        case 'recordPaymentAgainstTotal':
-                             if (result && result.financialTxId && localFinancialId) {
-                                if (payloadWithoutId.payment_method === 'cash') {
-                                    await db.cash_transactions.where({ id: localFinancialId }).modify({ id: result.financialTxId });
-                                } else {
-                                    await db.bank_transactions.where({ id: localFinancialId }).modify({ id: result.financialTxId });
-                                }
-                            }
-                            break;
-                        case 'recordAdvancePayment':
-                            if (result && result.ledgerEntry && result.financialTx) {
-                                await db.transaction('rw', db.ap_ar_transactions, db.cash_transactions, db.bank_transactions, async () => {
-                                    if (localLedgerId) await db.ap_ar_transactions.where({ id: localLedgerId }).modify({ id: result.ledgerEntry.id });
-                                    if (result.financialTx.bank_id) {
-                                        if (localFinancialId) await db.bank_transactions.where({ id: localFinancialId }).modify({ id: result.financialTx.id, advance_id: result.ledgerEntry.id });
-                                    } else {
-                                        if (localFinancialId) await db.cash_transactions.where({ id: localFinancialId }).modify({ id: result.financialTx.id, advance_id: result.ledgerEntry.id });
-                                    }
-                                });
-                            }
-                            break;
-                        case 'transferFunds':
-                             if (result && localCashId && localBankId) {
-                                await db.cash_transactions.where({ id: localCashId }).modify({ id: result.cashTxId });
-                                await db.bank_transactions.where({ id: localBankId }).modify({ id: result.bankTxId });
-                            }
-                            break;
-                        case 'addStockTransaction':
-                             if (result && localId) {
-                                await db.stock_transactions.where({ id: localId }).modify({ id: result.stockTx.id });
-                                if (result.financialTx) {
-                                    const finTable = result.financialTx.bank_id ? 'bank_transactions' : 'cash_transactions';
-                                    await db.table(finTable).where({ linkedStockTxId: localId }).modify({ id: result.financialTx.id, linkedStockTxId: result.stockTx.id });
-                                }
-                            }
-                            break;
-                        case 'addLoan':
-                            if (result && localId && localFinancialId) {
-                                await db.loans.where({ id: localId }).modify({ id: result.loan.id });
-                                const finTable = result.financialTx.bank_id ? 'bank_transactions' : 'cash_transactions';
-                                await db.table(finTable).where({ id: localFinancialId }).modify({ id: result.financialTx.id, linkedLoanId: result.loan.id });
-                            }
-                            break;
-                        case 'recordLoanPayment':
-                            if (result && item.payload.localPaymentId && item.payload.localFinancialId) {
-                                await db.loan_payments.where({ id: item.payload.localPaymentId }).modify({ id: result.savedPayment.id });
-                                const finTable = result.financialTx.bank_id ? 'bank_transactions' : 'cash_transactions';
-                                await db.table(finTable).where({ id: item.payload.localFinancialId }).modify({ id: result.financialTx.id });
-                            }
-                            break;
+                // Post-sync local DB updates for ID reconciliation
+                if (result && result.id && localId) {
+                    const tableName = payloadWithoutId.tableName;
+                    const oldRecord = await db.table(tableName).get(localId);
+                    if (oldRecord) {
+                        await db.table(tableName).delete(localId);
+                        await db.table(tableName).add({ ...oldRecord, id: result.id });
+                    }
+                } else if (result && result.stockTx && result.stockTx.id && localId) { // For addStockTransaction
+                    await db.stock_transactions.update(localId, { id: result.stockTx.id });
+                    if (result.financialTx) {
+                        const finTable = result.financialTx.bank_id ? 'bank_transactions' : 'cash_transactions';
+                        await db.table(finTable).where({ linkedStockTxId: localId }).modify({ id: result.financialTx.id, linkedStockTxId: result.stockTx.id });
                     }
                 }
 
@@ -146,7 +90,8 @@ export function useDataSyncer() {
                 console.error(`Sync failed for item ${item.id} (${item.action}):`, error);
             }
         }
-
+        
+        setIsSyncing(false);
         if (!specificItemId) {
             if (failedItems > 0) {
                 toast.error(`${failedItems} sync operations failed. Check console for details.`);
@@ -154,14 +99,13 @@ export function useDataSyncer() {
                 if (queue.length > 0) toast.success("All items synced successfully!");
             }
         }
-
-        setIsSyncing(false);
-    }, [isSyncing, handleApiError]);
+    }, [isSyncing, handleApiError, isOnline]);
 
     const queueOrSync = useCallback(async (item: Omit<SyncQueueItem, 'timestamp' | 'id'>) => {
         const id = await db.sync_queue.add({ ...item, timestamp: Date.now() } as SyncQueueItem);
         if (isOnline) {
-            processSyncQueue(id); 
+            // No longer passing ID here to avoid complexity. The processQueue will pick it up.
+            processSyncQueue();
         } else {
             toast.info("You are offline. Change saved locally and will sync later.");
         }

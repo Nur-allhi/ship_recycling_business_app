@@ -58,7 +58,6 @@ export interface StockTransaction {
   difference: number;
   difference_reason?: string;
   contact_id?: string;
-  contact_name?: string;
 }
 
 export interface User {
@@ -117,7 +116,6 @@ export interface Category {
 
 export interface MonthlySnapshot {
     id: string;
-    // user_id removed for shared app model
     snapshot_date: string;
     cash_balance: number;
     bank_balances: Record<string, number>;
@@ -150,6 +148,3 @@ export interface LoanPayment {
   notes?: string;
   created_at: string;
 }
-    
-
-    

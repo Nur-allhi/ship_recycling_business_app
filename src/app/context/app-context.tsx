@@ -1,7 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useMemo } from 'react';
-import type { User, CashTransaction, BankTransaction, StockItem, StockTransaction, Contact, LedgerTransaction, Bank, Category, MonthlySnapshot, Loan, LoanPayment } from '@/lib/types';
+import type { User, Bank, Category, MonthlySnapshot } from '@/lib/types';
 import { toast } from 'sonner';
 import { useRouter, usePathname } from 'next/navigation';
 import { useLiveQuery } from 'dexie-react-hooks';
@@ -35,20 +35,10 @@ interface AppData {
   isInitialBalanceDialogOpen: boolean;
   fontSize: FontSize;
   currency: string;
-  wastagePercentage: number;
   showStockValue: boolean;
-  cashTransactions: CashTransaction[];
-  bankTransactions: BankTransaction[];
-  stockTransactions: StockTransaction[];
-  stockItems: StockItem[];
-  ledgerTransactions: LedgerTransaction[];
-  loans: Loan[];
-  loanPayments: LoanPayment[];
+  banks: Bank[];
   cashCategories: Category[];
   bankCategories: Category[];
-  contacts: Contact[];
-  banks: Bank[];
-  loadedMonths: Record<string, boolean>;
   blockingOperation: BlockingOperation;
 }
 
@@ -60,7 +50,6 @@ interface AppContextType extends AppData {
   processSyncQueue: (specificItemId?: number) => Promise<void>;
   openInitialBalanceDialog: () => void;
   closeInitialBalanceDialog: () => void;
-  setLoadedMonths: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
   setUser: (user: User | null) => void;
   setBlockingOperation: (op: BlockingOperation) => void;
   queueOrSync: (item: import('@/lib/db').SyncQueueItem) => Promise<void>;
@@ -112,11 +101,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     const { isSyncing, syncQueueCount, processSyncQueue, queueOrSync } = useDataSyncer();
     
-    const [loadedMonths, setLoadedMonths] = useState<Record<string, boolean>>({});
     const [isInitialBalanceDialogOpen, setIsInitialBalanceDialogOpen] = useState(false);
     
-    // Live Queries for UI data
-    const liveData = useLiveDBData();
+    // Global data that is small and safe to query live
+    const appState = useLiveQuery(() => db.app_state.get(1), []);
+    const banks = useLiveQuery(() => db.banks.toArray(), []);
+    const allCategories = useLiveQuery(() => db.categories.toArray(), []);
+
+    const { cashCategories, bankCategories } = useMemo(() => {
+        const dbCash: Category[] = [];
+        const dbBank: Category[] = [];
+        (allCategories || []).forEach(c => {
+            if (c.type === 'cash') dbCash.push(c);
+            else if (c.type === 'bank') dbBank.push(c);
+        });
+        return { cashCategories: dbCash, bankCategories: dbBank };
+    }, [allCategories]);
 
     const seedEssentialCategories = useCallback(async (existingCategories: Category[]): Promise<Category[]> => {
         let finalCategories = [...existingCategories];
@@ -128,19 +128,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
         if (categoriesToCreate.length > 0) {
             console.log(`Seeding ${categoriesToCreate.length} essential categories...`);
+            // This is the key fix: use Promise.all to await the resolution of all creation promises.
             const creationPromises = categoriesToCreate.map(cat => 
                 server.appendData({ tableName: 'categories', data: cat, select: '*' })
             );
-            
-            // Await all promises to resolve
             const newCategories = await Promise.all(creationPromises);
-            
-            // Add the newly created, resolved category objects to our list
             newCategories.forEach(newCat => {
-                if (newCat) finalCategories.push(newCat);
+                if (newCat) finalCategories.push(newCat as Category);
             });
         }
-
         return finalCategories;
     }, []);
 
@@ -154,17 +150,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 await db.app_state.update(1, { user: null });
                 return;
             }
-
             setUser(session);
-
             const localUser = await db.app_state.get(1);
+
             if (!localUser || !localUser.user || localUser.user.id !== session.id || options?.force) {
-                await db.app_state.put({
+                 await db.app_state.put({
                     id: 1, user: session, fontSize: 'base', currency: 'BDT',
-                    wastagePercentage: 0, showStockValue: false, lastSync: null
+                    showStockValue: false, lastSync: null
                 });
                 
-                let [categoriesData, contactsData, banksData, cashTxs, bankTxs, stockTxs, ledgerData, ledgerPaymentsData, snapshotsData, initialStockData, loansData, loanPaymentsData] = await Promise.all([
+                let [categoriesData, ...otherData] = await Promise.all([
                     server.readData({ tableName: 'categories', select: '*' }),
                     server.readData({ tableName: 'contacts', select: '*' }),
                     server.readData({ tableName: 'banks', select: '*' }),
@@ -181,17 +176,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 
                 categoriesData = await seedEssentialCategories(categoriesData || []);
 
+                const [contactsData, banksData, cashTxs, bankTxs, stockTxs, ledgerData, ledgerPaymentsData, snapshotsData, initialStockData, loansData, loanPaymentsData] = otherData;
+
                 const ledgerTxsWithPayments = (ledgerData || []).map((tx: any) => ({
                     ...tx,
                     installments: (ledgerPaymentsData || []).filter((ins: any) => ins.ap_ar_transaction_id === tx.id)
                 }));
-                
                  const loansWithPayments = (loansData || []).map((loan: any) => ({
                     ...loan,
                     payments: (loanPaymentsData || []).filter((p: any) => p.loan_id === loan.id)
                 }));
                 
-
                 await db.transaction('rw', db.tables, async () => {
                     await bulkPut('categories', categoriesData); await bulkPut('contacts', contactsData);
                     await bulkPut('banks', banksData);
@@ -203,9 +198,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                     await db.app_state.update(1, { lastSync: new Date().toISOString() });
                 });
             }
-
             processSyncQueue();
-
         } catch (error: any) {
             handleApiError(error);
         } finally {
@@ -220,16 +213,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             if (session) {
                 setUser(session);
                 const localUser = await db.app_state.get(1);
-                if (localUser?.user?.id === session.id) {
-                    setIsLoading(false);
-                } else {
-                    await reloadData();
+                if (localUser?.user?.id === session.id && !localUser.lastSync) {
+                     await reloadData({ force: true });
+                } else if(localUser?.user?.id !== session.id) {
+                    await reloadData({ force: true });
                 }
             } else {
                 setUser(null);
-                setIsLoading(false);
             }
             setIsInitialLoadComplete(true);
+            setIsLoading(false);
         };
         checkSessionAndLoad();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -245,14 +238,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             toast.success("You are back online!");
             processSyncQueue();
         };
-    
         const handleOffline = () => setIsOnline(false);
-    
         setIsOnline(navigator.onLine);
-    
         window.addEventListener('online', handleOnline);
         window.addEventListener('offline', handleOffline);
-    
         return () => {
             window.removeEventListener('online', handleOnline);
             window.removeEventListener('offline', handleOffline);
@@ -275,7 +264,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     const OnlineStatusIndicator = () => {
         if (!hasMounted || isOnline) return null;
-    
         return (
             <div className="fixed bottom-4 right-4 z-50 animate-fade-in">
                 <div className="flex items-center gap-2 rounded-full bg-background px-3 py-2 text-foreground shadow-lg border">
@@ -294,19 +282,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         isLoading, isOnline, user, isInitialLoadComplete, isLoggingOut, isAuthenticating,
         isSyncing, syncQueueCount, isInitialBalanceDialogOpen, blockingOperation,
         // Live Data
-        ...liveData,
-        // Misc
-        loadedMonths,
-        // Setters & Functions
-        setLoadedMonths,
+        fontSize: appState?.fontSize ?? 'base',
+        currency: appState?.currency ?? 'BDT',
+        showStockValue: appState?.showStockValue ?? false,
+        banks: banks || [],
+        cashCategories: cashCategories || [],
+        bankCategories: bankCategories || [],
+        // Functions
         login, logout, reloadData, handleApiError,
         processSyncQueue, openInitialBalanceDialog, closeInitialBalanceDialog,
         setUser, setBlockingOperation, queueOrSync,
     }), [
         isLoading, isOnline, user, isInitialLoadComplete, isLoggingOut, isAuthenticating,
-        isSyncing, syncQueueCount, isInitialBalanceDialogOpen, liveData,
-        loadedMonths, login, logout, reloadData, handleApiError,
-        processSyncQueue, setUser, blockingOperation, queueOrSync
+        isSyncing, syncQueueCount, isInitialBalanceDialogOpen, blockingOperation,
+        appState, banks, cashCategories, bankCategories,
+        login, logout, reloadData, handleApiError,
+        processSyncQueue, setUser, queueOrSync
     ]);
 
     return (
@@ -315,86 +306,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             {isLoading && !isInitialLoadComplete ? <AppLoading /> : children}
         </AppContext.Provider>
     );
-}
-
-function useLiveDBData() {
-    const appState = useLiveQuery(() => db.app_state.get(1), []);
-    const cashTransactions = useLiveQuery(() => db.cash_transactions.toArray(), []);
-    const bankTransactions = useLiveQuery(() => db.bank_transactions.toArray(), []);
-    const stockTransactions = useLiveQuery(() => db.stock_transactions.toArray(), []);
-    const ledgerTransactions = useLiveQuery(() => db.ap_ar_transactions.orderBy('date').reverse().toArray(), []);
-    const loans = useLiveQuery(() => db.loans.toArray(), []);
-    const loanPayments = useLiveQuery(() => db.loan_payments.toArray(), []);
-    const banks = useLiveQuery(() => db.banks.toArray(), []);
-    const categories = useLiveQuery(() => db.categories.toArray(), []);
-    const contacts = useLiveQuery(() => db.contacts.toArray(), []);
-    const initialStock = useLiveQuery(() => db.initial_stock.toArray(), []);
-
-    const stockItems = useMemo(() => {
-        const portfolio: Record<string, { weight: number, purchasePricePerKg: number, totalValue: number }> = {};
-        
-        (initialStock || []).forEach(item => {
-            if (!portfolio[item.name]) {
-                portfolio[item.name] = { weight: 0, purchasePricePerKg: 0, totalValue: 0 };
-            }
-            portfolio[item.name].weight += item.weight;
-            portfolio[item.name].totalValue += item.weight * item.purchasePricePerKg;
-        });
-
-        [...(stockTransactions || [])].sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime()).forEach(tx => {
-            if (!portfolio[tx.stockItemName]) {
-                portfolio[tx.stockItemName] = { weight: 0, purchasePricePerKg: 0, totalValue: 0 };
-            }
-            
-            const item = portfolio[tx.stockItemName];
-            const currentAvgPrice = item.weight > 0 ? item.totalValue / item.weight : 0;
-
-            if (tx.type === 'purchase') {
-                item.weight += tx.weight;
-                item.totalValue += tx.weight * tx.pricePerKg;
-            } else {
-                item.weight -= tx.weight;
-                item.totalValue -= tx.weight * currentAvgPrice;
-            }
-        });
-        
-        return Object.entries(portfolio).map(([name, { weight, totalValue }]) => ({ 
-            id: name, 
-            name, 
-            weight, 
-            purchasePricePerKg: weight > 0 ? totalValue / weight : 0
-        }));
-
-    }, [initialStock, stockTransactions]);
-
-
-    const { cashCategories, bankCategories } = useMemo(() => {
-        const dbCash: Category[] = [];
-        const dbBank: Category[] = [];
-        (categories || []).forEach(c => {
-            if (c.type === 'cash') dbCash.push(c);
-            else if (c.type === 'bank') dbBank.push(c);
-        });
-        return { cashCategories: dbCash, bankCategories: dbBank };
-    }, [categories]);
-
-    return {
-        fontSize: appState?.fontSize ?? 'base',
-        currency: appState?.currency ?? 'BDT',
-        wastagePercentage: appState?.wastagePercentage ?? 0,
-        showStockValue: appState?.showStockValue ?? false,
-        cashTransactions: cashTransactions || [],
-        bankTransactions: bankTransactions || [],
-        stockTransactions: stockTransactions || [],
-        ledgerTransactions: ledgerTransactions || [],
-        loans: loans || [],
-        loanPayments: loanPayments || [],
-        stockItems: stockItems || [],
-        cashCategories,
-        bankCategories,
-        contacts: contacts || [],
-        banks: banks || [],
-    };
 }
 
 export function useAppContext() {

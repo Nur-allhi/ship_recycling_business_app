@@ -6,9 +6,8 @@ interface AppState {
     id: number; // Singleton, always 1
     user: User | null;
     fontSize: 'sm' | 'base' | 'lg';
-    wastagePercentage: number;
-    currency: string;
     showStockValue: boolean;
+    currency: string;
     lastSync: string | null;
 }
 
@@ -39,7 +38,7 @@ export class AppDatabase extends Dexie {
 
     constructor() {
         super('ShipShapeLedgerDB');
-        this.version(13).stores({
+        this.version(14).stores({
             app_state: 'id',
             cash_transactions: '++id, date, category, linkedStockTxId, linkedLoanId, advance_id, contact_id',
             bank_transactions: '++id, date, bank_id, category, linkedStockTxId, linkedLoanId, advance_id, contact_id',
@@ -54,15 +53,7 @@ export class AppDatabase extends Dexie {
             monthly_snapshots: '++id, snapshot_date',
             loans: '++id, contact_id, type, status',
             loan_payments: '++id, loan_id, payment_date',
-            sync_queue: '++id, timestamp, payload.localId',
-        });
-
-        // Drop old table in version 12
-        this.version(12).stores({
-             payment_installments: null
-        }).upgrade(tx => {
-             // This is a dummy upgrade function to make the version change.
-             // The actual table rename should be handled by a migration script on the real database.
+            sync_queue: '++id, timestamp, [payload.tableName+payload.localId]',
         });
     }
 }
@@ -86,5 +77,3 @@ export async function clearAllData() {
         }
     }));
 }
-
-    

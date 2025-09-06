@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { Badge } from "@/components/ui/badge"
-import { Plus, Trash2, Eye, EyeOff, Users, Settings, Palette, FileCog, Recycle, Landmark, Activity, ArrowUpCircle, ArrowDownCircle, User, Contact, RefreshCw, Lock, Loader2 } from "lucide-react"
+import { Plus, Trash2, Users, Settings, Palette, FileCog, Recycle, Lock, Loader2, ArrowUpCircle, ArrowDownCircle, RefreshCw } from "lucide-react"
 import { toast } from "sonner"
 import { ResponsiveSelect } from "@/components/ui/responsive-select"
 import { RecycleBinTab } from "./recycle-bin-tab"
@@ -18,7 +18,6 @@ import { ExportImportTab } from "./export-import-tab"
 import { ContactsTab } from "./contacts-tab"
 import { ActivityLogTab } from "./activity-log-tab"
 import { RadioGroup, RadioGroupItem } from "./ui/radio-group"
-import { cn } from "@/lib/utils"
 import { UserManagementTab } from "./user-management-tab"
 import * as server from "@/lib/actions"
 import type { Bank, Category } from "@/lib/types"
@@ -29,11 +28,13 @@ function AppearanceSettings() {
   const {
     fontSize,
     currency,
+    showStockValue,
   } = useAppContext();
 
   const {
     setFontSize,
     setCurrency,
+    setShowStockValue
   } = useAppActions();
 
   const handleCurrencyChange = (value: string) => {
@@ -74,6 +75,13 @@ function AppearanceSettings() {
               items={currencyItems}
           />
         </div>
+         <div>
+          <Label>Stock Value Visibility</Label>
+          <RadioGroup onValueChange={(v) => setShowStockValue(v === 'true')} value={String(showStockValue)} className="flex pt-2 gap-4">
+              <Label className="flex items-center gap-2 cursor-pointer"><RadioGroupItem value="true" /> Show</Label>
+              <Label className="flex items-center gap-2 cursor-pointer"><RadioGroupItem value="false" /> Hide</Label>
+          </RadioGroup>
+        </div>
       </CardContent>
     </Card>
   )
@@ -81,7 +89,7 @@ function AppearanceSettings() {
 
 function GeneralSettings() {
   const { openInitialBalanceDialog } = useAppContext();
-  const { addBank, addCategory, deleteCategory: deleteCategoryAction, setWastagePercentage } = useAppActions();
+  const { addBank, addCategory, deleteCategory: deleteCategoryAction } = useAppActions();
   const [banks, setBanks] = useState<Bank[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -91,7 +99,6 @@ function GeneralSettings() {
   const newCategoryNameRef = useRef<HTMLInputElement>(null);
   const [newCategoryType, setNewCategoryType] = useState<'cash' | 'bank'>('cash');
   const [newCategoryDirection, setNewCategoryDirection] = useState<'credit' | 'debit' | undefined>();
-  const wastageRef = useRef<HTMLInputElement>(null);
   const newBankNameRef = useRef<HTMLInputElement>(null);
 
   const fetchData = useCallback(async () => {
@@ -119,22 +126,16 @@ function GeneralSettings() {
     if (!name) return;
 
     setIsAddingBank(true);
-    
-    // Optimistic UI update
     const tempId = `temp_bank_${Date.now()}`;
     const newBank: Bank = { id: tempId, name, createdAt: new Date().toISOString() };
     setBanks(prev => [...prev, newBank]);
-    if (newBankNameRef.current) newBankNameRef.current.value = "";
-
+    
     try {
       await addBank(name);
-      // The addBank action in app-actions will now trigger a full reload,
-      // so we don't need to manually refetch here.
-      // But we will refresh just in case for a better UX feel
-      await fetchData();
+      if (newBankNameRef.current) newBankNameRef.current.value = "";
+      toast.success("Bank Added Successfully", { description: "It will be available everywhere shortly."})
     } catch (e: any) {
       toast.error("Failed to add bank", { description: e.message });
-      // Rollback UI
       setBanks(prev => prev.filter(b => b.id !== tempId));
     } finally {
       setIsAddingBank(false);
@@ -152,14 +153,13 @@ function GeneralSettings() {
         id: tempId, name, type: newCategoryType, 
         direction: newCategoryDirection, is_deletable: true 
     };
-    
     setCategories(prev => [...prev, newCategory]);
-    if(newCategoryNameRef.current) newCategoryNameRef.current.value = "";
-    setNewCategoryDirection(undefined);
 
     try {
         await addCategory(newCategoryType, name, newCategoryDirection);
-        await fetchData(); // Refresh data after adding
+        if(newCategoryNameRef.current) newCategoryNameRef.current.value = "";
+        setNewCategoryDirection(undefined);
+        toast.success("Category Added Successfully", { description: "It will be available everywhere shortly."})
     } catch(e: any) {
         toast.error("Failed to add category", { description: e.message });
         setCategories(prev => prev.filter(c => c.id !== tempId));
@@ -178,19 +178,6 @@ function GeneralSettings() {
     } catch (e:any) {
         toast.error("Failed to delete category", { description: e.message });
         setCategories(originalCategories); 
-    }
-  }
-
-  const handleWastageSave = () => {
-    const wastageValue = wastageRef.current?.value;
-    if (wastageValue) {
-      const percentage = parseFloat(wastageValue);
-      if (percentage >= 0 && percentage <= 100) {
-        setWastagePercentage(percentage);
-        toast.success("Wastage Percentage Updated", { description: `Set to ${percentage}%.` });
-      } else {
-        toast.error("Invalid Percentage", { description: "Wastage must be between 0 and 100." });
-      }
     }
   }
 
@@ -230,7 +217,6 @@ function GeneralSettings() {
                         <CardTitle>Bank Accounts</CardTitle>
                         <CardDescription>Manage your bank accounts.</CardDescription>
                     </div>
-                    <Button variant="ghost" size="icon" onClick={fetchData} disabled={isLoading}><RefreshCw className="h-4 w-4" /></Button>
                 </div>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -261,7 +247,6 @@ function GeneralSettings() {
                     <CardTitle>Category Management</CardTitle>
                     <CardDescription>Customize categories for your cash and bank transactions.</CardDescription>
                 </div>
-                <Button variant="ghost" size="icon" onClick={fetchData} disabled={isLoading}><RefreshCw className="h-4 w-4" /></Button>
             </div>
             </CardHeader>
             <CardContent className="space-y-6">
@@ -334,19 +319,6 @@ function GeneralSettings() {
                     </div>
                 </div>
             </div>
-            </CardContent>
-        </Card>
-        <Card>
-            <CardHeader>
-            <CardTitle>Wastage Settings</CardTitle>
-            <CardDescription>Set a default wastage percentage for stock sales. This is applied to the weight of the sold item.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-            <div className="space-y-2">
-                <Label htmlFor="wastage-percentage">Wastage Percentage (%)</Label>
-                <Input id="wastage-percentage" type="number" step="0.01" defaultValue={0} ref={wastageRef} />
-            </div>
-            <Button onClick={handleWastageSave}>Save Wastage Setting</Button>
             </CardContent>
         </Card>
      </div>
