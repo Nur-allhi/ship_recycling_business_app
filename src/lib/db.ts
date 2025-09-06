@@ -38,7 +38,7 @@ export class AppDatabase extends Dexie {
 
     constructor() {
         super('ShipShapeLedgerDB');
-        this.version(15).stores({
+        this.version(16).stores({
             app_state: 'id',
             cash_transactions: '++id, date, category, linkedStockTxId, linkedLoanId, advance_id, contact_id',
             bank_transactions: '++id, date, bank_id, category, linkedStockTxId, linkedLoanId, advance_id, contact_id',
@@ -53,7 +53,7 @@ export class AppDatabase extends Dexie {
             monthly_snapshots: '++id, snapshot_date',
             loans: '++id, contact_id, type, status',
             loan_payments: '++id, loan_id, payment_date',
-            sync_queue: '++id, timestamp, [payload.tableName+payload.localId]',
+            sync_queue: '++id',
         });
     }
 }
