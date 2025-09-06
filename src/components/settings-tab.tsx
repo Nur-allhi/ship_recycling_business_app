@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useRef, useState, useMemo, ReactNode, useEffect, useCallback } from "react"
@@ -373,5 +372,3 @@ export function SettingsTab() {
     </div>
   );
 }
-
-    
