@@ -153,6 +153,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                     { name: 'Advance Received', type: 'cash', direction: 'credit', is_deletable: false },
                     { name: 'Advance Payment', type: 'bank', direction: 'debit', is_deletable: false },
                     { name: 'Advance Received', type: 'bank', direction: 'credit', is_deletable: false },
+                    { name: 'Loan In', type: 'cash', direction: 'credit', is_deletable: false },
+                    { name: 'Loan Out', type: 'cash', direction: 'debit', is_deletable: false },
+                    { name: 'Loan In', type: 'bank', direction: 'credit', is_deletable: false },
+                    { name: 'Loan Out', type: 'bank', direction: 'debit', is_deletable: false },
                 ];
 
                 for (const cat of essentialCategories) {

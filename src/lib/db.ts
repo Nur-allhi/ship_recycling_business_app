@@ -39,7 +39,7 @@ export class AppDatabase extends Dexie {
 
     constructor() {
         super('ShipShapeLedgerDB');
-        this.version(10).stores({
+        this.version(11).stores({
             app_state: 'id',
             cash_transactions: '++id, date, category, linkedStockTxId, linkedLoanId, advance_id, contact_id',
             bank_transactions: '++id, date, bank_id, category, linkedStockTxId, linkedLoanId, advance_id, contact_id',
