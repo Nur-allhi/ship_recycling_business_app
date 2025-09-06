@@ -348,14 +348,14 @@ export async function deleteAllData() {
 }
 
 // NEW: Replaces deleteVendor and deleteClient
-export async function deleteContact(id: string) {
+export async function deleteContact(input: { id: string }) {
     try {
         const session = await getSession();
         if (!session || session.role !== 'admin') throw new Error("Only admins can perform this action.");
         const supabase = createAdminSupabaseClient();
-        const { error } = await supabase.from('contacts').delete().eq('id', id);
+        const { error } = await supabase.from('contacts').delete().eq('id', input.id);
         if(error) throw error;
-        await logActivity(`Deleted contact with ID: ${id}`);
+        await logActivity(`Deleted contact with ID: ${input.id}`);
         return { success: true };
     } catch (error) {
         return handleApiError(error);
@@ -461,14 +461,14 @@ export async function recordDirectPayment(input: z.infer<typeof RecordDirectPaym
     }
 }
 
-const AddStockTransactionInputSchema = z.object({ stockTx: z.any(), bank_id: z.string().optional() });
+const AddStockTransactionInputSchema = z.object({ stockTx: z.any(), localId: z.string() });
 
 export async function addStockTransaction(input: z.infer<typeof AddStockTransactionInputSchema>) {
     try {
         const session = await getSession();
         if (!session || session.role !== 'admin') throw new Error("Only admins can add transactions.");
         const supabase = createAdminSupabaseClient();
-        const { stockTx, bank_id } = input;
+        const { stockTx } = input;
         
         const { data: savedStockTx, error: stockError } = await supabase.from('stock_transactions').insert(stockTx).select().single();
         if(stockError) throw stockError;
@@ -484,7 +484,7 @@ export async function addStockTransaction(input: z.infer<typeof AddStockTransact
             };
             const tableName = stockTx.paymentMethod === 'cash' ? 'cash_transactions' : 'bank_transactions';
             const type = stockTx.paymentMethod === 'cash' ? (stockTx.type === 'purchase' ? 'expense' : 'income') : (stockTx.type === 'purchase' ? 'withdrawal' : 'deposit');
-            const { data, error } = await supabase.from(tableName).insert({ ...financialTxData, type, bank_id }).select().single();
+            const { data, error } = await supabase.from(tableName).insert({ ...financialTxData, type, bank_id: stockTx.bank_id }).select().single();
             if(error) throw error;
             savedFinancialTx = data;
         } else if (stockTx.paymentMethod === 'credit') {
@@ -767,6 +767,8 @@ const AddLoanSchema = z.object({
         method: z.enum(['cash', 'bank']),
         bank_id: z.string().optional(),
     }),
+    localId: z.string(),
+    localFinancialId: z.string(),
 });
 
 
@@ -844,8 +846,11 @@ export async function recordLoanPayment(input: z.infer<typeof RecordLoanPaymentS
         const supabase = createAdminSupabaseClient();
         const { loan_id, amount, payment_date, payment_method, bank_id, notes } = input;
 
-        const { data: loan, error: loanError } = await supabase.from('loans').select('*, loan_payments(amount)').eq('id', loan_id).single();
+        const { data: loan, error: loanError } = await supabase.from('loans').select('*').eq('id', loan_id).single();
         if (loanError || !loan) throw new Error("Loan not found.");
+
+        const { data: existingPayments, error: paymentsError } = await supabase.from('loan_payments').select('amount').eq('loan_id', loan_id);
+        if (paymentsError) throw paymentsError;
 
         const financialTxData = {
             date: payment_date,
@@ -878,7 +883,7 @@ export async function recordLoanPayment(input: z.infer<typeof RecordLoanPaymentS
         }).select().single();
         if (paymentError) throw paymentError;
 
-        const totalPaid = loan.loan_payments.reduce((sum, p) => sum + p.amount, 0) + savedPayment.amount;
+        const totalPaid = existingPayments.reduce((sum, p) => sum + p.amount, 0) + savedPayment.amount;
         if (totalPaid >= loan.principal_amount) {
             await supabase.from('loans').update({ status: 'paid' }).eq('id', loan_id);
         }
