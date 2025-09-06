@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useRef, useState, useMemo, ReactNode, useEffect, useCallback } from "react"
@@ -21,6 +22,8 @@ import { RadioGroup, RadioGroupItem } from "./ui/radio-group"
 import { UserManagementTab } from "./user-management-tab"
 import * as server from "@/lib/actions"
 import type { Bank, Category } from "@/lib/types"
+import { useLiveQuery } from "dexie-react-hooks"
+import { db } from "@/lib/db"
 
 type SettingsPage = 'appearance' | 'general' | 'contacts' | 'users' | 'activity_log' | 'recycle_bin' | 'export_import';
 
@@ -90,9 +93,10 @@ function AppearanceSettings() {
 function GeneralSettings() {
   const { openInitialBalanceDialog } = useAppContext();
   const { addBank, addCategory, deleteCategory: deleteCategoryAction } = useAppActions();
-  const [banks, setBanks] = useState<Bank[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  
+  const banks = useLiveQuery(() => db.banks.toArray(), []);
+  const categories = useLiveQuery(() => db.categories.toArray(), []);
+
   const [isAddingBank, setIsAddingBank] = useState(false);
   const [isAddingCategory, setIsAddingCategory] = useState(false);
 
@@ -101,42 +105,17 @@ function GeneralSettings() {
   const [newCategoryDirection, setNewCategoryDirection] = useState<'credit' | 'debit' | undefined>();
   const newBankNameRef = useRef<HTMLInputElement>(null);
 
-  const fetchData = useCallback(async () => {
-    setIsLoading(true);
-    try {
-        const [banksData, categoriesData] = await Promise.all([
-            server.readData({ tableName: 'banks', select: '*' }),
-            server.readData({ tableName: 'categories', select: '*' }),
-        ]);
-        setBanks((banksData as Bank[]) || []);
-        setCategories((categoriesData as Category[]) || []);
-    } catch (e: any) {
-        toast.error("Failed to load general settings", { description: e.message });
-    } finally {
-        setIsLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
-
   const handleAddBank = async () => {
     const name = newBankNameRef.current?.value.trim();
     if (!name) return;
 
     setIsAddingBank(true);
-    const tempId = `temp_bank_${Date.now()}`;
-    const newBank: Bank = { id: tempId, name, createdAt: new Date().toISOString() };
-    setBanks(prev => [...prev, newBank]);
-    
     try {
       await addBank(name);
       if (newBankNameRef.current) newBankNameRef.current.value = "";
       toast.success("Bank Added Successfully", { description: "It will be available everywhere shortly."})
     } catch (e: any) {
       toast.error("Failed to add bank", { description: e.message });
-      setBanks(prev => prev.filter(b => b.id !== tempId));
     } finally {
       setIsAddingBank(false);
     }
@@ -148,13 +127,6 @@ function GeneralSettings() {
     if (!newCategoryDirection) { toast.error('Category direction required'); return; }
     
     setIsAddingCategory(true);
-    const tempId = `temp_cat_${Date.now()}`;
-    const newCategory: Category = { 
-        id: tempId, name, type: newCategoryType, 
-        direction: newCategoryDirection, is_deletable: true 
-    };
-    setCategories(prev => [...prev, newCategory]);
-
     try {
         await addCategory(newCategoryType, name, newCategoryDirection);
         if(newCategoryNameRef.current) newCategoryNameRef.current.value = "";
@@ -162,34 +134,29 @@ function GeneralSettings() {
         toast.success("Category Added Successfully", { description: "It will be available everywhere shortly."})
     } catch(e: any) {
         toast.error("Failed to add category", { description: e.message });
-        setCategories(prev => prev.filter(c => c.id !== tempId));
     } finally {
         setIsAddingCategory(false);
-        fetchData(); // Refetch data
     }
   }
 
   const handleDeleteCategory = async (id: string) => {
-    const originalCategories = categories;
-    setCategories(prev => prev.filter(c => c.id !== id));
-    
     try {
         await deleteCategoryAction(id);
         toast.success("Category Deleted");
     } catch (e:any) {
         toast.error("Failed to delete category", { description: e.message });
-        setCategories(originalCategories); 
     }
   }
 
   const { cashCategories, bankCategories } = useMemo(() => {
+    const allCategories = categories || [];
     return {
-        cashCategories: categories.filter(c => c.type === 'cash'),
-        bankCategories: categories.filter(c => c.type === 'bank')
+        cashCategories: allCategories.filter(c => c.type === 'cash'),
+        bankCategories: allCategories.filter(c => c.type === 'bank')
     }
   }, [categories]);
 
-  if (isLoading) {
+  if (!banks || !categories) {
     return (
         <div className="flex justify-center items-center h-96">
             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />

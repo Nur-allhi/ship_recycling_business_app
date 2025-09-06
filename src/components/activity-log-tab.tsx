@@ -1,39 +1,22 @@
+
 "use client";
 
 import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from '@/components/ui/button';
-import { Loader2, RefreshCw } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { readData } from '@/lib/actions';
 import type { ActivityLog } from '@/lib/types';
 import { format, parseISO } from 'date-fns';
+import { useLiveQuery } from 'dexie-react-hooks';
+import { db } from '@/lib/db';
 
 export function ActivityLogTab() {
-  const [logs, setLogs] = useState<ActivityLog[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-
-  const fetchLogs = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const fetchedLogs = await readData({ tableName: 'activity_log', select: '*' });
-      // Ensure we have a valid array and type it properly
-      if (Array.isArray(fetchedLogs)) {
-        setLogs(((fetchedLogs as unknown) as ActivityLog[]).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));
-      } else {
-        setLogs([]);
-      }
-    } catch (error: any) {
-      toast.error('Error fetching activity logs', { description: error.message });
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchLogs();
-  }, [fetchLogs]);
+  const logs = useLiveQuery(
+    () => db.activity_log.orderBy('created_at').reverse().toArray(),
+    []
+  );
 
   return (
     <Card>
@@ -43,9 +26,6 @@ export function ActivityLogTab() {
                 <CardTitle>Activity Log</CardTitle>
                 <CardDescription>A record of important actions performed in the application.</CardDescription>
             </div>
-            <Button variant="ghost" size="icon" onClick={fetchLogs} disabled={isLoading}>
-                {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4"/>}
-              </Button>
         </div>
       </CardHeader>
       <CardContent>
@@ -59,7 +39,7 @@ export function ActivityLogTab() {
                 </TableRow>
             </TableHeader>
             <TableBody>
-                {isLoading ? (
+                {logs === undefined ? (
                     <TableRow><TableCell colSpan={3} className="text-center h-24"><Loader2 className="mx-auto h-6 w-6 animate-spin" /></TableCell></TableRow>
                 ) : logs.length > 0 ? (
                 logs.map((log) => (
