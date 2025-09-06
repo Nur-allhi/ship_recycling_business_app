@@ -249,7 +249,7 @@ const SidebarTrigger = React.forwardRef<
       data-sidebar="trigger"
       variant="ghost"
       size="icon"
-      className={cn("h-7 w-7", className)}
+      className={cn("h-7 w-7", isMobile ? "" : "hidden", className)}
       onClick={(event) => {
         onClick?.(event)
         toggleSidebar()
@@ -547,17 +547,15 @@ const SidebarMenuButton = React.forwardRef<
         {...props}
       >
         {icon}
-        <div className="flex-1 w-full min-w-0 overflow-hidden">
-          <div
+        <span
             className={cn(
-              "whitespace-nowrap transition-all duration-300 ease-in-out",
+              "whitespace-nowrap transition-all duration-200 ease-in-out",
               "group-data-[state=collapsed]:w-0 group-data-[state=collapsed]:opacity-0",
-              "group-data-[state=expanded]:w-full group-data-[state=expanded]:opacity-100",
+              "group-data-[state=expanded]:w-auto group-data-[state=expanded]:opacity-100",
             )}
           >
             {rest}
-          </div>
-        </div>
+          </span>
       </Comp>
     )
 
@@ -755,3 +753,5 @@ export {
   SidebarTrigger,
   useSidebar,
 }
+
+    
