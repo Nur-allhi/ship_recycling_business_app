@@ -755,21 +755,34 @@ export async function getOrCreateSnapshot(date: string): Promise<MonthlySnapshot
 }
 
 const AddLoanSchema = z.object({
-    loanData: z.any(),
+    loanData: z.object({
+        contact_id: z.string(),
+        type: z.enum(['payable', 'receivable']),
+        principal_amount: z.number(),
+        interest_rate: z.number(),
+        issue_date: z.string(),
+        due_date: z.string().optional(),
+    }),
     disbursement: z.object({
         method: z.enum(['cash', 'bank']),
         bank_id: z.string().optional(),
-    })
+    }),
 });
+
 
 export async function addLoan(input: z.infer<typeof AddLoanSchema>) {
     try {
         const session = await getSession();
         if (!session || session.role !== 'admin') throw new Error("Only admins can add loans.");
+
+        // Validate input with the new strict schema
+        const parsedInput = AddLoanSchema.parse(input);
+        const { loanData, disbursement } = parsedInput;
+        
         const supabase = createAdminSupabaseClient();
         
         const { data: loan, error: loanError } = await supabase.from('loans').insert({
-            ...input.loanData,
+            ...loanData,
             status: 'active',
         }).select().single();
 
@@ -783,12 +796,12 @@ export async function addLoan(input: z.infer<typeof AddLoanSchema>) {
             actual_amount: loan.principal_amount,
             difference: 0,
             contact_id: loan.contact_id,
-            linkedLoanId: loan.id, // Corrected from linkedLoanID
+            linkedLoanId: loan.id,
         };
         
         let savedFinancialTx;
 
-        if (input.disbursement.method === 'cash') {
+        if (disbursement.method === 'cash') {
             const { data, error } = await supabase.from('cash_transactions').insert({
                 ...financialTxData,
                 type: loan.type === 'payable' ? 'income' : 'expense',
@@ -800,7 +813,7 @@ export async function addLoan(input: z.infer<typeof AddLoanSchema>) {
             const { data, error } = await supabase.from('bank_transactions').insert({
                 ...financialTxData,
                 type: loan.type === 'payable' ? 'deposit' : 'withdrawal',
-                bank_id: input.disbursement.bank_id,
+                bank_id: disbursement.bank_id,
             }).select().single();
             if(error) throw error;
             savedFinancialTx = data;
