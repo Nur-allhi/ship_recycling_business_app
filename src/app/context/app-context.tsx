@@ -15,6 +15,10 @@ import { useBalanceCalculator } from './useBalanceCalculator';
 import * as server from '@/lib/actions';
 import { getSession as getSessionFromCookie } from '@/app/auth/actions';
 
+type BlockingOperation = {
+    isActive: boolean;
+    message: string;
+};
 
 type FontSize = 'sm' | 'base' | 'lg';
 
@@ -52,6 +56,7 @@ interface AppData {
   contacts: Contact[];
   banks: Bank[];
   loadedMonths: Record<string, boolean>;
+  blockingOperation: BlockingOperation;
 }
 
 interface AppContextType extends AppData {
@@ -65,6 +70,7 @@ interface AppContextType extends AppData {
   closeInitialBalanceDialog: () => void;
   setLoadedMonths: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
   setUser: (user: User | null) => void;
+  setBlockingOperation: (op: BlockingOperation) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -103,6 +109,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const router = useRouter();
     const pathname = usePathname();
     const [hasMounted, setHasMounted] = useState(false);
+    const [blockingOperation, setBlockingOperation] = useState<BlockingOperation>({ isActive: false, message: '' });
 
     const {
         user, setUser, isAuthenticating, isLoading, setIsLoading, isLoggingOut, isOnline,
@@ -119,7 +126,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     // Live Queries for UI data
     const liveData = useLiveDBData();
 
-    const seedEssentialCategories = async (existingCategories: Category[]): Promise<Category[]> => {
+    const seedEssentialCategories = useCallback(async (existingCategories: Category[]): Promise<Category[]> => {
         const categoriesToCreate = essentialCategories.filter(essentialCat => 
             !existingCategories.some(existingCat => 
                 existingCat.name === essentialCat.name && existingCat.type === essentialCat.type
@@ -132,11 +139,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
         console.log(`Seeding ${categoriesToCreate.length} essential categories...`);
 
-        const creationPromises = categoriesToCreate.map(cat => 
-            server.appendData({ tableName: 'categories', data: cat, select: '*' })
-        );
-        
         try {
+            const creationPromises = categoriesToCreate.map(cat => 
+                server.appendData({ tableName: 'categories', data: cat, select: '*' })
+            );
             const newCategories = await Promise.all(creationPromises);
             return [...existingCategories, ...newCategories.filter(Boolean)];
         } catch(e) {
@@ -144,7 +150,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             // Return what we have, better than nothing.
             return existingCategories;
         }
-    };
+    }, []);
 
     const reloadData = useCallback(async (options?: { force?: boolean, needsInitialBalance?: boolean }) => {
         setIsLoading(true);
@@ -166,7 +172,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                     wastagePercentage: 0, showStockValue: false, lastSync: null
                 });
                 
-                const [categoriesRes, contactsData, banksData, cashTxs, bankTxs, stockTxs, ledgerData, ledgerPaymentsData, snapshotsData, initialStockData, loansData, loanPaymentsData] = await Promise.all([
+                const [categoriesData, contactsData, banksData, cashTxs, bankTxs, stockTxs, ledgerData, ledgerPaymentsData, snapshotsData, initialStockData, loansData, loanPaymentsData] = await Promise.all([
                     server.readData({ tableName: 'categories', select: '*' }),
                     server.readData({ tableName: 'contacts', select: '*' }),
                     server.readData({ tableName: 'banks', select: '*' }),
@@ -181,8 +187,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                     server.readData({ tableName: 'loan_payments', select: '*' }),
                 ]);
                 
-                // This is the critical fix: Ensure categories are created and combined correctly.
-                const finalCategories = await seedEssentialCategories(categoriesRes || []);
+                const finalCategories = await seedEssentialCategories(categoriesData || []);
 
                 const ledgerTxsWithPayments = (ledgerData || []).map((tx: any) => ({
                     ...tx,
@@ -215,7 +220,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         } finally {
             setIsLoading(false);
         }
-    }, [handleApiError, setIsLoading, setUser, updateBalances, processSyncQueue]);
+    }, [handleApiError, setIsLoading, setUser, updateBalances, processSyncQueue, seedEssentialCategories]);
 
     useEffect(() => {
         const checkSessionAndLoad = async () => {
@@ -300,7 +305,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         // State
         cashBalance, bankBalance, stockItems: calculatedStockItems, totalPayables, totalReceivables,
         isLoading, isOnline, user, isInitialLoadComplete, isLoggingOut, isAuthenticating,
-        isSyncing, syncQueueCount, isInitialBalanceDialogOpen,
+        isSyncing, syncQueueCount, isInitialBalanceDialogOpen, blockingOperation,
         // Live Data
         ...liveData,
         // Misc
@@ -309,13 +314,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setLoadedMonths,
         login, logout, reloadData, updateBalances, handleApiError,
         processSyncQueue, openInitialBalanceDialog, closeInitialBalanceDialog,
-        setUser,
+        setUser, setBlockingOperation,
     }), [
         cashBalance, bankBalance, calculatedStockItems, totalPayables, totalReceivables,
         isLoading, isOnline, user, isInitialLoadComplete, isLoggingOut, isAuthenticating,
         isSyncing, syncQueueCount, isInitialBalanceDialogOpen, liveData,
         loadedMonths, login, logout, reloadData, updateBalances, handleApiError,
-        processSyncQueue, setUser
+        processSyncQueue, setUser, blockingOperation
     ]);
 
     return (
@@ -376,5 +381,3 @@ export function useAppContext() {
     }
     return context;
 }
-
-    

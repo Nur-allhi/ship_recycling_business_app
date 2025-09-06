@@ -10,6 +10,7 @@ import { useSessionManager } from './useSessionManager';
 import type { CashTransaction, BankTransaction, StockTransaction, Contact, LedgerTransaction, LedgerPayment, StockItem, Loan, LoanPayment } from '@/lib/types';
 import * as server from '@/lib/actions'; 
 import { getSession } from '../auth/actions';
+import { useAppContext } from './app-context';
 
 // Helper to format date as YYYY-MM-DD string, preserving the local date
 const toYYYYMMDD = (date: Date) => {
@@ -22,6 +23,7 @@ export function useAppActions() {
     const { user, isOnline, logout } = useSessionManager();
     const { queueOrSync } = useDataSyncer();
     const { updateBalances } = useBalanceCalculator();
+    const { setBlockingOperation } = useAppContext();
     
     const performAdminAction = async <T,>(action: () => Promise<T>): Promise<T | undefined> => {
         const session = await getSession();
@@ -477,10 +479,16 @@ export function useAppActions() {
         });
     };
 
-    const handleDeleteAllData = () => {
-        performAdminAction(() => {
-            queueOrSync({ action: 'deleteAllData', payload: {} });
-            logout();
+    const handleDeleteAllData = async () => {
+        await performAdminAction(async () => {
+            setBlockingOperation({ isActive: true, message: "Deleting all data... Please wait." });
+            try {
+                await server.deleteAllData();
+                toast.success("All data has been deleted.");
+            } finally {
+                // The logout will clear the blocking operation state.
+                logout();
+            }
         });
     };
     
@@ -610,5 +618,3 @@ export function useAppActions() {
         recordLoanPayment,
     };
 }
-
-    

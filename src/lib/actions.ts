@@ -93,7 +93,7 @@ export async function readData(input: z.infer<typeof ReadDataInputSchema>): Prom
         }
         throw new Error(error.message);
     }
-    return data || [];
+    return (data as any[]) || [];
   } catch (error) {
     return handleApiError(error);
   }
@@ -326,20 +326,22 @@ export async function deleteAllData() {
 
         const supabase = createAdminSupabaseClient();
         
+        // Correct deletion order to respect foreign key constraints
         const tablesToDelete = [
-            'loan_payments',
-            'ledger_payments',
-            'cash_transactions', 
-            'bank_transactions', 
-            'stock_transactions', 
-            'ap_ar_transactions', 
-            'loans',
-            'contacts', 
+            'loan_payments',          // Depends on loans
+            'ledger_payments',        // Depends on ap_ar_transactions
+            'cash_transactions',      // Links to loans, ap_ar, contacts, banks
+            'bank_transactions',      // Links to loans, ap_ar, contacts, banks
+            'stock_transactions',     // Links to contacts, banks
+            'ap_ar_transactions',     // Depends on contacts
+            'loans',                  // Depends on contacts
+            'contacts',               // Referenced by many
             'initial_stock',
-            'categories', 
-            'banks', 
-            'activity_log', 
+            'categories',
+            'banks',
+            'activity_log',
             'monthly_snapshots',
+            'sync_queue',             // Clear the sync queue as well
         ];
 
         for (const tableName of tablesToDelete) {
@@ -913,5 +915,3 @@ export async function recordLoanPayment(input: z.infer<typeof RecordLoanPaymentS
         return handleApiError(error);
     }
 }
-
-    
