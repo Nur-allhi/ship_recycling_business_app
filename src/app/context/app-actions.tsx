@@ -220,8 +220,6 @@ export function useAppActions() {
             const tempId = `temp_${Date.now()}`;
             await db.categories.add({ id: tempId, name, type, direction, is_deletable: true});
             queueOrSync({ action: 'appendData', payload: { tableName: 'categories', data: { name, type, direction, is_deletable: true }, localId: tempId, select: '*' } });
-            // Controlled refresh
-            await reloadData({ force: true });
         });
     };
 
