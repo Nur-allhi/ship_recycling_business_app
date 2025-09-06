@@ -24,7 +24,8 @@ export function RecycleBinTab() {
         deletedLedgerTransactions,
         currency,
         user,
-        loadRecycleBinData
+        loadRecycleBinData,
+        isBinLoading, // Use the new loading state
     } = useAppContext();
     const { 
         restoreTransaction,
@@ -32,15 +33,12 @@ export function RecycleBinTab() {
     } = useAppActions();
     const [activeTab, setActiveTab] = useState('cash');
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-    const [isLoading, setIsLoading] = useState(true);
     const isMobile = useIsMobile();
 
     const fetchData = useCallback(async () => {
-        setIsLoading(true);
         if (user) {
             await loadRecycleBinData();
         }
-        setIsLoading(false);
     }, [loadRecycleBinData, user]);
 
     useEffect(() => {
@@ -100,7 +98,7 @@ export function RecycleBinTab() {
                     </TableRow>
                 </TableHeader>
                 <TableBody>
-                    {isLoading ? (
+                    {isBinLoading ? (
                         <TableRow><TableCell colSpan={columns.length + 1} className="text-center h-24"><Loader2 className="mx-auto h-6 w-6 animate-spin" /></TableCell></TableRow>
                     ) : items.length > 0 ? items.map(item => (
                         <TableRow key={item.id}>
@@ -132,8 +130,8 @@ export function RecycleBinTab() {
                             </CardDescription>
                         </div>
                         <div className="flex items-center gap-2">
-                             <Button variant="ghost" size="icon" onClick={fetchData} disabled={isLoading}>
-                                {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                             <Button variant="ghost" size="icon" onClick={fetchData} disabled={isBinLoading}>
+                                {isBinLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
                             </Button>
                              {hasDeletedItems && (
                                 <Button variant="destructive" size="sm" onClick={() => setIsDeleteDialogOpen(true)}>
