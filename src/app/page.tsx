@@ -15,7 +15,7 @@ import { InitialBalanceDialog } from '@/components/initial-balance-dialog';
 import { AppLoading } from '@/components/app-loading';
 import { FloatingActionButton } from '@/components/floating-action-button';
 import { AnimatePresence, motion } from 'framer-motion';
-import { SidebarProvider, Sidebar, SidebarTrigger, SidebarInset } from '@/components/ui/sidebar';
+import { SidebarProvider, Sidebar, SidebarTrigger } from '@/components/ui/sidebar';
 import { AppSidebar } from '@/components/app-sidebar';
 
 const fontClasses = {
@@ -50,21 +50,21 @@ function ShipShapeLedger() {
 
   return (
     <SidebarProvider>
-        <div className={cn('min-h-screen bg-background text-foreground', fontClasses[fontSize] || 'text-base')}>
+        <div className={cn('min-h-screen bg-background text-foreground flex', fontClasses[fontSize] || 'text-base')}>
             {isAdmin && <InitialBalanceDialog isOpen={isInitialBalanceDialogOpen} />}
             
             <Sidebar>
                 <AppSidebar activeTab={activeTab} setActiveTab={setActiveTab} />
             </Sidebar>
 
-            <SidebarInset className="flex flex-col min-h-screen">
-                <main className="flex-grow p-4 md:p-6 lg:p-8">
-                     <div className="flex items-center gap-2 mb-4">
-                        <SidebarTrigger />
-                        <h2 className="text-lg font-semibold text-muted-foreground">
-                            Welcome, {user.username} ({roleDisplayName})
-                        </h2>
-                    </div>
+            <div className="flex-1 flex flex-col">
+                <header className="flex items-center gap-2 p-4 border-b">
+                    <SidebarTrigger />
+                    <h2 className="text-lg font-semibold text-muted-foreground">
+                        Welcome, {user.username} ({roleDisplayName})
+                    </h2>
+                </header>
+                <main className="flex-grow p-4 md:p-6 lg:p-8 overflow-y-auto">
                     <AnimatePresence mode="wait">
                         <motion.div
                             key={activeTab}
@@ -78,7 +78,7 @@ function ShipShapeLedger() {
                     </AnimatePresence>
                 </main>
                 {isAdmin && <FloatingActionButton />}
-            </SidebarInset>
+            </div>
         </div>
     </SidebarProvider>
   );
