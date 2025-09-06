@@ -1,3 +1,4 @@
+
 "use client";
 
 import {
@@ -66,7 +67,9 @@ export function AppSidebar({ activeTab, setActiveTab }: AppSidebarProps) {
             <SidebarHeader>
                  <div className="flex items-center gap-2">
                     <Logo className="h-8 w-8 text-primary shrink-0" />
-                    <span className="text-lg font-semibold transition-opacity duration-200 group-data-[state=collapsed]:opacity-0">Ha-Mim Iron Mart</span>
+                    <span className="text-lg font-semibold overflow-hidden transition-all duration-300 ease-in-out group-data-[state=expanded]:w-auto group-data-[state=expanded]:opacity-100 group-data-[state=collapsed]:w-0 group-data-[state=collapsed]:opacity-0">
+                        Ha-Mim Iron Mart
+                    </span>
                 </div>
             </SidebarHeader>
             
