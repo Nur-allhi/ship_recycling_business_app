@@ -27,8 +27,7 @@ export function useSessionManager() {
             console.error("Server logout failed, proceeding with client-side cleanup:", error);
         } finally {
             // Always perform client-side cleanup
-            await db.app_state.update(1, { user: null });
-            await clearAllData();
+            await clearAllData(true); // Clear everything including app state
             setUser(null);
             setIsLoggingOut(false);
             // Full page reload to ensure all state is cleared and redirect to login
@@ -52,7 +51,7 @@ export function useSessionManager() {
         try {
             const result = await serverLogin(credentials);
             if (result.success && result.session) {
-                setUser(result.session);
+                // Don't set user here, let the AppContext reload handle it
                 toast.success("Login Successful", { description: "Welcome back!" });
                  // Full page reload to trigger a full data fetch in AppContext
                 window.location.href = '/';

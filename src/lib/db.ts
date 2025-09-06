@@ -71,10 +71,11 @@ export async function bulkPut(tableName: keyof AppDatabase, data: any[]) {
   }
 }
 
-export async function clearAllData() {
+export async function clearAllData(clearAppState = true) {
     await Promise.all(db.tables.map(table => {
-        if (table.name !== 'app_state') { // Keep app_state
-            return table.clear();
+        if (!clearAppState && table.name === 'app_state') {
+             return;
         }
+        return table.clear();
     }));
 }

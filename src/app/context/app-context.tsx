@@ -6,7 +6,7 @@ import type { User, Bank, Category, MonthlySnapshot, Contact, LedgerTransaction,
 import { toast } from 'sonner';
 import { useRouter, usePathname } from 'next/navigation';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { db, bulkPut } from '@/lib/db';
+import { db, bulkPut, clearAllData } from '@/lib/db';
 import { WifiOff, RefreshCw } from 'lucide-react';
 import { AppLoading } from '@/components/app-loading';
 import { useSessionManager } from './useSessionManager';
@@ -149,55 +149,60 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             if (!session) {
                 setIsLoading(false);
                 setUser(null);
-                await db.app_state.update(1, { user: null });
                 return;
             }
+            
             setUser(session);
-            const localUser = await db.app_state.get(1);
+            
+            let [categoriesData, ...otherData] = await Promise.all([
+                server.readData({ tableName: 'categories', select: '*' }),
+                server.readData({ tableName: 'contacts', select: '*' }),
+                server.readData({ tableName: 'banks', select: '*' }),
+                server.readData({ tableName: 'cash_transactions', select: '*' }),
+                server.readData({ tableName: 'bank_transactions', select: '*' }),
+                server.readData({ tableName: 'stock_transactions', select: '*' }),
+                server.readData({ tableName: 'ap_ar_transactions', select: '*' }),
+                server.readData({ tableName: 'ledger_payments', select: '*' }),
+                server.readData({ tableName: 'monthly_snapshots', select: '*' }),
+                server.readData({ tableName: 'initial_stock', select: '*' }),
+                server.readData({ tableName: 'loans', select: '*' }),
+                server.readData({ tableName: 'loan_payments', select: '*' }),
+            ]);
+            
+            categoriesData = await seedEssentialCategories(categoriesData || []);
 
-            if (!localUser || !localUser.user || localUser.user.id !== session.id || options?.force) {
-                 await db.app_state.put({
-                    id: 1, user: session, fontSize: 'base', currency: 'BDT',
-                    showStockValue: false, lastSync: null
+            const [contactsData, banksData, cashTxs, bankTxs, stockTxs, ledgerData, ledgerPaymentsData, snapshotsData, initialStockData, loansData, loanPaymentsData] = otherData;
+            
+            await db.transaction('rw', db.tables, async () => {
+                // Critical: Clear old data before putting new data
+                await clearAllData(false); // false = don't clear app_state
+
+                await db.app_state.put({
+                    id: 1, user: session, fontSize: appState?.fontSize ?? 'base', currency: appState?.currency ?? 'BDT',
+                    showStockValue: appState?.showStockValue ?? false, lastSync: null
                 });
-                
-                let [categoriesData, ...otherData] = await Promise.all([
-                    server.readData({ tableName: 'categories', select: '*' }),
-                    server.readData({ tableName: 'contacts', select: '*' }),
-                    server.readData({ tableName: 'banks', select: '*' }),
-                    server.readData({ tableName: 'cash_transactions', select: '*' }),
-                    server.readData({ tableName: 'bank_transactions', select: '*' }),
-                    server.readData({ tableName: 'stock_transactions', select: '*' }),
-                    server.readData({ tableName: 'ap_ar_transactions', select: '*' }),
-                    server.readData({ tableName: 'ledger_payments', select: '*' }),
-                    server.readData({ tableName: 'monthly_snapshots', select: '*' }),
-                    server.readData({ tableName: 'initial_stock', select: '*' }),
-                    server.readData({ tableName: 'loans', select: '*' }),
-                    server.readData({ tableName: 'loan_payments', select: '*' }),
-                ]);
-                
-                categoriesData = await seedEssentialCategories(categoriesData || []);
 
-                const [contactsData, banksData, cashTxs, bankTxs, stockTxs, ledgerData, ledgerPaymentsData, snapshotsData, initialStockData, loansData, loanPaymentsData] = otherData;
+                await bulkPut('categories', categoriesData); await bulkPut('contacts', contactsData);
+                await bulkPut('banks', banksData);
+                await bulkPut('cash_transactions', cashTxs); await bulkPut('bank_transactions', bankTxs);
+                await bulkPut('stock_transactions', stockTxs); await bulkPut('ap_ar_transactions', ledgerData);
+                await bulkPut('ledger_payments', ledgerPaymentsData);
+                await bulkPut('monthly_snapshots', snapshotsData); await bulkPut('initial_stock', initialStockData);
+                await bulkPut('loans', loansData); await bulkPut('loan_payments', loanPaymentsData);
+                await db.app_state.update(1, { lastSync: new Date().toISOString() });
+            });
 
-                await db.transaction('rw', db.tables, async () => {
-                    await bulkPut('categories', categoriesData); await bulkPut('contacts', contactsData);
-                    await bulkPut('banks', banksData);
-                    await bulkPut('cash_transactions', cashTxs); await bulkPut('bank_transactions', bankTxs);
-                    await bulkPut('stock_transactions', stockTxs); await bulkPut('ap_ar_transactions', ledgerData);
-                    await bulkPut('ledger_payments', ledgerPaymentsData);
-                    await bulkPut('monthly_snapshots', snapshotsData); await bulkPut('initial_stock', initialStockData);
-                    await bulkPut('loans', loansData); await bulkPut('loan_payments', loanPaymentsData);
-                    await db.app_state.update(1, { lastSync: new Date().toISOString() });
-                });
+            if (options?.needsInitialBalance) {
+                setIsInitialBalanceDialogOpen(true);
             }
+            
             processSyncQueue();
         } catch (error: any) {
             handleApiError(error);
         } finally {
             setIsLoading(false);
         }
-    }, [handleApiError, setIsLoading, setUser, processSyncQueue, seedEssentialCategories]);
+    }, [handleApiError, setIsLoading, setUser, processSyncQueue, seedEssentialCategories, appState]);
 
     useEffect(() => {
         const checkSessionAndLoad = async () => {
@@ -205,12 +210,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             const session = await getSessionFromCookie();
             if (session) {
                 setUser(session);
-                const localUser = await db.app_state.get(1);
-                if (localUser?.user?.id === session.id && !localUser.lastSync) {
-                     await reloadData({ force: true });
-                } else if(localUser?.user?.id !== session.id) {
-                    await reloadData({ force: true });
-                }
+                // Always reload data on initial session load to ensure sync
+                await reloadData({ force: true });
             } else {
                 setUser(null);
             }
@@ -309,3 +310,4 @@ export function useAppContext() {
     }
     return context;
 }
+
