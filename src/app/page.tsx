@@ -144,25 +144,25 @@ function ShipShapeLedger() {
                     </TabsList>
                 </div>
              )}
-            <TabsContent value="dashboard" className="mt-6 animate-slide-in-up">
+            <TabsContent forceMount value="dashboard" className="mt-6 animate-slide-in-up">
                 <DashboardTab setActiveTab={setActiveTab} />
             </TabsContent>
-             <TabsContent value="cash" className="mt-6 animate-slide-in-up">
+             <TabsContent forceMount value="cash" className="mt-6 animate-slide-in-up">
                 <CashTab />
             </TabsContent>
-            <TabsContent value="bank" className="mt-6 animate-slide-in-up">
+            <TabsContent forceMount value="bank" className="mt-6 animate-slide-in-up">
                 <BankTab />
             </TabsContent>
-            <TabsContent value="credit" className="mt-6 animate-slide-in-up">
+            <TabsContent forceMount value="credit" className="mt-6 animate-slide-in-up">
                 <CreditTab />
             </TabsContent>
-            <TabsContent value="stock" className="mt-6 animate-slide-in-up">
+            <TabsContent forceMount value="stock" className="mt-6 animate-slide-in-up">
                 <StockTab />
             </TabsContent>
-             <TabsContent value="loans" className="mt-6 animate-slide-in-up">
+             <TabsContent forceMount value="loans" className="mt-6 animate-slide-in-up">
                 <LoansTab />
             </TabsContent>
-            <TabsContent value="settings" className="mt-6 animate-slide-in-up">
+            <TabsContent forceMount value="settings" className="mt-6 animate-slide-in-up">
                 <SettingsTab />
             </TabsContent>
           </Tabs>
