@@ -60,24 +60,80 @@ function ShipShapeLedger() {
   
   const renderTabContent = () => {
     return (
-        <AnimatePresence mode="wait">
-            <motion.div
-                key={activeTab}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                transition={{ duration: 0.2 }}
-                className="mt-6"
-            >
-                {activeTab === 'dashboard' && <DashboardTab setActiveTab={setActiveTab} />}
-                {activeTab === 'cash' && <CashTab />}
-                {activeTab === 'bank' && <BankTab />}
-                {activeTab === 'credit' && <CreditTab />}
-                {activeTab === 'stock' && <StockTab />}
-                {activeTab === 'loans' && <LoansTab />}
-                {activeTab === 'settings' && <SettingsTab />}
-            </motion.div>
-        </AnimatePresence>
+        <div className="mt-6">
+            <AnimatePresence mode="wait">
+                <motion.div
+                    key={activeTab}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    transition={{ duration: 0.2 }}
+                    style={{ display: activeTab === 'dashboard' ? 'block' : 'none' }}
+                >
+                    <DashboardTab setActiveTab={setActiveTab} />
+                </motion.div>
+                <motion.div
+                    key="cash"
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    transition={{ duration: 0.2 }}
+                     style={{ display: activeTab === 'cash' ? 'block' : 'none' }}
+                >
+                    <CashTab />
+                </motion.div>
+                 <motion.div
+                    key="bank"
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    transition={{ duration: 0.2 }}
+                     style={{ display: activeTab === 'bank' ? 'block' : 'none' }}
+                >
+                    <BankTab />
+                </motion.div>
+                <motion.div
+                    key="credit"
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    transition={{ duration: 0.2 }}
+                     style={{ display: activeTab === 'credit' ? 'block' : 'none' }}
+                >
+                    <CreditTab />
+                </motion.div>
+                <motion.div
+                    key="stock"
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    transition={{ duration: 0.2 }}
+                     style={{ display: activeTab === 'stock' ? 'block' : 'none' }}
+                >
+                    <StockTab />
+                </motion.div>
+                 <motion.div
+                    key="loans"
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    transition={{ duration: 0.2 }}
+                     style={{ display: activeTab === 'loans' ? 'block' : 'none' }}
+                >
+                    <LoansTab />
+                </motion.div>
+                <motion.div
+                    key="settings"
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    transition={{ duration: 0.2 }}
+                     style={{ display: activeTab === 'settings' ? 'block' : 'none' }}
+                >
+                    <SettingsTab />
+                </motion.div>
+            </AnimatePresence>
+        </div>
     )
   }
 
@@ -155,7 +211,7 @@ function ShipShapeLedger() {
           <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
              {!isMobile && (
                 <div className="overflow-x-auto pb-2">
-                    <TabsList className="grid w-full grid-cols-7 min-w-[800px]">
+                    <TabsList>
                         {navItems.map(item => {
                             const Icon = item.icon;
                             return (
