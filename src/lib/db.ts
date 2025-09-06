@@ -37,8 +37,9 @@ export class AppDatabase extends Dexie {
     sync_queue!: EntityTable<SyncQueueItem, 'id'>;
 
     constructor() {
-        super('ShipShapeLedgerDB');
-        this.version(16).stores({
+        // Renaming the database to force a fresh start and bypass the upgrade error.
+        super('ShipShapeLedgerDB_v2');
+        this.version(1).stores({
             app_state: 'id',
             cash_transactions: '++id, date, category, linkedStockTxId, linkedLoanId, advance_id, contact_id',
             bank_transactions: '++id, date, bank_id, category, linkedStockTxId, linkedLoanId, advance_id, contact_id',
@@ -53,7 +54,7 @@ export class AppDatabase extends Dexie {
             monthly_snapshots: '++id, snapshot_date',
             loans: '++id, contact_id, type, status',
             loan_payments: '++id, loan_id, payment_date',
-            sync_queue: '++id',
+            sync_queue: '++id, timestamp', // Correctly defining the index without changing primary key
         });
     }
 }
