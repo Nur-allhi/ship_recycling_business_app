@@ -38,6 +38,7 @@ import * as server from "@/lib/actions";
 import { db } from "@/lib/db"
 import { useBalanceCalculator } from "../app/context/useBalanceCalculator"
 import { motion, AnimatePresence } from "framer-motion"
+import { useLiveQuery } from "dexie-react-hooks"
 
 const toYYYYMMDD = (date: Date) => {
     const d = new Date(date);
@@ -49,7 +50,8 @@ type SortKey = keyof BankTransaction | 'debit' | 'credit' | null;
 type SortDirection = 'asc' | 'desc';
 
 export function BankTab() {
-  const { bankTransactions, currency, user, banks, isLoading, handleApiError, isOnline, contacts, loans } = useAppContext()
+  const { currency, user, banks, isLoading, handleApiError, isOnline, contacts, loans } = useAppContext()
+  const bankTransactions = useLiveQuery(() => db.bank_transactions.toArray(), []);
   const { bankBalance } = useBalanceCalculator();
   const { transferFunds, deleteBankTransaction, deleteMultipleBankTransactions } = useAppActions();
   const [isTransferSheetOpen, setIsTransferSheetOpen] = useState(false)
@@ -75,7 +77,6 @@ export function BankTab() {
     if (localSnapshot) {
         setMonthlySnapshot(localSnapshot);
     } else {
-        // If no local snapshot, try to fetch from server ONLY IF online.
         if (isOnline && user?.role === 'admin') {
             try {
                 const serverSnapshot = await server.getOrCreateSnapshot(currentMonth.toISOString());
@@ -88,7 +89,6 @@ export function BankTab() {
                 setMonthlySnapshot(null);
             }
         } else {
-            // Offline or not admin, so we can't create a snapshot.
             setMonthlySnapshot(null);
         }
     }

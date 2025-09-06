@@ -31,6 +31,7 @@ import * as server from "@/lib/actions";
 import { db } from "@/lib/db"
 import { useBalanceCalculator } from "../app/context/useBalanceCalculator"
 import { motion, AnimatePresence } from "framer-motion"
+import { useLiveQuery } from "dexie-react-hooks"
 
 const toYYYYMMDD = (date: Date) => {
     const d = new Date(date);
@@ -42,7 +43,8 @@ type SortKey = keyof CashTransaction | 'debit' | 'credit' | null;
 type SortDirection = 'asc' | 'desc';
 
 export function CashTab() {
-  const { cashTransactions, currency, user, banks, isLoading, handleApiError, isOnline, contacts, loans } = useAppContext()
+  const { currency, user, banks, isLoading, handleApiError, isOnline, contacts, loans } = useAppContext()
+  const cashTransactions = useLiveQuery(() => db.cash_transactions.toArray(), []);
   const { cashBalance } = useBalanceCalculator();
   const { transferFunds, deleteCashTransaction, deleteMultipleCashTransactions } = useAppActions();
   const [isTransferSheetOpen, setIsTransferSheetOpen] = useState(false)
