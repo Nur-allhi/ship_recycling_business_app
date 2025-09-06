@@ -53,13 +53,11 @@ interface AppSidebarProps {
 
 export function AppSidebar({ activeTab, setActiveTab }: AppSidebarProps) {
     const { logout } = useAppContext();
-    const { setOpen, isMobile } = useSidebar();
+    const { setOpen } = useSidebar();
 
     const handleItemClick = (tab: string) => {
         setActiveTab(tab);
-        if (isMobile) {
-            setOpen(false);
-        }
+        setOpen(false);
     }
 
     return (
@@ -67,7 +65,7 @@ export function AppSidebar({ activeTab, setActiveTab }: AppSidebarProps) {
             <SidebarHeader>
                  <div className="flex items-center gap-2">
                     <Logo className="h-8 w-8 text-primary shrink-0" />
-                    <span className="text-lg font-semibold overflow-hidden transition-all duration-300 ease-in-out group-data-[state=expanded]:w-auto group-data-[state=expanded]:opacity-100 group-data-[state=collapsed]:w-0 group-data-[state=collapsed]:opacity-0">
+                    <span className="text-lg font-semibold overflow-hidden whitespace-nowrap transition-all duration-300 ease-in-out group-data-[state=expanded]:w-auto group-data-[state=expanded]:opacity-100 group-data-[state=collapsed]:w-0 group-data-[state=collapsed]:opacity-0">
                         Ha-Mim Iron Mart
                     </span>
                 </div>
@@ -86,7 +84,9 @@ export function AppSidebar({ activeTab, setActiveTab }: AppSidebarProps) {
                                         tooltip={{children: item.label}}
                                     >
                                         <item.icon />
-                                        <span>{item.label}</span>
+                                        <span className="whitespace-nowrap transition-all duration-200 ease-in-out group-data-[state=expanded]:w-auto group-data-[state=expanded]:opacity-100 group-data-[state=collapsed]:w-0 group-data-[state=collapsed]:opacity-0">
+                                            {item.label}
+                                        </span>
                                     </SidebarMenuButton>
                                 </SidebarMenuItem>
                             ))}
@@ -100,7 +100,9 @@ export function AppSidebar({ activeTab, setActiveTab }: AppSidebarProps) {
                     <SidebarMenuItem>
                         <SidebarMenuButton onClick={logout} tooltip={{children: "Logout"}}>
                             <LogOut />
-                            <span>Logout</span>
+                            <span className="whitespace-nowrap transition-all duration-200 ease-in-out group-data-[state=expanded]:w-auto group-data-[state=expanded]:opacity-100 group-data-[state=collapsed]:w-0 group-data-[state=collapsed]:opacity-0">
+                                Logout
+                            </span>
                         </SidebarMenuButton>
                     </SidebarMenuItem>
                 </SidebarMenu>
