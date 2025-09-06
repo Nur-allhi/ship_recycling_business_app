@@ -215,8 +215,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             const session = await getSessionFromCookie();
             if (session) {
                 setUser(session);
-                // Always reload data on initial session load to ensure sync
-                await reloadData({ force: true });
+                // Only reload data if there's a user, otherwise login flow will handle it.
+                await reloadData(); 
             } else {
                 setUser(null);
             }

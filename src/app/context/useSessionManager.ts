@@ -51,10 +51,9 @@ export function useSessionManager() {
         try {
             const result = await serverLogin(credentials);
             if (result.success && result.session) {
-                // Don't set user here, let the AppContext reload handle it
                 toast.success("Login Successful", { description: "Welcome back!" });
-                 // Full page reload to trigger a full data fetch in AppContext
-                window.location.href = '/';
+                // Use the router for a soft navigation
+                router.push('/');
             }
             return result;
         } catch (error: any) {
@@ -63,7 +62,7 @@ export function useSessionManager() {
         } finally {
             setIsAuthenticating(false);
         }
-    }, []);
+    }, [router]);
 
 
     return {
