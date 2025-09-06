@@ -1,7 +1,7 @@
 
 "use client"
 
-import { useRef, useState, useMemo, ReactNode } from "react"
+import { useRef, useState, useMemo, ReactNode, useEffect, useCallback } from "react"
 import { useAppContext } from "@/app/context/app-context"
 import { useAppActions } from "@/app/context/app-actions"
 import { Button } from "@/components/ui/button"
@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { Badge } from "@/components/ui/badge"
-import { Plus, Trash2, Eye, EyeOff, Users, Settings, Palette, FileCog, Recycle, Landmark, Activity, ArrowUpCircle, ArrowDownCircle, User, Contact, RefreshCw, Lock } from "lucide-react"
+import { Plus, Trash2, Eye, EyeOff, Users, Settings, Palette, FileCog, Recycle, Landmark, Activity, ArrowUpCircle, ArrowDownCircle, User, Contact, RefreshCw, Lock, Loader2 } from "lucide-react"
 import { toast } from "sonner"
 import { ResponsiveSelect } from "@/components/ui/responsive-select"
 import { RecycleBinTab } from "./recycle-bin-tab"
@@ -21,6 +21,8 @@ import { ActivityLogTab } from "./activity-log-tab"
 import { RadioGroup, RadioGroupItem } from "./ui/radio-group"
 import { cn } from "@/lib/utils"
 import { UserManagementTab } from "./user-management-tab"
+import { readData } from "@/lib/actions"
+import type { Bank, Category } from "@/lib/types"
 
 type SettingsPage = 'appearance' | 'general' | 'contacts' | 'users' | 'activity_log' | 'recycle_bin' | 'export_import';
 
@@ -79,49 +81,63 @@ function AppearanceSettings() {
 }
 
 function GeneralSettings() {
-  const {
-    banks,
-    cashCategories,
-    bankCategories,
-    wastagePercentage,
-    openInitialBalanceDialog,
-  } = useAppContext();
-  const {
-    addBank,
-    addCategory,
-    deleteCategory,
-    setWastagePercentage,
-  } = useAppActions();
+  const { wastagePercentage, openInitialBalanceDialog } = useAppContext();
+  const { addBank, addCategory, deleteCategory, setWastagePercentage } = useAppActions();
+  const [banks, setBanks] = useState<Bank[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const newCategoryNameRef = useRef<HTMLInputElement>(null)
+  const newCategoryNameRef = useRef<HTMLInputElement>(null);
   const [newCategoryType, setNewCategoryType] = useState<'cash' | 'bank'>('cash');
   const [newCategoryDirection, setNewCategoryDirection] = useState<'credit' | 'debit' | undefined>();
+  const wastageRef = useRef<HTMLInputElement>(null);
+  const newBankNameRef = useRef<HTMLInputElement>(null);
 
-  const wastageRef = useRef<HTMLInputElement>(null)
+  const fetchData = useCallback(async () => {
+    setIsLoading(true);
+    try {
+        const [banksData, categoriesData] = await Promise.all([
+            readData({ tableName: 'banks', select: '*' }),
+            readData({ tableName: 'categories', select: '*' }),
+        ]);
+        setBanks((banksData as Bank[]) || []);
+        setCategories((categoriesData as Category[]) || []);
+    } catch (e: any) {
+        toast.error("Failed to load general settings", { description: e.message });
+    } finally {
+        setIsLoading(false);
+    }
+  }, []);
 
-  const newBankNameRef = useRef<HTMLInputElement>(null)
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
-  const handleAddBank = () => {
+  const handleAddBank = async () => {
     const name = newBankNameRef.current?.value.trim();
     if (name) {
-      addBank(name);
+      await addBank(name);
       if (newBankNameRef.current) newBankNameRef.current.value = "";
+      toast.success("Bank Added");
+      fetchData(); // Refresh data
     }
   }
 
-  const handleAddCategory = () => {
+  const handleAddCategory = async () => {
     const name = newCategoryNameRef.current?.value.trim();
-    if (!name) {
-        toast.error('Category name required');
-        return;
-    }
-    if (!newCategoryDirection) {
-        toast.error('Category direction required');
-        return;
-    }
-    addCategory(newCategoryType, name, newCategoryDirection);
+    if (!name) { toast.error('Category name required'); return; }
+    if (!newCategoryDirection) { toast.error('Category direction required'); return; }
+    await addCategory(newCategoryType, name, newCategoryDirection);
     if(newCategoryNameRef.current) newCategoryNameRef.current.value = "";
     setNewCategoryDirection(undefined);
+    toast.success("Category Added");
+    fetchData(); // Refresh data
+  }
+
+  const handleDeleteCategory = async (id: string) => {
+    await deleteCategory(id);
+    toast.success("Category Deleted");
+    fetchData(); // Refresh data
   }
 
   const handleWastageSave = () => {
@@ -132,6 +148,21 @@ function GeneralSettings() {
     } else {
       toast.error("Invalid Percentage", { description: "Wastage must be between 0 and 100." });
     }
+  }
+
+  const { cashCategories, bankCategories } = useMemo(() => {
+    return {
+        cashCategories: categories.filter(c => c.type === 'cash'),
+        bankCategories: categories.filter(c => c.type === 'bank')
+    }
+  }, [categories]);
+
+  if (isLoading) {
+    return (
+        <div className="flex justify-center items-center h-96">
+            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+    )
   }
 
   return (
@@ -150,8 +181,13 @@ function GeneralSettings() {
         </Card>
         <Card>
             <CardHeader>
-                <CardTitle>Bank Accounts</CardTitle>
-                <CardDescription>Manage your bank accounts.</CardDescription>
+                <div className="flex justify-between items-center">
+                    <div>
+                        <CardTitle>Bank Accounts</CardTitle>
+                        <CardDescription>Manage your bank accounts.</CardDescription>
+                    </div>
+                    <Button variant="ghost" size="icon" onClick={fetchData} disabled={isLoading}><RefreshCw className="h-4 w-4" /></Button>
+                </div>
             </CardHeader>
             <CardContent className="space-y-4">
                     <div>
@@ -174,8 +210,13 @@ function GeneralSettings() {
         </Card>
         <Card>
             <CardHeader>
-            <CardTitle>Category Management</CardTitle>
-            <CardDescription>Customize categories for your cash and bank transactions.</CardDescription>
+            <div className="flex justify-between items-center">
+                <div>
+                    <CardTitle>Category Management</CardTitle>
+                    <CardDescription>Customize categories for your cash and bank transactions.</CardDescription>
+                </div>
+                <Button variant="ghost" size="icon" onClick={fetchData} disabled={isLoading}><RefreshCw className="h-4 w-4" /></Button>
+            </div>
             </CardHeader>
             <CardContent className="space-y-6">
             <div>
@@ -215,7 +256,7 @@ function GeneralSettings() {
                             {cat.name}
                             {cat.direction === 'credit' ? <ArrowUpCircle className="h-3 w-3 text-green-500"/> : <ArrowDownCircle className="h-3 w-3 text-red-500" />}
                             {cat.is_deletable && (
-                                <button onClick={() => deleteCategory(cat.id)} className="rounded-full hover:bg-muted-foreground/20">
+                                <button onClick={() => handleDeleteCategory(cat.id)} className="rounded-full hover:bg-muted-foreground/20">
                                 <Trash2 className="h-3 w-3" />
                                 </button>
                             )}
@@ -233,7 +274,7 @@ function GeneralSettings() {
                             {cat.name}
                             {cat.direction === 'credit' ? <ArrowUpCircle className="h-3 w-3 text-green-500"/> : <ArrowDownCircle className="h-3 w-3 text-red-500" />}
                             {cat.is_deletable && (
-                                <button onClick={() => deleteCategory(cat.id)} className="rounded-full hover:bg-muted-foreground/20">
+                                <button onClick={() => handleDeleteCategory(cat.id)} className="rounded-full hover:bg-muted-foreground/20">
                                 <Trash2 className="h-3 w-3" />
                                 </button>
                             )}
