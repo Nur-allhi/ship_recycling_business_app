@@ -15,7 +15,7 @@ import { InitialBalanceDialog } from '@/components/initial-balance-dialog';
 import { AppLoading } from '@/components/app-loading';
 import { FloatingActionButton } from '@/components/floating-action-button';
 import { AnimatePresence, motion } from 'framer-motion';
-import { SidebarProvider, Sidebar, useSidebar } from '@/components/ui/sidebar';
+import { SidebarProvider, Sidebar, useSidebar, SidebarTrigger } from '@/components/ui/sidebar';
 import { AppSidebar } from '@/components/app-sidebar';
 
 const fontClasses = {
@@ -28,13 +28,11 @@ function MainContent() {
     const { fontSize, isInitialBalanceDialogOpen, user } = useAppContext();
     const [activeTab, setActiveTab] = useState('dashboard');
     const isAdmin = user?.role === 'admin';
-    const { state } = useSidebar();
+    const { state, setOpen } = useSidebar();
 
     if (!user) {
         return <AppLoading message="Please wait..." />;
     }
-
-    const roleDisplayName = user?.role ? user.role.charAt(0).toUpperCase() + user.role.slice(1) : '';
 
     const renderTabContent = (tab: string) => {
         switch (tab) {
@@ -53,11 +51,19 @@ function MainContent() {
         <div className={cn('min-h-screen bg-background text-foreground flex', fontClasses[fontSize] || 'text-base')}>
             {isAdmin && <InitialBalanceDialog isOpen={isInitialBalanceDialogOpen} />}
             
-            <Sidebar>
+            <Sidebar onMouseLeave={() => setOpen(false)}>
                 <AppSidebar activeTab={activeTab} setActiveTab={setActiveTab} />
             </Sidebar>
             
-            <div className={cn("flex-1 flex flex-col transition-all duration-300 ease-in-out", state === 'collapsed' ? 'md:ml-12' : 'md:ml-64')}>
+            <div 
+              className={cn(
+                "flex-1 flex flex-col transition-all duration-300 ease-in-out",
+                state === 'collapsed' ? 'md:ml-12' : 'md:ml-64'
+              )}
+            >
+                <header className="sticky top-0 z-10 flex h-14 items-center gap-4 border-b bg-background/80 backdrop-blur-sm px-4 lg:h-[60px] lg:px-6">
+                    <SidebarTrigger className="shrink-0" />
+                </header>
                 <main className="flex-grow p-4 md:p-6 lg:p-8 overflow-y-auto">
                     <AnimatePresence mode="wait">
                         <motion.div

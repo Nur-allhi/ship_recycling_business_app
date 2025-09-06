@@ -227,7 +227,6 @@ const Sidebar = React.forwardRef<
         data-variant={variant}
         data-side={side}
         onMouseEnter={() => setOpen(true)}
-        onMouseLeave={() => setOpen(false)}
         {...props}
       >
         {children}
@@ -242,10 +241,6 @@ const SidebarTrigger = React.forwardRef<
   React.ComponentProps<typeof Button>
 >(({ className, onClick, ...props }, ref) => {
   const { toggleSidebar, isMobile } = useSidebar()
-
-  if (!isMobile) {
-    return null
-  }
 
   return (
     <Button
