@@ -124,7 +124,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                     server.readData({ tableName: 'loan_payments', select: '*' }),
                 ]);
 
-                const categoriesData = (Array.isArray(categoriesRes) ? categoriesRes : []) as Category[];
+                const categoriesData: Category[] = (Array.isArray(categoriesRes) ? categoriesRes : []) as Category[];
                 
                 const ledgerTxsWithPayments = (ledgerData || []).map((tx: any) => ({
                     ...tx,
