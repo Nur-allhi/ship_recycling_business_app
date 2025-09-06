@@ -2,7 +2,6 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { useAppContext } from "@/app/context/app-context";
 import { LedgerTransaction } from "@/lib/types";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "./ui/card";
@@ -14,6 +13,9 @@ import { Progress } from "./ui/progress";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./ui/tooltip";
 import { ContactHistoryDialog } from "./contact-history-dialog";
+import { useLiveQuery } from "dexie-react-hooks";
+import { db } from "@/lib/db";
+import { useAppContext } from "@/app/context/app-context";
 
 interface AggregatedContact {
     contact_id: string;
@@ -26,7 +28,8 @@ interface AggregatedContact {
 }
 
 export function PayablesList() {
-    const { ledgerTransactions, currency, user, contacts } = useAppContext();
+    const { currency, user, contacts } = useAppContext();
+    const ledgerTransactions = useLiveQuery(() => db.ap_ar_transactions.toArray());
     const [settleDialogState, setSettleDialogState] = useState<{isOpen: boolean, contact: AggregatedContact | null}>({isOpen: false, contact: null});
     const [advanceDialogState, setAdvanceDialogState] = useState<{isOpen: boolean, contact: AggregatedContact | null, ledgerType: 'payable' | 'receivable' | null}>({isOpen: false, contact: null, ledgerType: null});
     const [historyDialogState, setHistoryDialogState] = useState<{isOpen: boolean, contact: AggregatedContact | null}>({isOpen: false, contact: null});
@@ -39,11 +42,10 @@ export function PayablesList() {
         if (!ledgerTransactions || !contacts) return [];
 
         ledgerTransactions.forEach(tx => {
-            // Only consider 'payable' or 'advance' for this list
             if (tx.type !== 'payable' && tx.type !== 'advance') return;
 
             const contact = contacts.find(c => c.id === tx.contact_id);
-            if (!contact) return;
+            if (!contact || contact.type === 'client') return;
 
             if (!groups[tx.contact_id]) {
                 groups[tx.contact_id] = {
@@ -75,7 +77,7 @@ export function PayablesList() {
                     type: 'payable' as const,
                 };
             })
-            .filter(c => c.net_balance !== 0 || c.total_due > 0) // Only show if there is a balance or history
+            .filter(c => c.net_balance !== 0 || c.total_due > 0)
             .sort((a, b) => b.net_balance - a.net_balance);
 
     }, [ledgerTransactions, contacts]);

@@ -2,7 +2,6 @@
 "use client";
 
 import { useMemo, useEffect, useState } from "react";
-import { useAppContext } from "@/app/context/app-context";
 import type { Contact, LedgerTransaction, CashTransaction, BankTransaction } from "@/lib/types";
 import {
   Dialog,
@@ -20,6 +19,9 @@ import { FileText, ArrowRight, Loader2 } from "lucide-react";
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import { toast } from 'sonner';
+import { useLiveQuery } from "dexie-react-hooks";
+import { db } from "@/lib/db";
+import { useAppContext } from "@/app/context/app-context";
 
 interface ContactHistoryDialogProps {
   isOpen: boolean;
@@ -36,29 +38,35 @@ declare module 'jspdf' {
 type CombinedHistoryItem = (LedgerTransaction & { itemType: 'ledger' }) | ((CashTransaction | BankTransaction) & { itemType: 'payment' });
 
 export function ContactHistoryDialog({ isOpen, setIsOpen, contact }: ContactHistoryDialogProps) {
-  const { ledgerTransactions, currency, cashTransactions, bankTransactions } = useAppContext();
+  const { currency } = useAppContext();
+  const ledgerTransactions = useLiveQuery(() => db.ap_ar_transactions.where('contact_id').equals(contact.id).toArray(), [contact.id]);
+  const cashTransactions = useLiveQuery(() => db.cash_transactions.where('contact_id').equals(contact.id).toArray(), [contact.id]);
+  const bankTransactions = useLiveQuery(() => db.bank_transactions.where('contact_id').equals(contact.id).toArray(), [contact.id]);
+
   const [isLoading, setIsLoading] = useState(true);
   const [combinedHistory, setCombinedHistory] = useState<CombinedHistoryItem[]>([]);
 
   useEffect(() => {
     if (!isOpen) return;
+
+    if (ledgerTransactions === undefined || cashTransactions === undefined || bankTransactions === undefined) {
+      setIsLoading(true);
+      return;
+    }
+    
     setIsLoading(true);
 
-    // 1. Get all A/R or A/P ledger entries for this contact
-    const arApTxs: CombinedHistoryItem[] = ledgerTransactions
-      .filter(tx => tx.contact_id === contact.id)
+    const arApTxs: CombinedHistoryItem[] = (ledgerTransactions || [])
       .map(tx => ({ ...tx, itemType: 'ledger' }));
 
-    // 2. Get all cash and bank payments related to this contact
-    const relevantCashTxs: CombinedHistoryItem[] = cashTransactions
-      .filter(tx => tx.contact_id === contact.id && (tx.category === 'A/R Settlement' || tx.category === 'A/P Settlement'))
+    const relevantCashTxs: CombinedHistoryItem[] = (cashTransactions || [])
+      .filter(tx => tx.category === 'A/R Settlement' || tx.category === 'A/P Settlement')
       .map(tx => ({ ...tx, itemType: 'payment' }));
 
-    const relevantBankTxs: CombinedHistoryItem[] = bankTransactions
-      .filter(tx => tx.contact_id === contact.id && (tx.category === 'A/R Settlement' || tx.category === 'A/P Settlement'))
+    const relevantBankTxs: CombinedHistoryItem[] = (bankTransactions || [])
+      .filter(tx => tx.category === 'A/R Settlement' || tx.category === 'A/P Settlement')
       .map(tx => ({ ...tx, itemType: 'payment' }));
       
-    // 3. Combine and sort all transactions chronologically
     const allHistory = [...arApTxs, ...relevantCashTxs, ...relevantBankTxs];
     allHistory.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     
@@ -74,9 +82,9 @@ export function ContactHistoryDialog({ isOpen, setIsOpen, contact }: ContactHist
         if (item.itemType === 'ledger') {
              if (item.type === 'advance') {
                 credit += Math.abs(item.amount);
-             } else if (item.type === 'receivable') { // We owe them money
+             } else if (item.type === 'receivable') { 
                 debit += item.amount;
-             } else if (item.type === 'payable') { // They owe us money
+             } else if (item.type === 'payable') { 
                 debit += item.amount;
              }
         } else { // payment
@@ -88,8 +96,8 @@ export function ContactHistoryDialog({ isOpen, setIsOpen, contact }: ContactHist
         }
     });
 
-    const finalDebit = contact.type === 'vendor' ? totalCredit : totalDebit;
-    const finalCredit = contact.type === 'vendor' ? totalDebit : totalCredit;
+    const finalDebit = contact.type === 'vendor' ? credit : debit;
+    const finalCredit = contact.type === 'vendor' ? debit : credit;
 
     return { totalDebit: debit, totalCredit: credit, finalBalance: debit - credit };
   }, [combinedHistory, contact.type]);

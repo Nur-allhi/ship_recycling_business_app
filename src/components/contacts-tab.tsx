@@ -18,9 +18,12 @@ import { RadioGroup, RadioGroupItem } from "./ui/radio-group";
 import { Label } from "./ui/label";
 import { Tabs, TabsList, TabsTrigger } from "./ui/tabs";
 import { Badge } from "./ui/badge";
+import { useLiveQuery } from "dexie-react-hooks";
+import { db } from "@/lib/db";
 
 export function ContactsTab() {
-    const { contacts, ledgerTransactions, user } = useAppContext();
+    const { contacts, user } = useAppContext();
+    const ledgerTransactions = useLiveQuery(() => db.ap_ar_transactions.toArray());
     const { addContact, deleteContact } = useAppActions();
     
     const [historyState, setHistoryState] = useState<{isOpen: boolean, contact: Contact | null}>({isOpen: false, contact: null});
@@ -33,6 +36,8 @@ export function ContactsTab() {
 
     const contactTransactionCounts = useMemo(() => {
         const counts: Record<string, number> = {};
+        if (!contacts || !ledgerTransactions) return counts;
+
         contacts.forEach(c => counts[c.id] = 0);
         ledgerTransactions.forEach(tx => {
             if (tx.contact_id && counts[tx.contact_id] !== undefined) {
@@ -70,6 +75,7 @@ export function ContactsTab() {
     }
 
     const filteredContacts = useMemo(() => {
+        if (!contacts) return [];
         if (filter === 'all') return contacts;
         return contacts.filter(c => c.type === filter || c.type === 'both');
     }, [contacts, filter]);
