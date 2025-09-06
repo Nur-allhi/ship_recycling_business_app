@@ -8,23 +8,35 @@ import LogoutOverlayWrapper from '@/components/logout-overlay-wrapper';
 import { cn } from '@/lib/utils';
 import { AppLoading } from '@/components/app-loading';
 
-// Metadata can't be in a client component, so we export it from a server component wrapper if needed,
-// but for this file to be a client component, we manage metadata at the page level.
-// For simplicity, we remove the static metadata export from here.
+function LayoutContent({ children }: { children: React.ReactNode }) {
+    const { fontSize, isLoading, isInitialLoadComplete } = useAppContext();
 
-function RootLayoutContent({
+    const fontClasses = {
+        sm: 'text-sm',
+        base: 'text-base',
+        lg: 'text-xl',
+    };
+
+    return (
+        <body className={cn('antialiased', fontClasses[fontSize] || 'text-base')}>
+            {(isLoading || !isInitialLoadComplete) ? (
+                <AppLoading />
+            ) : (
+                <>
+                    {children}
+                    <LogoutOverlayWrapper />
+                    <Toaster richColors />
+                </>
+            )}
+        </body>
+    );
+}
+
+export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const { fontSize, isLoading, isInitialLoadComplete } = useAppContext();
-  
-  const fontClasses = {
-    sm: 'text-sm',
-    base: 'text-base',
-    lg: 'text-xl',
-  };
-
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
@@ -37,30 +49,9 @@ function RootLayoutContent({
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link href="https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@400;700&family=Roboto+Mono:wght@400;700&display=swap" rel="stylesheet" />
       </head>
-      <body className={cn('antialiased', fontClasses[fontSize] || 'text-base')}>
-        {(isLoading || !isInitialLoadComplete) ? (
-            <AppLoading />
-        ) : (
-            <>
-                {children}
-                <LogoutOverlayWrapper />
-                <Toaster richColors />
-            </>
-        )}
-      </body>
+      <AppProvider>
+        <LayoutContent>{children}</LayoutContent>
+      </AppProvider>
     </html>
-  );
-}
-
-
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
-  return (
-    <AppProvider>
-        <RootLayoutContent>{children}</RootLayoutContent>
-    </AppProvider>
   );
 }
