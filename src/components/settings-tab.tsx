@@ -81,7 +81,7 @@ function AppearanceSettings() {
 }
 
 function GeneralSettings() {
-  const { wastagePercentage, openInitialBalanceDialog } = useAppContext();
+  const { openInitialBalanceDialog } = useAppContext();
   const { addBank, addCategory, deleteCategory, setWastagePercentage } = useAppActions();
   const [banks, setBanks] = useState<Bank[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -158,12 +158,15 @@ function GeneralSettings() {
   }
 
   const handleWastageSave = () => {
-    const percentage = parseFloat(wastageRef.current?.value || '0');
-    if (percentage >= 0 && percentage <= 100) {
-      setWastagePercentage(percentage);
-      toast.success("Wastage Percentage Updated", { description: `Set to ${percentage}%.` });
-    } else {
-      toast.error("Invalid Percentage", { description: "Wastage must be between 0 and 100." });
+    const wastageValue = wastageRef.current?.value;
+    if (wastageValue) {
+      const percentage = parseFloat(wastageValue);
+      if (percentage >= 0 && percentage <= 100) {
+        setWastagePercentage(percentage);
+        toast.success("Wastage Percentage Updated", { description: `Set to ${percentage}%.` });
+      } else {
+        toast.error("Invalid Percentage", { description: "Wastage must be between 0 and 100." });
+      }
     }
   }
 
@@ -317,7 +320,7 @@ function GeneralSettings() {
             <CardContent className="space-y-4">
             <div className="space-y-2">
                 <Label htmlFor="wastage-percentage">Wastage Percentage (%)</Label>
-                <Input id="wastage-percentage" type="number" step="0.01" defaultValue={wastagePercentage} ref={wastageRef} />
+                <Input id="wastage-percentage" type="number" step="0.01" defaultValue={0} ref={wastageRef} />
             </div>
             <Button onClick={handleWastageSave}>Save Wastage Setting</Button>
             </CardContent>
@@ -370,3 +373,5 @@ export function SettingsTab() {
     </div>
   );
 }
+
+    
