@@ -51,7 +51,7 @@ function MainContent() {
         <div className={cn('min-h-screen bg-background text-foreground flex', fontClasses[fontSize] || 'text-base')}>
             {isAdmin && <InitialBalanceDialog isOpen={isInitialBalanceDialogOpen} />}
             
-            <Sidebar onMouseLeave={() => setOpen(false)}>
+            <Sidebar onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}>
                 <AppSidebar activeTab={activeTab} setActiveTab={setActiveTab} />
             </Sidebar>
             
@@ -61,9 +61,6 @@ function MainContent() {
                 state === 'collapsed' ? 'md:ml-12' : 'md:ml-64'
               )}
             >
-                <header className="sticky top-0 z-10 flex h-14 items-center gap-4 border-b bg-background/80 backdrop-blur-sm px-4 lg:h-[60px] lg:px-6">
-                    <SidebarTrigger className="shrink-0" />
-                </header>
                 <main className="flex-grow p-4 md:p-6 lg:p-8 overflow-y-auto">
                     <AnimatePresence mode="wait">
                         <motion.div
