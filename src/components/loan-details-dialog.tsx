@@ -111,7 +111,10 @@ export function LoanDetailsDialog({ isOpen, setIsOpen, loan }: LoanDetailsDialog
         <DialogHeader>
           <DialogTitle>Loan Details</DialogTitle>
           <DialogDescription>
-            Viewing loan details for contact. Status: <Badge className="capitalize ml-1">{loan.status}</Badge>
+            <span>
+              Viewing loan details for contact. Status:{" "}
+              <Badge className="capitalize ml-1">{loan.status}</Badge>
+            </span>
           </DialogDescription>
         </DialogHeader>
 
@@ -256,5 +259,3 @@ export function LoanDetailsDialog({ isOpen, setIsOpen, loan }: LoanDetailsDialog
     </Dialog>
   );
 }
-
-    
