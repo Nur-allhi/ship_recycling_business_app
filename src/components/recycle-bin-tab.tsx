@@ -23,10 +23,10 @@ export function RecycleBinTab() {
         deletedStockTransactions,
         deletedLedgerTransactions,
         currency,
-        user
+        user,
+        loadRecycleBinData
     } = useAppContext();
     const { 
-        loadRecycleBinData, 
         restoreTransaction,
         emptyRecycleBin,
     } = useAppActions();
