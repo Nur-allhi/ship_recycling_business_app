@@ -53,11 +53,11 @@ export function useDataSyncer() {
                     addStockTransaction: server.addStockTransaction,
                     updateStockTransaction: server.updateStockTransaction,
                     addInitialStockItem: server.addInitialStockItem,
-                    deleteContact: (id: string) => server.deleteContact(id),
-                    batchImportData: (data: any) => server.batchImportData(data),
+                    deleteContact: server.deleteContact,
+                    batchImportData: server.batchImportData,
                     deleteAllData: server.deleteAllData,
                     emptyRecycleBin: server.emptyRecycleBin,
-                    // Add new loan actions here
+                    addLoan: server.addLoan,
                 };
 
                 const actionFn = actionMap[item.action];
@@ -111,6 +111,13 @@ export function useDataSyncer() {
                                 }
                             }
                             break;
+                        case 'addLoan':
+                            if (result && localId && localFinancialId) {
+                                await db.loans.where({ id: localId }).modify({ id: result.loan.id });
+                                const finTable = result.financialTx.bank_id ? 'bank_transactions' : 'cash_transactions';
+                                await db.table(finTable).where({ id: localFinancialId }).modify({ id: result.financialTx.id, linkedLoanId: result.loan.id });
+                            }
+                            break;
                     }
                 }
 
@@ -150,5 +157,3 @@ export function useDataSyncer() {
         queueOrSync,
     };
 }
-
-    
