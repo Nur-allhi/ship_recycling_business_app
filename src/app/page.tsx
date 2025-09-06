@@ -15,7 +15,7 @@ import { InitialBalanceDialog } from '@/components/initial-balance-dialog';
 import { AppLoading } from '@/components/app-loading';
 import { FloatingActionButton } from '@/components/floating-action-button';
 import { AnimatePresence, motion } from 'framer-motion';
-import { SidebarProvider, Sidebar, SidebarTrigger } from '@/components/ui/sidebar';
+import { SidebarProvider, Sidebar, SidebarTrigger, useSidebar } from '@/components/ui/sidebar';
 import { AppSidebar } from '@/components/app-sidebar';
 
 const fontClasses = {
@@ -24,41 +24,41 @@ const fontClasses = {
   lg: 'text-xl',
 };
 
-function ShipShapeLedger() {
-  const { fontSize, isInitialBalanceDialogOpen, user } = useAppContext();
-  const [activeTab, setActiveTab] = useState('dashboard');
-  const isAdmin = user?.role === 'admin';
+function MainContent() {
+    const { fontSize, isInitialBalanceDialogOpen, user } = useAppContext();
+    const [activeTab, setActiveTab] = useState('dashboard');
+    const isAdmin = user?.role === 'admin';
+    const { state } = useSidebar();
 
-  if (!user) {
-    return <AppLoading message="Please wait..." />;
-  }
-  
-  const roleDisplayName = user?.role ? user.role.charAt(0).toUpperCase() + user.role.slice(1) : '';
-
-  const renderTabContent = (tab: string) => {
-    switch (tab) {
-        case 'dashboard': return <DashboardTab setActiveTab={setActiveTab} />;
-        case 'cash': return <CashTab />;
-        case 'bank': return <BankTab />;
-        case 'credit': return <CreditTab />;
-        case 'stock': return <StockTab />;
-        case 'loans': return <LoansTab />;
-        case 'settings': return <SettingsTab />;
-        default: return <DashboardTab setActiveTab={setActiveTab} />;
+    if (!user) {
+        return <AppLoading message="Please wait..." />;
     }
-  }
 
-  return (
-    <SidebarProvider>
+    const roleDisplayName = user?.role ? user.role.charAt(0).toUpperCase() + user.role.slice(1) : '';
+
+    const renderTabContent = (tab: string) => {
+        switch (tab) {
+            case 'dashboard': return <DashboardTab setActiveTab={setActiveTab} />;
+            case 'cash': return <CashTab />;
+            case 'bank': return <BankTab />;
+            case 'credit': return <CreditTab />;
+            case 'stock': return <StockTab />;
+            case 'loans': return <LoansTab />;
+            case 'settings': return <SettingsTab />;
+            default: return <DashboardTab setActiveTab={setActiveTab} />;
+        }
+    }
+
+    return (
         <div className={cn('min-h-screen bg-background text-foreground flex', fontClasses[fontSize] || 'text-base')}>
             {isAdmin && <InitialBalanceDialog isOpen={isInitialBalanceDialogOpen} />}
             
             <Sidebar>
                 <AppSidebar activeTab={activeTab} setActiveTab={setActiveTab} />
             </Sidebar>
-
-            <div className="flex-1 flex flex-col">
-                <header className="flex items-center gap-2 p-4 border-b">
+            
+            <div className={cn("flex-1 flex flex-col transition-all duration-300 ease-in-out", state === 'collapsed' ? 'md:ml-12' : 'md:ml-64')}>
+                 <header className="flex items-center gap-2 p-4 border-b">
                     <SidebarTrigger />
                     <h2 className="text-lg font-semibold text-muted-foreground">
                         Welcome, {user.username} ({roleDisplayName})
@@ -80,12 +80,14 @@ function ShipShapeLedger() {
                 {isAdmin && <FloatingActionButton />}
             </div>
         </div>
-    </SidebarProvider>
-  );
+    )
 }
+
 
 export default function Home() {
   return (
-    <ShipShapeLedger />
+    <SidebarProvider>
+        <MainContent />
+    </SidebarProvider>
   );
 }
