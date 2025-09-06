@@ -136,8 +136,23 @@ export function useAppActions() {
             
             await db.ap_ar_transactions.add(dataToSave);
             
-            const { installments, id, ...syncData } = dataToSave;
-            queueOrSync({ action: 'appendData', payload: { tableName: 'ap_ar_transactions', data: syncData, localId: tempId, logDescription: `Added A/P or A/R: ${tx.description}`, select: '*' } });
+            const syncData = {
+                ...tx,
+                contact_name: contact.name, // Ensure contact_name is in the payload
+                status: 'unpaid',
+                paid_amount: 0
+            };
+            
+            queueOrSync({ 
+                action: 'appendData', 
+                payload: { 
+                    tableName: 'ap_ar_transactions', 
+                    data: syncData, 
+                    localId: tempId, 
+                    logDescription: `Added A/P or A/R: ${tx.description}`, 
+                    select: '*' 
+                } 
+            });
         });
     };
     
