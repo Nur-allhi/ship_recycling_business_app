@@ -8,6 +8,7 @@ import {
   SidebarMenuButton,
   SidebarFooter,
   SidebarContent,
+  useSidebar,
 } from "@/components/ui/sidebar";
 import { Wallet, Landmark, Boxes, Settings, LogOut, CreditCard, LineChart, Handshake, PanelLeft } from 'lucide-react';
 import { useAppContext } from "@/app/context/app-context";
@@ -30,6 +31,14 @@ interface AppSidebarProps {
 
 export function AppSidebar({ activeTab, setActiveTab }: AppSidebarProps) {
     const { logout, user } = useAppContext();
+    const { setOpen, isMobile } = useSidebar();
+
+    const handleItemClick = (tab: string) => {
+        setActiveTab(tab);
+        if (isMobile) {
+            setOpen(false);
+        }
+    }
 
     return (
         <>
@@ -44,8 +53,9 @@ export function AppSidebar({ activeTab, setActiveTab }: AppSidebarProps) {
                     {navItems.map(item => (
                         <SidebarMenuItem key={item.value}>
                             <SidebarMenuButton 
-                                onClick={() => setActiveTab(item.value)}
+                                onClick={() => handleItemClick(item.value)}
                                 isActive={activeTab === item.value}
+                                tooltip={{children: item.label}}
                             >
                                 <item.icon />
                                 <span>{item.label}</span>
@@ -57,7 +67,7 @@ export function AppSidebar({ activeTab, setActiveTab }: AppSidebarProps) {
             <SidebarFooter>
                 <SidebarMenu>
                     <SidebarMenuItem>
-                        <SidebarMenuButton onClick={logout}>
+                        <SidebarMenuButton onClick={logout} tooltip={{children: "Logout"}}>
                             <LogOut />
                             <span>Logout</span>
                         </SidebarMenuButton>
