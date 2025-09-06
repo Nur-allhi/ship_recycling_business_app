@@ -775,7 +775,6 @@ export async function addLoan(input: z.infer<typeof AddLoanSchema>) {
 
         if (loanError) throw loanError;
 
-        // Now create the corresponding financial transaction
         const financialTxData = {
             date: loan.issue_date,
             description: `Loan ${loan.type === 'payable' ? 'received from' : 'given to'} contact ID ${loan.contact_id}`,
@@ -784,28 +783,34 @@ export async function addLoan(input: z.infer<typeof AddLoanSchema>) {
             actual_amount: loan.principal_amount,
             difference: 0,
             contact_id: loan.contact_id,
+            linkedLoanId: loan.id,
         };
+        
+        let savedFinancialTx;
 
         if (input.disbursement.method === 'cash') {
-            await supabase.from('cash_transactions').insert({
+            const { data, error } = await supabase.from('cash_transactions').insert({
                 ...financialTxData,
                 type: loan.type === 'payable' ? 'income' : 'expense',
-            });
+            }).select().single();
+            if(error) throw error;
+            savedFinancialTx = data;
+
         } else {
-            await supabase.from('bank_transactions').insert({
+            const { data, error } = await supabase.from('bank_transactions').insert({
                 ...financialTxData,
                 type: loan.type === 'payable' ? 'deposit' : 'withdrawal',
                 bank_id: input.disbursement.bank_id,
-            });
+            }).select().single();
+            if(error) throw error;
+            savedFinancialTx = data;
         }
 
         await logActivity(`Added new ${loan.type} loan for ${loan.principal_amount}`);
-        return loan;
+        return { loan, financialTx: savedFinancialTx };
 
     } catch(error) {
         return handleApiError(error);
     }
 }
-    
-
     

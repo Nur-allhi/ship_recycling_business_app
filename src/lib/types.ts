@@ -11,6 +11,7 @@ export interface Transaction {
   lastEdited?: string;
   deletedAt?: string;
   linkedStockTxId?: string;
+  linkedLoanId?: string;
   createdAt: string;
   advance_id?: string | null;
   contact_id?: string | null;
@@ -155,6 +156,7 @@ export interface LoanPayment {
 
 
     
+
 
 
 

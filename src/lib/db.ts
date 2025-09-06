@@ -39,10 +39,10 @@ export class AppDatabase extends Dexie {
 
     constructor() {
         super('ShipShapeLedgerDB');
-        this.version(9).stores({
+        this.version(10).stores({
             app_state: 'id',
-            cash_transactions: '++id, date, category, linkedStockTxId, advance_id, contact_id',
-            bank_transactions: '++id, date, bank_id, category, linkedStockTxId, advance_id, contact_id',
+            cash_transactions: '++id, date, category, linkedStockTxId, linkedLoanId, advance_id, contact_id',
+            bank_transactions: '++id, date, bank_id, category, linkedStockTxId, linkedLoanId, advance_id, contact_id',
             stock_transactions: '++id, date, stockItemName, type, contact_id',
             ap_ar_transactions: '++id, date, type, contact_id, status',
             payment_installments: '++id, ap_ar_transaction_id, date',
@@ -55,36 +55,7 @@ export class AppDatabase extends Dexie {
             loans: '++id, contact_id, type, status',
             loan_payments: '++id, loan_id, payment_date',
             sync_queue: '++id, timestamp, payload.localId',
-        }).upgrade(tx => {
-            // Migration logic to convert vendors and clients to contacts
-             return Promise.all([
-                tx.table('vendors').toArray(),
-                tx.table('clients').toArray()
-            ]).then(([vendors, clients]) => {
-                const contactsToAdd: Contact[] = [];
-                vendors.forEach(v => contactsToAdd.push({ ...v, type: 'vendor'}));
-                clients.forEach(c => {
-                    const existing = contactsToAdd.find(contact => contact.id === c.id);
-                    if (existing) {
-                        existing.type = 'both';
-                    } else {
-                        contactsToAdd.push({ ...c, type: 'client' });
-                    }
-                });
-                return tx.table('contacts').bulkAdd(contactsToAdd);
-            }).then(() => {
-                // After migration, you might want to delete the old tables.
-                // This is commented out to be safe, but would be part of a full migration.
-                // return Dexie.delete('vendors');
-                // return Dexie.delete('clients');
-            });
         });
-        
-        // Remove vendors and clients tables in a later version if they exist
-        this.version(10).stores({
-            vendors: null,
-            clients: null
-        })
     }
 }
 
