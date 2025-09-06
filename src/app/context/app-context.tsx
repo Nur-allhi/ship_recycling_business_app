@@ -278,20 +278,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const openInitialBalanceDialog = useCallback(() => setIsInitialBalanceDialogOpen(true), []);
     const closeInitialBalanceDialog = useCallback(() => setIsInitialBalanceDialogOpen(false), []);
 
-    const OnlineStatusIndicator = useMemo(() => {
-        if (!hasMounted || isOnline) return null;
-        return (
-            <div className="fixed bottom-4 right-4 z-50 animate-fade-in">
-                <div className="flex items-center gap-2 rounded-full bg-background px-3 py-2 text-foreground shadow-lg border">
-                    {isSyncing ? (
-                        <><RefreshCw className="h-5 w-5 animate-spin" /><span className="font-semibold text-sm">Syncing...</span></>
-                    ) : (
-                        <><WifiOff className="h-5 w-5 text-destructive" /><span className="font-semibold text-sm">Offline</span></>
-                    )}
-                </div>
+    const OnlineStatusIndicator = () => (
+        <div className="fixed bottom-4 right-4 z-50 animate-fade-in">
+            <div className="flex items-center gap-2 rounded-full bg-background px-3 py-2 text-foreground shadow-lg border">
+                {isSyncing ? (
+                    <><RefreshCw className="h-5 w-5 animate-spin" /><span className="font-semibold text-sm">Syncing...</span></>
+                ) : (
+                    <><WifiOff className="h-5 w-5 text-destructive" /><span className="font-semibold text-sm">Offline</span></>
+                )}
             </div>
-        );
-    }, [hasMounted, isOnline, isSyncing]);
+        </div>
+    );
     
     const contextValue = useMemo(() => ({
         isLoading, isOnline, user, isInitialLoadComplete, isLoggingOut, isAuthenticating,
@@ -321,7 +318,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     return (
         <AppContext.Provider value={contextValue}>
-            <OnlineStatusIndicator />
+            {hasMounted && !isOnline && <OnlineStatusIndicator />}
             {(isLoading || !isInitialLoadComplete) ? <AppLoading /> : children}
         </AppContext.Provider>
     );
