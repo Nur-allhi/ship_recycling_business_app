@@ -212,8 +212,6 @@ export function useAppActions() {
             const tempId = `temp_bank_${Date.now()}`;
             await db.banks.add({ id: tempId, name, createdAt: new Date().toISOString() });
             queueOrSync({ action: 'appendData', payload: { tableName: 'banks', data: { name }, localId: tempId, select: '*' } });
-            // Controlled refresh to avoid crashes
-            await reloadData({ force: true });
         });
     };
 
