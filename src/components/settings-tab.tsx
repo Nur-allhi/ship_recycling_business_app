@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useRef, useState, useMemo, ReactNode, useEffect, useCallback } from "react"
@@ -21,7 +20,7 @@ import { ActivityLogTab } from "./activity-log-tab"
 import { RadioGroup, RadioGroupItem } from "./ui/radio-group"
 import { cn } from "@/lib/utils"
 import { UserManagementTab } from "./user-management-tab"
-import { readData } from "@/lib/actions"
+import * as server from "@/lib/actions"
 import type { Bank, Category } from "@/lib/types"
 
 type SettingsPage = 'appearance' | 'general' | 'contacts' | 'users' | 'activity_log' | 'recycle_bin' | 'export_import';
@@ -81,8 +80,8 @@ function AppearanceSettings() {
 }
 
 function GeneralSettings() {
-  const { openInitialBalanceDialog, queueOrSync } = useAppContext();
-  const { deleteCategory: deleteCategoryAction, setWastagePercentage } = useAppActions();
+  const { openInitialBalanceDialog } = useAppContext();
+  const { addBank, addCategory, deleteCategory: deleteCategoryAction, setWastagePercentage } = useAppActions();
   const [banks, setBanks] = useState<Bank[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -99,8 +98,8 @@ function GeneralSettings() {
     setIsLoading(true);
     try {
         const [banksData, categoriesData] = await Promise.all([
-            readData({ tableName: 'banks', select: '*' }),
-            readData({ tableName: 'categories', select: '*' }),
+            server.readData({ tableName: 'banks', select: '*' }),
+            server.readData({ tableName: 'categories', select: '*' }),
         ]);
         setBanks((banksData as Bank[]) || []);
         setCategories((categoriesData as Category[]) || []);
@@ -120,26 +119,21 @@ function GeneralSettings() {
     if (!name) return;
 
     setIsAddingBank(true);
-    const tempId = `temp_bank_${Date.now()}`;
-    const newBank: Bank = { id: tempId, name, createdAt: new Date().toISOString() };
     
     // Optimistic UI update
+    const tempId = `temp_bank_${Date.now()}`;
+    const newBank: Bank = { id: tempId, name, createdAt: new Date().toISOString() };
     setBanks(prev => [...prev, newBank]);
     if (newBankNameRef.current) newBankNameRef.current.value = "";
 
     try {
-      await queueOrSync({ 
-        action: 'appendData', 
-        payload: { 
-          tableName: 'banks', 
-          data: { name }, 
-          localId: tempId, 
-          select: '*' 
-        } 
-      });
-      toast.success("Bank Added", { description: `${name} has been added and will sync.` });
+      await addBank(name);
+      // The addBank action in app-actions will now trigger a full reload,
+      // so we don't need to manually refetch here.
+      // But we will refresh just in case for a better UX feel
+      await fetchData();
     } catch (e: any) {
-      toast.error("Failed to queue bank creation", { description: e.message });
+      toast.error("Failed to add bank", { description: e.message });
       // Rollback UI
       setBanks(prev => prev.filter(b => b.id !== tempId));
     } finally {
@@ -159,24 +153,15 @@ function GeneralSettings() {
         direction: newCategoryDirection, is_deletable: true 
     };
     
-    // Optimistic UI update
     setCategories(prev => [...prev, newCategory]);
     if(newCategoryNameRef.current) newCategoryNameRef.current.value = "";
     setNewCategoryDirection(undefined);
 
     try {
-        await queueOrSync({ 
-            action: 'appendData', 
-            payload: { 
-                tableName: 'categories', 
-                data: { name, type: newCategoryType, direction: newCategoryDirection, is_deletable: true }, 
-                localId: tempId, 
-                select: '*' 
-            } 
-        });
-        toast.success("Category Added", { description: `${name} has been added and will sync.`});
+        await addCategory(newCategoryType, name, newCategoryDirection);
+        await fetchData(); // Refresh data after adding
     } catch(e: any) {
-        toast.error("Failed to queue category creation", { description: e.message });
+        toast.error("Failed to add category", { description: e.message });
         setCategories(prev => prev.filter(c => c.id !== tempId));
     } finally {
         setIsAddingCategory(false);
@@ -184,7 +169,6 @@ function GeneralSettings() {
   }
 
   const handleDeleteCategory = async (id: string) => {
-    // Optimistically remove from UI
     const originalCategories = categories;
     setCategories(prev => prev.filter(c => c.id !== id));
     
@@ -193,7 +177,7 @@ function GeneralSettings() {
         toast.success("Category Deleted");
     } catch (e:any) {
         toast.error("Failed to delete category", { description: e.message });
-        setCategories(originalCategories); // Rollback on error
+        setCategories(originalCategories); 
     }
   }
 
@@ -413,5 +397,3 @@ export function SettingsTab() {
     </div>
   );
 }
-
-    

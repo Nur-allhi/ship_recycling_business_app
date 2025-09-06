@@ -1,4 +1,3 @@
-
 "use client";
 import { useCallback } from 'react';
 import { toast } from 'sonner';
@@ -209,18 +208,22 @@ export function useAppActions() {
     const setShowStockValue = (show: boolean) => db.app_state.update(1, { showStockValue: show });
 
     const addBank = async (name: string) => {
-        return performAdminAction(async () => {
-            const tempId = `temp_${Date.now()}`;
+        await performAdminAction(async () => {
+            const tempId = `temp_bank_${Date.now()}`;
             await db.banks.add({ id: tempId, name, createdAt: new Date().toISOString() });
             queueOrSync({ action: 'appendData', payload: { tableName: 'banks', data: { name }, localId: tempId, select: '*' } });
+            // Controlled refresh to avoid crashes
+            await reloadData({ force: true });
         });
     };
 
     const addCategory = async (type: 'cash' | 'bank', name: string, direction: 'credit' | 'debit') => {
-        return performAdminAction(async () => {
+        await performAdminAction(async () => {
             const tempId = `temp_${Date.now()}`;
             await db.categories.add({ id: tempId, name, type, direction, is_deletable: true});
             queueOrSync({ action: 'appendData', payload: { tableName: 'categories', data: { name, type, direction, is_deletable: true }, localId: tempId, select: '*' } });
+            // Controlled refresh
+            await reloadData({ force: true });
         });
     };
 

@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useMemo } from 'react';
@@ -41,6 +40,7 @@ interface AppData {
   cashTransactions: CashTransaction[];
   bankTransactions: BankTransaction[];
   stockTransactions: StockTransaction[];
+  stockItems: StockItem[];
   ledgerTransactions: LedgerTransaction[];
   loans: Loan[];
   loanPayments: LoanPayment[];
@@ -119,29 +119,29 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const liveData = useLiveDBData();
 
     const seedEssentialCategories = useCallback(async (existingCategories: Category[]): Promise<Category[]> => {
+        let finalCategories = [...existingCategories];
         const categoriesToCreate = essentialCategories.filter(essentialCat => 
             !existingCategories.some(existingCat => 
                 existingCat.name === essentialCat.name && existingCat.type === essentialCat.type
             )
         );
 
-        if (categoriesToCreate.length === 0) {
-            return existingCategories;
-        }
-
-        console.log(`Seeding ${categoriesToCreate.length} essential categories...`);
-        
-        try {
+        if (categoriesToCreate.length > 0) {
+            console.log(`Seeding ${categoriesToCreate.length} essential categories...`);
             const creationPromises = categoriesToCreate.map(cat => 
                 server.appendData({ tableName: 'categories', data: cat, select: '*' })
             );
+            
+            // Await all promises to resolve
             const newCategories = await Promise.all(creationPromises);
-            return [...existingCategories, ...newCategories.filter(Boolean)];
-        } catch(e) {
-            console.error("Could not create one or more essential categories:", e);
-            // Return what we have, better than nothing.
-            return existingCategories;
+            
+            // Add the newly created, resolved category objects to our list
+            newCategories.forEach(newCat => {
+                if (newCat) finalCategories.push(newCat);
+            });
         }
+
+        return finalCategories;
     }, []);
 
     const reloadData = useCallback(async (options?: { force?: boolean, needsInitialBalance?: boolean }) => {
@@ -330,6 +330,43 @@ function useLiveDBData() {
     const contacts = useLiveQuery(() => db.contacts.toArray(), []);
     const initialStock = useLiveQuery(() => db.initial_stock.toArray(), []);
 
+    const stockItems = useMemo(() => {
+        const portfolio: Record<string, { weight: number, purchasePricePerKg: number, totalValue: number }> = {};
+        
+        (initialStock || []).forEach(item => {
+            if (!portfolio[item.name]) {
+                portfolio[item.name] = { weight: 0, purchasePricePerKg: 0, totalValue: 0 };
+            }
+            portfolio[item.name].weight += item.weight;
+            portfolio[item.name].totalValue += item.weight * item.purchasePricePerKg;
+        });
+
+        [...(stockTransactions || [])].sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime()).forEach(tx => {
+            if (!portfolio[tx.stockItemName]) {
+                portfolio[tx.stockItemName] = { weight: 0, purchasePricePerKg: 0, totalValue: 0 };
+            }
+            
+            const item = portfolio[tx.stockItemName];
+            const currentAvgPrice = item.weight > 0 ? item.totalValue / item.weight : 0;
+
+            if (tx.type === 'purchase') {
+                item.weight += tx.weight;
+                item.totalValue += tx.weight * tx.pricePerKg;
+            } else {
+                item.weight -= tx.weight;
+                item.totalValue -= tx.weight * currentAvgPrice;
+            }
+        });
+        
+        return Object.entries(portfolio).map(([name, { weight, totalValue }]) => ({ 
+            id: name, 
+            name, 
+            weight, 
+            purchasePricePerKg: weight > 0 ? totalValue / weight : 0
+        }));
+
+    }, [initialStock, stockTransactions]);
+
 
     const { cashCategories, bankCategories } = useMemo(() => {
         const dbCash: Category[] = [];
@@ -352,7 +389,7 @@ function useLiveDBData() {
         ledgerTransactions: ledgerTransactions || [],
         loans: loans || [],
         loanPayments: loanPayments || [],
-        initialStock: initialStock || [],
+        stockItems: stockItems || [],
         cashCategories,
         bankCategories,
         contacts: contacts || [],
