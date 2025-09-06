@@ -69,6 +69,36 @@ interface AppContextType extends AppData {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
+const essentialCategories: Omit<Category, 'id'>[] = [
+    { name: 'Cash In', type: 'cash', direction: 'credit', is_deletable: false },
+    { name: 'Cash Out', type: 'cash', direction: 'debit', is_deletable: false },
+    { name: 'Deposit', type: 'bank', direction: 'credit', is_deletable: false },
+    { name: 'Withdrawal', type: 'bank', direction: 'debit', is_deletable: false },
+    { name: 'A/R Settlement', type: 'cash', direction: 'credit', is_deletable: false },
+    { name: 'A/P Settlement', type: 'cash', direction: 'debit', is_deletable: false },
+    { name: 'A/R Settlement', type: 'bank', direction: 'credit', is_deletable: false },
+    { name: 'A/P Settlement', type: 'bank', direction: 'debit', is_deletable: false },
+    { name: 'Stock Purchase', type: 'cash', direction: 'debit', is_deletable: false },
+    { name: 'Stock Sale', type: 'cash', direction: 'credit', is_deletable: false },
+    { name: 'Stock Purchase', type: 'bank', direction: 'debit', is_deletable: false },
+    { name: 'Stock Sale', type: 'bank', direction: 'credit', is_deletable: false },
+    { name: 'Initial Balance', type: 'cash', direction: 'credit', is_deletable: false },
+    { name: 'Initial Balance', type: 'bank', direction: 'credit', is_deletable: false },
+    { name: 'Funds Transfer', type: 'cash', direction: null, is_deletable: false },
+    { name: 'Funds Transfer', type: 'bank', direction: null, is_deletable: false },
+    { name: 'Advance Payment', type: 'cash', direction: 'debit', is_deletable: false },
+    { name: 'Advance Received', type: 'cash', direction: 'credit', is_deletable: false },
+    { name: 'Advance Payment', type: 'bank', direction: 'debit', is_deletable: false },
+    { name: 'Advance Received', type: 'bank', direction: 'credit', is_deletable: false },
+    { name: 'Loan In', type: 'cash', direction: 'credit', is_deletable: false },
+    { name: 'Loan Out', type: 'cash', direction: 'debit', is_deletable: false },
+    { name: 'Loan In', type: 'bank', direction: 'credit', is_deletable: false },
+    { name: 'Loan Out', type: 'bank', direction: 'debit', is_deletable: false },
+    { name: 'Loan Payment', type: 'cash', direction: null, is_deletable: false },
+    { name: 'Loan Payment', type: 'bank', direction: null, is_deletable: false },
+];
+
+
 export function AppProvider({ children }: { children: React.ReactNode }) {
     const router = useRouter();
     const pathname = usePathname();
@@ -88,6 +118,27 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     
     // Live Queries for UI data
     const liveData = useLiveDBData();
+
+    const seedEssentialCategories = async (existingCategories: Category[]): Promise<Category[]> => {
+        let finalCategories = [...existingCategories];
+        let wasModified = false;
+
+        for (const cat of essentialCategories) {
+            const exists = finalCategories.some(c => c.name === cat.name && c.type === cat.type);
+            if (!exists) {
+                try {
+                    const newCat = await server.appendData({ tableName: 'categories', data: cat, select: '*' });
+                    if (newCat) {
+                        finalCategories.push(newCat as Category);
+                        wasModified = true;
+                    }
+                } catch(e) {
+                    console.error("Could not create essential category:", cat.name, e);
+                }
+            }
+        }
+        return wasModified ? finalCategories : existingCategories;
+    };
 
     const reloadData = useCallback(async (options?: { force?: boolean, needsInitialBalance?: boolean }) => {
         setIsLoading(true);
@@ -124,8 +175,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                     server.readData({ tableName: 'loan_payments', select: '*' }),
                 ]);
 
-                const categoriesData: Category[] = (Array.isArray(categoriesRes) ? categoriesRes : []) as Category[];
+                const serverCategories: Category[] = (Array.isArray(categoriesRes) ? categoriesRes : []) as Category[];
                 
+                // This is the critical fix: Ensure categories are created and combined correctly.
+                const finalCategories = await seedEssentialCategories(serverCategories);
+
                 const ledgerTxsWithPayments = (ledgerData || []).map((tx: any) => ({
                     ...tx,
                     installments: (ledgerPaymentsData || []).filter((ins: any) => ins.ap_ar_transaction_id === tx.id)
@@ -136,47 +190,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                     payments: (loanPaymentsData || []).filter((p: any) => p.loan_id === loan.id)
                 }));
                 
-                const essentialCategories = [
-                    { name: 'Cash In', type: 'cash', direction: 'credit', is_deletable: false },
-                    { name: 'Cash Out', type: 'cash', direction: 'debit', is_deletable: false },
-                    { name: 'Deposit', type: 'bank', direction: 'credit', is_deletable: false },
-                    { name: 'Withdrawal', type: 'bank', direction: 'debit', is_deletable: false },
-                    { name: 'A/R Settlement', type: 'cash', direction: 'credit', is_deletable: false },
-                    { name: 'A/P Settlement', type: 'cash', direction: 'debit', is_deletable: false },
-                    { name: 'A/R Settlement', type: 'bank', direction: 'credit', is_deletable: false },
-                    { name: 'A/P Settlement', type: 'bank', direction: 'debit', is_deletable: false },
-                    { name: 'Stock Purchase', type: 'cash', direction: 'debit', is_deletable: false },
-                    { name: 'Stock Sale', type: 'cash', direction: 'credit', is_deletable: false },
-                    { name: 'Stock Purchase', type: 'bank', direction: 'debit', is_deletable: false },
-                    { name: 'Stock Sale', type: 'bank', direction: 'credit', is_deletable: false },
-                    { name: 'Initial Balance', type: 'cash', direction: 'credit', is_deletable: false },
-                    { name: 'Initial Balance', type: 'bank', direction: 'credit', is_deletable: false },
-                    { name: 'Funds Transfer', type: 'cash', direction: null, is_deletable: false },
-                    { name: 'Funds Transfer', type: 'bank', direction: null, is_deletable: false },
-                    { name: 'Advance Payment', type: 'cash', direction: 'debit', is_deletable: false },
-                    { name: 'Advance Received', type: 'cash', direction: 'credit', is_deletable: false },
-                    { name: 'Advance Payment', type: 'bank', direction: 'debit', is_deletable: false },
-                    { name: 'Advance Received', type: 'bank', direction: 'credit', is_deletable: false },
-                    { name: 'Loan In', type: 'cash', direction: 'credit', is_deletable: false },
-                    { name: 'Loan Out', type: 'cash', direction: 'debit', is_deletable: false },
-                    { name: 'Loan In', type: 'bank', direction: 'credit', is_deletable: false },
-                    { name: 'Loan Out', type: 'bank', direction: 'debit', is_deletable: false },
-                    { name: 'Loan Payment', type: 'cash', direction: null, is_deletable: false },
-                    { name: 'Loan Payment', type: 'bank', direction: null, is_deletable: false },
-                ];
-
-                for (const cat of essentialCategories) {
-                    const exists = categoriesData.some((c) => c.name === cat.name && c.type === cat.type);
-                    if (!exists) {
-                        const newCat = await server.appendData({ tableName: 'categories', data: cat, select: '*' });
-                        if (newCat) {
-                            categoriesData.push(newCat as Category);
-                        }
-                    }
-                }
 
                 await db.transaction('rw', db.tables, async () => {
-                    await bulkPut('categories', categoriesData); await bulkPut('contacts', contactsData);
+                    await bulkPut('categories', finalCategories); await bulkPut('contacts', contactsData);
                     await bulkPut('banks', banksData);
                     await bulkPut('cash_transactions', cashTxs); await bulkPut('bank_transactions', bankTxs);
                     await bulkPut('stock_transactions', stockTxs); await bulkPut('ap_ar_transactions', ledgerTxsWithPayments);
