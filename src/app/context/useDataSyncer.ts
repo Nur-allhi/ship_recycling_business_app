@@ -35,7 +35,6 @@ export function useDataSyncer() {
         for (const item of queue) {
             try {
                 let result: any;
-                const { localId, ...payloadWithoutId } = item.payload || {};
                 
                 const actionMap: { [key: string]: (payload: any) => Promise<any> } = {
                     appendData: server.appendData,

@@ -71,14 +71,19 @@ export function ApArForm({ setDialogOpen }: ApArFormProps) {
     const transactionDate = format(data.date, 'yyyy-MM-dd');
     try {
         let finalContactId: string;
+        let finalContactName: string;
         const contactType = data.ledgerType === 'payable' ? 'vendor' : 'client';
 
         if (data.contact_id === 'new' && data.newContact) {
             const newContact = await addContact(data.newContact, contactType);
             if (!newContact) throw new Error("Failed to create new contact.");
             finalContactId = newContact.id;
+            finalContactName = newContact.name;
         } else {
             finalContactId = data.contact_id;
+            const existingContact = contacts.find(c => c.id === data.contact_id);
+            if (!existingContact) throw new Error("Selected contact not found.");
+            finalContactName = existingContact.name;
         }
 
         await addLedgerTransaction({
@@ -87,6 +92,7 @@ export function ApArForm({ setDialogOpen }: ApArFormProps) {
             amount: data.amount!,
             date: transactionDate,
             contact_id: finalContactId,
+            contact_name: finalContactName,
         });
 
         toast.success("A/R or A/P Entry Added");

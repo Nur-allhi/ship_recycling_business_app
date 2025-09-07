@@ -510,7 +510,13 @@ export async function addStockTransaction(input: z.infer<typeof AddStockTransact
             savedFinancialTx = data;
         } else if (stockTx.paymentMethod === 'credit') {
             let amountToLog = stockTx.actual_amount;
-            const { data: advances } = await supabase.from('ap_ar_transactions').select('id, amount').eq('contact_id', stockTx.contact_id).eq('type', 'advance').lt('amount', 0);
+            
+            const { data: advances } = await supabase
+                .from('ap_ar_transactions')
+                .select('id, amount')
+                .eq('contact_id', stockTx.contact_id)
+                .eq('type', 'advance')
+                .lt('amount', 0);
 
             if (advances && advances.length > 0) {
                 for (const advance of advances) {
@@ -526,11 +532,15 @@ export async function addStockTransaction(input: z.infer<typeof AddStockTransact
                 const ledgerData = {
                     type: stockTx.type === 'purchase' ? 'payable' : 'receivable',
                     description: stockTx.description || `${stockTx.stockItemName} (${stockTx.weight}kg)`,
-                    amount: amountToLog, date: stockTx.date, contact_id: stockTx.contact_id!,
-                    status: 'unpaid', paid_amount: 0
+                    amount: amountToLog,
+                    date: stockTx.date,
+                    contact_id: stockTx.contact_id!,
+                    status: 'unpaid',
+                    paid_amount: 0,
+                    contact_name: stockTx.contact_name,
                 };
                 const { error } = await supabase.from('ap_ar_transactions').insert(ledgerData);
-                if(error) throw error;
+                if (error) throw error;
             }
         }
         await logActivity(`Added stock transaction: ${stockTx.stockItemName}`);
@@ -667,7 +677,7 @@ export async function recordAdvancePayment(input: z.infer<typeof RecordAdvancePa
         
         const { data: ledgerEntry, error: ledgerError } = await supabase.from('ap_ar_transactions').insert({
             type: 'advance', date: date, description: ledgerDescription, amount: ledgerAmount, paid_amount: 0,
-            status: 'paid', contact_id: contact_id,
+            status: 'paid', contact_id: contact_id, contact_name: contact.data.name
         }).select().single();
         if (ledgerError) throw new Error(ledgerError.message);
         if (!ledgerEntry) throw new Error("Failed to create ledger entry for advance.");
@@ -790,8 +800,6 @@ const AddLoanSchema = z.object({
     }),
     newContactName: z.string().optional(),
     newContactType: z.enum(['vendor', 'client']).optional(),
-    localId: z.string(),
-    localFinancialId: z.string(),
 });
 
 
@@ -872,8 +880,6 @@ const RecordLoanPaymentSchema = z.object({
     payment_method: z.enum(['cash', 'bank']),
     bank_id: z.string().optional(),
     notes: z.string().optional(),
-    localPaymentId: z.string(),
-    localFinancialId: z.string(),
 });
 
 export async function recordLoanPayment(input: z.infer<typeof RecordLoanPaymentSchema>) {

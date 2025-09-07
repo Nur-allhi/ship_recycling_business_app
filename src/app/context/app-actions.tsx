@@ -141,9 +141,7 @@ export function useAppActions() {
             
             const syncData = {
                 ...tx,
-                contact_name: contact.name, // Ensure contact_name is in the payload
-                status: 'unpaid',
-                paid_amount: 0
+                contact_name: contact.name,
             };
             
             queueOrSync({ 
@@ -235,7 +233,6 @@ export function useAppActions() {
     }, [queueOrSync]);
     
     const setFontSize = (size: 'sm' | 'base' | 'lg') => db.app_state.update(1, { fontSize: size });
-    const setWastagePercentage = (percentage: number) => performAdminAction(() => db.app_state.update(1, { wastagePercentage: percentage }));
     const setCurrency = (currency: string) => db.app_state.update(1, { currency: currency });
     const setShowStockValue = (show: boolean) => db.app_state.update(1, { showStockValue: show });
 
@@ -521,16 +518,14 @@ export function useAppActions() {
             const tempId = `temp_loan_${Date.now()}`;
             const tempFinancialId = `temp_loan_fin_${Date.now()}`;
             
-            const loanDataForDb = { ...loan };
+            const loanDataForDb: Partial<Loan> = { ...loan };
             if (newContact) {
-                // When creating a new contact, we use a placeholder ID for the local DB
-                // but send the name/type to the server to create the real one.
                 const tempContactId = `temp_contact_${Date.now()}`;
                 await db.contacts.add({ id: tempContactId, name: newContact.name, type: newContact.type, createdAt: new Date().toISOString() });
                 loanDataForDb.contact_id = tempContactId;
             }
 
-            const newLoan: Loan = { ...loanDataForDb, id: tempId, status: 'active', created_at: new Date().toISOString(), payments: [] };
+            const newLoan: Loan = { ...(loanDataForDb as Loan), id: tempId, status: 'active', created_at: new Date().toISOString(), payments: [] };
             
             await db.loans.add(newLoan);
 
@@ -552,10 +547,10 @@ export function useAppActions() {
             } else {
                 await db.bank_transactions.add({ ...financialTxData, type: loan.type === 'payable' ? 'deposit' : 'withdrawal', bank_id: disbursement.bank_id! });
             }
-
-            const payloadData = { ...loan };
+            
+            const payloadData: any = { ...loan };
             if (newContact) {
-                payloadData.contact_id = 'new'; // Signal to server to create a new contact
+                payloadData.contact_id = 'new';
             }
 
             const payload: any = { 
@@ -639,7 +634,6 @@ export function useAppActions() {
         deleteMultipleBankTransactions: (txs: BankTransaction[]) => Promise.all(txs.map(tx => deleteTransaction('bank_transactions', tx))),
         deleteMultipleStockTransactions: (txs: StockTransaction[]) => Promise.all(txs.map(tx => deleteTransaction('stock_transactions', tx))),
         setFontSize,
-        setWastagePercentage,
         setCurrency,
         setShowStockValue,
         addBank,
