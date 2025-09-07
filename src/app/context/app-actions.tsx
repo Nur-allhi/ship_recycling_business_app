@@ -126,23 +126,20 @@ export function useAppActions() {
                 toast.error("Contact could not be found for this transaction.");
                 return;
             }
-
+    
             const tempId = `temp_ledger_${Date.now()}`;
-            const dataToSave: LedgerTransaction = { 
-                ...tx, 
+            const dataToSave: LedgerTransaction = {
+                ...tx,
                 contact_name: contact.name,
-                status: 'unpaid', 
-                paid_amount: 0, 
-                installments: [], 
-                id: tempId 
+                status: 'unpaid',
+                paid_amount: 0,
+                installments: [],
+                id: tempId,
             };
             
             await db.ap_ar_transactions.add(dataToSave);
             
-            const syncData = {
-                ...tx,
-                contact_name: contact.name,
-            };
+            const { id, installments, ...syncData } = dataToSave;
             
             queueOrSync({ 
                 action: 'appendData', 
@@ -475,7 +472,7 @@ export function useAppActions() {
     };
 
     const handleImport = (file: File) => {
-        return performAdminAction(() => {
+        return performAdminAction(async () => {
             const reader = new FileReader();
             reader.onload = async (event) => {
                 try {
@@ -551,14 +548,15 @@ export function useAppActions() {
             const payloadData: any = { ...loan };
             if (newContact) {
                 payloadData.contact_id = 'new';
+                payloadData.newContactName = newContact.name;
+                payloadData.newContactType = newContact.type;
             }
 
-            const payload: any = { 
-                loanData: payloadData, 
-                disbursement, 
-                localId: tempId, 
+            const payload = {
+                loanData: payloadData,
+                disbursement,
+                localId: tempId,
                 localFinancialId: tempFinancialId,
-                ...(newContact && { newContactName: newContact.name, newContactType: newContact.type })
             };
             
             queueOrSync({ action: 'addLoan', payload });
