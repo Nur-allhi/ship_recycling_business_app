@@ -528,20 +528,26 @@ export async function addStockTransaction(input: z.infer<typeof AddStockTransact
                     amountToLog -= amountToSettle;
                 }
             }
-            if (amountToLog > 0) {
-                const ledgerData = {
-                    type: stockTx.type === 'purchase' ? 'payable' : 'receivable',
-                    description: stockTx.description || `${stockTx.stockItemName} (${stockTx.weight}kg)`,
-                    amount: amountToLog,
-                    date: stockTx.date,
-                    contact_id: stockTx.contact_id!,
-                    status: 'unpaid',
-                    paid_amount: 0,
-                    contact_name: stockTx.contact_name,
-                };
-                const { error } = await supabase.from('ap_ar_transactions').insert(ledgerData);
-                if (error) throw error;
+
+            // If the entire amount was covered by the advance, we are done.
+            if (amountToLog <= 0) {
+                await logActivity(`Added stock transaction (credit, fully covered by advance): ${stockTx.stockItemName}`);
+                return { stockTx: savedStockTx, financialTx: null };
             }
+
+            // Otherwise, create a new payable/receivable for the remaining amount.
+            const ledgerData = {
+                type: stockTx.type === 'purchase' ? 'payable' : 'receivable',
+                description: stockTx.description || `${stockTx.stockItemName} (${stockTx.weight}kg)`,
+                amount: amountToLog,
+                date: stockTx.date,
+                contact_id: stockTx.contact_id!,
+                status: 'unpaid',
+                paid_amount: 0,
+                contact_name: stockTx.contact_name,
+            };
+            const { error } = await supabase.from('ap_ar_transactions').insert(ledgerData);
+            if (error) throw error;
         }
         await logActivity(`Added stock transaction: ${stockTx.stockItemName}`);
         return { stockTx: savedStockTx, financialTx: savedFinancialTx };
@@ -814,22 +820,23 @@ export async function addLoan(input: z.infer<typeof AddLoanSchema>) {
         const supabase = createAdminSupabaseClient();
         
         let finalContactId = loanData.contact_id;
-        const dataForLoanInsert = { ...loanData };
+        const { newContactName, newContactType, ...restLoanData } = loanData;
 
-        if (loanData.contact_id === 'new' && loanData.newContactName && loanData.newContactType) {
+        if (loanData.contact_id === 'new' && newContactName && newContactType) {
             const { data: newContact, error: contactError } = await supabase
                 .from('contacts')
-                .insert({ name: loanData.newContactName, type: loanData.newContactType })
+                .insert({ name: newContactName, type: newContactType })
                 .select('id')
                 .single();
             if (contactError) throw new Error(`Failed to create new contact: ${contactError.message}`);
             finalContactId = newContact.id;
         }
         
-        delete (dataForLoanInsert as any).newContactName;
-        delete (dataForLoanInsert as any).newContactType;
-        dataForLoanInsert.contact_id = finalContactId;
-
+        const dataForLoanInsert = {
+            ...restLoanData,
+            contact_id: finalContactId, // Explicitly use the finalContactId
+        };
+        
         const { data: loan, error: loanError } = await supabase.from('loans').insert({
             ...dataForLoanInsert,
             status: 'active',

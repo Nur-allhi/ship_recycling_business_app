@@ -12,7 +12,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 export function useDataSyncer() {
     const { handleApiError, isOnline } = useSessionManager();
     const [isSyncing, setIsSyncing] = useState(false);
-    const syncQueueCount = useLiveQuery(() => db.sync_queue.count(), 0) || 0;
+    const syncQueueCount = useLiveQuery(() => db.sync_queue.count(), [], 0) || 0;
 
     const processSyncQueue = useCallback(async (specificItemId?: number) => {
         if (isSyncing || !isOnline) return;
