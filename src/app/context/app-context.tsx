@@ -94,6 +94,17 @@ const essentialCategories: Omit<Category, 'id'>[] = [
     { name: 'Loan Payment', type: 'bank', direction: null, is_deletable: false },
 ];
 
+function isCategory(obj: any): obj is Category {
+    return (
+        obj &&
+        typeof obj === 'object' &&
+        'id' in obj &&
+        'name' in obj &&
+        'type' in obj &&
+        'direction' in obj &&
+        'is_deletable' in obj
+    );
+}
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
     const router = useRouter();
@@ -148,8 +159,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 );
                 const newCategories = await Promise.all(creationPromises);
                 newCategories.forEach(newCat => {
-                    if (newCat && typeof newCat === 'object' && 'id' in newCat) {
-                         finalCategories.push(newCat as Category);
+                    if (isCategory(newCat)) {
+                         finalCategories.push(newCat);
                     }
                 });
             } catch(e) {
@@ -342,5 +353,7 @@ export function useAppContext() {
     }
     return context;
 }
+
+    
 
     

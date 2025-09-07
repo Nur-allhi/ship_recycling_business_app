@@ -814,6 +814,7 @@ export async function addLoan(input: z.infer<typeof AddLoanSchema>) {
         const supabase = createAdminSupabaseClient();
         
         let finalContactId = loanData.contact_id;
+        const dataForLoanInsert = { ...loanData };
 
         if (loanData.contact_id === 'new' && loanData.newContactName && loanData.newContactType) {
             const { data: newContact, error: contactError } = await supabase
@@ -825,11 +826,12 @@ export async function addLoan(input: z.infer<typeof AddLoanSchema>) {
             finalContactId = newContact.id;
         }
         
-        const { newContactName, newContactType, ...restLoanData } = loanData;
+        delete (dataForLoanInsert as any).newContactName;
+        delete (dataForLoanInsert as any).newContactType;
+        dataForLoanInsert.contact_id = finalContactId;
 
         const { data: loan, error: loanError } = await supabase.from('loans').insert({
-            ...restLoanData,
-            contact_id: finalContactId, // Use the correct, final ID
+            ...dataForLoanInsert,
             status: 'active',
         }).select().single();
 
