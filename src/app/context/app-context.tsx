@@ -148,7 +148,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 );
                 const newCategories = await Promise.all(creationPromises);
                 newCategories.forEach(newCat => {
-                    if (newCat) finalCategories.push(newCat as Category);
+                    if (newCat && typeof newCat === 'object' && 'id' in newCat) {
+                         finalCategories.push(newCat as Category);
+                    }
                 });
             } catch(e) {
                 console.error("Failed to seed essential categories", e);
@@ -230,21 +232,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             const session = await getSessionFromCookie();
             if (session) {
                 setUser(session);
-                // Initial load on first entering the app
-                if (!isInitialLoadComplete) {
-                    await reloadData();
-                }
+                await reloadData();
             } else {
                 setUser(null);
-                setIsInitialLoadComplete(true);
             }
-            setIsLoading(false);
+             setIsInitialLoadComplete(true);
+             setIsLoading(false);
         };
         
-        if (!user && !isInitialLoadComplete) {
+        if (!isInitialLoadComplete) {
           checkSessionAndLoad();
         }
-    }, [isInitialLoadComplete, reloadData, setIsLoading, setUser, user]);
+    }, [isInitialLoadComplete, reloadData, setIsLoading, setUser]);
 
     useEffect(() => { setHasMounted(true); }, []);
 
@@ -343,3 +342,5 @@ export function useAppContext() {
     }
     return context;
 }
+
+    

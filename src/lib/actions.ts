@@ -825,7 +825,7 @@ export async function addLoan(input: z.infer<typeof AddLoanSchema>) {
             finalContactId = newContact.id;
         }
         
-        const { newContactName, newContactType, contact_id, ...restLoanData } = loanData;
+        const { newContactName, newContactType, ...restLoanData } = loanData;
 
         const { data: loan, error: loanError } = await supabase.from('loans').insert({
             ...restLoanData,
