@@ -129,8 +129,19 @@ export function InitialBalanceDialog({ isOpen }: InitialBalanceDialogProps) {
     }
   };
 
+  const handleClose = () => {
+    // Also reset local state when closing dialog without saving
+    setStockItems([]);
+    if(cashRef.current) cashRef.current.value = "0";
+    Object.values(bankRefs.current).forEach(ref => {
+      if (ref) ref.value = "0";
+    });
+    closeInitialBalanceDialog();
+  };
+
+
   return (
-    <Dialog open={isOpen} onOpenChange={closeInitialBalanceDialog}>
+    <Dialog open={isOpen} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Set Initial Balances</DialogTitle>
@@ -240,7 +251,7 @@ export function InitialBalanceDialog({ isOpen }: InitialBalanceDialogProps) {
             </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={closeInitialBalanceDialog}>Set Balances Later</Button>
+          <Button variant="outline" onClick={handleClose}>Set Balances Later</Button>
           <Button onClick={handleSave} disabled={isSaving}>
             {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Save and Continue

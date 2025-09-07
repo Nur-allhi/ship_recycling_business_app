@@ -69,8 +69,9 @@ const ResponsiveSelect = React.forwardRef<
     const showSearch = showSearchProp !== undefined ? showSearchProp : searchDefault;
     
     const selectedItem = React.useMemo(() => {
-       return items.find((item) => item.value === value);
-    }, [items, value]);
+       const item = items.find((item) => item.value === value);
+       return item ? item.label : placeholder;
+    }, [items, value, placeholder]);
 
 
     const handleSelect = (currentValue: string) => {
@@ -125,7 +126,7 @@ const ResponsiveSelect = React.forwardRef<
               {...props}
             >
               <span className="truncate">
-                {selectedItem ? selectedItem.label : placeholder}
+                {selectedItem}
               </span>
               <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
             </Button>
@@ -152,7 +153,7 @@ const ResponsiveSelect = React.forwardRef<
             {...props}
           >
             <span className="truncate">
-              {selectedItem ? selectedItem.label : placeholder}
+              {selectedItem}
             </span>
             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
           </Button>

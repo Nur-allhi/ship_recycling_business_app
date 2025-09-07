@@ -103,7 +103,6 @@ export function StockForm({ setDialogOpen }: StockFormProps) {
 
 
   const onSubmit = async (data: FormData) => {
-    const transactionDate = format(data.date, 'yyyy-MM-dd');
     try {
         let finalContactId: string | undefined;
         let finalContactName: string | undefined;
@@ -126,7 +125,7 @@ export function StockForm({ setDialogOpen }: StockFormProps) {
             pricePerKg: data.pricePerKg,
             paymentMethod: data.paymentMethod,
             description: data.description,
-            date: transactionDate,
+            date: format(data.date, 'yyyy-MM-dd'),
             expected_amount: data.expected_amount,
             actual_amount: paymentMethod === 'credit' ? data.expected_amount : data.actual_amount,
             difference: difference,

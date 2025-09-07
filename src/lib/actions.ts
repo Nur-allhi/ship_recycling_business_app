@@ -529,13 +529,11 @@ export async function addStockTransaction(input: z.infer<typeof AddStockTransact
                 }
             }
 
-            // If the entire amount was covered by the advance, we are done.
             if (amountToLog <= 0) {
                 await logActivity(`Added stock transaction (credit, fully covered by advance): ${stockTx.stockItemName}`);
                 return { stockTx: savedStockTx, financialTx: null };
             }
 
-            // Otherwise, create a new payable/receivable for the remaining amount.
             const ledgerData = {
                 type: stockTx.type === 'purchase' ? 'payable' : 'receivable',
                 description: stockTx.description || `${stockTx.stockItemName} (${stockTx.weight}kg)`,
@@ -834,13 +832,11 @@ export async function addLoan(input: z.infer<typeof AddLoanSchema>) {
         
         const dataForLoanInsert = {
             ...restLoanData,
-            contact_id: finalContactId, // Explicitly use the finalContactId
+            contact_id: finalContactId,
+            status: 'active',
         };
         
-        const { data: loan, error: loanError } = await supabase.from('loans').insert({
-            ...dataForLoanInsert,
-            status: 'active',
-        }).select().single();
+        const { data: loan, error: loanError } = await supabase.from('loans').insert(dataForLoanInsert).select().single();
 
         if (loanError) throw loanError;
 
@@ -871,7 +867,7 @@ export async function addLoan(input: z.infer<typeof AddLoanSchema>) {
                 type: loan.type === 'payable' ? 'deposit' : 'withdrawal',
                 bank_id: disbursement.bank_id,
             }).select().single();
-            if(error) throw error;
+             if(error) throw error;
             savedFinancialTx = data;
         }
 

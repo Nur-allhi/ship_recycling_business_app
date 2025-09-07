@@ -47,7 +47,7 @@ interface LoanFormProps {
 }
 
 export function LoanForm({ setDialogOpen }: LoanFormProps) {
-  const { addLoan, addContact } = useAppActions();
+  const { addLoan } = useAppActions();
   const { contacts, banks } = useAppContext();
   const [issueDatePickerOpen, setIssueDatePickerOpen] = useState(false);
   const [dueDatePickerOpen, setDueDatePickerOpen] = useState(false);
@@ -79,12 +79,11 @@ export function LoanForm({ setDialogOpen }: LoanFormProps) {
     setIsSubmitting(true);
     try {
         let finalContactId: string = data.contact_id;
-        let newContactData;
+        let newContactData: { name: string; type: "vendor" | "client"; } | undefined;
 
         if (data.contact_id === 'new' && data.newContact) {
              const contactType = data.type === 'payable' ? 'vendor' : 'client';
              newContactData = { name: data.newContact, type: contactType };
-             // We pass the name and type to the addLoan action, not the temp ID.
              finalContactId = 'new';
         }
 
