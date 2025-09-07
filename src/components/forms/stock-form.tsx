@@ -106,14 +106,17 @@ export function StockForm({ setDialogOpen }: StockFormProps) {
     const transactionDate = format(data.date, 'yyyy-MM-dd');
     try {
         let finalContactId: string | undefined;
+        let finalContactName: string | undefined;
 
         if (data.contact_id === 'new' && data.newContact) {
             const contactType = data.stockType === 'purchase' ? 'vendor' : 'client';
             const newContact = await addContact(data.newContact, contactType);
             if (!newContact) throw new Error("Failed to create new contact.");
             finalContactId = newContact.id;
+            finalContactName = newContact.name;
         } else if (data.contact_id) {
             finalContactId = data.contact_id;
+            finalContactName = contacts.find(c => c.id === data.contact_id)?.name;
         }
 
         await addStockTransaction({
@@ -129,6 +132,7 @@ export function StockForm({ setDialogOpen }: StockFormProps) {
             difference: difference,
             difference_reason: data.difference_reason,
             contact_id: finalContactId,
+            contact_name: finalContactName,
             bank_id: data.bank_id,
         });
         

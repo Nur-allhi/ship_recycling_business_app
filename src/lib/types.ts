@@ -58,6 +58,7 @@ export interface StockTransaction {
   difference: number;
   difference_reason?: string;
   contact_id?: string;
+  contact_name?: string;
 }
 
 export interface User {

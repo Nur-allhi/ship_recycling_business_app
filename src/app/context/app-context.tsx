@@ -176,8 +176,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 setUser(session);
             }
             
-            let [categoriesData, ...otherData] = await Promise.all([
-                server.readData({ tableName: 'categories', select: '*' }),
+            const serverData = await server.readData({ tableName: 'categories', select: '*' });
+            const categoriesData = await seedEssentialCategories(serverData as Category[]);
+
+            const [contactsData, banksData, cashTxs, bankTxs, stockTxs, ledgerData, ledgerPaymentsData, snapshotsData, initialStockData, loansData, loanPaymentsData, activityLogData] = await Promise.all([
                 server.readData({ tableName: 'contacts', select: '*' }),
                 server.readData({ tableName: 'banks', select: '*' }),
                 server.readData({ tableName: 'cash_transactions', select: '*' }),
@@ -191,10 +193,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 server.readData({ tableName: 'loan_payments', select: '*' }),
                 server.readData({ tableName: 'activity_log', select: '*' }),
             ]);
-            
-            categoriesData = await seedEssentialCategories(categoriesData || []);
-
-            const [contactsData, banksData, cashTxs, bankTxs, stockTxs, ledgerData, ledgerPaymentsData, snapshotsData, initialStockData, loansData, loanPaymentsData, activityLogData] = otherData;
             
             await db.transaction('rw', db.tables, async () => {
                 await clearAllData(false);

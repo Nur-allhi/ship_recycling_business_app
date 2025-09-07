@@ -28,7 +28,7 @@ import { toast } from 'sonner';
 import { ResponsiveSelect } from './ui/responsive-select';
 import { Separator } from './ui/separator';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
-import type { Loan } from '@/lib/types';
+import type { Loan, LoanPayment } from '@/lib/types';
 import { Badge } from './ui/badge';
 import { generateLoanStatementPdf } from '@/lib/pdf-utils';
 
@@ -51,10 +51,14 @@ const paymentSchema = z.object({
 
 type FormData = z.infer<typeof paymentSchema>;
 
+interface LoanWithPayments extends Loan {
+    payments: LoanPayment[];
+}
+
 interface LoanDetailsDialogProps {
   isOpen: boolean;
   setIsOpen: (open: boolean) => void;
-  loan: Loan;
+  loan: LoanWithPayments;
 }
 
 export function LoanDetailsDialog({ isOpen, setIsOpen, loan }: LoanDetailsDialogProps) {
