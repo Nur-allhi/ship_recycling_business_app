@@ -12,7 +12,7 @@ import { AppLoading } from '@/components/app-loading';
 import { useSessionManager } from './useSessionManager';
 import { useDataSyncer } from './useDataSyncer';
 import * as server from '@/lib/actions';
-import { getSession as getSessionFromCookie } from '@/app/auth/actions';
+import { getSession as getSessionFromCookie, login as serverLogin } from '@/app/auth/actions';
 
 type BlockingOperation = {
     isActive: boolean;
@@ -51,7 +51,7 @@ interface AppData {
 }
 
 interface AppContextType extends AppData {
-  login: (credentials: Parameters<typeof server.login>[0]) => Promise<any>;
+  login: (credentials: Parameters<typeof serverLogin>[0]) => Promise<any>;
   logout: () => Promise<void>;
   reloadData: (options?: { force?: boolean; needsInitialBalance?: boolean }) => Promise<void>;
   handleApiError: (error: unknown) => void;

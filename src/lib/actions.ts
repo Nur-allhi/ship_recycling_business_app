@@ -810,9 +810,7 @@ export async function addLoan(input: z.infer<typeof AddLoanSchema>) {
         const session = await getSession();
         if (!session || session.role !== 'admin') throw new Error("Only admins can add loans.");
 
-        // Validate input with the new strict schema
         const { loanData, disbursement } = input;
-        
         const supabase = createAdminSupabaseClient();
         
         let finalContactId = loanData.contact_id;
@@ -827,11 +825,11 @@ export async function addLoan(input: z.infer<typeof AddLoanSchema>) {
             finalContactId = newContact.id;
         }
         
-        const { newContactName, newContactType, ...restLoanData } = loanData;
+        const { newContactName, newContactType, contact_id, ...restLoanData } = loanData;
 
         const { data: loan, error: loanError } = await supabase.from('loans').insert({
             ...restLoanData,
-            contact_id: finalContactId,
+            contact_id: finalContactId, // Use the correct, final ID
             status: 'active',
         }).select().single();
 
