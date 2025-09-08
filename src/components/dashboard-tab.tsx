@@ -15,7 +15,7 @@ interface DashboardTabProps {
 }
 
 export function DashboardTab({ setActiveTab }: DashboardTabProps) {
-  const { currency, isLoading, cashTransactions, bankTransactions, stockItems, stockTransactions } = useAppContext()
+  const { currency, isLoading, isInitialLoadComplete, cashTransactions, bankTransactions, stockItems, stockTransactions } = useAppContext()
   
   const cashBalance = useMemo(() => 
     (cashTransactions || []).reduce((acc, tx) => acc + (tx.type === 'income' ? tx.actual_amount : -tx.actual_amount), 0), 
@@ -78,7 +78,7 @@ export function DashboardTab({ setActiveTab }: DashboardTabProps) {
   const totalBalance = (cashBalance ?? 0) + (bankBalance ?? 0)
 
   const renderValue = (value: string | number, isCurrency = true) => {
-    if (isLoading) {
+    if (isLoading || !isInitialLoadComplete) {
       return <Skeleton className="h-8 w-3/4" />;
     }
     const formattedValue = isCurrency ? formatCurrency(value as number) : `${value}`;
@@ -86,7 +86,7 @@ export function DashboardTab({ setActiveTab }: DashboardTabProps) {
   };
 
   const renderSubtext = (value: string) => {
-    if (isLoading) {
+    if (isLoading || !isInitialLoadComplete) {
       return <Skeleton className="h-4 w-2/3 mt-1" />;
     }
     return <div className="text-xs text-muted-foreground animate-fade-in">{value}</div>;

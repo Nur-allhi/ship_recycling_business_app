@@ -11,7 +11,7 @@ import type { User } from '@/lib/types';
 export function useSessionManager() {
     const router = useRouter();
     const [user, setUser] = useState<User | null>(null);
-    const [isLoading, setIsLoading] = useState(false);
+    const [isLoading, setIsLoading] = useState(true);
     const [isAuthenticating, setIsAuthenticating] = useState(false);
     const [isLoggingOut, setIsLoggingOut] = useState(false);
     const [isOnline, setIsOnline] = useState(true);
@@ -49,7 +49,8 @@ export function useSessionManager() {
             const result = await serverLogin(credentials);
             if (result.success && result.session) {
                 toast.success("Login Successful", { description: "Welcome back!" });
-                setUser(result.session); // This will trigger the reload in the main context
+                setUser(result.session);
+                setIsInitialLoadComplete(false); // Trigger a full reload
                 router.push('/');
             }
             return result;
@@ -64,17 +65,17 @@ export function useSessionManager() {
 
     return {
         user,
-        setUser,
+        setUser: useCallback(setUser, []),
         isLoading,
-        setIsLoading,
+        setIsLoading: useCallback(setIsLoading, []),
         isAuthenticating,
         isLoggingOut,
         isOnline,
         isInitialLoadComplete,
-        setIsInitialLoadComplete,
+        setIsInitialLoadComplete: useCallback(setIsInitialLoadComplete, []),
         login,
         logout,
         handleApiError,
-        setIsOnline,
+        setIsOnline: useCallback(setIsOnline, []),
     };
 }

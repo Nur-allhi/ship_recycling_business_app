@@ -109,7 +109,6 @@ function isCategory(obj: any): obj is Category {
 export function AppProvider({ children }: { children: React.ReactNode }) {
     const router = useRouter();
     const pathname = usePathname();
-    const [hasMounted, setHasMounted] = useState(false);
     const [blockingOperation, setBlockingOperation] = useState<BlockingOperation>({ isActive: false, message: '' });
 
     const {
@@ -182,6 +181,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             const session = await getSessionFromCookie();
             if (!session) {
                 setUser(null);
+                setIsInitialLoadComplete(true);
                 return;
             }
             
@@ -240,27 +240,29 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     useEffect(() => {
         const checkSessionAndLoad = async () => {
             setIsLoading(true);
-            const session = await getSessionFromCookie();
-            if (session) {
-                setUser(session);
-                await reloadData();
-            } else {
+            try {
+                const session = await getSessionFromCookie();
+                if (session) {
+                    setUser(session);
+                    await reloadData();
+                } else {
+                    setUser(null);
+                }
+            } catch (error) {
+                console.error("Error during initial session check:", error);
                 setUser(null);
+            } finally {
+                setIsInitialLoadComplete(true);
+                setIsLoading(false);
             }
-             setIsInitialLoadComplete(true);
-             setIsLoading(false);
         };
         
         if (!isInitialLoadComplete) {
           checkSessionAndLoad();
         }
-    }, [isInitialLoadComplete, reloadData, setIsLoading, setUser]);
-
-    useEffect(() => { setHasMounted(true); }, []);
+    }, []); // Run only once on mount
 
     useEffect(() => {
-        if (!hasMounted) return;
-    
         const handleOnline = () => {
             setIsOnline(true);
             toast.success("You are back online!");
@@ -271,7 +273,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         window.addEventListener('online', handleOnline);
         window.addEventListener('offline', handleOffline);
         
-        // Initial check
         handleOffline();
         if (navigator.onLine) handleOnline();
 
@@ -279,7 +280,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             window.removeEventListener('online', handleOnline);
             window.removeEventListener('offline', handleOffline);
         };
-    }, [hasMounted, processSyncQueue, setIsOnline]);
+    }, [processSyncQueue, setIsOnline]);
     
     useEffect(() => {
         if (isLoading || !isInitialLoadComplete) return;
@@ -353,7 +354,3 @@ export function useAppContext() {
     }
     return context;
 }
-
-    
-
-    
