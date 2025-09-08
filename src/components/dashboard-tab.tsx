@@ -12,24 +12,22 @@ import type { CashTransaction, BankTransaction, StockItem, StockTransaction } fr
 
 interface DashboardTabProps {
   setActiveTab: (tab: string) => void;
+  cashBalance: number;
+  bankBalance: number;
+  currentStockWeight: number;
+  currentStockValue: number;
+  isLoading: boolean;
 }
 
-export function DashboardTab({ setActiveTab }: DashboardTabProps) {
-  const { currency, cashTransactions, bankTransactions, stockItems, stockTransactions, showStockValue } = useAppContext()
-  
-  const isLoading = useMemo(() => {
-    return cashTransactions === undefined || bankTransactions === undefined || stockItems === undefined || stockTransactions === undefined;
-  }, [cashTransactions, bankTransactions, stockItems, stockTransactions]);
-
-  const cashBalance = useMemo(() => 
-    (cashTransactions || []).reduce((acc, tx) => acc + (tx.type === 'income' ? tx.actual_amount : -tx.actual_amount), 0), 
-    [cashTransactions]
-  );
-  
-  const bankBalance = useMemo(() => 
-    (bankTransactions || []).reduce((acc, tx) => acc + (tx.type === 'deposit' ? tx.actual_amount : -tx.actual_amount), 0),
-    [bankTransactions]
-  );
+export function DashboardTab({ 
+  setActiveTab,
+  cashBalance,
+  bankBalance,
+  currentStockWeight,
+  currentStockValue,
+  isLoading
+}: DashboardTabProps) {
+  const { currency, showStockValue } = useAppContext()
 
   const formatCurrency = (amount: number) => {
     if (currency === 'BDT') {
@@ -38,48 +36,7 @@ export function DashboardTab({ setActiveTab }: DashboardTabProps) {
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: currency, currencyDisplay: 'symbol' }).format(amount)
   }
 
-  const { currentStockWeight, currentStockValue } = useMemo(() => {
-    const stockPortfolio: Record<string, { weight: number, totalValue: number }> = {};
-    
-    (stockItems || []).forEach(item => {
-        if (!stockPortfolio[item.name]) {
-            stockPortfolio[item.name] = { weight: 0, totalValue: 0 };
-        }
-        stockPortfolio[item.name].weight += item.weight;
-        stockPortfolio[item.name].totalValue += item.weight * item.purchasePricePerKg;
-    });
-
-    (stockTransactions || []).forEach(tx => {
-        if (!stockPortfolio[tx.stockItemName]) {
-            stockPortfolio[tx.stockItemName] = { weight: 0, totalValue: 0 };
-        }
-        
-        const item = stockPortfolio[tx.stockItemName];
-        const currentAvgPrice = item.weight > 0 ? item.totalValue / item.weight : 0;
-
-        if (tx.type === 'purchase') {
-            item.weight += tx.weight;
-            item.totalValue += tx.weight * tx.pricePerKg;
-        } else {
-            item.weight -= tx.weight;
-            item.totalValue -= tx.weight * currentAvgPrice;
-        }
-    });
-    
-    let totalWeight = 0;
-    let totalValue = 0;
-    Object.values(stockPortfolio).forEach(item => {
-        totalWeight += item.weight;
-        totalValue += item.totalValue;
-    });
-    
-    return {
-      currentStockWeight: totalWeight,
-      currentStockValue: totalValue
-    };
-  }, [stockItems, stockTransactions]);
-
-  const totalBalance = (cashBalance ?? 0) + (bankBalance ?? 0)
+  const totalBalance = cashBalance + bankBalance;
 
   const renderValue = (value: string | number, isCurrency = true) => {
     if (isLoading) {
@@ -115,8 +72,8 @@ export function DashboardTab({ setActiveTab }: DashboardTabProps) {
     <div className="space-y-6">
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <StatCard title="Total Balance" value={totalBalance} subtext="Cash + Bank combined" icon={LineChart} />
-        <StatCard title="Cash Balance" value={cashBalance ?? 0} subtext="In-hand currency" icon={Wallet} onClick={() => setActiveTab('cash')} />
-        <StatCard title="Bank Balance" value={bankBalance ?? 0} subtext="Managed by financial institutions" icon={Landmark} onClick={() => setActiveTab('bank')} />
+        <StatCard title="Cash Balance" value={cashBalance} subtext="In-hand currency" icon={Wallet} onClick={() => setActiveTab('cash')} />
+        <StatCard title="Bank Balance" value={bankBalance} subtext="Managed by financial institutions" icon={Landmark} onClick={() => setActiveTab('bank')} />
         <StatCard title="Stock Quantity" value={`${currentStockWeight.toFixed(2)} kg`} subtext={showStockValue ? `Total Value: ${formatCurrency(currentStockValue)}` : 'Value is hidden'} icon={Boxes} onClick={() => setActiveTab('stock')} />
       </div>
     </div>

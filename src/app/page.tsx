@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useAppContext } from './context/app-context';
 import { cn } from '@/lib/utils';
 import { DashboardTab } from '@/components/dashboard-tab';
@@ -26,10 +26,64 @@ const fontClasses = {
 };
 
 function MainContent() {
-    const { fontSize, isInitialBalanceDialogOpen, user, isLoading, isInitialLoadComplete } = useAppContext();
+    const { 
+        fontSize, isInitialBalanceDialogOpen, user, isLoading, isInitialLoadComplete,
+        cashTransactions, bankTransactions, stockItems, stockTransactions, showStockValue
+    } = useAppContext();
     const [activeTab, setActiveTab] = useState('dashboard');
     const isAdmin = user?.role === 'admin';
     const { state, setOpen } = useSidebar();
+
+    const cashBalance = useMemo(() => 
+      (cashTransactions || []).reduce((acc, tx) => acc + (tx.type === 'income' ? tx.actual_amount : -tx.actual_amount), 0), 
+      [cashTransactions]
+    );
+    
+    const bankBalance = useMemo(() => 
+      (bankTransactions || []).reduce((acc, tx) => acc + (tx.type === 'deposit' ? tx.actual_amount : -tx.actual_amount), 0),
+      [bankTransactions]
+    );
+
+    const { currentStockWeight, currentStockValue } = useMemo(() => {
+      const stockPortfolio: Record<string, { weight: number, totalValue: number }> = {};
+      
+      (stockItems || []).forEach(item => {
+          if (!stockPortfolio[item.name]) {
+              stockPortfolio[item.name] = { weight: 0, totalValue: 0 };
+          }
+          stockPortfolio[item.name].weight += item.weight;
+          stockPortfolio[item.name].totalValue += item.weight * item.purchasePricePerKg;
+      });
+
+      (stockTransactions || []).forEach(tx => {
+          if (!stockPortfolio[tx.stockItemName]) {
+              stockPortfolio[tx.stockItemName] = { weight: 0, totalValue: 0 };
+          }
+          
+          const item = stockPortfolio[tx.stockItemName];
+          const currentAvgPrice = item.weight > 0 ? item.totalValue / item.weight : 0;
+
+          if (tx.type === 'purchase') {
+              item.weight += tx.weight;
+              item.totalValue += tx.weight * tx.pricePerKg;
+          } else {
+              item.weight -= tx.weight;
+              item.totalValue -= tx.weight * currentAvgPrice;
+          }
+      });
+      
+      let totalWeight = 0;
+      let totalValue = 0;
+      Object.values(stockPortfolio).forEach(item => {
+          totalWeight += item.weight;
+          totalValue += item.totalValue;
+      });
+      
+      return {
+        currentStockWeight: totalWeight,
+        currentStockValue: totalValue
+      };
+    }, [stockItems, stockTransactions]);
 
     if (isLoading || !isInitialLoadComplete || !user) {
         return <AppLoading message="Please wait..." />;
@@ -37,14 +91,28 @@ function MainContent() {
 
     const renderTabContent = (tab: string) => {
         switch (tab) {
-            case 'dashboard': return <DashboardTab setActiveTab={setActiveTab} />;
+            case 'dashboard': return <DashboardTab 
+                                        setActiveTab={setActiveTab} 
+                                        cashBalance={cashBalance}
+                                        bankBalance={bankBalance}
+                                        currentStockWeight={currentStockWeight}
+                                        currentStockValue={currentStockValue}
+                                        isLoading={isLoading}
+                                    />;
             case 'cash': return <CashTab />;
             case 'bank': return <BankTab />;
             case 'credit': return <CreditTab />;
             case 'stock': return <StockTab />;
             case 'loans': return <LoansTab />;
             case 'settings': return <SettingsTab />;
-            default: return <DashboardTab setActiveTab={setActiveTab} />;
+            default: return <DashboardTab 
+                                setActiveTab={setActiveTab} 
+                                cashBalance={cashBalance}
+                                bankBalance={bankBalance}
+                                currentStockWeight={currentStockWeight}
+                                currentStockValue={currentStockValue}
+                                isLoading={isLoading}
+                            />;
         }
     }
 
