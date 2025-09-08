@@ -516,7 +516,7 @@ export function useAppActions() {
         }
     };
     
-    const addLoan = async (loan: Omit<Loan, 'id' | 'status' | 'created_at' | 'payments'>, disbursement: { method: 'cash' | 'bank', bank_id?: string }, newContact?: {name: string, type: 'vendor' | 'client'}) => {
+    const addLoan = async (loan: Omit<Loan, 'id' | 'payments'>, disbursement: { method: 'cash' | 'bank', bank_id?: string }, newContact?: {name: string, type: 'vendor' | 'client'}) => {
         return performAdminAction(async () => {
             const tempId = `temp_loan_${Date.now()}`;
             const tempFinancialId = `temp_loan_fin_${Date.now()}`;
@@ -528,7 +528,7 @@ export function useAppActions() {
                 loanDataForDb.contact_id = tempContactId;
             }
 
-            const newLoan: Loan = { ...(loanDataForDb as Loan), id: tempId, status: 'active', created_at: new Date().toISOString(), payments: [] };
+            const newLoan: Loan = { ...(loanDataForDb as Loan), id: tempId, payments: [] };
             
             await db.loans.add(newLoan);
 

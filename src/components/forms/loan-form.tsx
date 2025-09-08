@@ -94,6 +94,8 @@ export function LoanForm({ setDialogOpen }: LoanFormProps) {
           interest_rate: data.interest_rate ?? 0,
           issue_date: formatISO(data.issue_date, { representation: 'date' }),
           due_date: data.due_date ? formatISO(data.due_date, { representation: 'date' }) : undefined,
+          status: 'active' as const,
+          created_at: new Date().toISOString(),
         }
         
         const disbursementData = {
