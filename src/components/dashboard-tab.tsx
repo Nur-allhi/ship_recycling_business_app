@@ -12,15 +12,10 @@ import type { CashTransaction, BankTransaction, StockItem, StockTransaction } fr
 
 interface DashboardTabProps {
   setActiveTab: (tab: string) => void;
-  cashTransactions: CashTransaction[];
-  bankTransactions: BankTransaction[];
-  stockItems: StockItem[];
-  stockTransactions: StockTransaction[];
-  isLoading: boolean;
 }
 
-export function DashboardTab({ setActiveTab, cashTransactions, bankTransactions, stockItems, stockTransactions, isLoading }: DashboardTabProps) {
-  const { currency } = useAppContext()
+export function DashboardTab({ setActiveTab }: DashboardTabProps) {
+  const { currency, isLoading, cashTransactions, bankTransactions, stockItems, stockTransactions } = useAppContext()
   
   const cashBalance = useMemo(() => 
     (cashTransactions || []).reduce((acc, tx) => acc + (tx.type === 'income' ? tx.actual_amount : -tx.actual_amount), 0), 
