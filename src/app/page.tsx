@@ -45,28 +45,30 @@ function MainContent() {
     );
 
     const { currentStockWeight, currentStockValue } = useMemo(() => {
-      const stockPortfolio: Record<string, { weight: number, totalValue: number }> = {};
+      const portfolio: Record<string, { weight: number, totalValue: number }> = {};
       
       (stockItems || []).forEach(item => {
-          if (!stockPortfolio[item.name]) {
-              stockPortfolio[item.name] = { weight: 0, totalValue: 0 };
+          if (!portfolio[item.name]) {
+              portfolio[item.name] = { weight: 0, totalValue: 0 };
           }
-          stockPortfolio[item.name].weight += item.weight;
-          stockPortfolio[item.name].totalValue += item.weight * item.purchasePricePerKg;
+          portfolio[item.name].weight += item.weight;
+          portfolio[item.name].totalValue += item.weight * item.purchasePricePerKg;
       });
 
-      (stockTransactions || []).forEach(tx => {
-          if (!stockPortfolio[tx.stockItemName]) {
-              stockPortfolio[tx.stockItemName] = { weight: 0, totalValue: 0 };
+      const allTransactions = [...(stockTransactions || [])].sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+      allTransactions.forEach(tx => {
+          if (!portfolio[tx.stockItemName]) {
+              portfolio[tx.stockItemName] = { weight: 0, totalValue: 0 };
           }
           
-          const item = stockPortfolio[tx.stockItemName];
+          const item = portfolio[tx.stockItemName];
           const currentAvgPrice = item.weight > 0 ? item.totalValue / item.weight : 0;
 
           if (tx.type === 'purchase') {
               item.weight += tx.weight;
               item.totalValue += tx.weight * tx.pricePerKg;
-          } else {
+          } else { // Sale
               item.weight -= tx.weight;
               item.totalValue -= tx.weight * currentAvgPrice;
           }
@@ -74,7 +76,7 @@ function MainContent() {
       
       let totalWeight = 0;
       let totalValue = 0;
-      Object.values(stockPortfolio).forEach(item => {
+      Object.values(portfolio).forEach(item => {
           totalWeight += item.weight;
           totalValue += item.totalValue;
       });
