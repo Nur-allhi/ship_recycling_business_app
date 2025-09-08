@@ -36,7 +36,7 @@ interface StockItemEntry {
 
 export function InitialBalanceDialog({ isOpen }: InitialBalanceDialogProps) {
   const { banks, closeInitialBalanceDialog } = useAppContext();
-  const { setInitialBalances, addInitialStockItem } = useAppActions();
+  const { setInitialBalances } = useAppActions();
   const cashRef = useRef<HTMLInputElement>(null);
   const bankRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const [stockItems, setStockItems] = useState<StockItemEntry[]>([]);
@@ -92,35 +92,25 @@ export function InitialBalanceDialog({ isOpen }: InitialBalanceDialogProps) {
           }
           bankTotals[bank.id] = value;
         }
-
-        for (const item of stockItems) {
-            // Treat empty string as 0 for validation and saving.
-            const weight = item.weight === '' ? 0 : Number(item.weight);
-            const pricePerKg = item.pricePerKg === '' ? 0 : Number(item.pricePerKg);
-
-            if (!item.name || isNaN(weight) || weight <= 0 || isNaN(pricePerKg) || pricePerKg < 0) {
-                toast.error('Invalid Stock Item', {
-                    description: `Please ensure all fields for "${item.name || 'new item'}" are filled correctly.`
-                });
-                setIsSaving(false);
-                return;
-            }
-        }
         
-        // Pass the selected date to the context function
-        await setInitialBalances(cash, bankTotals, date);
-
-        // Now, add the stock items one by one.
-        for (const item of stockItems) {
-            await addInitialStockItem({ 
-                name: item.name, 
-                weight: Number(item.weight), 
-                pricePerKg: Number(item.pricePerKg) 
-            });
-        }
+        const validatedStockItems = stockItems.map(item => {
+             const weight = item.weight === '' ? 0 : Number(item.weight);
+            const pricePerKg = item.pricePerKg === '' ? 0 : Number(item.pricePerKg);
+            if (!item.name || isNaN(weight) || weight <= 0 || isNaN(pricePerKg) || pricePerKg < 0) {
+                throw new Error(`Please ensure all fields for "${item.name || 'new item'}" are filled correctly.`);
+            }
+            return { name: item.name, weight, pricePerKg };
+        });
+        
+        await setInitialBalances({
+          cash,
+          bankTotals,
+          stockItems: validatedStockItems,
+          date,
+        });
 
         toast.success("Initial Balances Set", { description: "Your initial financial and stock balances have been saved." });
-        closeInitialBalanceDialog();
+        handleClose();
         
     } catch(e: any) {
         toast.error("Failed to Save", { description: e.message || "An unknown error occurred." });
@@ -130,7 +120,6 @@ export function InitialBalanceDialog({ isOpen }: InitialBalanceDialogProps) {
   };
 
   const handleClose = () => {
-    // Also reset local state when closing dialog without saving
     setStockItems([]);
     if(cashRef.current) cashRef.current.value = "0";
     Object.values(bankRefs.current).forEach(ref => {

@@ -12,7 +12,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 export function useDataSyncer() {
     const { handleApiError, isOnline } = useSessionManager();
     const [isSyncing, setIsSyncing] = useState(false);
-    const syncQueueCount = useLiveQuery(() => db.sync_queue.count(), [], 0) || 0;
+    const syncQueueCount = useLiveQuery(() => db.sync_queue.count(), [], 0);
 
     const processSyncQueue = useCallback(async (specificItemId?: number) => {
         if (isSyncing || !isOnline) return;
@@ -49,7 +49,6 @@ export function useDataSyncer() {
                     deleteCategory: server.deleteCategory,
                     addStockTransaction: server.addStockTransaction,
                     updateStockTransaction: server.updateStockTransaction,
-                    addInitialStockItem: server.addInitialStockItem,
                     deleteContact: server.deleteContact,
                     batchImportData: server.batchImportData,
                     deleteAllData: server.deleteAllData,

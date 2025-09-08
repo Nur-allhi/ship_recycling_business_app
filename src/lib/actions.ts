@@ -583,7 +583,12 @@ export async function updateStockTransaction(input: z.infer<typeof UpdateStockTr
     }
 }    
 
-const SetInitialBalancesSchema = z.object({ cash: z.number().nonnegative(), bankTotals: z.record(z.string(), z.number().nonnegative()), date: z.string() });
+const SetInitialBalancesSchema = z.object({
+  cash: z.number().nonnegative(),
+  bankTotals: z.record(z.string(), z.number().nonnegative()),
+  stockItems: z.array(z.object({ name: z.string(), weight: z.number(), pricePerKg: z.number() })),
+  date: z.string(),
+});
 
 export async function setInitialBalances(input: z.infer<typeof SetInitialBalancesSchema>) {
     try {
@@ -593,6 +598,7 @@ export async function setInitialBalances(input: z.infer<typeof SetInitialBalance
         
         await supabase.from('cash_transactions').delete().eq('category', 'Initial Balance');
         await supabase.from('bank_transactions').delete().eq('category', 'Initial Balance');
+        await supabase.from('initial_stock').delete().gt('created_at', '1970-01-01T00:00:00Z');
 
         await supabase.from('cash_transactions').insert({
             date: input.date, type: 'income', category: 'Initial Balance',
@@ -605,22 +611,17 @@ export async function setInitialBalances(input: z.infer<typeof SetInitialBalance
                 description: 'Initial bank balance set.', bank_id, actual_amount: amount, expected_amount: amount, difference: 0,
             })));
         }
-        await logActivity("Set initial cash and bank balances.");
-        return { success: true };
-    } catch (error) {
-        return handleApiError(error);
-    }
-}
 
-const AddInitialStockItemSchema = z.object({ item: z.object({ name: z.string(), weight: z.number(), pricePerKg: z.number() }) });
+        if (input.stockItems.length > 0) {
+            const stockData = input.stockItems.map(item => ({
+                name: item.name,
+                weight: item.weight,
+                purchasePricePerKg: item.pricePerKg,
+            }));
+            await supabase.from('initial_stock').insert(stockData);
+        }
 
-export async function addInitialStockItem(input: z.infer<typeof AddInitialStockItemSchema>) {
-    try {
-        const session = await getSession();
-        if (!session || session.role !== 'admin') throw new Error("Only admins can add initial stock.");
-        const supabase = createAdminSupabaseClient();
-        const { error } = await supabase.from('initial_stock').insert({ name: input.item.name, weight: input.item.weight, purchasePricePerKg: input.item.pricePerKg });
-        if(error) throw error;
+        await logActivity("Set initial cash, bank, and stock balances.");
         return { success: true };
     } catch (error) {
         return handleApiError(error);
