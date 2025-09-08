@@ -90,7 +90,7 @@ export function BankForm({ setDialogOpen }: BankFormProps) {
     try {
         if (data.payLater && isExpense) {
             if (!data.contact_id) throw new Error("Vendor not found for pay later transaction.");
-            await addLedgerTransaction({ type: 'payable', description: data.description, amount: data.amount, date: transactionDate, contact_id: data.contact_id! });
+            await addLedgerTransaction({ type: 'payable', description: data.description, amount: data.amount, date: transactionDate, contact_id: data.contact_id!, created_at: new Date().toISOString() });
         } else {
             if (!categoryInfo) throw new Error("Category information not found.");
             await addBankTransaction({
