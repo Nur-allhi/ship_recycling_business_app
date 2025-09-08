@@ -51,6 +51,7 @@ export function StockTab() {
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const isMobile = useIsMobile();
   const isAdmin = user?.role === 'admin';
+  const isLoading = stockTransactions === undefined;
   
   const handleSort = (key: SortKey) => {
     if (sortKey === key) {
@@ -212,7 +213,9 @@ export function StockTab() {
         </TableHeader>
         <AnimatePresence initial={false}>
           <motion.tbody>
-            {paginatedTransactions.length > 0 ? (
+            {isLoading ? (
+                <TableRow><TableCell colSpan={isSelectionMode ? 9 : 8} className="h-24 text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin" /></TableCell></TableRow>
+            ) : paginatedTransactions.length > 0 ? (
                 paginatedTransactions.map((tx: StockTransaction) => (
                   <motion.tr 
                     key={tx.id} 
@@ -288,7 +291,9 @@ export function StockTab() {
 
   const renderMobileHistory = () => (
     <div className="space-y-4">
-       {paginatedTransactions.length > 0 ? (
+       {isLoading ? (
+        <div className="flex justify-center items-center h-24"><Loader2 className="h-6 w-6 animate-spin" /></div>
+      ) : paginatedTransactions.length > 0 ? (
         <AnimatePresence initial={false}>
           {paginatedTransactions.map((tx: StockTransaction) => (
               <motion.div 
