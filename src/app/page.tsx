@@ -26,7 +26,7 @@ const fontClasses = {
 };
 
 function MainContent() {
-    const { fontSize, isInitialBalanceDialogOpen, user, isLoading, isInitialLoadComplete } = useAppContext();
+    const { fontSize, isInitialBalanceDialogOpen, user, isLoading, isInitialLoadComplete, cashTransactions, bankTransactions, stockItems, stockTransactions } = useAppContext();
     const [activeTab, setActiveTab] = useState('dashboard');
     const isAdmin = user?.role === 'admin';
     const { state, setOpen } = useSidebar();
@@ -37,14 +37,14 @@ function MainContent() {
 
     const renderTabContent = (tab: string) => {
         switch (tab) {
-            case 'dashboard': return <DashboardTab setActiveTab={setActiveTab} />;
+            case 'dashboard': return <DashboardTab setActiveTab={setActiveTab} cashTransactions={cashTransactions} bankTransactions={bankTransactions} stockItems={stockItems} stockTransactions={stockTransactions} isLoading={isLoading} />;
             case 'cash': return <CashTab />;
             case 'bank': return <BankTab />;
             case 'credit': return <CreditTab />;
             case 'stock': return <StockTab />;
             case 'loans': return <LoansTab />;
             case 'settings': return <SettingsTab />;
-            default: return <DashboardTab setActiveTab={setActiveTab} />;
+            default: return <DashboardTab setActiveTab={setActiveTab} cashTransactions={cashTransactions} bankTransactions={bankTransactions} stockItems={stockItems} stockTransactions={stockTransactions} isLoading={isLoading} />;
         }
     }
 

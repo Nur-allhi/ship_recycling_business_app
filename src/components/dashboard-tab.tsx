@@ -7,23 +7,20 @@ import { Wallet, Landmark, Boxes, LineChart } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Skeleton } from "@/components/ui/skeleton";
 import { useMemo } from "react";
-import { useLiveQuery } from "dexie-react-hooks";
-import { db } from "@/lib/db";
+import type { CashTransaction, BankTransaction, StockItem, StockTransaction } from "@/lib/types";
 
 
 interface DashboardTabProps {
   setActiveTab: (tab: string) => void;
+  cashTransactions: CashTransaction[];
+  bankTransactions: BankTransaction[];
+  stockItems: StockItem[];
+  stockTransactions: StockTransaction[];
+  isLoading: boolean;
 }
 
-export function DashboardTab({ setActiveTab }: DashboardTabProps) {
+export function DashboardTab({ setActiveTab, cashTransactions, bankTransactions, stockItems, stockTransactions, isLoading }: DashboardTabProps) {
   const { currency } = useAppContext()
-  
-  const cashTransactions = useLiveQuery(() => db.cash_transactions.toArray());
-  const bankTransactions = useLiveQuery(() => db.bank_transactions.toArray());
-  const stockItems = useLiveQuery(() => db.initial_stock.toArray());
-  const stockTransactions = useLiveQuery(() => db.stock_transactions.toArray());
-
-  const isLoading = !cashTransactions || !bankTransactions || !stockItems || !stockTransactions;
   
   const cashBalance = useMemo(() => 
     (cashTransactions || []).reduce((acc, tx) => acc + (tx.type === 'income' ? tx.actual_amount : -tx.actual_amount), 0), 
