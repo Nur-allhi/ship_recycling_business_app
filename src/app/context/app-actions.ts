@@ -39,7 +39,7 @@ export function useAppActions() {
     const addCashTransaction = async (tx: Omit<CashTransaction, 'id' | 'deletedAt'>) => {
         return performAdminAction(async () => {
             const tempId = `temp_cash_${Date.now()}`;
-            const newTxData: CashTransaction = { ...tx, id: tempId };
+            const newTxData: CashTransaction = { ...tx, id: tempId, created_at: tx.created_at || new Date().toISOString() };
             
             await db.cash_transactions.add(newTxData);
 
@@ -50,7 +50,8 @@ export function useAppActions() {
                 };
                 queueOrSync({ action: 'recordDirectPayment', payload: { ...payload, localId: tempId } });
             } else {
-                queueOrSync({ action: 'appendData', payload: { tableName: 'cash_transactions', data: { ...tx }, localId: tempId, logDescription: `Added cash transaction: ${tx.description}`, select: '*' } });
+                const { id, ...syncData } = newTxData;
+                queueOrSync({ action: 'appendData', payload: { tableName: 'cash_transactions', data: { ...syncData }, localId: tempId, logDescription: `Added cash transaction: ${tx.description}`, select: '*' } });
             }
         });
     };
@@ -58,7 +59,7 @@ export function useAppActions() {
     const addBankTransaction = async (tx: Omit<BankTransaction, 'id' | 'deletedAt'>) => {
         return performAdminAction(async () => {
             const tempId = `temp_bank_${Date.now()}`;
-            const newTxData: BankTransaction = { ...tx, id: tempId };
+            const newTxData: BankTransaction = { ...tx, id: tempId, created_at: tx.created_at || new Date().toISOString() };
             
             await db.bank_transactions.add(newTxData);
             
@@ -69,7 +70,8 @@ export function useAppActions() {
                 };
                 queueOrSync({ action: 'recordDirectPayment', payload: { ...payload, localId: tempId } });
             } else {
-                queueOrSync({ action: 'appendData', payload: { tableName: 'bank_transactions', data: { ...tx }, localId: tempId, logDescription: `Added bank transaction: ${tx.description}`, select: '*' } });
+                 const { id, ...syncData } = newTxData;
+                queueOrSync({ action: 'appendData', payload: { tableName: 'bank_transactions', data: { ...syncData }, localId: tempId, logDescription: `Added bank transaction: ${tx.description}`, select: '*' } });
             }
         });
     };
@@ -77,7 +79,7 @@ export function useAppActions() {
     const addStockTransaction = async (tx: Omit<StockTransaction, 'id' | 'deletedAt'>) => {
         return performAdminAction(async () => {
             const stockTempId = `temp_stock_${Date.now()}`;
-            const newStockTxData: StockTransaction = { ...tx, id: stockTempId };
+            const newStockTxData: StockTransaction = { ...tx, id: stockTempId, created_at: tx.created_at || new Date().toISOString() };
 
             await db.stock_transactions.add(newStockTxData);
 
@@ -115,7 +117,7 @@ export function useAppActions() {
             
             queueOrSync({
                 action: 'addStockTransaction',
-                payload: { stockTx: { ...tx }, localId: stockTempId }
+                payload: { stockTx: { ...newStockTxData }, localId: stockTempId }
             });
         });
     };
@@ -135,6 +137,7 @@ export function useAppActions() {
                 status: 'unpaid',
                 paid_amount: 0,
                 id: tempId,
+                created_at: tx.created_at || new Date().toISOString()
             };
             
             await db.ap_ar_transactions.add(dataToSave);
@@ -516,7 +519,7 @@ export function useAppActions() {
         }
     };
     
-    const addLoan = async (loan: Omit<Loan, 'id' | 'payments'>, disbursement: { method: 'cash' | 'bank', bank_id?: string }, newContact?: {name: string, type: 'vendor' | 'client'}) => {
+    const addLoan = async (loan: Omit<Loan, 'id'>, disbursement: { method: 'cash' | 'bank', bank_id?: string }, newContact?: {name: string, type: 'vendor' | 'client'}) => {
         return performAdminAction(async () => {
             const tempId = `temp_loan_${Date.now()}`;
             const tempFinancialId = `temp_loan_fin_${Date.now()}`;
@@ -528,7 +531,7 @@ export function useAppActions() {
                 loanDataForDb.contact_id = tempContactId;
             }
 
-            const newLoan: Loan = { ...(loanDataForDb as Loan), id: tempId, payments: [] };
+            const newLoan: Loan = { ...(loanDataForDb as Loan), id: tempId };
             
             await db.loans.add(newLoan);
 

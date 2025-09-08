@@ -93,7 +93,7 @@ export function ApArForm({ setDialogOpen }: ApArFormProps) {
             date: transactionDate,
             contact_id: finalContactId,
             contact_name: finalContactName,
-            installments: [],
+            created_at: new Date().toISOString(),
         });
 
         toast.success("A/R or A/P Entry Added");

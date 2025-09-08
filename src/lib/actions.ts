@@ -490,7 +490,9 @@ export async function addStockTransaction(input: z.infer<typeof AddStockTransact
         const supabase = createAdminSupabaseClient();
         const { stockTx } = input;
         
-        const { data: savedStockTx, error: stockError } = await supabase.from('stock_transactions').insert(stockTx).select().single();
+        const { id, contact_name: tempContactName, ...stockTxToSave } = stockTx;
+        
+        const { data: savedStockTx, error: stockError } = await supabase.from('stock_transactions').insert(stockTxToSave).select().single();
         if(stockError) throw stockError;
 
         let savedFinancialTx = null;
@@ -532,6 +534,10 @@ export async function addStockTransaction(input: z.infer<typeof AddStockTransact
                 await logActivity(`Added stock transaction (credit, fully covered by advance): ${stockTx.stockItemName}`);
                 return { stockTx: savedStockTx, financialTx: null };
             }
+            
+            if (!stockTx.contact_id || !tempContactName) {
+                throw new Error("Contact information is missing for credit stock transaction.");
+            }
 
             const ledgerData = {
                 type: stockTx.type === 'purchase' ? 'payable' : 'receivable',
@@ -541,7 +547,7 @@ export async function addStockTransaction(input: z.infer<typeof AddStockTransact
                 contact_id: stockTx.contact_id!,
                 status: 'unpaid',
                 paid_amount: 0,
-                contact_name: stockTx.contact_name,
+                contact_name: tempContactName,
             };
             const { error } = await supabase.from('ap_ar_transactions').insert(ledgerData);
             if (error) throw error;
@@ -946,3 +952,5 @@ export async function recordLoanPayment(input: z.infer<typeof RecordLoanPaymentS
         return handleApiError(error);
     }
 }
+
+    

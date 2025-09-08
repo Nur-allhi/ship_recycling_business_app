@@ -137,7 +137,6 @@ export interface Loan {
   due_date?: string;
   status: 'active' | 'paid' | 'defaulted';
   created_at: string;
-  payments: LedgerPayment[];
 }
 
 export interface LoanPayment {
