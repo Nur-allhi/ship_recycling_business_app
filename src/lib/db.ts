@@ -42,19 +42,19 @@ export class AppDatabase extends Dexie {
         super('ShipShapeLedgerDB_v2');
         this.version(1).stores({
             app_state: 'id',
-            cash_transactions: '++id, date, category, linkedStockTxId, linkedLoanId, advance_id, contact_id',
-            bank_transactions: '++id, date, bank_id, category, linkedStockTxId, linkedLoanId, advance_id, contact_id',
-            stock_transactions: '++id, date, stockItemName, type, contact_id',
-            ap_ar_transactions: '++id, date, type, contact_id, status',
-            ledger_payments: '++id, ap_ar_transaction_id, date',
+            cash_transactions: '++id, date, category, linkedStockTxId, linkedLoanId, advance_id, contact_id, created_at',
+            bank_transactions: '++id, date, bank_id, category, linkedStockTxId, linkedLoanId, advance_id, contact_id, created_at',
+            stock_transactions: '++id, date, stockItemName, type, contact_id, created_at',
+            ap_ar_transactions: '++id, date, type, contact_id, status, created_at',
+            ledger_payments: '++id, ap_ar_transaction_id, date, created_at',
 
             banks: 'id, name',
             categories: 'id, type, name',
             contacts: 'id, name, type',
             initial_stock: '++id, name',
             monthly_snapshots: '++id, snapshot_date',
-            loans: '++id, contact_id, type, status',
-            loan_payments: '++id, loan_id, payment_date',
+            loans: '++id, contact_id, type, status, created_at',
+            loan_payments: '++id, loan_id, payment_date, created_at',
             activity_log: '++id, created_at',
             sync_queue: '++id, timestamp',
         });

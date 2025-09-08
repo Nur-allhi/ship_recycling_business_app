@@ -36,11 +36,10 @@ export function useAppActions() {
         }
     };
 
-    const addCashTransaction = async (tx: Omit<CashTransaction, 'id' | 'created_at' | 'deletedAt'>) => {
+    const addCashTransaction = async (tx: Omit<CashTransaction, 'id' | 'deletedAt'>) => {
         return performAdminAction(async () => {
             const tempId = `temp_cash_${Date.now()}`;
-            const currentTimestamp = new Date().toISOString();
-            const newTxData: CashTransaction = { ...tx, id: tempId, created_at: currentTimestamp };
+            const newTxData: CashTransaction = { ...tx, id: tempId };
             
             await db.cash_transactions.add(newTxData);
 
@@ -51,16 +50,15 @@ export function useAppActions() {
                 };
                 queueOrSync({ action: 'recordDirectPayment', payload: { ...payload, localId: tempId } });
             } else {
-                queueOrSync({ action: 'appendData', payload: { tableName: 'cash_transactions', data: { ...tx, created_at: currentTimestamp }, localId: tempId, logDescription: `Added cash transaction: ${tx.description}`, select: '*' } });
+                queueOrSync({ action: 'appendData', payload: { tableName: 'cash_transactions', data: { ...tx }, localId: tempId, logDescription: `Added cash transaction: ${tx.description}`, select: '*' } });
             }
         });
     };
 
-    const addBankTransaction = async (tx: Omit<BankTransaction, 'id' | 'created_at' | 'deletedAt'>) => {
+    const addBankTransaction = async (tx: Omit<BankTransaction, 'id' | 'deletedAt'>) => {
         return performAdminAction(async () => {
             const tempId = `temp_bank_${Date.now()}`;
-            const currentTimestamp = new Date().toISOString();
-            const newTxData: BankTransaction = { ...tx, id: tempId, created_at: currentTimestamp };
+            const newTxData: BankTransaction = { ...tx, id: tempId };
             
             await db.bank_transactions.add(newTxData);
             
@@ -71,23 +69,22 @@ export function useAppActions() {
                 };
                 queueOrSync({ action: 'recordDirectPayment', payload: { ...payload, localId: tempId } });
             } else {
-                queueOrSync({ action: 'appendData', payload: { tableName: 'bank_transactions', data: { ...tx, created_at: currentTimestamp }, localId: tempId, logDescription: `Added bank transaction: ${tx.description}`, select: '*' } });
+                queueOrSync({ action: 'appendData', payload: { tableName: 'bank_transactions', data: { ...tx }, localId: tempId, logDescription: `Added bank transaction: ${tx.description}`, select: '*' } });
             }
         });
     };
 
-    const addStockTransaction = async (tx: Omit<StockTransaction, 'id' | 'created_at' | 'deletedAt'>) => {
+    const addStockTransaction = async (tx: Omit<StockTransaction, 'id' | 'deletedAt'>) => {
         return performAdminAction(async () => {
             const stockTempId = `temp_stock_${Date.now()}`;
-            const currentTimestamp = new Date().toISOString();
-            const newStockTxData: StockTransaction = { ...tx, id: stockTempId, created_at: currentTimestamp };
+            const newStockTxData: StockTransaction = { ...tx, id: stockTempId };
 
             await db.stock_transactions.add(newStockTxData);
 
             if (tx.paymentMethod === 'cash' || tx.paymentMethod === 'bank') {
                 const financialTempId = `temp_fin_${Date.now()}`;
                 const financialTxData = {
-                    id: financialTempId, created_at: currentTimestamp,
+                    id: financialTempId, created_at: new Date().toISOString(),
                     date: tx.date, expected_amount: tx.expected_amount, actual_amount: tx.actual_amount,
                     difference: tx.difference, difference_reason: tx.difference_reason,
                     description: tx.description || `${tx.type} of ${tx.weight}kg of ${tx.stockItemName}`,
@@ -109,20 +106,21 @@ export function useAppActions() {
                     type: tx.type === 'purchase' ? 'payable' : 'receivable',
                     description: tx.description || `${tx.stockItemName} (${tx.weight}kg)`,
                     amount: tx.actual_amount, date: tx.date, contact_id: tx.contact_id!,
-                    status: 'unpaid', paid_amount: 0, installments: [],
+                    status: 'unpaid', paid_amount: 0, 
                     contact_name: contact?.name,
+                    created_at: new Date().toISOString(),
                 };
                 await db.ap_ar_transactions.add(ledgerData);
             }
             
             queueOrSync({
                 action: 'addStockTransaction',
-                payload: { stockTx: { ...tx, created_at: currentTimestamp }, localId: stockTempId }
+                payload: { stockTx: { ...tx }, localId: stockTempId }
             });
         });
     };
 
-    const addLedgerTransaction = async (tx: Omit<LedgerTransaction, 'id' | 'deletedAt' | 'status' | 'paid_amount' | 'installments'>) => {
+    const addLedgerTransaction = async (tx: Omit<LedgerTransaction, 'id' | 'deletedAt' | 'status' | 'paid_amount'>) => {
         return performAdminAction(async () => {
             const contact = contacts.find(c => c.id === tx.contact_id);
             if (!contact) {
@@ -136,13 +134,12 @@ export function useAppActions() {
                 contact_name: contact.name,
                 status: 'unpaid',
                 paid_amount: 0,
-                installments: [],
                 id: tempId,
             };
             
             await db.ap_ar_transactions.add(dataToSave);
             
-            const { id, installments, ...syncData } = dataToSave;
+            const { id, ...syncData } = dataToSave;
             
             queueOrSync({ 
                 action: 'appendData', 
@@ -412,7 +409,7 @@ export function useAppActions() {
                 status: 'paid',
                 contact_id: contact_id,
                 contact_name: contact.name,
-                installments: []
+                created_at: currentTimestamp,
             };
             await db.ap_ar_transactions.add(advanceLedgerEntry);
 

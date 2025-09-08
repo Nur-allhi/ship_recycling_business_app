@@ -96,7 +96,7 @@ export interface LedgerTransaction {
   contact_id: string;
   contact_name?: string;
   deletedAt?: string;
-  installments: LedgerPayment[];
+  created_at: string;
 }
     
 export interface ActivityLog {
@@ -137,7 +137,7 @@ export interface Loan {
   due_date?: string;
   status: 'active' | 'paid' | 'defaulted';
   created_at: string;
-  payments: LoanPayment[]; // Include payments for easier access in UI
+  payments: LedgerPayment[];
 }
 
 export interface LoanPayment {

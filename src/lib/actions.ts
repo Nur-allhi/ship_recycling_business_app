@@ -368,7 +368,6 @@ export async function deleteAllData() {
     }
 }
 
-// NEW: Replaces deleteVendor and deleteClient
 export async function deleteContact(input: { id: string }) {
     try {
         const session = await getSession();
