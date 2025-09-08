@@ -28,7 +28,7 @@ const fontClasses = {
 function MainContent() {
     const { 
         fontSize, isInitialBalanceDialogOpen, user, isLoading, isInitialLoadComplete,
-        cashTransactions, bankTransactions, stockItems, stockTransactions, showStockValue
+        cashTransactions, bankTransactions
     } = useAppContext();
     const [activeTab, setActiveTab] = useState('dashboard');
     const isAdmin = user?.role === 'admin';
@@ -44,49 +44,6 @@ function MainContent() {
       [bankTransactions]
     );
 
-    const { currentStockWeight, currentStockValue } = useMemo(() => {
-      const portfolio: Record<string, { weight: number, totalValue: number }> = {};
-      
-      (stockItems || []).forEach(item => {
-          if (!portfolio[item.name]) {
-              portfolio[item.name] = { weight: 0, totalValue: 0 };
-          }
-          portfolio[item.name].weight += item.weight;
-          portfolio[item.name].totalValue += item.weight * item.purchasePricePerKg;
-      });
-
-      const allTransactions = [...(stockTransactions || [])].sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-
-      allTransactions.forEach(tx => {
-          if (!portfolio[tx.stockItemName]) {
-              portfolio[tx.stockItemName] = { weight: 0, totalValue: 0 };
-          }
-          
-          const item = portfolio[tx.stockItemName];
-          const currentAvgPrice = item.weight > 0 ? item.totalValue / item.weight : 0;
-
-          if (tx.type === 'purchase') {
-              item.weight += tx.weight;
-              item.totalValue += tx.weight * tx.pricePerKg;
-          } else { // Sale
-              item.weight -= tx.weight;
-              item.totalValue -= tx.weight * currentAvgPrice;
-          }
-      });
-      
-      let totalWeight = 0;
-      let totalValue = 0;
-      Object.values(portfolio).forEach(item => {
-          totalWeight += item.weight;
-          totalValue += item.totalValue;
-      });
-      
-      return {
-        currentStockWeight: totalWeight,
-        currentStockValue: totalValue
-      };
-    }, [stockItems, stockTransactions]);
-
     if (isLoading || !isInitialLoadComplete || !user) {
         return <AppLoading message="Please wait..." />;
     }
@@ -97,9 +54,6 @@ function MainContent() {
                                         setActiveTab={setActiveTab} 
                                         cashBalance={cashBalance}
                                         bankBalance={bankBalance}
-                                        currentStockWeight={currentStockWeight}
-                                        currentStockValue={currentStockValue}
-                                        isLoading={isLoading}
                                     />;
             case 'cash': return <CashTab />;
             case 'bank': return <BankTab />;
@@ -111,9 +65,6 @@ function MainContent() {
                                 setActiveTab={setActiveTab} 
                                 cashBalance={cashBalance}
                                 bankBalance={bankBalance}
-                                currentStockWeight={currentStockWeight}
-                                currentStockValue={currentStockValue}
-                                isLoading={isLoading}
                             />;
         }
     }

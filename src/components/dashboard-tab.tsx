@@ -14,20 +14,14 @@ interface DashboardTabProps {
   setActiveTab: (tab: string) => void;
   cashBalance: number;
   bankBalance: number;
-  currentStockWeight: number;
-  currentStockValue: number;
-  isLoading: boolean;
 }
 
 export function DashboardTab({ 
   setActiveTab,
   cashBalance,
   bankBalance,
-  currentStockWeight,
-  currentStockValue,
-  isLoading
 }: DashboardTabProps) {
-  const { currency, showStockValue } = useAppContext()
+  const { currency, showStockValue, currentStockValue, currentStockWeight, isLoading, isDataLoaded } = useAppContext()
 
   const formatCurrency = (amount: number) => {
     if (currency === 'BDT') {
@@ -37,9 +31,11 @@ export function DashboardTab({
   }
 
   const totalBalance = cashBalance + bankBalance;
+  
+  const isComponentLoading = isLoading || !isDataLoaded;
 
   const renderValue = (value: string | number, isCurrency = true) => {
-    if (isLoading) {
+    if (isComponentLoading) {
       return <Skeleton className="h-8 w-3/4" />;
     }
     const formattedValue = isCurrency ? formatCurrency(value as number) : `${value}`;
@@ -47,7 +43,7 @@ export function DashboardTab({
   };
 
   const renderSubtext = (value: string) => {
-    if (isLoading) {
+    if (isComponentLoading) {
       return <Skeleton className="h-4 w-2/3 mt-1" />;
     }
     return <div className="text-xs text-muted-foreground animate-fade-in">{value}</div>;
