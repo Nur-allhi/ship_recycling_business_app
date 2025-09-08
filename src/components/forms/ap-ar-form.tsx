@@ -87,9 +87,9 @@ export function ApArForm({ setDialogOpen }: ApArFormProps) {
         }
 
         await addLedgerTransaction({
-            type: data.ledgerType!,
-            description: data.description!,
-            amount: data.amount!,
+            type: data.ledgerType,
+            description: data.description,
+            amount: data.amount,
             date: transactionDate,
             contact_id: finalContactId,
             contact_name: finalContactName,
@@ -186,3 +186,4 @@ export function ApArForm({ setDialogOpen }: ApArFormProps) {
     </Card>
   );
 }
+
