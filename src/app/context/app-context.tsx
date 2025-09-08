@@ -53,6 +53,7 @@ interface AppData {
   // Calculated state
   currentStockWeight: number;
   currentStockValue: number;
+  currentStockItems: any[];
 }
 
 interface AppContextType extends AppData {
@@ -149,49 +150,59 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         return { cashCategories: dbCash, bankCategories: dbBank };
     }, [allCategories]);
 
-    const { currentStockWeight, currentStockValue } = useMemo(() => {
-      if (!stockItems || !stockTransactions) return { currentStockWeight: 0, currentStockValue: 0 };
-      const portfolio: Record<string, { weight: number, totalValue: number }> = {};
-      
-      stockItems.forEach(item => {
-          if (!portfolio[item.name]) {
-              portfolio[item.name] = { weight: 0, totalValue: 0 };
-          }
-          portfolio[item.name].weight += item.weight;
-          portfolio[item.name].totalValue += item.weight * item.purchasePricePerKg;
-      });
-
-      const allTransactions = [...stockTransactions].sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-
-      allTransactions.forEach(tx => {
-          if (!portfolio[tx.stockItemName]) {
-              portfolio[tx.stockItemName] = { weight: 0, totalValue: 0 };
-          }
-          
-          const item = portfolio[tx.stockItemName];
-          const currentAvgPrice = item.weight > 0 ? item.totalValue / item.weight : 0;
-
-          if (tx.type === 'purchase') {
-              item.weight += tx.weight;
-              item.totalValue += tx.weight * tx.pricePerKg;
-          } else { // Sale
-              item.weight -= tx.weight;
-              item.totalValue -= tx.weight * currentAvgPrice;
-          }
-      });
-      
-      let totalWeight = 0;
-      let totalValue = 0;
-      Object.values(portfolio).forEach(item => {
-          totalWeight += item.weight;
-          totalValue += item.totalValue;
-      });
-      
-      return {
-        currentStockWeight: totalWeight,
-        currentStockValue: totalValue
-      };
-    }, [stockItems, stockTransactions]);
+    const { currentStockWeight, currentStockValue, currentStockItems } = useMemo(() => {
+        if (!stockItems || !stockTransactions) return { currentStockWeight: 0, currentStockValue: 0, currentStockItems: [] };
+        
+        const portfolio: Record<string, { weight: number, totalValue: number, purchaseCount: number }> = {};
+        
+        stockItems.forEach(item => {
+            if (!portfolio[item.name]) {
+                portfolio[item.name] = { weight: 0, totalValue: 0, purchaseCount: 0 };
+            }
+            portfolio[item.name].weight += item.weight;
+            portfolio[item.name].totalValue += item.weight * item.purchasePricePerKg;
+            if (item.weight > 0) portfolio[item.name].purchaseCount++;
+        });
+  
+        const allTransactions = [...stockTransactions].sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  
+        allTransactions.forEach(tx => {
+            if (!portfolio[tx.stockItemName]) {
+                portfolio[tx.stockItemName] = { weight: 0, totalValue: 0, purchaseCount: 0 };
+            }
+            
+            const item = portfolio[tx.stockItemName];
+            const currentAvgPrice = (item.totalValue > 0 && item.weight > 0) ? item.totalValue / item.weight : 0;
+  
+            if (tx.type === 'purchase') {
+                item.weight += tx.weight;
+                item.totalValue += tx.weight * tx.pricePerKg;
+                item.purchaseCount++;
+            } else { // Sale
+                item.weight -= tx.weight;
+                item.totalValue -= tx.weight * currentAvgPrice;
+            }
+        });
+        
+        let totalWeight = 0;
+        let totalValue = 0;
+        const portfolioArray = Object.entries(portfolio).map(([name, data]) => {
+            totalWeight += data.weight;
+            totalValue += data.totalValue;
+            return {
+                name,
+                weight: data.weight,
+                totalValue: data.totalValue,
+                avgPrice: data.weight > 0 ? data.totalValue / data.weight : 0,
+            };
+        });
+        
+        return {
+          currentStockWeight: totalWeight,
+          currentStockValue: totalValue,
+          currentStockItems: portfolioArray.filter(item => item.weight > 0)
+        };
+      }, [stockItems, stockTransactions]);
 
     const seedEssentialCategories = useCallback(async (existingCategories: Category[]): Promise<Category[]> => {
         let finalCategories = [...existingCategories];
@@ -391,6 +402,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         activityLog: activityLog || [],
         currentStockWeight,
         currentStockValue,
+        currentStockItems,
         login, logout, reloadData, handleApiError,
         processSyncQueue, openInitialBalanceDialog, closeInitialBalanceDialog,
         setUser, setBlockingOperation, queueOrSync,
@@ -398,7 +410,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         isLoading, isOnline, user, isInitialLoadComplete, isDataLoaded, isLoggingOut, isAuthenticating,
         isSyncing, syncQueueCount, isInitialBalanceDialogOpen, blockingOperation,
         appState, banks, cashCategories, bankCategories, contacts, loans, loanPayments, stockItems, cashTransactions, bankTransactions, stockTransactions, activityLog,
-        currentStockWeight, currentStockValue,
+        currentStockWeight, currentStockValue, currentStockItems,
         login, logout, reloadData, handleApiError,
         processSyncQueue, openInitialBalanceDialog, closeInitialBalanceDialog, setUser, setBlockingOperation, queueOrSync
     ]);
@@ -406,7 +418,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return (
         <AppContext.Provider value={contextValue}>
             <OnlineStatusIndicator />
-            {(isLoading || !isDataLoaded) && !pathname.startsWith('/login') ? <AppLoading /> : children}
+            {(isLoading || !isInitialLoadComplete || !isDataLoaded) ? <AppLoading /> : children}
         </AppContext.Provider>
     );
 }

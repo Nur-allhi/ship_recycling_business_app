@@ -377,8 +377,8 @@ export function StockTab() {
                 </TableRow>
             </TableHeader>
             <TableBody>
-                {currentStockItems.length > 0 ? (
-                currentStockItems.map((item, index) => (
+                {(currentStockItems || []).length > 0 ? (
+                (currentStockItems || []).map((item, index) => (
                     <TableRow key={index}>
                     <TableCell className="font-medium text-center">{item.name}</TableCell>
                     <TableCell className="text-center font-mono">{item.weight.toFixed(2)}</TableCell>
@@ -392,7 +392,7 @@ export function StockTab() {
                 </TableRow>
                 )}
             </TableBody>
-            {currentStockItems.length > 0 && (
+            {(currentStockItems || []).length > 0 && (
                 <TableFoot>
                     <TableRow>
                     <TableCell className="font-bold text-center">Totals</TableCell>
@@ -408,8 +408,8 @@ export function StockTab() {
 
   const renderMobileInventory = () => (
     <div className="space-y-4">
-        {currentStockItems.length > 0 ? (
-            currentStockItems.map((item, index) => (
+        {(currentStockItems || []).length > 0 ? (
+            (currentStockItems || []).map((item, index) => (
                 <Card key={index}>
                     <CardContent className="p-4 space-y-2">
                         <div className="flex justify-between items-start">
@@ -430,7 +430,7 @@ export function StockTab() {
             <div className="text-center text-muted-foreground py-12">No stock items with current balance.</div>
         )}
 
-        {currentStockItems.length > 0 && (
+        {(currentStockItems || []).length > 0 && (
             <Card className="bg-muted/50">
                 <CardHeader>
                     <CardTitle className="text-base">Total Inventory Summary</CardTitle>
@@ -605,5 +605,3 @@ export function StockTab() {
     </>
   )
 }
-
-    
