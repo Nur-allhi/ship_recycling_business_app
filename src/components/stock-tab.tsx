@@ -156,22 +156,52 @@ export function StockTab() {
   }
 
   const { currentStockWeight, currentStockValue, currentStockItems } = useMemo(() => {
-    const items = (stockItems || []).map(item => ({
-        name: item.name,
-        weight: item.weight,
-        avgPrice: item.purchasePricePerKg,
-        totalValue: item.weight * item.purchasePricePerKg
-    }));
-    
-    const totalWeight = items.reduce((acc, item) => acc + item.weight, 0);
-    const totalValue = items.reduce((acc, item) => acc + item.totalValue, 0);
-    
-    return {
+      const portfolio: Record<string, { weight: number, totalValue: number }> = {};
+      
+      (stockItems || []).forEach(item => {
+          if (!portfolio[item.name]) {
+              portfolio[item.name] = { weight: 0, totalValue: 0 };
+          }
+          portfolio[item.name].weight += item.weight;
+          portfolio[item.name].totalValue += item.weight * item.purchasePricePerKg;
+      });
+
+      const allTransactions = [...(stockTransactions || [])].sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+      allTransactions.forEach(tx => {
+          if (!portfolio[tx.stockItemName]) {
+              portfolio[tx.stockItemName] = { weight: 0, totalValue: 0 };
+          }
+          
+          const item = portfolio[tx.stockItemName];
+          const currentAvgPrice = item.weight > 0 ? item.totalValue / item.weight : 0;
+
+          if (tx.type === 'purchase') {
+              item.weight += tx.weight;
+              item.totalValue += tx.weight * tx.pricePerKg;
+          } else { // Sale
+              item.weight -= tx.weight;
+              // On sale, reduce total value by the average cost of the sold items, not the sale price
+              item.totalValue -= tx.weight * currentAvgPrice;
+          }
+      });
+      
+      const items = Object.entries(portfolio).map(([name, data]) => ({
+          name,
+          weight: data.weight,
+          avgPrice: data.weight > 0 ? data.totalValue / data.weight : 0,
+          totalValue: data.totalValue
+      }));
+
+      const totalWeight = items.reduce((acc, item) => acc + item.weight, 0);
+      const totalValue = items.reduce((acc, item) => acc + item.totalValue, 0);
+      
+      return {
         currentStockWeight: totalWeight,
         currentStockValue: totalValue,
         currentStockItems: items.filter(item => item.weight > 0)
-    };
-}, [stockItems]);
+      };
+  }, [stockItems, stockTransactions]);
   
   const { totalPurchaseWeight, totalSaleWeight, totalPurchaseValue, totalSaleValue } = useMemo(() => {
     return filteredByMonth.reduce((acc, tx) => {
