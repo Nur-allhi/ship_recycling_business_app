@@ -36,10 +36,10 @@ export function useAppActions() {
         }
     };
 
-    const addCashTransaction = async (tx: Omit<CashTransaction, 'id' | 'createdAt' | 'deletedAt'>) => {
+    const addCashTransaction = async (tx: Omit<CashTransaction, 'id' | 'created_at' | 'deletedAt'>) => {
         return performAdminAction(async () => {
             const tempId = `temp_cash_${Date.now()}`;
-            const newTxData: CashTransaction = { ...tx, id: tempId, createdAt: new Date().toISOString() };
+            const newTxData: CashTransaction = { ...tx, id: tempId, created_at: new Date().toISOString() };
             
             await db.cash_transactions.add(newTxData);
 
@@ -55,10 +55,10 @@ export function useAppActions() {
         });
     };
 
-    const addBankTransaction = async (tx: Omit<BankTransaction, 'id' | 'createdAt' | 'deletedAt'>) => {
+    const addBankTransaction = async (tx: Omit<BankTransaction, 'id' | 'created_at' | 'deletedAt'>) => {
         return performAdminAction(async () => {
             const tempId = `temp_bank_${Date.now()}`;
-            const newTxData: BankTransaction = { ...tx, id: tempId, createdAt: new Date().toISOString() };
+            const newTxData: BankTransaction = { ...tx, id: tempId, created_at: new Date().toISOString() };
             
             await db.bank_transactions.add(newTxData);
             
@@ -74,17 +74,17 @@ export function useAppActions() {
         });
     };
 
-    const addStockTransaction = async (tx: Omit<StockTransaction, 'id' | 'createdAt' | 'deletedAt'>) => {
+    const addStockTransaction = async (tx: Omit<StockTransaction, 'id' | 'created_at' | 'deletedAt'>) => {
         return performAdminAction(async () => {
             const stockTempId = `temp_stock_${Date.now()}`;
-            const newStockTxData: StockTransaction = { ...tx, id: stockTempId, createdAt: new Date().toISOString() };
+            const newStockTxData: StockTransaction = { ...tx, id: stockTempId, created_at: new Date().toISOString() };
 
             await db.stock_transactions.add(newStockTxData);
 
             if (tx.paymentMethod === 'cash' || tx.paymentMethod === 'bank') {
                 const financialTempId = `temp_fin_${Date.now()}`;
                 const financialTxData = {
-                    id: financialTempId, createdAt: new Date().toISOString(),
+                    id: financialTempId, created_at: new Date().toISOString(),
                     date: tx.date, expected_amount: tx.expected_amount, actual_amount: tx.actual_amount,
                     difference: tx.difference, difference_reason: tx.difference_reason,
                     description: tx.description || `${tx.type} of ${tx.weight}kg of ${tx.stockItemName}`,
@@ -154,7 +154,7 @@ export function useAppActions() {
         });
     };
     
-    const editCashTransaction = async (originalTx: CashTransaction, updatedTxData: Partial<Omit<CashTransaction, 'id' | 'date' | 'createdAt'>>) => {
+    const editCashTransaction = async (originalTx: CashTransaction, updatedTxData: Partial<Omit<CashTransaction, 'id' | 'date' | 'created_at'>>) => {
         return performAdminAction(async () => {
             await db.cash_transactions.update(originalTx.id, updatedTxData);
             queueOrSync({ action: 'updateData', payload: { tableName: 'cash_transactions', id: originalTx.id, data: updatedTxData, logDescription: `Edited cash tx: ${originalTx.id}` }});
@@ -162,7 +162,7 @@ export function useAppActions() {
         });
     };
 
-    const editBankTransaction = async (originalTx: BankTransaction, updatedTxData: Partial<Omit<BankTransaction, 'id'| 'date' | 'createdAt'>>) => {
+    const editBankTransaction = async (originalTx: BankTransaction, updatedTxData: Partial<Omit<BankTransaction, 'id'| 'date' | 'created_at'>>) => {
         return performAdminAction(async () => {
             await db.bank_transactions.update(originalTx.id, updatedTxData);
             queueOrSync({ action: 'updateData', payload: { tableName: 'bank_transactions', id: originalTx.id, data: updatedTxData, logDescription: `Edited bank tx: ${originalTx.id}` }});
@@ -170,7 +170,7 @@ export function useAppActions() {
         });
     };
 
-    const editStockTransaction = async (originalTx: StockTransaction, updatedTxData: Partial<Omit<StockTransaction, 'id' | 'date' | 'createdAt'>>) => {
+    const editStockTransaction = async (originalTx: StockTransaction, updatedTxData: Partial<Omit<StockTransaction, 'id' | 'date' | 'created_at'>>) => {
         return performAdminAction(async () => {
             const fullUpdate = { ...originalTx, ...updatedTxData };
             const newActualAmount = fullUpdate.weight * fullUpdate.pricePerKg;
@@ -236,7 +236,7 @@ export function useAppActions() {
     const addBank = async (name: string) => {
         await performAdminAction(async () => {
             const tempId = `temp_bank_${Date.now()}`;
-            await db.banks.add({ id: tempId, name, createdAt: new Date().toISOString() });
+            await db.banks.add({ id: tempId, name, created_at: new Date().toISOString() });
             queueOrSync({ action: 'appendData', payload: { tableName: 'banks', data: { name }, localId: tempId, select: '*' } });
         });
     };
@@ -264,11 +264,11 @@ export function useAppActions() {
             const tempBankId = `temp_tf_bank_${Date.now()}`;
 
             if (from === 'cash') {
-                await db.cash_transactions.add({ id: tempCashId, date, type: 'expense', category: 'Funds Transfer', description: fromDesc, actual_amount: amount, expected_amount: amount, difference: 0, createdAt: new Date().toISOString() });
-                await db.bank_transactions.add({ id: tempBankId, date, type: 'deposit', category: 'Funds Transfer', description: toDesc, actual_amount: amount, expected_amount: amount, difference: 0, bank_id: bankId, createdAt: new Date().toISOString() });
+                await db.cash_transactions.add({ id: tempCashId, date, type: 'expense', category: 'Funds Transfer', description: fromDesc, actual_amount: amount, expected_amount: amount, difference: 0, created_at: new Date().toISOString() });
+                await db.bank_transactions.add({ id: tempBankId, date, type: 'deposit', category: 'Funds Transfer', description: toDesc, actual_amount: amount, expected_amount: amount, difference: 0, bank_id: bankId, created_at: new Date().toISOString() });
             } else {
-                await db.bank_transactions.add({ id: tempBankId, date, type: 'withdrawal', category: 'Funds Transfer', description: fromDesc, actual_amount: amount, expected_amount: amount, difference: 0, bank_id: bankId, createdAt: new Date().toISOString() });
-                await db.cash_transactions.add({ id: tempCashId, date, type: 'income', category: 'Funds Transfer', description: toDesc, actual_amount: amount, expected_amount: amount, difference: 0, createdAt: new Date().toISOString() });
+                await db.bank_transactions.add({ id: tempBankId, date, type: 'withdrawal', category: 'Funds Transfer', description: fromDesc, actual_amount: amount, expected_amount: amount, difference: 0, bank_id: bankId, created_at: new Date().toISOString() });
+                await db.cash_transactions.add({ id: tempCashId, date, type: 'income', category: 'Funds Transfer', description: toDesc, actual_amount: amount, expected_amount: amount, difference: 0, created_at: new Date().toISOString() });
             }
             
             queueOrSync({ action: 'transferFunds', payload: { from, amount, date, bankId, description, localCashId: tempCashId, localBankId: tempBankId } });
@@ -286,9 +286,9 @@ export function useAppActions() {
             await db.initial_stock.clear();
 
             // Add new balances to local DB
-            await db.cash_transactions.add({ id: `temp_init_cash_${Date.now()}`, date: isoDate, type: 'income', category: 'Initial Balance', description: 'Initial cash balance', actual_amount: payload.cash, expected_amount: payload.cash, difference: 0, createdAt: new Date().toISOString() });
+            await db.cash_transactions.add({ id: `temp_init_cash_${Date.now()}`, date: isoDate, type: 'income', category: 'Initial Balance', description: 'Initial cash balance', actual_amount: payload.cash, expected_amount: payload.cash, difference: 0, created_at: new Date().toISOString() });
             for (const [bankId, amount] of Object.entries(payload.bankTotals)) {
-                await db.bank_transactions.add({ id: `temp_init_bank_${bankId}_${Date.now()}`, date: isoDate, type: 'deposit', category: 'Initial Balance', description: 'Initial bank balance', actual_amount: amount, expected_amount: amount, difference: 0, bank_id: bankId, createdAt: new Date().toISOString() });
+                await db.bank_transactions.add({ id: `temp_init_bank_${bankId}_${Date.now()}`, date: isoDate, type: 'deposit', category: 'Initial Balance', description: 'Initial bank balance', actual_amount: amount, expected_amount: amount, difference: 0, bank_id: bankId, created_at: new Date().toISOString() });
             }
             if (payload.stockItems.length > 0) {
                 const stockDataForDb = payload.stockItems.map(item => ({
@@ -311,7 +311,7 @@ export function useAppActions() {
         }
 
         const tempId = `temp_contact_${Date.now()}`;
-        const newContact: Contact = { id: tempId, name, type, createdAt: new Date().toISOString() };
+        const newContact: Contact = { id: tempId, name, type, created_at: new Date().toISOString() };
         
         await db.contacts.add(newContact);
         queueOrSync({ action: 'appendData', payload: { tableName: 'contacts', data: { name, type }, localId: tempId, logDescription: `Added contact: ${name}`, select: '*' }});
@@ -338,9 +338,9 @@ export function useAppActions() {
             const isoDate = toYYYYMMDD(paymentDate);
 
             if (paymentMethod === 'cash') {
-                await db.cash_transactions.add({ id: tempFinancialId, date: isoDate, type: ledgerType === 'payable' ? 'expense' : 'income', category, description: desc, actual_amount: paymentAmount, expected_amount: paymentAmount, difference: 0, createdAt: new Date().toISOString(), contact_id: contactId });
+                await db.cash_transactions.add({ id: tempFinancialId, date: isoDate, type: ledgerType === 'payable' ? 'expense' : 'income', category, description: desc, actual_amount: paymentAmount, expected_amount: paymentAmount, difference: 0, created_at: new Date().toISOString(), contact_id: contactId });
             } else {
-                await db.bank_transactions.add({ id: tempFinancialId, date: isoDate, type: ledgerType === 'payable' ? 'withdrawal' : 'deposit', category, description: desc, actual_amount: paymentAmount, expected_amount: paymentAmount, difference: 0, bank_id: bankId!, createdAt: new Date().toISOString(), contact_id: contactId });
+                await db.bank_transactions.add({ id: tempFinancialId, date: isoDate, type: ledgerType === 'payable' ? 'withdrawal' : 'deposit', category, description: desc, actual_amount: paymentAmount, expected_amount: paymentAmount, difference: 0, bank_id: bankId!, created_at: new Date().toISOString(), contact_id: contactId });
             }
 
             let amountToSettle = paymentAmount;
@@ -365,7 +365,7 @@ export function useAppActions() {
                     amount: paymentForThisTx,
                     date: isoDate,
                     payment_method: paymentMethod,
-                    createdAt: new Date().toISOString(),
+                    created_at: new Date().toISOString(),
                 };
                 await db.ledger_payments.add(installment);
                 
@@ -418,7 +418,7 @@ export function useAppActions() {
                 actual_amount: amount,
                 difference: 0,
                 advance_id: tempLedgerId,
-                createdAt: new Date().toISOString(),
+                created_at: new Date().toISOString(),
                 contact_id: contact_id,
             };
 
@@ -520,7 +520,7 @@ export function useAppActions() {
             const loanDataForDb: Partial<Loan> = { ...loan };
             if (newContact) {
                 const tempContactId = `temp_contact_${Date.now()}`;
-                await db.contacts.add({ id: tempContactId, name: newContact.name, type: newContact.type, createdAt: new Date().toISOString() });
+                await db.contacts.add({ id: tempContactId, name: newContact.name, type: newContact.type, created_at: new Date().toISOString() });
                 loanDataForDb.contact_id = tempContactId;
             }
 
@@ -538,7 +538,7 @@ export function useAppActions() {
                 difference: 0,
                 contact_id: loanDataForDb.contact_id,
                 linkedLoanId: tempId, // Link financial tx to loan
-                createdAt: new Date().toISOString(),
+                created_at: new Date().toISOString(),
             };
 
             if (disbursement.method === 'cash') {
@@ -597,7 +597,7 @@ export function useAppActions() {
                 difference: 0,
                 contact_id: loan.contact_id,
                 linkedLoanId: loan_id,
-                createdAt: new Date().toISOString(),
+                created_at: new Date().toISOString(),
             };
 
             if (payment_method === 'cash') {

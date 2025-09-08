@@ -12,7 +12,7 @@ export interface Transaction {
   deletedAt?: string;
   linkedStockTxId?: string;
   linkedLoanId?: string;
-  createdAt: string;
+  created_at: string;
   advance_id?: string | null;
   contact_id?: string | null;
 }
@@ -24,7 +24,7 @@ export interface CashTransaction extends Transaction {
 export interface Bank {
     id: string;
     name: string;
-    createdAt: string;
+    created_at: string;
 }
 
 export interface BankTransaction extends Transaction {
@@ -51,7 +51,7 @@ export interface StockTransaction {
   description?: string;
   lastEdited?: string;
   deletedAt?: string;
-  createdAt: string;
+  created_at: string;
   // New fields for payment discrepancies
   expected_amount: number;
   actual_amount: number;
@@ -72,7 +72,7 @@ export interface Contact {
   id: string;
   name: string;
   type: 'vendor' | 'client' | 'both';
-  createdAt: string;
+  created_at: string;
 }
 
 
@@ -82,7 +82,7 @@ export interface LedgerPayment {
   amount: number;
   date: string;
   payment_method: 'cash' | 'bank';
-  createdAt: string;
+  created_at: string;
 }
 
 export interface LedgerTransaction {

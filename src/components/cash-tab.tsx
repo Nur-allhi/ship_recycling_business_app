@@ -32,19 +32,15 @@ import { db } from "@/lib/db"
 import { motion, AnimatePresence } from "framer-motion"
 import { useLiveQuery } from "dexie-react-hooks"
 import { generateCashLedgerPdf } from "@/lib/pdf-utils"
-
-const toYYYYMMDD = (date: Date) => {
-    const d = new Date(date);
-    d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
-    return d.toISOString().split('T')[0];
-};
+import { useSortedTransactions, calculateRunningBalances } from "@/lib/db-queries"
+import { toYYYYMMDD } from "@/lib/utils"
 
 type SortKey = keyof CashTransaction | 'debit' | 'credit' | null;
 type SortDirection = 'asc' | 'desc';
 
 export function CashTab() {
   const { currency, user, banks, handleApiError, isOnline, contacts, loans } = useAppContext()
-  const cashTransactions = useLiveQuery(() => db.cash_transactions.toArray());
+  const allCashTransactions = useLiveQuery(() => db.cash_transactions.toArray());
   const cashBalance = useLiveQuery(() => 
     db.cash_transactions.toArray().then(txs => 
       txs.reduce((acc, tx) => acc + (tx.type === 'income' ? tx.actual_amount : -tx.actual_amount), 0)
@@ -65,7 +61,15 @@ export function CashTab() {
   const [isSnapshotLoading, setIsSnapshotLoading] = useState(true);
   const isMobile = useIsMobile();
   const isAdmin = user?.role === 'admin';
-  const isLoading = cashTransactions === undefined;
+
+  // Use centralized sorting function that implements ORDER BY date ASC, created_at ASC
+  const { isLoading: isTransactionsLoading, transactions: displayTransactions, chronologicalTransactions } = useSortedTransactions('cash_transactions', {
+    month: currentMonth,
+    sortKey: sortKey as any, // Type assertion needed due to component-specific sort keys
+    sortDirection,
+  });
+
+  const isLoading = allCashTransactions === undefined || isTransactionsLoading;
 
   const fetchSnapshot = useCallback(async () => {
     setIsSnapshotLoading(true);
@@ -74,7 +78,6 @@ export function CashTab() {
     if (localSnapshot) {
         setMonthlySnapshot(localSnapshot);
     } else {
-        // Fallback to local calculation if no snapshot is available or offline
         setMonthlySnapshot(null);
     }
     setIsSnapshotLoading(false);
@@ -92,84 +95,56 @@ export function CashTab() {
       setSortDirection('desc');
     }
   };
-
-  const filteredByMonth = useMemo(() => {
-    if (!cashTransactions) return [];
-    const start = startOfMonth(currentMonth);
-    const end = endOfMonth(currentMonth);
-    return cashTransactions.filter(tx => {
-        const txDate = new Date(tx.date);
-        return txDate >= start && txDate <= end;
-    })
-  }, [cashTransactions, currentMonth]);
   
+  // Calculate running balances using chronological order to prevent negative balance issues
   const transactionsWithBalances = useMemo(() => {
+    if (!chronologicalTransactions) return [];
+    
     const start = startOfMonth(currentMonth);
     let openingBalance = 0;
 
     if (monthlySnapshot) {
         openingBalance = monthlySnapshot.cash_balance;
+        console.log(`[CashTab] Using monthly snapshot opening balance: ${openingBalance}`);
     } else {
-        // If no snapshot, calculate from all previous transactions
-        openingBalance = (cashTransactions || [])
-            .filter(tx => isBefore(new Date(tx.date), start))
+        const historicalTxs = (allCashTransactions || [])
+            .filter(tx => isBefore(new Date(tx.date), start));
+        
+        openingBalance = historicalTxs
             .reduce((acc, tx) => acc + (tx.type === 'income' ? tx.actual_amount : -tx.actual_amount), 0);
+        
+        console.log(`[CashTab] Calculated opening balance for ${format(currentMonth, 'MMMM yyyy')}:`, {
+            startOfMonth: start.toISOString().split('T')[0],
+            historicalTransactionsCount: historicalTxs.length,
+            openingBalance,
+            sampleHistoricalDates: historicalTxs.slice(0, 3).map(tx => tx.date)
+        });
+        
+        // MIGRATION HANDLING: If no historical transactions and current month has data,
+        // this suggests the opening balance should be calculated differently
+        if (historicalTxs.length === 0 && chronologicalTransactions && chronologicalTransactions.length > 0) {
+            console.warn(`[CashTab] No historical transactions found before ${start.toISOString().split('T')[0]}, but current month has ${chronologicalTransactions.length} transactions. This may indicate missing opening balance data.`);
+            
+            // For data migration: You may want to set a proper opening balance here
+            // based on your business requirements. For now, we'll continue with 0
+            // but this ensures the income-first sorting prevents negative balances.
+        }
     }
 
-    const txsInMonthForCalc = [...filteredByMonth].sort((a, b) => {
-        const dateA = new Date(a.date).getTime();
-        const dateB = new Date(b.date).getTime();
-        if(dateA !== dateB) return dateA - dateB;
-        // Secondary sort by creation time for same-day transactions
-        return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
-    });
+    // Use chronological order for balance calculation to maintain proper sequence
+    return calculateRunningBalances(chronologicalTransactions, openingBalance);
+  }, [monthlySnapshot, chronologicalTransactions, allCashTransactions, currentMonth]);
 
-    let currentBalance = openingBalance;
-    const balancesMap = new Map<string, number>();
-    for (const tx of txsInMonthForCalc) {
-        currentBalance += (tx.type === 'income' ? tx.actual_amount : -tx.actual_amount);
-        balancesMap.set(tx.id, currentBalance);
-    }
-    
-    return filteredByMonth.map(tx => ({...tx, balance: balancesMap.get(tx.id) || 0}));
-  }, [monthlySnapshot, filteredByMonth, cashTransactions, currentMonth]);
-
+  // Map display transactions to include balances
   const sortedTransactions = useMemo(() => {
-    return [...transactionsWithBalances].sort((a, b) => {
-        let aValue: any;
-        let bValue: any;
-        
-        if (sortKey === 'debit') {
-            aValue = a.type === 'expense' ? a.actual_amount : 0;
-            bValue = b.type === 'expense' ? b.actual_amount : 0;
-        } else if (sortKey === 'credit') {
-            aValue = a.type === 'income' ? a.actual_amount : 0;
-            bValue = b.type === 'income' ? b.actual_amount : 0;
-        } else if(sortKey === 'date') {
-             const dateA = new Date(a.date).getTime();
-             const dateB = new Date(b.date).getTime();
-             if(dateA !== dateB) return sortDirection === 'desc' ? dateB - dateA : dateA - dateB;
-             // Secondary sort for date
-             return sortDirection === 'desc' 
-                ? new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime() 
-                : new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
-        } else if (sortKey) {
-            aValue = a[sortKey as keyof CashTransaction];
-            bValue = b[sortKey as keyof CashTransaction];
-        } else {
-            return 0;
-        }
-
-        let result = 0;
-        if (typeof aValue === 'string' && typeof bValue === 'string') {
-            result = aValue.localeCompare(bValue);
-        } else if (typeof aValue === 'number' && typeof bValue === 'number') {
-            result = aValue - bValue;
-        }
-        
-        return sortDirection === 'desc' ? -result : result;
-    });
-  }, [transactionsWithBalances, sortKey, sortDirection]);
+    if (!displayTransactions || !transactionsWithBalances) return [];
+    
+    const balanceMap = new Map(transactionsWithBalances.map(tx => [tx.id, tx.balance]));
+    return displayTransactions.map(tx => ({
+      ...tx,
+      balance: balanceMap.get(tx.id) || 0
+    }));
+  }, [displayTransactions, transactionsWithBalances]);
 
   const handleEditClick = (tx: CashTransaction) => {
     setEditSheetState({ isOpen: true, transaction: tx });

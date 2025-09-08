@@ -39,12 +39,8 @@ import { db } from "@/lib/db"
 import { motion, AnimatePresence } from "framer-motion"
 import { useLiveQuery } from "dexie-react-hooks"
 import { generateBankLedgerPdf } from "@/lib/pdf-utils"
-
-const toYYYYMMDD = (date: Date) => {
-    const d = new Date(date);
-    d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
-    return d.toISOString().split('T')[0];
-};
+import { useSortedTransactions, calculateRunningBalances } from "@/lib/db-queries"
+import { toYYYYMMDD } from "@/lib/utils"
 
 type SortKey = keyof BankTransaction | 'debit' | 'credit' | null;
 type SortDirection = 'asc' | 'desc';
@@ -72,7 +68,22 @@ export function BankTab() {
   const [isSnapshotLoading, setIsSnapshotLoading] = useState(true);
   const isMobile = useIsMobile();
   const isAdmin = user?.role === 'admin';
-  const isLoading = bankTransactions === undefined;
+
+  // Filter transactions by selected bank before applying centralized sorting
+  const bankFilter = useCallback((tx: BankTransaction) => {
+    if (selectedBankId === 'all') return true;
+    return tx.bank_id === selectedBankId;
+  }, [selectedBankId]);
+
+  // Use centralized sorting function that implements ORDER BY date ASC, created_at ASC
+  const { isLoading: isTransactionsLoading, transactions: displayTransactions, chronologicalTransactions } = useSortedTransactions('bank_transactions', {
+    month: currentMonth,
+    sortKey: sortKey as any, // Type assertion needed due to component-specific sort keys
+    sortDirection,
+    filter: bankFilter,
+  });
+
+  const isLoading = bankTransactions === undefined || isTransactionsLoading;
 
   const fetchSnapshot = useCallback(async () => {
     setIsSnapshotLoading(true);
@@ -103,12 +114,6 @@ export function BankTab() {
     fetchSnapshot();
   }, [fetchSnapshot]);
 
-  const filteredByBank = useMemo(() => {
-    if (!bankTransactions) return [];
-    if (selectedBankId === 'all') return bankTransactions;
-    return bankTransactions.filter(tx => tx.bank_id === selectedBankId);
-  }, [bankTransactions, selectedBankId]);
-
   const handleSort = (key: SortKey) => {
     if (sortKey === key) {
       setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
@@ -118,16 +123,10 @@ export function BankTab() {
     }
   };
 
-  const filteredByMonth = useMemo(() => {
-    const start = startOfMonth(currentMonth);
-    const end = endOfMonth(currentMonth);
-    return filteredByBank.filter(tx => {
-        const txDate = new Date(tx.date);
-        return txDate >= start && txDate <= end;
-    })
-  }, [filteredByBank, currentMonth]);
-  
+  // Calculate running balances using chronological order to prevent negative balance issues
   const transactionsWithBalances = useMemo(() => {
+    if (!chronologicalTransactions) return [];
+    
     const start = startOfMonth(currentMonth);
     let openingBalance = 0;
 
@@ -138,64 +137,28 @@ export function BankTab() {
             openingBalance = monthlySnapshot.bank_balances?.[selectedBankId] || 0;
         }
     } else {
-        openingBalance = (filteredByBank || [])
+        // Calculate opening balance from historical transactions
+        const allBankTxs = bankTransactions || [];
+        const filteredForBalance = selectedBankId === 'all' ? allBankTxs : allBankTxs.filter(tx => tx.bank_id === selectedBankId);
+        openingBalance = filteredForBalance
             .filter(tx => isBefore(new Date(tx.date), start))
             .reduce((acc, tx) => acc + (tx.type === 'deposit' ? tx.actual_amount : -tx.actual_amount), 0);
     }
 
-    const txsInMonthForCalc = [...filteredByMonth].sort((a, b) => {
-        const dateA = new Date(a.date).getTime();
-        const dateB = new Date(b.date).getTime();
-        if(dateA !== dateB) return dateA - dateB;
-        return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
-    });
+    // Use chronological order for balance calculation to maintain proper sequence
+    return calculateRunningBalances(chronologicalTransactions, openingBalance);
+  }, [monthlySnapshot, chronologicalTransactions, bankTransactions, selectedBankId, currentMonth]);
 
-    let currentBalance = openingBalance;
-    const balancesMap = new Map<string, number>();
-    for (const tx of txsInMonthForCalc) {
-        currentBalance += (tx.type === 'deposit' ? tx.actual_amount : -tx.actual_amount);
-        balancesMap.set(tx.id, currentBalance);
-    }
-
-    return filteredByMonth.map(tx => ({...tx, balance: balancesMap.get(tx.id) || 0}));
-  }, [monthlySnapshot, filteredByMonth, selectedBankId, filteredByBank, currentMonth]);
-
+  // Map display transactions to include balances
   const sortedTransactions = useMemo(() => {
-    return [...transactionsWithBalances].sort((a, b) => {
-        let aValue: any;
-        let bValue: any;
-
-        if (sortKey === 'debit') {
-            aValue = a.type === 'withdrawal' ? a.actual_amount : 0;
-            bValue = b.type === 'withdrawal' ? b.actual_amount : 0;
-        } else if (sortKey === 'credit') {
-            aValue = a.type === 'deposit' ? a.actual_amount : 0;
-            bValue = b.type === 'deposit' ? b.actual_amount : 0;
-        } else if(sortKey === 'date') {
-             const dateA = new Date(a.date).getTime();
-             const dateB = new Date(b.date).getTime();
-             if(dateA !== dateB) return sortDirection === 'desc' ? dateB - dateA : dateA - dateB;
-              // Secondary sort for date
-             return sortDirection === 'desc' 
-                ? new Date(b.createdAt).getTime() - new Date(b.createdAt).getTime() 
-                : new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
-        } else if (sortKey) {
-            aValue = a[sortKey as keyof BankTransaction];
-            bValue = b[sortKey as keyof BankTransaction];
-        } else {
-            return 0;
-        }
-        
-        let result = 0;
-        if (typeof aValue === 'string' && typeof bValue === 'string') {
-            result = aValue.localeCompare(bValue);
-        } else if (typeof aValue === 'number' && typeof bValue === 'number') {
-            result = aValue - bValue;
-        }
-        
-        return sortDirection === 'desc' ? -result : result;
-    });
-  }, [transactionsWithBalances, sortKey, sortDirection]);
+    if (!displayTransactions || !transactionsWithBalances) return [];
+    
+    const balanceMap = new Map(transactionsWithBalances.map(tx => [tx.id, tx.balance]));
+    return displayTransactions.map(tx => ({
+      ...tx,
+      balance: balanceMap.get(tx.id) || 0
+    }));
+  }, [displayTransactions, transactionsWithBalances]);
 
   const handleEditClick = (tx: BankTransaction) => {
     setEditSheetState({ isOpen: true, transaction: tx });
