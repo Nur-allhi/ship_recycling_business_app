@@ -254,35 +254,31 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 setUser(session);
             }
             
-            const serverData = await server.readData({ tableName: 'categories', select: '*' });
-            const categoriesData = await seedEssentialCategories(serverData as Category[]);
+            const serverData = await server.batchReadData({
+                tables: [
+                    { tableName: 'categories' }, { tableName: 'contacts' },
+                    { tableName: 'banks' }, { tableName: 'cash_transactions' },
+                    { tableName: 'bank_transactions' }, { tableName: 'stock_transactions' },
+                    { tableName: 'ap_ar_transactions' }, { tableName: 'ledger_payments' },
+                    { tableName: 'monthly_snapshots' }, { tableName: 'initial_stock' },
+                    { tableName: 'loans' }, { tableName: 'loan_payments' },
+                    { tableName: 'activity_log' },
+                ]
+            });
 
-            const [contactsData, banksData, cashTxs, bankTxs, stockTxs, ledgerData, ledgerPaymentsData, snapshotsData, initialStockData, loansData, loanPaymentsData, activityLogData] = await Promise.all([
-                server.readData({ tableName: 'contacts', select: '*' }),
-                server.readData({ tableName: 'banks', select: '*' }),
-                server.readData({ tableName: 'cash_transactions', select: '*' }),
-                server.readData({ tableName: 'bank_transactions', select: '*' }),
-                server.readData({ tableName: 'stock_transactions', select: '*' }),
-                server.readData({ tableName: 'ap_ar_transactions', select: '*' }),
-                server.readData({ tableName: 'ledger_payments', select: '*' }),
-                server.readData({ tableName: 'monthly_snapshots', select: '*' }),
-                server.readData({ tableName: 'initial_stock', select: '*' }),
-                server.readData({ tableName: 'loans', select: '*' }),
-                server.readData({ tableName: 'loan_payments', select: '*' }),
-                server.readData({ tableName: 'activity_log', select: '*' }),
-            ]);
+            const categoriesData = await seedEssentialCategories(serverData.categories as Category[]);
             
             await db.transaction('rw', db.tables, async () => {
                 await clearAllData(false);
                 await db.app_state.put({ id: 1, user: session, fontSize: appState?.fontSize ?? 'base', currency: appState?.currency ?? 'BDT', showStockValue: appState?.showStockValue ?? false, lastSync: null });
-                await bulkPut('categories', categoriesData); await bulkPut('contacts', contactsData);
-                await bulkPut('banks', banksData);
-                await bulkPut('cash_transactions', cashTxs); await bulkPut('bank_transactions', bankTxs);
-                await bulkPut('stock_transactions', stockTxs); await bulkPut('ap_ar_transactions', ledgerData);
-                await bulkPut('ledger_payments', ledgerPaymentsData);
-                await bulkPut('monthly_snapshots', snapshotsData); await bulkPut('initial_stock', initialStockData);
-                await bulkPut('loans', loansData); await bulkPut('loan_payments', loanPaymentsData);
-                await bulkPut('activity_log', activityLogData);
+                await bulkPut('categories', categoriesData); await bulkPut('contacts', serverData.contacts);
+                await bulkPut('banks', serverData.banks);
+                await bulkPut('cash_transactions', serverData.cash_transactions); await bulkPut('bank_transactions', serverData.bank_transactions);
+                await bulkPut('stock_transactions', serverData.stock_transactions); await bulkPut('ap_ar_transactions', serverData.ap_ar_transactions);
+                await bulkPut('ledger_payments', serverData.ledger_payments);
+                await bulkPut('monthly_snapshots', serverData.monthly_snapshots); await bulkPut('initial_stock', serverData.initial_stock);
+                await bulkPut('loans', serverData.loans); await bulkPut('loan_payments', serverData.loan_payments);
+                await bulkPut('activity_log', serverData.activity_log);
                 await db.app_state.update(1, { lastSync: new Date().toISOString() });
             });
             setIsDataLoaded(true);
@@ -434,5 +430,3 @@ export function useAppContext() {
     }
     return context;
 }
-
-    
