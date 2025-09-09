@@ -137,21 +137,23 @@ export function ContactsTab() {
                                                 <TableCell>
                                                     <Badge variant={contact.type === 'vendor' ? 'secondary' : 'outline'} className="capitalize">{contact.type}</Badge>
                                                 </TableCell>
-                                                <TableCell className="text-right space-x-2">
-                                                    <Button variant="outline" size="sm" onClick={() => handleViewHistory(contact)}>
-                                                        <FileClock className="mr-2 h-4 w-4" />
-                                                        History
-                                                    </Button>
-                                                    {isAdmin && (
-                                                        <Button 
-                                                            variant="destructive" 
-                                                            size="icon" 
-                                                            onClick={() => handleDeleteClick(contact)}
-                                                            disabled={contactTransactionCounts[contact.id] > 0}
-                                                        >
-                                                            <Trash2 className="h-4 w-4" />
+                                                <TableCell className="text-right">
+                                                    <div className="flex justify-end items-center gap-2">
+                                                        <Button variant="outline" size="sm" onClick={() => handleViewHistory(contact)}>
+                                                            <FileClock className="mr-2 h-4 w-4" />
+                                                            History
                                                         </Button>
-                                                    )}
+                                                        {isAdmin && (
+                                                            <Button 
+                                                                variant="destructive" 
+                                                                size="icon" 
+                                                                onClick={() => handleDeleteClick(contact)}
+                                                                disabled={contactTransactionCounts[contact.id] > 0}
+                                                            >
+                                                                <Trash2 className="h-4 w-4" />
+                                                            </Button>
+                                                        )}
+                                                    </div>
                                                 </TableCell>
                                             </TableRow>
                                         ))
