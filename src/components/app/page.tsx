@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useMemo } from 'react';
-import { useAppContext } from './context/app-context';
+import { useAppContext } from '../context/app-context';
 import { cn } from '@/lib/utils';
 import { DashboardTab } from '@/components/dashboard-tab';
 import { CashTab } from '@/components/cash-tab';

@@ -427,7 +427,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
     
     if (isLoggingOut || (blockingOperation.isActive && !isLoading)) {
-        return <AppOverlay message={blockingOperation.message || "Logging out..."} />;
+        return <AppOverlay message={blockingOperation.message || "Processing..."} />;
     }
 
     return (
