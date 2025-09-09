@@ -95,7 +95,7 @@ function MainContent() {
                 <AppSidebar activeTab={activeTab} setActiveTab={setActiveTab} />
             </Sidebar>
             
-            <main className="flex-1 flex flex-col transition-all duration-300 ease-in-out md:pl-12 peer-[[data-state=expanded]]:md:pl-64">
+            <main className="flex-1 flex flex-col transition-all duration-300 ease-in-out md:ml-64 peer-[[data-state=collapsed]]:md:ml-12">
                 {isMobile && (
                     <header className="flex items-center p-2 border-b">
                          <SidebarTrigger className="ml-2">
