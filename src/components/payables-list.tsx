@@ -59,7 +59,7 @@ export function PayablesList() {
             if (tx.type === 'payable') {
                 groups[tx.contact_id].total_due += tx.amount;
                 groups[tx.contact_id].total_paid += tx.paid_amount;
-            } else if (tx.type === 'advance' && tx.amount < 0) { // Advances to vendors are negative amounts
+            } else if (tx.type === 'advance' && tx.amount < 0) { // Advances TO vendors are negative amounts
                 groups[tx.contact_id].total_advance += Math.abs(tx.amount);
             }
         });
