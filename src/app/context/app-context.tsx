@@ -239,14 +239,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         }
         
         setIsDataLoaded(false);
-        setIsLoading(true);
         try {
             const session = await getSessionFromCookie();
             if (!session) {
                 setUser(null);
-                setIsLoading(false);
-                setIsInitialLoadComplete(true);
-                setIsDataLoaded(true); // No data to load, so mark as loaded
+                setIsDataLoaded(true);
                 return;
             }
             
@@ -290,13 +287,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             processSyncQueue();
         } catch (error: any) {
             handleApiError(error);
-        } finally {
-            setIsLoading(false);
-            if (!isInitialLoadComplete) {
-                setIsInitialLoadComplete(true);
-            }
         }
-    }, [isSyncing, setIsLoading, setUser, user, seedEssentialCategories, appState, processSyncQueue, handleApiError, isInitialLoadComplete, setIsInitialLoadComplete]);
+    }, [isSyncing, user, setUser, seedEssentialCategories, appState, processSyncQueue, handleApiError]);
 
 
     const checkSessionAndLoad = useCallback(async () => {

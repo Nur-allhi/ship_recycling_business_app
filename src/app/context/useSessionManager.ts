@@ -50,7 +50,9 @@ export function useSessionManager() {
             if (result.success && result.session) {
                 toast.success("Login Successful", { description: "Welcome back!" });
                 setUser(result.session);
-                setIsInitialLoadComplete(false); // Trigger a full reload
+                // Set to false to trigger a full data reload in the AppProvider
+                // This ensures fresh data is loaded after a new login
+                setIsInitialLoadComplete(false); 
                 router.push('/');
             }
             return result;
