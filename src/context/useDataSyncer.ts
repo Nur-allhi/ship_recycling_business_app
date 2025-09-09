@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import { db } from '@/lib/db';
 import type { SyncQueueItem } from '@/lib/db';
 import * as server from '@/lib/actions';
-import { useSessionManager } from './useSessionManager';
+import { useSessionManager } from '@/app/context/useSessionManager';
 import { useLiveQuery } from 'dexie-react-hooks';
 
 export function useDataSyncer() {
@@ -74,17 +74,18 @@ export function useDataSyncer() {
                             // Ensure the returned data is merged with any existing fields not returned from server
                             await db.table(tableName).add({ ...oldRecord, ...result });
                         }
-                    } else if (item.action === 'addStockTransaction' && result?.stockTx && result?.stockTx.id && item.payload.localId) {
-                         const oldStockTx = await db.stock_transactions.get(item.payload.localId);
-                         if (oldStockTx) {
-                             await db.stock_transactions.delete(item.payload.localId);
-                             await db.stock_transactions.add({ ...oldStockTx, ...result.stockTx });
-                         }
+                    } else if (item.action === 'addStockTransaction' && result?.stockTx && result?.stockTx.id && item.payload.localId) { // addStockTransaction
+                        const oldStockTx = await db.stock_transactions.get(item.payload.localId);
+                        if (oldStockTx) {
+                           await db.stock_transactions.delete(item.payload.localId);
+                           await db.stock_transactions.add({ ...oldStockTx, ...result.stockTx });
+                        }
 
                         if (result.financialTx) {
                             const finTable = result.financialTx.bank_id ? 'bank_transactions' : 'cash_transactions';
                             const finLocalId = item.payload.stockTx.paymentMethod === 'bank' ? (await db.bank_transactions.where({linkedStockTxId: item.payload.localId}).first())?.id : (await db.cash_transactions.where({linkedStockTxId: item.payload.localId}).first())?.id;
-                             if(finLocalId) await db.table(finTable).where({ id: finLocalId }).modify({ id: result.financialTx.id, linkedStockTxId: result.stockTx.id });
+
+                            if(finLocalId) await db.table(finTable).where({ id: finLocalId }).modify({ id: result.financialTx.id, linkedStockTxId: result.stockTx.id });
                         }
                     } else if (item.action === 'addLoan' && result?.loan && result?.loan.id && item.payload.localId) { // addLoan
                         await db.loans.update(item.payload.localId, { id: result.loan.id });
