@@ -18,6 +18,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { SidebarProvider, Sidebar, useSidebar, SidebarTrigger } from '@/components/ui/sidebar';
 import { AppSidebar } from '@/components/app-sidebar';
 import { Menu } from 'lucide-react';
+import { format } from 'date-fns';
 
 const fontClasses = {
   sm: 'text-sm',
@@ -31,6 +32,7 @@ function MainContent() {
         cashTransactions, bankTransactions, isLoading
     } = useAppContext();
     const [activeTab, setActiveTab] = useState('dashboard');
+    const [currentDate, setCurrentDate] = useState('');
     const isAdmin = user?.role === 'admin';
     const { isMobile } = useSidebar();
     const router = useRouter();
@@ -55,6 +57,10 @@ function MainContent() {
             router.replace('/login');
         }
     }, [user, isLoading, pathname, router]);
+
+    useEffect(() => {
+        setCurrentDate(format(new Date(), 'PPP'));
+    }, []);
 
     if (!user) {
         return null; // Should be handled by the layout effect, but as a fallback
@@ -95,7 +101,10 @@ function MainContent() {
                          <SidebarTrigger className="ml-2">
                             <Menu className="h-5 w-5" />
                          </SidebarTrigger>
-                        <h1 className="text-lg font-semibold ml-2">Ha-Mim Iron Mart</h1>
+                         <div className="ml-2">
+                            <h1 className="text-xl font-semibold leading-tight">Ha-Mim Iron Mart</h1>
+                            <p className="text-xs text-muted-foreground">{currentDate}</p>
+                        </div>
                     </header>
                 )}
                 <div className="flex-grow p-4 md:p-6 lg:p-8 overflow-y-auto">
