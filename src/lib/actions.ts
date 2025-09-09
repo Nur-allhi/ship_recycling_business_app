@@ -840,20 +840,15 @@ export async function getOrCreateSnapshot(date: string): Promise<MonthlySnapshot
 }
 
 const AddLoanSchema = z.object({
-  loanData: z.object({
-    contact_id: z.string(),
-    type: z.enum(['payable', 'receivable']),
-    principal_amount: z.number(),
-    interest_rate: z.number(),
-    issue_date: z.string(),
-    due_date: z.string().optional(),
-    newContactName: z.string().optional(),
-    newContactType: z.enum(['vendor', 'client']).optional(),
-  }),
+  loanData: z.any(),
   disbursement: z.object({
     method: z.enum(['cash', 'bank']),
     bank_id: z.string().optional(),
   }),
+  newContact: z.object({
+    name: z.string(),
+    type: z.enum(['vendor', 'client']),
+  }).optional(),
   localId: z.string(),
   localFinancialId: z.string(),
 });
@@ -864,24 +859,27 @@ export async function addLoan(input: z.infer<typeof AddLoanSchema>) {
         const session = await getSession();
         if (!session || session.role !== 'admin') throw new Error("Only admins can add loans.");
 
-        const { loanData, disbursement } = input;
+        const { loanData, disbursement, newContact } = input;
         const supabase = createAdminSupabaseClient();
         
         let finalContactId = loanData.contact_id;
-        const { newContactName, newContactType, ...restLoanData } = loanData;
 
-        if (loanData.contact_id === 'new' && newContactName && newContactType) {
-            const { data: newContact, error: contactError } = await supabase
+        if (newContact) {
+            const { data: createdContact, error: contactError } = await supabase
                 .from('contacts')
-                .insert({ name: newContactName, type: newContactType })
+                .insert({ name: newContact.name, type: newContact.type })
                 .select('id')
                 .single();
             if (contactError) throw new Error(`Failed to create new contact: ${contactError.message}`);
-            finalContactId = newContact.id;
+            finalContactId = createdContact.id;
         }
         
+        if (!finalContactId) {
+            throw new Error("Contact ID is missing for the loan.");
+        }
+
         const dataForLoanInsert = {
-            ...restLoanData,
+            ...loanData,
             contact_id: finalContactId,
             status: 'active',
         };

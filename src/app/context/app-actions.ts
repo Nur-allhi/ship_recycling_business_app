@@ -554,16 +554,10 @@ export function useAppActions() {
                 await db.bank_transactions.add({ ...financialTxData, type: loan.type === 'payable' ? 'deposit' : 'withdrawal', bank_id: disbursement.bank_id! });
             }
             
-            const payloadData: any = { ...loan };
-            if (newContact) {
-                payloadData.contact_id = 'new';
-                payloadData.newContactName = newContact.name;
-                payloadData.newContactType = newContact.type;
-            }
-
             const payload = {
-                loanData: payloadData,
+                loanData: loan,
                 disbursement,
+                newContact,
                 localId: tempId,
                 localFinancialId: tempFinancialId,
             };
