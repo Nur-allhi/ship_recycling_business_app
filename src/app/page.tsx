@@ -17,7 +17,7 @@ import { FloatingActionButton } from '@/components/floating-action-button';
 import { AnimatePresence, motion } from 'framer-motion';
 import { SidebarProvider, Sidebar, useSidebar, SidebarTrigger } from '@/components/ui/sidebar';
 import { AppSidebar } from '@/components/app-sidebar';
-import { PanelLeft } from 'lucide-react';
+import { Menu } from 'lucide-react';
 
 const fontClasses = {
   sm: 'text-sm',
@@ -92,8 +92,8 @@ function MainContent() {
             <main className="flex-1 flex flex-col transition-all duration-300 ease-in-out md:pl-12 peer-[[data-state=expanded]]:md:pl-64">
                 {isMobile && (
                     <header className="flex items-center p-2 border-b">
-                         <SidebarTrigger>
-                            <PanelLeft className="h-5 w-5" />
+                         <SidebarTrigger className="ml-2">
+                            <Menu className="h-5 w-5" />
                          </SidebarTrigger>
                         <h1 className="text-lg font-semibold ml-2">Ha-Mim Iron Mart</h1>
                     </header>
