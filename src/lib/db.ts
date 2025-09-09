@@ -43,7 +43,7 @@ export class AppDatabase extends Dexie {
             app_state: 'id',
             cash_transactions: '++id, date, category, linkedStockTxId, advance_id, contact_id, created_at',
             bank_transactions: '++id, date, bank_id, category, linkedStockTxId, advance_id, contact_id, created_at',
-            stock_transactions: '++id, date, stockItemName, type, contact_id, created_at',
+            stock_transactions: '++id, date, stockItemName, type, created_at',
             ap_ar_transactions: '++id, date, type, contact_id, status, created_at',
             ledger_payments: '++id, ap_ar_transaction_id, date, created_at',
             banks: 'id, name',
@@ -63,7 +63,7 @@ export class AppDatabase extends Dexie {
              bank_transactions: '++id, date, bank_id, category, linkedStockTxId, linkedLoanId, advance_id, contact_id, created_at',
              // No changes to other tables, but they must be listed to be kept.
              app_state: 'id',
-             stock_transactions: '++id, date, stockItemName, type, contact_id, created_at',
+             stock_transactions: '++id, date, stockItemName, type, created_at',
              ap_ar_transactions: '++id, date, type, contact_id, status, created_at',
              ledger_payments: '++id, ap_ar_transaction_id, date, created_at',
              banks: 'id, name',
@@ -75,6 +75,10 @@ export class AppDatabase extends Dexie {
              loan_payments: '++id, loan_id, payment_date, created_at',
              activity_log: '++id, created_at',
              sync_queue: '++id, timestamp',
+        });
+
+        this.version(3).stores({
+            stock_transactions: '++id, date, stockItemName, type, contact_id, created_at',
         });
     }
 }
