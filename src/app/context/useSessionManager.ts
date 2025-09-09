@@ -11,11 +11,9 @@ import type { User } from '@/lib/types';
 export function useSessionManager() {
     const router = useRouter();
     const [user, setUser] = useState<User | null>(null);
-    const [isLoading, setIsLoading] = useState(true);
     const [isAuthenticating, setIsAuthenticating] = useState(false);
     const [isLoggingOut, setIsLoggingOut] = useState(false);
     const [isOnline, setIsOnline] = useState(true);
-    const [isInitialLoadComplete, setIsInitialLoadComplete] = useState(false);
 
     const logout = useCallback(async () => {
         setIsLoggingOut(true);
@@ -50,9 +48,6 @@ export function useSessionManager() {
             if (result.success && result.session) {
                 toast.success("Login Successful", { description: "Welcome back!" });
                 setUser(result.session);
-                // Set to false to trigger a full data reload in the AppProvider
-                // This ensures fresh data is loaded after a new login
-                setIsInitialLoadComplete(false); 
                 router.push('/');
             }
             return result;
@@ -68,13 +63,9 @@ export function useSessionManager() {
     return {
         user,
         setUser: useCallback(setUser, []),
-        isLoading,
-        setIsLoading: useCallback(setIsLoading, []),
         isAuthenticating,
         isLoggingOut,
         isOnline,
-        isInitialLoadComplete,
-        setIsInitialLoadComplete: useCallback(setIsInitialLoadComplete, []),
         login,
         logout,
         handleApiError,

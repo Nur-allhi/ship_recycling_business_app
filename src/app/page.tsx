@@ -27,7 +27,7 @@ const fontClasses = {
 
 function MainContent() {
     const { 
-        fontSize, isInitialBalanceDialogOpen, user, isLoading, isInitialLoadComplete,
+        fontSize, isInitialBalanceDialogOpen, user,
         cashTransactions, bankTransactions
     } = useAppContext();
     const [activeTab, setActiveTab] = useState('dashboard');
@@ -44,8 +44,8 @@ function MainContent() {
       [bankTransactions]
     );
 
-    if (isLoading || !isInitialLoadComplete || !user) {
-        return <AppLoading message="Please wait..." />;
+    if (!user) {
+        return null; // Should be handled by the layout effect, but as a fallback
     }
 
     const renderTabContent = (tab: string) => {

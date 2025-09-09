@@ -22,12 +22,11 @@ type BlockingOperation = {
 type FontSize = 'sm' | 'base' | 'lg';
 
 interface AppData {
-  // From useSessionManager
+  // Global State
   isLoading: boolean;
   isOnline: boolean;
   user: User | null;
-  isInitialLoadComplete: boolean;
-  isDataLoaded: boolean;
+  // From useSessionManager
   isLoggingOut: boolean;
   isAuthenticating: boolean;
   // From useDataSyncer
@@ -116,17 +115,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const router = useRouter();
     const pathname = usePathname();
     const [blockingOperation, setBlockingOperation] = useState<BlockingOperation>({ isActive: false, message: '' });
+    const [isLoading, setIsLoading] = useState(true);
+    const [isInitialLoadComplete, setIsInitialLoadComplete] = useState(false);
 
     const {
-        user, setUser, isAuthenticating, isLoading, setIsLoading, isLoggingOut, isOnline,
-        isInitialLoadComplete, setIsInitialLoadComplete, login, logout, handleApiError,
-        setIsOnline
+        user, setUser, isAuthenticating, isLoggingOut, isOnline,
+        login, logout, handleApiError, setIsOnline
     } = useSessionManager();
 
     const { isSyncing, syncQueueCount, processSyncQueue, queueOrSync } = useDataSyncer();
     
     const [isInitialBalanceDialogOpen, setIsInitialBalanceDialogOpen] = useState(false);
-    const [isDataLoaded, setIsDataLoaded] = useState(false);
     
     const appState = useLiveQuery(() => db.app_state.get(1), []);
     const banks = useLiveQuery(() => db.banks.toArray(), []);
@@ -238,12 +237,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             return;
         }
         
-        setIsDataLoaded(false);
         try {
             const session = await getSessionFromCookie();
             if (!session) {
                 setUser(null);
-                setIsDataLoaded(true);
                 return;
             }
             
@@ -278,7 +275,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 await bulkPut('activity_log', serverData.activity_log);
                 await db.app_state.update(1, { lastSync: new Date().toISOString() });
             });
-            setIsDataLoaded(true);
 
             if (options?.needsInitialBalance) {
                 setIsInitialBalanceDialogOpen(true);
@@ -302,7 +298,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 await reloadData();
             } else {
                 setUser(null);
-                setIsDataLoaded(true); // If no session, no data to load.
             }
         } catch (error) {
             console.error("Error during initial session check:", error);
@@ -314,7 +309,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             }
             setIsLoading(false);
         }
-    }, [user, setUser, reloadData, isInitialLoadComplete, setIsInitialLoadComplete, setIsLoading, handleApiError]);
+    }, [user, setUser, reloadData, isInitialLoadComplete, setIsInitialLoadComplete, handleApiError]);
 
 
     useEffect(() => {
@@ -374,7 +369,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     );
     
     const contextValue = useMemo(() => ({
-        isLoading, isOnline, user, isInitialLoadComplete, isDataLoaded, isLoggingOut, isAuthenticating,
+        isLoading, isOnline, user, isAuthenticating, isLoggingOut,
         isSyncing, syncQueueCount, isInitialBalanceDialogOpen, blockingOperation,
         fontSize: appState?.fontSize ?? 'base',
         currency: appState?.currency ?? 'BDT',
@@ -393,11 +388,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         currentStockWeight,
         currentStockValue,
         currentStockItems,
-        login, logout, reloadData, handleApiError,
+        login: async (credentials) => {
+            const result = await login(credentials);
+            if (result.success) {
+                setIsInitialLoadComplete(false); // Trigger reload
+            }
+            return result;
+        },
+        logout, reloadData, handleApiError,
         processSyncQueue, openInitialBalanceDialog, closeInitialBalanceDialog,
         setUser, setBlockingOperation, queueOrSync,
     }), [
-        isLoading, isOnline, user, isInitialLoadComplete, isDataLoaded, isLoggingOut, isAuthenticating,
+        isLoading, isOnline, user, isAuthenticating, isLoggingOut,
         isSyncing, syncQueueCount, isInitialBalanceDialogOpen, blockingOperation,
         appState, banks, cashCategories, bankCategories, contacts, loans, loanPayments, stockItems, cashTransactions, bankTransactions, stockTransactions, activityLog,
         currentStockWeight, currentStockValue, currentStockItems,
@@ -405,12 +407,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         processSyncQueue, openInitialBalanceDialog, closeInitialBalanceDialog, setUser, setBlockingOperation, queueOrSync
     ]);
 
-    const showLoadingScreen = isLoading || !isInitialLoadComplete || (user && !isDataLoaded);
+    if (isLoading || !isInitialLoadComplete) {
+        return <AppLoading />;
+    }
 
     return (
         <AppContext.Provider value={contextValue}>
             <OnlineStatusIndicator />
-            {showLoadingScreen ? <AppLoading /> : children}
+            {children}
         </AppContext.Provider>
     );
 }
