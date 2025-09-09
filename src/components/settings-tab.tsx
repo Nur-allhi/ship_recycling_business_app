@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { Badge } from "@/components/ui/badge"
-import { Plus, Trash2, Users, Settings, Palette, FileCog, Recycle, Loader2, ArrowUpCircle, ArrowDownCircle, Lock, Contact2, History } from "lucide-react"
+import { Plus, Trash2, Users, Settings, Palette, FileCog, Recycle, Loader2, ArrowUpCircle, ArrowDownCircle, Lock, Contact2, History, ChevronLeft } from "lucide-react"
 import { toast } from "sonner"
 import { ResponsiveSelect } from "@/components/ui/responsive-select"
 import { RecycleBinTab } from "./recycle-bin-tab"
@@ -285,55 +285,72 @@ function GeneralSettings() {
 export function SettingsTab() {
   const { user } = useAppContext();
   const isAdmin = user?.role === 'admin';
-  const [activePage, setActivePage] = useState<SettingsPage>('appearance');
+  const [activePage, setActivePage] = useState<SettingsPage | null>(null);
 
-  const navItems: {id: SettingsPage, label: string, icon: React.ElementType, adminOnly: boolean}[] = [
-    { id: 'appearance', label: 'Appearance', icon: Palette, adminOnly: false },
-    { id: 'general', label: 'General', icon: Settings, adminOnly: true },
-    { id: 'contacts', label: 'Contacts', icon: Contact2, adminOnly: false },
-    { id: 'users', label: 'Users', icon: Users, adminOnly: true },
-    { id: 'activity_log', label: 'Activity Log', icon: History, adminOnly: true },
-    { id: 'recycle_bin', label: 'Recycle Bin', icon: Recycle, adminOnly: true },
-    { id: 'export_import', label: 'Export/Import', icon: FileCog, adminOnly: false },
-  ]
+  const navItems: {id: SettingsPage, label: string, description: string, icon: React.ElementType, adminOnly: boolean}[] = [
+    { id: 'appearance', label: 'Appearance', description: 'Adjust look, feel, and currency.', icon: Palette, adminOnly: false },
+    { id: 'general', label: 'General', description: 'Manage banks, categories, and initial balances.', icon: Settings, adminOnly: true },
+    { id: 'contacts', label: 'Contacts', description: 'Manage your vendors and clients list.', icon: Contact2, adminOnly: false },
+    { id: 'users', label: 'User Management', description: 'Add, view, and remove system users.', icon: Users, adminOnly: true },
+    { id: 'activity_log', label: 'Activity Log', description: 'View a log of all important actions.', icon: History, adminOnly: true },
+    { id: 'recycle_bin', label: 'Recycle Bin', description: 'Restore or permanently delete items.', icon: Recycle, adminOnly: true },
+    { id: 'export_import', label: 'Export/Import', description: 'Backup, restore, or reset all data.', icon: FileCog, adminOnly: false },
+  ];
   
   const filteredNavItems = navItems.filter(item => !item.adminOnly || isAdmin);
 
-  const renderActivePage = () => {
-    switch (activePage) {
-        case 'appearance': return <AppearanceSettings />;
-        case 'general': return <GeneralSettings />;
-        case 'contacts': return <ContactsTab />;
-        case 'users': return <UserManagementTab />;
-        case 'activity_log': return <ActivityLogTab />;
-        case 'recycle_bin': return <RecycleBinTab />;
-        case 'export_import': return <ExportImportTab />;
-        default: return <AppearanceSettings />;
+  const renderContent = () => {
+    if (activePage) {
+        let pageComponent;
+        switch (activePage) {
+            case 'appearance': pageComponent = <AppearanceSettings />; break;
+            case 'general': pageComponent = <GeneralSettings />; break;
+            case 'contacts': pageComponent = <ContactsTab />; break;
+            case 'users': pageComponent = <UserManagementTab />; break;
+            case 'activity_log': pageComponent = <ActivityLogTab />; break;
+            case 'recycle_bin': pageComponent = <RecycleBinTab />; break;
+            case 'export_import': pageComponent = <ExportImportTab />; break;
+            default: pageComponent = null;
+        }
+        return (
+            <div>
+                <Button variant="ghost" onClick={() => setActivePage(null)} className="mb-4">
+                    <ChevronLeft className="mr-2 h-4 w-4" />
+                    Back to Settings
+                </Button>
+                <div key={activePage} className="animate-fade-in">
+                    {pageComponent}
+                </div>
+            </div>
+        );
     }
+
+    return (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {filteredNavItems.map(item => (
+                <Card 
+                    key={item.id} 
+                    onClick={() => setActivePage(item.id)}
+                    className="cursor-pointer hover:bg-muted/50 hover:border-primary/50 transition-all"
+                >
+                    <CardHeader className="flex flex-row items-center justify-between">
+                        <CardTitle className="text-lg">{item.label}</CardTitle>
+                        <item.icon className="h-6 w-6 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                        <p className="text-sm text-muted-foreground">{item.description}</p>
+                    </CardContent>
+                </Card>
+            ))}
+        </div>
+    );
   };
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <aside className="md:col-span-1">
-            <nav className="flex flex-col space-y-1">
-                {filteredNavItems.map(item => (
-                    <Button 
-                        key={item.id} 
-                        variant={activePage === item.id ? 'secondary' : 'ghost'}
-                        onClick={() => setActivePage(item.id)}
-                        className="justify-start"
-                    >
-                        <item.icon className="mr-2 h-4 w-4" />
-                        {item.label}
-                    </Button>
-                ))}
-            </nav>
-        </aside>
-        <main className="md:col-span-3">
-           <div key={activePage} className="animate-fade-in">
-             {renderActivePage()}
-           </div>
-        </main>
+    <div>
+        {renderContent()}
     </div>
   );
 }
+
+    
