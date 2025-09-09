@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
@@ -5,7 +6,6 @@ import { useAppContext } from "@/app/context/app-context";
 import { useAppActions } from "@/app/context/app-actions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Undo2, Trash2, Loader2, RefreshCw } from "lucide-react";
 import { format } from "date-fns";
@@ -112,32 +112,35 @@ export function RecycleBinTab() {
         )
     }
 
-    const renderTable = (items: any[], columns: { key: string, header: string, render?: (item: any) => React.ReactNode }[], txType: 'cash' | 'bank' | 'stock' | 'ap_ar') => (
-        <div className="overflow-x-auto">
-            <Table>
-                <TableHeader>
-                    <TableRow>
-                        {columns.map(col => <TableHead key={col.key}>{col.header}</TableHead>)}
-                        <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                </TableHeader>
-                <TableBody>
-                    {isLoading ? (
-                        <TableRow><TableCell colSpan={columns.length + 1} className="text-center h-24"><Loader2 className="mx-auto h-6 w-6 animate-spin" /></TableCell></TableRow>
-                    ) : items.length > 0 ? items.map(item => (
-                        <TableRow key={item.id}>
-                            {columns.map(col => (
-                                <TableCell key={col.key}>{col.render ? col.render(item) : item[col.key]}</TableCell>
-                            ))}
-                            <TableCell className="text-right">
-                                <Button variant="ghost" size="icon" onClick={() => handleRestore(txType, item.id)}>
-                                    <Undo2 className="h-4 w-4"/>
-                                </Button>
-                            </TableCell>
-                        </TableRow>
-                    )) : <TableRow><TableCell colSpan={columns.length + 1} className="text-center h-24">No deleted items in this category.</TableCell></TableRow>}
-                </TableBody>
-            </Table>
+    const renderCards = (items: any[], txType: 'cash' | 'bank' | 'stock' | 'ap_ar') => (
+        <div className="space-y-4">
+             {isLoading ? (
+                <div className="flex justify-center items-center h-24"><Loader2 className="h-6 w-6 animate-spin" /></div>
+            ) : items.length > 0 ? (
+                items.map(item => (
+                    <Card key={item.id}>
+                        <CardContent className="p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                            <div className="flex-grow space-y-1">
+                                <p className="font-semibold">
+                                    {txType === 'stock' ? `${item.stockItemName} (${item.weight}kg)` : item.description}
+                                </p>
+                                <p className="text-sm text-muted-foreground">
+                                    Amount: <span className="font-mono font-medium text-foreground">{formatCurrency(item.actual_amount || item.amount)}</span>
+                                </p>
+                                <p className="text-xs text-muted-foreground">
+                                    Deleted on: {item.deletedAt ? format(new Date(item.deletedAt), "dd-MM-yyyy 'at' HH:mm") : 'N/A'}
+                                </p>
+                            </div>
+                            <Button variant="outline" size="sm" onClick={() => handleRestore(txType, item.id)} className="w-full sm:w-auto">
+                                <Undo2 className="mr-2 h-4 w-4"/>
+                                Restore
+                            </Button>
+                        </CardContent>
+                    </Card>
+                ))
+            ) : (
+                 <div className="text-center text-muted-foreground py-12">No deleted items in this category.</div>
+            )}
         </div>
     );
     
@@ -184,33 +187,16 @@ export function RecycleBinTab() {
                             </TabsList>
                         )}
                         <TabsContent value="cash" className="mt-4">
-                            {renderTable(deletedItems.cash, [
-                                { key: 'deletedAt', header: 'Deleted On', render: (tx) => tx.deletedAt ? format(new Date(tx.deletedAt), "dd-MM-yyyy") : 'N/A' },
-                                { key: 'description', header: 'Description' },
-                                { key: 'actual_amount', header: 'Amount', render: (tx) => <span className={tx.type === 'income' ? 'text-accent' : 'text-destructive'}>{formatCurrency(tx.actual_amount)}</span> },
-                            ], 'cash')}
+                           {renderCards(deletedItems.cash, 'cash')}
                         </TabsContent>
                         <TabsContent value="bank" className="mt-4">
-                             {renderTable(deletedItems.bank, [
-                                { key: 'deletedAt', header: 'Deleted On', render: (tx) => tx.deletedAt ? format(new Date(tx.deletedAt), "dd-MM-yyyy") : 'N/A' },
-                                { key: 'description', header: 'Description' },
-                                { key: 'actual_amount', header: 'Amount', render: (tx) => <span className={tx.type === 'deposit' ? 'text-accent' : 'text-destructive'}>{formatCurrency(tx.actual_amount)}</span> },
-                            ], 'bank')}
+                            {renderCards(deletedItems.bank, 'bank')}
                         </TabsContent>
                         <TabsContent value="stock" className="mt-4">
-                            {renderTable(deletedItems.stock, [
-                                { key: 'deletedAt', header: 'Deleted On', render: (tx) => tx.deletedAt ? format(new Date(tx.deletedAt), "dd-MM-yyyy") : 'N/A' },
-                                { key: 'stockItemName', header: 'Item' },
-                                { key: 'weight', header: 'Weight', render: (tx) => `${tx.weight} kg` },
-                                { key: 'actual_amount', header: 'Value', render: (tx) => formatCurrency(tx.actual_amount) },
-                            ], 'stock')}
+                           {renderCards(deletedItems.stock, 'stock')}
                         </TabsContent>
                         <TabsContent value="ap_ar" className="mt-4">
-                           {renderTable(deletedItems.ap_ar, [
-                                { key: 'deletedAt', header: 'Deleted On', render: (tx) => tx.deletedAt ? format(new Date(tx.deletedAt), "dd-MM-yyyy") : 'N/A' },
-                                { key: 'description', header: 'Description' },
-                                { key: 'amount', header: 'Amount', render: (tx) => formatCurrency(tx.amount) },
-                            ], 'ap_ar')}
+                          {renderCards(deletedItems.ap_ar, 'ap_ar')}
                         </TabsContent>
                     </Tabs>
                 </CardContent>
