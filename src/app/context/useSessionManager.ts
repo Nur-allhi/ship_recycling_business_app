@@ -26,9 +26,9 @@ export function useSessionManager() {
             await clearAllData(true); 
             setUser(null);
             setIsLoggingOut(false);
-            router.push('/login');
+            // The main context will handle redirecting to the login page.
         }
-    }, [router]);
+    }, []);
 
     const handleApiError = useCallback((error: any) => {
         const isAuthError = error.message.includes('JWT') || error.message.includes('Unauthorized') || error.message.includes("SESSION_EXPIRED");
@@ -47,8 +47,7 @@ export function useSessionManager() {
             const result = await serverLogin(credentials);
             if (result.success && result.session) {
                 toast.success("Login Successful", { description: "Welcome back!" });
-                setUser(result.session);
-                router.push('/');
+                // The main context will handle setting the user and redirecting.
             }
             return result;
         } catch (error) {
@@ -57,7 +56,7 @@ export function useSessionManager() {
         } finally {
             setIsAuthenticating(false);
         }
-    }, [router]);
+    }, []);
 
 
     return {

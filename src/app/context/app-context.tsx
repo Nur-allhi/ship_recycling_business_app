@@ -237,6 +237,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             return;
         }
         
+        setBlockingOperation({ isActive: true, message: 'Fetching latest data...' });
+        
         try {
             const session = await getSessionFromCookie();
             if (!session) {
@@ -248,7 +250,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 setUser(session);
             }
             
-            setBlockingOperation({ isActive: true, message: 'Fetching latest data...' });
             const serverData = await server.batchReadData({
                 tables: [
                     { tableName: 'categories' }, { tableName: 'contacts' },
@@ -282,23 +283,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 setIsInitialBalanceDialogOpen(true);
             }
             
-            processSyncQueue();
+            await processSyncQueue();
         } catch (error: any) {
             handleApiError(error);
-        } finally {
-            setBlockingOperation({ isActive: false, message: '' });
         }
     }, [isSyncing, user, setUser, seedEssentialCategories, appState, processSyncQueue, handleApiError]);
 
 
     const checkSessionAndLoad = useCallback(async () => {
+        setIsLoading(true);
         setBlockingOperation({ isActive: true, message: 'Verifying your session...' });
         try {
             const session = await getSessionFromCookie();
             if (session) {
-                if(!user || user.id !== session.id) {
-                    setUser(session);
-                }
+                setUser(session);
                 await reloadData();
             } else {
                 setUser(null);
@@ -311,14 +309,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             setIsLoading(false);
             setBlockingOperation({ isActive: false, message: '' });
         }
-    }, [user, setUser, reloadData, handleApiError]);
+    }, [setUser, reloadData, handleApiError]);
 
 
     useEffect(() => {
-        if (isLoading) {
-          checkSessionAndLoad();
-        }
-    }, [isLoading, checkSessionAndLoad]);
+        // This effect runs only once on initial component mount to start the loading sequence.
+        checkSessionAndLoad();
+    }, [checkSessionAndLoad]);
 
     useEffect(() => {
         const handleOnline = () => {
@@ -341,7 +338,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }, [processSyncQueue, setIsOnline]);
     
     useEffect(() => {
-        if (isLoading) return;
+        if (isLoading) return; // Don't redirect while initial loading is in progress.
         const onLoginPage = pathname === '/login';
         if (user && onLoginPage) {
             router.replace('/');
@@ -393,7 +390,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         login: async (credentials) => {
             const result = await login(credentials);
             if (result.success) {
-                setIsLoading(true); // Trigger reload
+                checkSessionAndLoad(); // Trigger full reload on successful login
             }
             return result;
         },
@@ -405,7 +402,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         isSyncing, syncQueueCount, isInitialBalanceDialogOpen, blockingOperation,
         appState, banks, cashCategories, bankCategories, contacts, loans, loanPayments, stockItems, cashTransactions, bankTransactions, stockTransactions, activityLog,
         currentStockWeight, currentStockValue, currentStockItems,
-        login, logout, reloadData, handleApiError,
+        login, logout, reloadData, handleApiError, checkSessionAndLoad,
         processSyncQueue, openInitialBalanceDialog, closeInitialBalanceDialog, setUser, setBlockingOperation, queueOrSync
     ]);
     
