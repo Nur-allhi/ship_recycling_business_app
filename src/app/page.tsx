@@ -1,8 +1,9 @@
 
 "use client";
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useAppContext } from './context/app-context';
+import { useRouter, usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { DashboardTab } from '@/components/dashboard-tab';
 import { CashTab } from '@/components/cash-tab';
@@ -26,11 +27,13 @@ const fontClasses = {
 function MainContent() {
     const { 
         fontSize, isInitialBalanceDialogOpen, user,
-        cashTransactions, bankTransactions
+        cashTransactions, bankTransactions, isLoading
     } = useAppContext();
     const [activeTab, setActiveTab] = useState('dashboard');
     const isAdmin = user?.role === 'admin';
     const { state, setOpen } = useSidebar();
+    const router = useRouter();
+    const pathname = usePathname();
 
     const cashBalance = useMemo(() => 
       (cashTransactions || []).reduce((acc, tx) => acc + (tx.type === 'income' ? tx.actual_amount : -tx.actual_amount), 0), 
@@ -41,6 +44,16 @@ function MainContent() {
       (bankTransactions || []).reduce((acc, tx) => acc + (tx.type === 'deposit' ? tx.actual_amount : -tx.actual_amount), 0),
       [bankTransactions]
     );
+    
+    useEffect(() => {
+        if (isLoading) return; // Don't redirect while initial loading is in progress.
+        const onLoginPage = pathname === '/login';
+        if (user && onLoginPage) {
+            router.replace('/');
+        } else if (!user && !onLoginPage) {
+            router.replace('/login');
+        }
+    }, [user, isLoading, pathname, router]);
 
     if (!user) {
         return null; // Should be handled by the layout effect, but as a fallback
