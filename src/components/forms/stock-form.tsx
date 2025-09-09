@@ -133,6 +133,7 @@ export function StockForm({ setDialogOpen }: StockFormProps) {
             contact_id: finalContactId,
             contact_name: finalContactName,
             bank_id: data.bank_id,
+            created_at: new Date().toISOString(),
         });
         
         toast.success("Stock Transaction Added");
