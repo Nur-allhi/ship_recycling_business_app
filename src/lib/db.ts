@@ -80,6 +80,10 @@ export class AppDatabase extends Dexie {
         this.version(3).stores({
             stock_transactions: '++id, date, stockItemName, type, contact_id, contact_name, created_at',
         });
+        
+        this.version(4).stores({
+            loan_payments: '++id, loan_id, payment_date, linked_transaction_id, created_at',
+        });
     }
 }
 
