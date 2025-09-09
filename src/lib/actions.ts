@@ -549,16 +549,35 @@ export async function recordDirectPayment(input: z.infer<typeof RecordDirectPaym
     }
 }
 
-const AddStockTransactionInputSchema = z.object({ stockTx: z.any(), localId: z.string() });
+const AddStockTransactionInputSchema = z.object({ 
+    stockTx: z.any(), 
+    newContact: z.object({ name: z.string(), type: z.enum(['vendor', 'client']) }).optional(),
+    localId: z.string() 
+});
 
 export async function addStockTransaction(input: z.infer<typeof AddStockTransactionInputSchema>) {
     try {
         const session = await getSession();
         if (!session || session.role !== 'admin') throw new Error("Only admins can add transactions.");
-        const supabase = createAdminSupabaseClient();
-        const { stockTx } = input;
         
-        const { id, ...stockTxToSave } = stockTx;
+        const supabase = createAdminSupabaseClient();
+        const { stockTx, newContact } = input;
+        
+        let finalContactId = stockTx.contact_id;
+        let finalContactName = stockTx.contact_name;
+
+        if (newContact) {
+            const { data: createdContact, error: contactError } = await supabase
+                .from('contacts')
+                .insert({ name: newContact.name, type: newContact.type })
+                .select('id, name')
+                .single();
+            if (contactError) throw new Error(`Failed to create new contact: ${contactError.message}`);
+            finalContactId = createdContact.id;
+            finalContactName = createdContact.name;
+        }
+
+        const { id, ...stockTxToSave } = { ...stockTx, contact_id: finalContactId, contact_name: finalContactName };
         
         const { data: savedStockTx, error: stockError } = await supabase.from('stock_transactions').insert(stockTxToSave).select().single();
         if(stockError) throw stockError;
@@ -570,7 +589,7 @@ export async function addStockTransaction(input: z.infer<typeof AddStockTransact
                 difference: stockTx.difference, difference_reason: stockTx.difference_reason,
                 description: stockTx.description || `${stockTx.type} of ${stockTx.weight}kg of ${stockTx.stockItemName}`,
                 category: stockTx.type === 'purchase' ? 'Stock Purchase' : 'Stock Sale', linkedStockTxId: savedStockTx.id,
-                contact_id: stockTx.contact_id
+                contact_id: finalContactId
             };
             const tableName = stockTx.paymentMethod === 'cash' ? 'cash_transactions' : 'bank_transactions';
             const type = stockTx.paymentMethod === 'cash' ? (stockTx.type === 'purchase' ? 'expense' : 'income') : (stockTx.type === 'purchase' ? 'withdrawal' : 'deposit');
@@ -578,23 +597,23 @@ export async function addStockTransaction(input: z.infer<typeof AddStockTransact
             if(error) throw error;
             savedFinancialTx = data;
         } else if (stockTx.paymentMethod === 'credit') {
-             if (!stockTx.contact_id) {
+             if (!finalContactId) {
                 throw new Error("Contact information is missing for credit stock transaction.");
             }
-            const {data: contact} = await supabase.from('contacts').select('name').eq('id', stockTx.contact_id).single();
-            if (!contact) throw new Error("Contact not found for credit transaction.");
+            if (!finalContactName) {
+                 const {data: contact} = await supabase.from('contacts').select('name').eq('id', finalContactId).single();
+                 if (!contact) throw new Error("Contact not found for credit transaction.");
+                 finalContactName = contact.name;
+            }
 
             let amountToLog = stockTx.actual_amount;
             
-            // For purchases, check for advances to vendors (negative amount)
-            // For sales, check for advances from clients (negative amount)
-            // The logic for advance amounts (being negative) is consistent for both vendors and clients
             const { data: advances } = await supabase
                 .from('ap_ar_transactions')
                 .select('id, amount')
-                .eq('contact_id', stockTx.contact_id)
+                .eq('contact_id', finalContactId)
                 .eq('type', 'advance')
-                .lt('amount', 0); // Advance payments are stored as negative
+                .lt('amount', 0);
 
             if (advances && advances.length > 0) {
                 for (const advance of advances) {
@@ -620,10 +639,10 @@ export async function addStockTransaction(input: z.infer<typeof AddStockTransact
                 description: stockTx.description || `${stockTx.stockItemName} (${stockTx.weight}kg)`,
                 amount: amountToLog,
                 date: stockTx.date,
-                contact_id: stockTx.contact_id!,
+                contact_id: finalContactId,
                 status: 'unpaid',
                 paid_amount: 0,
-                contact_name: contact.name,
+                contact_name: finalContactName,
             };
             const { error } = await supabase.from('ap_ar_transactions').insert(ledgerData);
             if (error) throw error;

@@ -104,18 +104,10 @@ export function StockForm({ setDialogOpen }: StockFormProps) {
 
   const onSubmit = async (data: FormData) => {
     try {
-        let finalContactId: string | undefined;
-        let finalContactName: string | undefined;
-
+        let newContactData;
         if (data.contact_id === 'new' && data.newContact) {
             const contactType = data.stockType === 'purchase' ? 'vendor' : 'client';
-            const newContact = await addContact(data.newContact, contactType);
-            if (!newContact) throw new Error("Failed to create new contact.");
-            finalContactId = newContact.id;
-            finalContactName = newContact.name;
-        } else if (data.contact_id) {
-            finalContactId = data.contact_id;
-            finalContactName = contacts.find(c => c.id === data.contact_id)?.name;
+            newContactData = { name: data.newContact, type: contactType };
         }
 
         await addStockTransaction({
@@ -130,11 +122,10 @@ export function StockForm({ setDialogOpen }: StockFormProps) {
             actual_amount: paymentMethod === 'credit' ? data.expected_amount : data.actual_amount,
             difference: difference,
             difference_reason: data.difference_reason,
-            contact_id: finalContactId,
-            contact_name: finalContactName,
+            contact_id: newContactData ? undefined : data.contact_id, // Pass contact_id only if not creating new one
             bank_id: data.bank_id,
             created_at: new Date().toISOString(),
-        });
+        }, newContactData);
         
         toast.success("Stock Transaction Added");
         setDialogOpen(false);

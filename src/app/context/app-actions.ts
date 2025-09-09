@@ -76,11 +76,19 @@ export function useAppActions() {
         });
     };
 
-    const addStockTransaction = async (tx: Omit<StockTransaction, 'id' | 'deletedAt'>) => {
+    const addStockTransaction = async (tx: Omit<StockTransaction, 'id' | 'deletedAt'>, newContact?: {name: string, type: 'vendor' | 'client'}) => {
         return performAdminAction(async () => {
             const stockTempId = `temp_stock_${Date.now()}`;
-            const newStockTxData: StockTransaction = { ...tx, id: stockTempId, created_at: tx.created_at || new Date().toISOString() };
+            let txDataForDb: Partial<StockTransaction> = { ...tx };
 
+            if (newContact) {
+                const tempContactId = `temp_contact_${Date.now()}`;
+                await db.contacts.add({ id: tempContactId, name: newContact.name, type: newContact.type, created_at: new Date().toISOString() });
+                txDataForDb.contact_id = tempContactId;
+                txDataForDb.contact_name = newContact.name;
+            }
+
+            const newStockTxData: StockTransaction = { ...(txDataForDb as StockTransaction), id: stockTempId, created_at: tx.created_at || new Date().toISOString() };
             await db.stock_transactions.add(newStockTxData);
 
             if (tx.paymentMethod === 'cash' || tx.paymentMethod === 'bank') {
@@ -91,7 +99,7 @@ export function useAppActions() {
                     difference: tx.difference, difference_reason: tx.difference_reason,
                     description: tx.description || `${tx.type} of ${tx.weight}kg of ${tx.stockItemName}`,
                     category: tx.type === 'purchase' ? 'Stock Purchase' : 'Stock Sale', linkedStockTxId: stockTempId,
-                    contact_id: tx.contact_id,
+                    contact_id: txDataForDb.contact_id,
                 };
 
                 if (tx.paymentMethod === 'cash') {
@@ -101,13 +109,13 @@ export function useAppActions() {
                 }
             } else if (tx.paymentMethod === 'credit') {
                 const ledgerTempId = `temp_ledger_${Date.now()}`;
-                const contact = contacts.find(c => c.id === tx.contact_id);
+                const contact = contacts.find(c => c.id === txDataForDb.contact_id) || (newContact ? {id: txDataForDb.contact_id, name: newContact.name} : undefined);
 
                 const ledgerData: LedgerTransaction = {
                     id: ledgerTempId,
                     type: tx.type === 'purchase' ? 'payable' : 'receivable',
                     description: tx.description || `${tx.stockItemName} (${tx.weight}kg)`,
-                    amount: tx.actual_amount, date: tx.date, contact_id: tx.contact_id!,
+                    amount: tx.actual_amount, date: tx.date, contact_id: txDataForDb.contact_id!,
                     status: 'unpaid', paid_amount: 0, 
                     contact_name: contact?.name,
                     created_at: new Date().toISOString(),
@@ -117,7 +125,7 @@ export function useAppActions() {
             
             queueOrSync({
                 action: 'addStockTransaction',
-                payload: { stockTx: { ...newStockTxData }, localId: stockTempId }
+                payload: { stockTx: { ...newStockTxData }, newContact, localId: stockTempId }
             });
         });
     };
