@@ -21,7 +21,7 @@ export function DashboardTab({
   cashBalance,
   bankBalance,
 }: DashboardTabProps) {
-  const { currency, showStockValue, currentStockValue, currentStockWeight, isLoading } = useAppContext()
+  const { currency, showStockValue, currentStockValue, currentStockWeight, isLoading, cashTransactions } = useAppContext()
 
   const formatCurrency = (amount: number) => {
     if (currency === 'BDT') {
@@ -32,7 +32,8 @@ export function DashboardTab({
 
   const totalBalance = cashBalance + bankBalance;
   
-  const isComponentLoading = isLoading || cashBalance === undefined || bankBalance === undefined || currentStockValue === undefined;
+  // Use a more reliable loading check. If cashTransactions is undefined, it means liveQuery is not ready.
+  const isComponentLoading = cashTransactions === undefined;
 
   const renderValue = (value: string | number, isCurrency = true) => {
     if (isComponentLoading) {

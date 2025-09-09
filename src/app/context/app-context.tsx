@@ -238,6 +238,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         }
         
         try {
+            setBlockingOperation({ isActive: true, message: 'Fetching latest data...' });
             const serverData = await server.batchReadData({
                 tables: [
                     { tableName: 'categories' }, { tableName: 'contacts' },
@@ -249,7 +250,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                     { tableName: 'activity_log' },
                 ]
             });
-
+            
             setBlockingOperation({ isActive: true, message: 'Organizing your data...' });
             const categoriesData = await seedEssentialCategories(serverData.categories as Category[]);
             
@@ -274,30 +275,34 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             await processSyncQueue();
         } catch (error: any) {
             handleApiError(error);
+        } finally {
+            setBlockingOperation({ isActive: false, message: '' });
         }
     }, [isSyncing, user, appState, processSyncQueue, handleApiError, seedEssentialCategories]);
 
 
     const checkSessionAndLoad = useCallback(async () => {
-        setIsLoading(true);
         try {
             setBlockingOperation({ isActive: true, message: 'Verifying your session...' });
             const session = await getSessionFromCookie();
             
             if (session) {
                 setUser(session);
-                setBlockingOperation({ isActive: true, message: 'Fetching latest data...' });
-                await reloadData();
+                // Immediately allow render with local data. Server fetch will happen in the background.
+                setIsLoading(false); 
+                // Now, trigger background sync
+                reloadData(); 
             } else {
                 setUser(null);
+                setIsLoading(false);
             }
         } catch (error) {
             console.error("Error during initial session check:", error);
             setUser(null);
             handleApiError(error);
-        } finally {
-            setBlockingOperation({ isActive: false, message: '' });
             setIsLoading(false);
+        } finally {
+             setBlockingOperation({ isActive: false, message: '' });
         }
     }, [setUser, reloadData, handleApiError]);
 
@@ -346,11 +351,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         {!isOnline && (
             <div className="fixed bottom-4 right-4 z-50 animate-fade-in">
                 <div className="flex items-center gap-2 rounded-full bg-background px-3 py-2 text-foreground shadow-lg border">
-                    {isSyncing ? (
-                        <><RefreshCw className="h-5 w-5 animate-spin" /><span className="font-semibold text-sm">Syncing...</span></>
-                    ) : (
-                        <><WifiOff className="h-5 w-5 text-destructive" /><span className="font-semibold text-sm">Offline</span></>
-                    )}
+                    <WifiOff className="h-5 w-5 text-destructive" />
+                    <span className="font-semibold text-sm">Offline</span>
+                </div>
+            </div>
+        )}
+        {isSyncing && (
+             <div className="fixed bottom-4 right-4 z-50 animate-fade-in">
+                <div className="flex items-center gap-2 rounded-full bg-background px-3 py-2 text-foreground shadow-lg border">
+                    <RefreshCw className="h-5 w-5 animate-spin" />
+                    <span className="font-semibold text-sm">Syncing...</span>
                 </div>
             </div>
         )}
@@ -380,7 +390,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         login: async (credentials) => {
             const result = await login(credentials);
             if (result.success) {
-                checkSessionAndLoad(); // Trigger full reload on successful login
+                // Set loading to true to show loading screen while data is fetched for the first time
+                setIsLoading(true);
+                await checkSessionAndLoad(); // Trigger full reload on successful login
             }
             return result;
         },
@@ -397,7 +409,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     ]);
     
     if (isLoading) {
-        return <AppLoading message={blockingOperation.message || undefined} />;
+        return <AppLoading message={blockingOperation.message || "Loading your ledger..."} />;
     }
     
     if (isLoggingOut || (blockingOperation.isActive && !isLoading)) {
