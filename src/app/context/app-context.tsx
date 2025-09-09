@@ -281,35 +281,30 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }, [isSyncing, user, appState, processSyncQueue, handleApiError, seedEssentialCategories]);
 
     useEffect(() => {
-        // This effect runs only once on initial component mount to start the loading sequence.
         const checkSessionAndLoad = async () => {
+            setIsLoading(true);
+            setBlockingOperation({ isActive: true, message: 'Verifying your session...' });
             try {
-                setBlockingOperation({ isActive: true, message: 'Verifying your session...' });
                 const session = await getSessionFromCookie();
                 
                 if (session) {
                     setUser(session);
-                    // Immediately allow render with local data. Server fetch will happen in the background.
-                    setIsLoading(false); 
-                    // Now, trigger background sync
-                    await reloadData(); 
+                    await reloadData();
                 } else {
                     setUser(null);
-                    setIsLoading(false);
                 }
             } catch (error) {
                 console.error("Error during initial session check:", error);
                 setUser(null);
                 handleApiError(error);
-                setIsLoading(false);
             } finally {
+                 setIsLoading(false);
                  setBlockingOperation({ isActive: false, message: '' });
             }
         };
 
         checkSessionAndLoad();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []); // Empty dependency array ensures this runs only ONCE.
+    }, []);
 
     useEffect(() => {
         const handleOnline = () => {
@@ -346,9 +341,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const closeInitialBalanceDialog = useCallback(() => setIsInitialBalanceDialogOpen(false), []);
     
     const contextLogin = useCallback(async (credentials: Parameters<typeof serverLogin>[0]) => {
+        setIsLoading(true);
         const result = await login(credentials);
         if (result.success) {
-            setIsLoading(true);
             try {
                 setBlockingOperation({ isActive: true, message: 'Verifying your session...' });
                 const session = await getSessionFromCookie();
@@ -364,6 +359,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 setBlockingOperation({ isActive: false, message: ''});
                 setIsLoading(false);
             }
+        } else {
+            setIsLoading(false);
         }
         return result;
     }, [login, setUser, reloadData, handleApiError]);

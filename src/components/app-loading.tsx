@@ -30,7 +30,7 @@ export function AppLoading({ message }: { message?: string }) {
                     <h1 className="text-2xl font-bold text-primary">Ha-Mim Iron Mart</h1>
                 </div>
                 <Progress value={progress} className="w-full h-2" />
-                <p className="text-muted-foreground animate-pulse">
+                <p className="text-muted-foreground animate-pulse text-center">
                     {message || "Loading your ledger..."}
                 </p>
             </div>
