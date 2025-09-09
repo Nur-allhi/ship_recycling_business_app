@@ -69,16 +69,16 @@ export function LoginForm() {
       const result = await login(data);
       
       if (result.success) {
-          toast.success("Login Successful", { description: "Welcome back!" });
-          await sleep(1000);
-
+          toast.success("Login Successful", { description: "Welcome back! Redirecting..." });
+          
           if (data.rememberMe) {
               localStorage.setItem('rememberedUsername', data.username);
           } else {
               localStorage.removeItem('rememberedUsername');
           }
           
-          router.push('/');
+          await sleep(1000);
+          window.location.href = '/';
       }
 
     } catch (error: any) {

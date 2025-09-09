@@ -238,6 +238,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         }
         
         try {
+            setBlockingOperation({ isActive: true, message: 'Fetching latest data...' });
             const serverData = await server.batchReadData({
                 tables: [
                     { tableName: 'categories', select: '*' }, { tableName: 'contacts', select: '*' },
@@ -339,28 +340,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const closeInitialBalanceDialog = useCallback(() => setIsInitialBalanceDialogOpen(false), []);
     
     const contextLogin = useCallback(async (credentials: Parameters<typeof serverLogin>[0]) => {
-        const result = await login(credentials);
-        if (result.success) {
-            setIsLoading(true); // Show main loading screen
-            try {
-                setBlockingOperation({ isActive: true, message: 'Verifying your session...' });
-                const session = await getSessionFromCookie();
-                 if (session) {
-                    setUser(session);
-                    setBlockingOperation({ isActive: true, message: 'Fetching latest data...' });
-                    await reloadData({ needsInitialBalance: result.needsInitialBalance });
-                } else {
-                    setUser(null);
-                }
-            } catch (e) {
-                handleApiError(e);
-            } finally {
-                setBlockingOperation({ isActive: false, message: ''});
-                setIsLoading(false);
-            }
-        }
-        return result;
-    }, [login, setUser, reloadData, handleApiError]);
+        return await login(credentials);
+    }, [login]);
 
     const OnlineStatusIndicator = () => (
       <>
@@ -417,7 +398,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     ]);
     
     if (isLoading) {
-        return <AppLoading message={blockingOperation.message || "Loading your ledger..."} />;
+        return <AppLoading message={blockingOperation.message} />;
     }
     
     if (isLoggingOut || (blockingOperation.isActive && !isLoading)) {
