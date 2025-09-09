@@ -586,23 +586,29 @@ export async function addStockTransaction(input: z.infer<typeof AddStockTransact
 
             let amountToLog = stockTx.actual_amount;
             
+            // For purchases, check for advances to vendors (negative amount)
+            // For sales, check for advances from clients (negative amount)
+            // The logic for advance amounts (being negative) is consistent for both vendors and clients
             const { data: advances } = await supabase
                 .from('ap_ar_transactions')
                 .select('id, amount')
                 .eq('contact_id', stockTx.contact_id)
                 .eq('type', 'advance')
-                .lt('amount', 0);
+                .lt('amount', 0); // Advance payments are stored as negative
 
             if (advances && advances.length > 0) {
                 for (const advance of advances) {
                     if (amountToLog <= 0) break;
                     const advanceBalance = Math.abs(advance.amount);
                     const amountToSettle = Math.min(amountToLog, advanceBalance);
+                    
                     const { error: updateError } = await supabase.from('ap_ar_transactions').update({ amount: advance.amount + amountToSettle }).eq('id', advance.id);
                     if (updateError) throw updateError;
+                    
                     amountToLog -= amountToSettle;
                 }
             }
+
 
             if (amountToLog <= 0) {
                 await logActivity(`Added stock transaction (credit, fully covered by advance): ${stockTx.stockItemName}`);
@@ -1034,3 +1040,5 @@ export async function clearActivityLog() {
         return handleApiError(error);
     }
 }
+
+    
