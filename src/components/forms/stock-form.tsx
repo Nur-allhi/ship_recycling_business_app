@@ -104,7 +104,7 @@ export function StockForm({ setDialogOpen }: StockFormProps) {
 
   const onSubmit = async (data: FormData) => {
     try {
-        let newContactData;
+        let newContactData: { name: string; type: "vendor" | "client"; } | undefined;
         if (data.contact_id === 'new' && data.newContact) {
             const contactType = data.stockType === 'purchase' ? 'vendor' : 'client';
             newContactData = { name: data.newContact, type: contactType };
@@ -320,3 +320,5 @@ export function StockForm({ setDialogOpen }: StockFormProps) {
     </div>
   );
 }
+
+    

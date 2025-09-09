@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import { db } from '@/lib/db';
 import type { SyncQueueItem } from '@/lib/db';
 import * as server from '@/lib/actions';
-import { useSessionManager } from './useSessionManager';
+import { useSessionManager } from '@/app/context/useSessionManager';
 import { useLiveQuery } from 'dexie-react-hooks';
 
 export function useDataSyncer() {
@@ -131,3 +131,5 @@ export function useDataSyncer() {
         queueOrSync,
     };
 }
+
+    
