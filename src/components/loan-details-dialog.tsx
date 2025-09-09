@@ -112,7 +112,7 @@ export function LoanDetailsDialog({ isOpen, setIsOpen, loan }: LoanDetailsDialog
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogContent className="max-w-3xl">
+      <DialogContent className="max-w-3xl flex flex-col max-h-[90vh]">
         <DialogHeader>
           <DialogTitle>Loan Details</DialogTitle>
           <DialogDescription>
@@ -123,148 +123,150 @@ export function LoanDetailsDialog({ isOpen, setIsOpen, loan }: LoanDetailsDialog
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 my-4 p-4 rounded-lg bg-muted/50 text-center">
-            <div>
-                <p className="text-sm text-muted-foreground">Principal</p>
-                <p className="text-lg font-bold font-mono">{formatCurrency(loan.principal_amount)}</p>
+        <div className="flex-grow overflow-y-auto pr-4 -mr-4 space-y-6">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 my-4 p-4 rounded-lg bg-muted/50 text-center">
+                <div>
+                    <p className="text-sm text-muted-foreground">Principal</p>
+                    <p className="text-lg font-bold font-mono">{formatCurrency(loan.principal_amount)}</p>
+                </div>
+                <div>
+                    <p className="text-sm text-muted-foreground">Total Paid</p>
+                    <p className="text-lg font-bold font-mono text-green-600">{formatCurrency(totalPaid)}</p>
+                </div>
+                <div>
+                    <p className="text-sm text-muted-foreground">Outstanding</p>
+                    <p className="text-lg font-bold font-mono text-destructive">{formatCurrency(outstandingBalance)}</p>
+                </div>
+                <div>
+                    <p className="text-sm text-muted-foreground">Interest Rate</p>
+                    <p className="text-lg font-bold font-mono">{loan.interest_rate}%</p>
+                </div>
             </div>
-             <div>
-                <p className="text-sm text-muted-foreground">Total Paid</p>
-                <p className="text-lg font-bold font-mono text-green-600">{formatCurrency(totalPaid)}</p>
-            </div>
-             <div>
-                <p className="text-sm text-muted-foreground">Outstanding</p>
-                <p className="text-lg font-bold font-mono text-destructive">{formatCurrency(outstandingBalance)}</p>
-            </div>
-             <div>
-                <p className="text-sm text-muted-foreground">Interest Rate</p>
-                <p className="text-lg font-bold font-mono">{loan.interest_rate}%</p>
-            </div>
-        </div>
-        
-        <Separator />
+            
+            <Separator />
 
-        <div className="space-y-4">
-            <h4 className="font-semibold">Payment History</h4>
-            <div className="max-h-48 overflow-y-auto border rounded-md">
-                <Table>
-                    <TableHeader>
-                        <TableRow>
-                            <TableHead>Date</TableHead>
-                            <TableHead className="text-right">Amount</TableHead>
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {loan.payments.length > 0 ? (
-                            loan.payments.map(p => (
-                                <TableRow key={p.id}>
-                                    <TableCell>{format(new Date(p.payment_date), 'dd-MM-yyyy')}</TableCell>
-                                    <TableCell className="text-right font-mono">{formatCurrency(p.amount)}</TableCell>
-                                </TableRow>
-                            ))
-                        ) : (
+            <div className="space-y-4">
+                <h4 className="font-semibold">Payment History</h4>
+                <div className="max-h-48 overflow-y-auto border rounded-md">
+                    <Table>
+                        <TableHeader>
                             <TableRow>
-                                <TableCell colSpan={2} className="text-center h-20 text-muted-foreground">No payments recorded yet.</TableCell>
+                                <TableHead>Date</TableHead>
+                                <TableHead className="text-right">Amount</TableHead>
                             </TableRow>
-                        )}
-                    </TableBody>
-                </Table>
-            </div>
-        </div>
-
-        {isAdmin && outstandingBalance > 0 && (
-            <>
-                <Separator />
-                <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-                    <h4 className="font-semibold">Record a New Payment</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                            <Label htmlFor="paymentAmount">Payment Amount</Label>
-                            <Input id="paymentAmount" type="number" step="0.01" {...register('paymentAmount')} />
-                            {errors.paymentAmount && <p className="text-sm text-destructive">{errors.paymentAmount.message}</p>}
-                        </div>
-                        <div className="space-y-2">
-                            <Label>Payment Date</Label>
-                            <Controller
-                                control={control}
-                                name="paymentDate"
-                                render={({ field }) => (
-                                    <Popover open={isDatePickerOpen} onOpenChange={setIsDatePickerOpen}>
-                                        <PopoverTrigger asChild>
-                                            <Button
-                                                variant={"outline"}
-                                                className={cn("w-full justify-start text-left font-normal", !field.value && "text-muted-foreground")}
-                                            >
-                                                <CalendarIcon className="mr-2 h-4 w-4" />
-                                                {field.value ? format(field.value, "PPP") : <span>Pick a date</span>}
-                                            </Button>
-                                        </PopoverTrigger>
-                                        <PopoverContent className="w-auto p-0">
-                                            <Calendar 
-                                                mode="single" 
-                                                selected={field.value} 
-                                                onSelect={(date) => {
-                                                  if (date) field.onChange(date);
-                                                  setIsDatePickerOpen(false);
-                                                }} 
-                                                initialFocus 
-                                            />
-                                        </PopoverContent>
-                                    </Popover>
-                                )}
-                            />
-                            {errors.paymentDate && <p className="text-sm text-destructive">{errors.paymentDate.message}</p>}
-                        </div>
-                    </div>
-                    
-                    <div className="space-y-2">
-                        <Label>Pay from / into</Label>
-                        <Controller 
-                            control={control}
-                            name="paymentMethod"
-                            render={({ field }) => (
-                                <RadioGroup onValueChange={field.onChange} value={field.value} className="flex pt-2 gap-4">
-                                    <Label className="flex items-center gap-2 cursor-pointer"><RadioGroupItem value="cash" />Cash</Label>
-                                    <Label className="flex items-center gap-2 cursor-pointer"><RadioGroupItem value="bank" />Bank</Label>
-                                </RadioGroup>
+                        </TableHeader>
+                        <TableBody>
+                            {loan.payments.length > 0 ? (
+                                loan.payments.map(p => (
+                                    <TableRow key={p.id}>
+                                        <TableCell>{format(new Date(p.payment_date), 'dd-MM-yyyy')}</TableCell>
+                                        <TableCell className="text-right font-mono">{formatCurrency(p.amount)}</TableCell>
+                                    </TableRow>
+                                ))
+                            ) : (
+                                <TableRow>
+                                    <TableCell colSpan={2} className="text-center h-20 text-muted-foreground">No payments recorded yet.</TableCell>
+                                </TableRow>
                             )}
-                        />
-                        {errors.paymentMethod && <p className="text-sm text-destructive">{errors.paymentMethod.message}</p>}
-                    </div>
+                        </TableBody>
+                    </Table>
+                </div>
+            </div>
 
-                    {paymentMethod === 'bank' && (
-                        <div className="space-y-2 animate-fade-in">
-                            <Label>Bank Account</Label>
+            {isAdmin && outstandingBalance > 0 && (
+                <>
+                    <Separator />
+                    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+                        <h4 className="font-semibold">Record a New Payment</h4>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <Label htmlFor="paymentAmount">Payment Amount</Label>
+                                <Input id="paymentAmount" type="number" step="0.01" {...register('paymentAmount')} />
+                                {errors.paymentAmount && <p className="text-sm text-destructive">{errors.paymentAmount.message}</p>}
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Payment Date</Label>
+                                <Controller
+                                    control={control}
+                                    name="paymentDate"
+                                    render={({ field }) => (
+                                        <Popover open={isDatePickerOpen} onOpenChange={setIsDatePickerOpen}>
+                                            <PopoverTrigger asChild>
+                                                <Button
+                                                    variant={"outline"}
+                                                    className={cn("w-full justify-start text-left font-normal", !field.value && "text-muted-foreground")}
+                                                >
+                                                    <CalendarIcon className="mr-2 h-4 w-4" />
+                                                    {field.value ? format(field.value, "PPP") : <span>Pick a date</span>}
+                                                </Button>
+                                            </PopoverTrigger>
+                                            <PopoverContent className="w-auto p-0">
+                                                <Calendar 
+                                                    mode="single" 
+                                                    selected={field.value} 
+                                                    onSelect={(date) => {
+                                                    if (date) field.onChange(date);
+                                                    setIsDatePickerOpen(false);
+                                                    }} 
+                                                    initialFocus 
+                                                />
+                                            </PopoverContent>
+                                        </Popover>
+                                    )}
+                                />
+                                {errors.paymentDate && <p className="text-sm text-destructive">{errors.paymentDate.message}</p>}
+                            </div>
+                        </div>
+                        
+                        <div className="space-y-2">
+                            <Label>Pay from / into</Label>
                             <Controller 
                                 control={control}
-                                name="bank_id"
+                                name="paymentMethod"
                                 render={({ field }) => (
-                                    <ResponsiveSelect
-                                        onValueChange={field.onChange}
-                                        value={field.value}
-                                        title="Select a Bank Account"
-                                        placeholder="Select a bank..."
-                                        items={bankAccountItems}
-                                    />
+                                    <RadioGroup onValueChange={field.onChange} value={field.value} className="flex pt-2 gap-4">
+                                        <Label className="flex items-center gap-2 cursor-pointer"><RadioGroupItem value="cash" />Cash</Label>
+                                        <Label className="flex items-center gap-2 cursor-pointer"><RadioGroupItem value="bank" />Bank</Label>
+                                    </RadioGroup>
                                 )}
                             />
-                            {errors.bank_id && <p className="text-sm text-destructive">{errors.bank_id.message}</p>}
+                            {errors.paymentMethod && <p className="text-sm text-destructive">{errors.paymentMethod.message}</p>}
                         </div>
-                    )}
-                    <DialogFooter>
-                         <Button type="button" variant="outline" onClick={handleExportPdf}>
-                            <Printer className="mr-2 h-4 w-4" />
-                            Print Statement
-                        </Button>
-                        <Button type="submit" disabled={isSubmitting}>
-                            {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
-                            Record Payment
-                        </Button>
-                    </DialogFooter>
-                </form>
-            </>
-        )}
-         {!isAdmin || outstandingBalance <= 0 && (
+
+                        {paymentMethod === 'bank' && (
+                            <div className="space-y-2 animate-fade-in">
+                                <Label>Bank Account</Label>
+                                <Controller 
+                                    control={control}
+                                    name="bank_id"
+                                    render={({ field }) => (
+                                        <ResponsiveSelect
+                                            onValueChange={field.onChange}
+                                            value={field.value}
+                                            title="Select a Bank Account"
+                                            placeholder="Select a bank..."
+                                            items={bankAccountItems}
+                                        />
+                                    )}
+                                />
+                                {errors.bank_id && <p className="text-sm text-destructive">{errors.bank_id.message}</p>}
+                            </div>
+                        )}
+                        <DialogFooter className="pt-4 sticky bottom-0 bg-background pb-2">
+                            <Button type="button" variant="outline" onClick={handleExportPdf}>
+                                <Printer className="mr-2 h-4 w-4" />
+                                Print Statement
+                            </Button>
+                            <Button type="submit" disabled={isSubmitting}>
+                                {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
+                                Record Payment
+                            </Button>
+                        </DialogFooter>
+                    </form>
+                </>
+            )}
+        </div>
+         {(!isAdmin || outstandingBalance <= 0) && (
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={handleExportPdf}>
                     <Printer className="mr-2 h-4 w-4" />
@@ -277,5 +279,3 @@ export function LoanDetailsDialog({ isOpen, setIsOpen, loan }: LoanDetailsDialog
     </Dialog>
   );
 }
-
-    
