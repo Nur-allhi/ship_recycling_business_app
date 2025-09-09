@@ -237,19 +237,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             return;
         }
         
-        setBlockingOperation({ isActive: true, message: 'Fetching latest data...' });
-        
         try {
-            const session = await getSessionFromCookie();
-            if (!session) {
-                setUser(null);
-                return;
-            }
-            
-            if(!user || user.id !== session.id) {
-                setUser(session);
-            }
-            
             const serverData = await server.batchReadData({
                 tables: [
                     { tableName: 'categories' }, { tableName: 'contacts' },
@@ -262,12 +250,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 ]
             });
 
+            setBlockingOperation({ isActive: true, message: 'Organizing your data...' });
             const categoriesData = await seedEssentialCategories(serverData.categories as Category[]);
             
-            setBlockingOperation({ isActive: true, message: 'Organizing your data...' });
             await db.transaction('rw', db.tables, async () => {
                 await clearAllData(false);
-                await db.app_state.put({ id: 1, user: session, fontSize: appState?.fontSize ?? 'base', currency: appState?.currency ?? 'BDT', showStockValue: appState?.showStockValue ?? false, lastSync: null });
+                await db.app_state.put({ id: 1, user: user!, fontSize: appState?.fontSize ?? 'base', currency: appState?.currency ?? 'BDT', showStockValue: appState?.showStockValue ?? false, lastSync: null });
                 await bulkPut('categories', categoriesData); await bulkPut('contacts', serverData.contacts);
                 await bulkPut('banks', serverData.banks);
                 await bulkPut('cash_transactions', serverData.cash_transactions); await bulkPut('bank_transactions', serverData.bank_transactions);
@@ -287,16 +275,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         } catch (error: any) {
             handleApiError(error);
         }
-    }, [isSyncing, user, setUser, seedEssentialCategories, appState, processSyncQueue, handleApiError]);
+    }, [isSyncing, user, appState, processSyncQueue, handleApiError, seedEssentialCategories]);
 
 
     const checkSessionAndLoad = useCallback(async () => {
         setIsLoading(true);
-        setBlockingOperation({ isActive: true, message: 'Verifying your session...' });
         try {
+            setBlockingOperation({ isActive: true, message: 'Verifying your session...' });
             const session = await getSessionFromCookie();
+            
             if (session) {
                 setUser(session);
+                setBlockingOperation({ isActive: true, message: 'Fetching latest data...' });
                 await reloadData();
             } else {
                 setUser(null);
@@ -306,8 +296,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             setUser(null);
             handleApiError(error);
         } finally {
-            setIsLoading(false);
             setBlockingOperation({ isActive: false, message: '' });
+            setIsLoading(false);
         }
     }, [setUser, reloadData, handleApiError]);
 
