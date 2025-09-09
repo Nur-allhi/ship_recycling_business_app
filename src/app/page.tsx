@@ -32,7 +32,7 @@ function MainContent() {
     } = useAppContext();
     const [activeTab, setActiveTab] = useState('dashboard');
     const isAdmin = user?.role === 'admin';
-    const { setOpen, isMobile } = useSidebar();
+    const { isMobile } = useSidebar();
     const router = useRouter();
     const pathname = usePathname();
 
