@@ -78,7 +78,7 @@ export class AppDatabase extends Dexie {
         });
 
         this.version(3).stores({
-            stock_transactions: '++id, date, stockItemName, type, contact_id, created_at',
+            stock_transactions: '++id, date, stockItemName, type, contact_id, contact_name, created_at',
         });
     }
 }
