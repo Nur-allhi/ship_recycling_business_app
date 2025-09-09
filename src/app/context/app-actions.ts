@@ -459,7 +459,7 @@ export function useAppActions() {
             queueOrSync({ action: 'restoreData', payload: { tableName, id } });
 
             // This fetches the restored data and updates the local DB immediately.
-            const restoredItem = await server.readSingleItem({ tableName, id });
+            const restoredItem = await server.readSingleItem({ tableName, id, select: '*' });
             if (restoredItem) {
                 await db.table(tableName).add(restoredItem);
                 toast.success("Item restored.");
@@ -672,5 +672,7 @@ export function useAppActions() {
         clearActivityLog,
     };
 }
+
+    
 
     
