@@ -2,7 +2,7 @@
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
-import type { CashTransaction, BankTransaction, StockTransaction, Loan, Contact, LoanPayment } from '@/lib/types';
+import type { CashTransaction, BankTransaction, StockTransaction, Loan, Contact, LoanPayment, LoanWithPayments } from '@/lib/types';
 import { toast } from 'sonner';
 
 // Extend the jsPDF interface to include autoTable
@@ -10,10 +10,6 @@ declare module 'jspdf' {
     interface jsPDF {
         autoTable: (options: any) => jsPDF;
     }
-}
-
-interface LoanWithPayments extends Loan {
-    payments: LoanPayment[];
 }
 
 const generateHeader = (doc: jsPDF, title: string, subtitle?: string) => {
@@ -309,3 +305,5 @@ export const generateContactStatementPdf = (contact: Contact, history: any[], cu
         console.error(e);
     }
 };
+
+    

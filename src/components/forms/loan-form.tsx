@@ -78,24 +78,20 @@ export function LoanForm({ setDialogOpen }: LoanFormProps) {
   const onSubmit = async (data: FormData) => {
     setIsSubmitting(true);
     try {
-        let finalContactId: string = data.contact_id;
         let newContactData: { name: string; type: "vendor" | "client"; } | undefined;
-
         if (data.contact_id === 'new' && data.newContact) {
              const contactType = data.type === 'payable' ? 'vendor' : 'client';
              newContactData = { name: data.newContact, type: contactType };
-             finalContactId = 'new';
         }
 
         const loanData = {
-          contact_id: finalContactId,
+          contact_id: data.contact_id,
           type: data.type,
           principal_amount: data.principal_amount,
           interest_rate: data.interest_rate ?? 0,
           issue_date: formatISO(data.issue_date, { representation: 'date' }),
           due_date: data.due_date ? formatISO(data.due_date, { representation: 'date' }) : undefined,
           status: 'active' as const,
-          created_at: new Date().toISOString(),
         }
         
         const disbursementData = {
@@ -229,3 +225,5 @@ export function LoanForm({ setDialogOpen }: LoanFormProps) {
     </Card>
   );
 }
+
+    

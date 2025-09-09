@@ -148,3 +148,11 @@ export interface LoanPayment {
   notes?: string;
   created_at: string;
 }
+
+export interface LoanWithPayments extends Loan {
+    payments: LoanPayment[];
+    contactName: string;
+    outstanding_balance: number;
+}
+
+    

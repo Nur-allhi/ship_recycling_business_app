@@ -8,14 +8,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from ".
 import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
 import { format } from "date-fns";
-import type { Loan, LoanPayment } from "@/lib/types";
+import type { Loan, LoanWithPayments } from "@/lib/types";
 import { LoanDetailsDialog } from "./loan-details-dialog";
-
-interface LoanWithPayments extends Loan {
-    payments: LoanPayment[];
-    contactName: string;
-    outstanding_balance: number;
-}
 
 export function LoansPayableList() {
     const { loans, contacts, currency, loanPayments } = useAppContext();
@@ -100,3 +94,5 @@ export function LoansPayableList() {
         </>
     );
 }
+
+    

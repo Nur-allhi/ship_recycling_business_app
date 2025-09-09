@@ -864,7 +864,7 @@ export async function addLoan(input: z.infer<typeof AddLoanSchema>) {
         
         let finalContactId = loanData.contact_id;
 
-        if (newContact) {
+        if (newContact && finalContactId === 'new') {
             const { data: createdContact, error: contactError } = await supabase
                 .from('contacts')
                 .insert({ name: newContact.name, type: newContact.type })
@@ -874,8 +874,8 @@ export async function addLoan(input: z.infer<typeof AddLoanSchema>) {
             finalContactId = createdContact.id;
         }
         
-        if (!finalContactId) {
-            throw new Error("Contact ID is missing for the loan.");
+        if (!finalContactId || finalContactId === 'new') {
+            throw new Error("Contact ID is missing or invalid for the loan.");
         }
 
         const dataForLoanInsert = {
@@ -994,3 +994,5 @@ export async function recordLoanPayment(input: z.infer<typeof RecordLoanPaymentS
         return handleApiError(error);
     }
 }
+
+    
