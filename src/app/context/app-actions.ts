@@ -133,7 +133,7 @@ export function useAppActions() {
             const tempId = `temp_ledger_${Date.now()}`;
             const dataToSave: LedgerTransaction = {
                 ...tx,
-                contact_name: contact.name,
+                contact_name: tx.contact_name || contact.name,
                 status: 'unpaid',
                 paid_amount: 0,
                 id: tempId,

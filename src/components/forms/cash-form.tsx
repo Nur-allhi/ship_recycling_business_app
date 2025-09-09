@@ -102,6 +102,7 @@ export function CashForm({ setDialogOpen }: CashFormProps) {
                 category: data.category,
                 date: transactionDate,
                 contact_id: data.contact_id,
+                created_at: new Date().toISOString(),
             });
         }
         toast.success("Cash Transaction Added");

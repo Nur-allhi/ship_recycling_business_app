@@ -104,6 +104,7 @@ export function BankForm({ setDialogOpen }: BankFormProps) {
                 date: transactionDate,
                 bank_id: data.bank_id,
                 contact_id: data.contact_id,
+                created_at: new Date().toISOString(),
             });
         }
         toast.success("Bank Transaction Added");

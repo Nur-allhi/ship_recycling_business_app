@@ -99,6 +99,49 @@ export async function readData(input: z.infer<typeof ReadDataInputSchema>): Prom
   }
 }
 
+const BatchReadDataInputSchema = z.object({
+  tables: z.array(z.object({
+    tableName: z.string(),
+    select: z.string().optional().default('*'),
+  })),
+});
+
+
+export async function batchReadData(input: z.infer<typeof BatchReadDataInputSchema>) {
+    try {
+        const session = await getSession();
+        if (!session) throw new Error("SESSION_EXPIRED");
+        const supabase = createAdminSupabaseClient();
+        
+        const results: Record<string, any[]> = {};
+        const softDeleteTables = ['cash_transactions', 'bank_transactions', 'stock_transactions', 'ap_ar_transactions'];
+
+        const queries = input.tables.map(tableInfo => {
+            let query = supabase.from(tableInfo.tableName).select(tableInfo.select);
+            if (softDeleteTables.includes(tableInfo.tableName)) {
+                query = query.is('deletedAt', null);
+            }
+            return query.then(({ data, error }) => {
+                if (error && error.code !== '42P01') {
+                    throw new Error(`Error fetching ${tableInfo.tableName}: ${error.message}`);
+                }
+                return { tableName: tableInfo.tableName, data: data || [] };
+            });
+        });
+
+        const settledResults = await Promise.all(queries);
+
+        for (const result of settledResults) {
+            results[result.tableName] = result.data;
+        }
+        
+        return results;
+
+    } catch (error) {
+        return handleApiError(error);
+    }
+}
+
 export async function readDeletedData(input: z.infer<typeof ReadDataInputSchema>) {
     try {
         const session = await getSession();
@@ -341,7 +384,6 @@ export async function deleteAllData() {
             'banks',
             'activity_log',
             'monthly_snapshots',
-            'sync_queue',             // Clear the sync queue as well
         ];
 
         for (const tableName of tablesToDelete) {
@@ -490,7 +532,7 @@ export async function addStockTransaction(input: z.infer<typeof AddStockTransact
         const supabase = createAdminSupabaseClient();
         const { stockTx } = input;
         
-        const { id, contact_name: tempContactName, ...stockTxToSave } = stockTx;
+        const { id, ...stockTxToSave } = stockTx;
         
         const { data: savedStockTx, error: stockError } = await supabase.from('stock_transactions').insert(stockTxToSave).select().single();
         if(stockError) throw stockError;
@@ -510,6 +552,12 @@ export async function addStockTransaction(input: z.infer<typeof AddStockTransact
             if(error) throw error;
             savedFinancialTx = data;
         } else if (stockTx.paymentMethod === 'credit') {
+             if (!stockTx.contact_id) {
+                throw new Error("Contact information is missing for credit stock transaction.");
+            }
+            const {data: contact} = await supabase.from('contacts').select('name').eq('id', stockTx.contact_id).single();
+            if (!contact) throw new Error("Contact not found for credit transaction.");
+
             let amountToLog = stockTx.actual_amount;
             
             const { data: advances } = await supabase
@@ -535,10 +583,6 @@ export async function addStockTransaction(input: z.infer<typeof AddStockTransact
                 return { stockTx: savedStockTx, financialTx: null };
             }
             
-            if (!stockTx.contact_id || !tempContactName) {
-                throw new Error("Contact information is missing for credit stock transaction.");
-            }
-
             const ledgerData = {
                 type: stockTx.type === 'purchase' ? 'payable' : 'receivable',
                 description: stockTx.description || `${stockTx.stockItemName} (${stockTx.weight}kg)`,
@@ -547,7 +591,7 @@ export async function addStockTransaction(input: z.infer<typeof AddStockTransact
                 contact_id: stockTx.contact_id!,
                 status: 'unpaid',
                 paid_amount: 0,
-                contact_name: tempContactName,
+                contact_name: contact.name,
             };
             const { error } = await supabase.from('ap_ar_transactions').insert(ledgerData);
             if (error) throw error;
@@ -952,5 +996,3 @@ export async function recordLoanPayment(input: z.infer<typeof RecordLoanPaymentS
         return handleApiError(error);
     }
 }
-
-    
