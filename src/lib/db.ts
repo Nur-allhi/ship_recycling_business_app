@@ -57,10 +57,11 @@ export class AppDatabase extends Dexie {
             sync_queue: '++id, timestamp',
         });
         
-        // Version 2: Added linkedLoanId index to financial transactions
+        // Version 2: Added linkedLoanId index to financial transactions and linked_transaction_id to loan_payments
         this.version(2).stores({
              cash_transactions: '++id, date, category, linkedStockTxId, linkedLoanId, advance_id, contact_id, created_at',
              bank_transactions: '++id, date, bank_id, category, linkedStockTxId, linkedLoanId, advance_id, contact_id, created_at',
+             loan_payments: '++id, loan_id, payment_date, linked_transaction_id, created_at',
              // No changes to other tables, but they must be listed to be kept.
              app_state: 'id',
              stock_transactions: '++id, date, stockItemName, type, created_at',
@@ -72,17 +73,12 @@ export class AppDatabase extends Dexie {
              initial_stock: '++id, name',
              monthly_snapshots: '++id, snapshot_date',
              loans: '++id, contact_id, type, status, created_at',
-             loan_payments: '++id, loan_id, payment_date, created_at',
              activity_log: '++id, created_at',
              sync_queue: '++id, timestamp',
         });
 
         this.version(3).stores({
             stock_transactions: '++id, date, stockItemName, type, contact_id, contact_name, created_at',
-        });
-        
-        this.version(4).stores({
-            loan_payments: '++id, loan_id, payment_date, linked_transaction_id, created_at',
         });
     }
 }
