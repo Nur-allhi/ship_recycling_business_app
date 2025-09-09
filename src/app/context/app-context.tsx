@@ -340,7 +340,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const closeInitialBalanceDialog = useCallback(() => setIsInitialBalanceDialogOpen(false), []);
     
     const contextLogin = useCallback(async (credentials: Parameters<typeof serverLogin>[0]) => {
-        return await login(credentials);
+        const result = await login(credentials);
+        if (result.success) {
+            setIsLoading(true); // Trigger loading screen
+            setBlockingOperation({ isActive: true, message: 'Loading your ledger...' });
+            // Let the session check effect handle the data reload
+            window.location.href = '/'; 
+        }
+        return result;
     }, [login]);
 
     const OnlineStatusIndicator = () => (

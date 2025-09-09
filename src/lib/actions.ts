@@ -994,3 +994,17 @@ export async function recordLoanPayment(input: z.infer<typeof RecordLoanPaymentS
         return handleApiError(error);
     }
 }
+
+export async function clearActivityLog() {
+    try {
+        const session = await getSession();
+        if (!session || session.role !== 'admin') throw new Error("Only admins can clear the activity log.");
+        const supabase = createAdminSupabaseClient();
+        const { error } = await supabase.from('activity_log').delete().gt('id', 0);
+        if (error) throw error;
+        await logActivity("Cleared the activity log.");
+        return { success: true };
+    } catch (error) {
+        return handleApiError(error);
+    }
+}

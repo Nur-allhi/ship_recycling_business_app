@@ -619,6 +619,13 @@ export function useAppActions() {
         });
     };
 
+    const clearActivityLog = async () => {
+        return performAdminAction(async () => {
+            await db.activity_log.clear();
+            await server.clearActivityLog();
+        });
+    };
+
     return {
         addCashTransaction,
         addBankTransaction,
@@ -653,6 +660,7 @@ export function useAppActions() {
         handleDeleteAllData,
         addLoan,
         recordLoanPayment,
+        clearActivityLog,
     };
 }
 
