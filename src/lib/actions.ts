@@ -608,12 +608,18 @@ export async function addStockTransaction(input: z.infer<typeof AddStockTransact
 
             let amountToLog = stockTx.actual_amount;
             
+            // Check for advances ONLY for the correct transaction type
+            // Purchase (Payable) checks for advances TO vendors (negative amount)
+            // Sale (Receivable) checks for advances FROM clients (positive amount)
+            const isPurchase = stockTx.type === 'purchase';
+            const advanceAmountFilter = isPurchase ? 'lt' : 'gt';
+            
             const { data: advances } = await supabase
                 .from('ap_ar_transactions')
                 .select('id, amount')
                 .eq('contact_id', finalContactId)
                 .eq('type', 'advance')
-                .lt('amount', 0);
+                .filter('amount', advanceAmountFilter, 0);
 
             if (advances && advances.length > 0) {
                 for (const advance of advances) {
@@ -621,7 +627,7 @@ export async function addStockTransaction(input: z.infer<typeof AddStockTransact
                     const advanceBalance = Math.abs(advance.amount);
                     const amountToSettle = Math.min(amountToLog, advanceBalance);
                     
-                    const { error: updateError } = await supabase.from('ap_ar_transactions').update({ amount: advance.amount + amountToSettle }).eq('id', advance.id);
+                    const { error: updateError } = await supabase.from('ap_ar_transactions').update({ amount: advance.amount + (isPurchase ? amountToSettle : -amountToSettle) }).eq('id', advance.id);
                     if (updateError) throw updateError;
                     
                     amountToLog -= amountToSettle;

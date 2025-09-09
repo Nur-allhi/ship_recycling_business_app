@@ -42,7 +42,6 @@ export function ReceivablesList() {
         if (!ledgerTransactions || !contacts) return [];
 
         ledgerTransactions.forEach(tx => {
-            if (tx.type !== 'receivable' && tx.type !== 'advance') return;
             const contact = contacts.find(c => c.id === tx.contact_id);
             if (!contact || (contact.type !== 'client' && contact.type !== 'both')) return;
 
@@ -57,8 +56,8 @@ export function ReceivablesList() {
             if (tx.type === 'receivable') {
                 groups[tx.contact_id].total_due += tx.amount;
                 groups[tx.contact_id].total_paid += tx.paid_amount;
-            } else if (tx.type === 'advance' && tx.amount < 0) { // Advance FROM client is negative
-                groups[tx.contact_id].total_advance += Math.abs(tx.amount);
+            } else if (tx.type === 'advance' && tx.amount > 0) { // Advance FROM client is positive
+                groups[tx.contact_id].total_advance += tx.amount;
             }
         });
         

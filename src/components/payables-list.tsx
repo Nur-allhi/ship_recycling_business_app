@@ -42,8 +42,6 @@ export function PayablesList() {
         if (!ledgerTransactions || !contacts) return [];
 
         ledgerTransactions.forEach(tx => {
-            if (tx.type !== 'payable' && tx.type !== 'advance') return;
-
             const contact = contacts.find(c => c.id === tx.contact_id);
             if (!contact || (contact.type !== 'vendor' && contact.type !== 'both')) return;
 
