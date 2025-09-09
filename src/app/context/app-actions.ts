@@ -455,8 +455,17 @@ export function useAppActions() {
                 case 'ap_ar': tableName = 'ap_ar_transactions'; break;
             }
 
+            // This tells the server to restore it.
             queueOrSync({ action: 'restoreData', payload: { tableName, id } });
-            toast.success("Item restoration queued. Please refresh data later.");
+
+            // This fetches the restored data and updates the local DB immediately.
+            const restoredItem = await server.readSingleItem({ tableName, id });
+            if (restoredItem) {
+                await db.table(tableName).add(restoredItem);
+                toast.success("Item restored.");
+            } else {
+                 toast.warning("Item restoration queued. It will appear after the next sync.");
+            }
         });
     }, [queueOrSync]);
     

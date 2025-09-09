@@ -166,6 +166,32 @@ export async function readDeletedData(input: z.infer<typeof ReadDataInputSchema>
     }
 }
 
+const ReadSingleItemInputSchema = z.object({
+    tableName: z.string(),
+    id: z.string(),
+    select: z.string().optional().default('*'),
+});
+
+export async function readSingleItem(input: z.infer<typeof ReadSingleItemInputSchema>) {
+    try {
+        const session = await getSession();
+        if (!session) throw new Error("SESSION_EXPIRED");
+
+        const supabase = createAdminSupabaseClient();
+        const { data, error } = await supabase
+            .from(input.tableName)
+            .select(input.select)
+            .eq('id', input.id)
+            .maybeSingle();
+        
+        if (error) throw new Error(error.message);
+        return data;
+
+    } catch (error) {
+        return handleApiError(error);
+    }
+}
+
 const AppendDataInputSchema = z.object({
   tableName: z.string(),
   data: z.record(z.any()).or(z.array(z.record(z.any()))),
