@@ -17,7 +17,7 @@ import { FloatingActionButton } from '@/components/floating-action-button';
 import { AnimatePresence, motion } from 'framer-motion';
 import { SidebarProvider, Sidebar, useSidebar, SidebarTrigger } from '@/components/ui/sidebar';
 import { AppSidebar } from '@/components/app-sidebar';
-import LogoutOverlayWrapper from '@/components/logout-overlay-wrapper';
+import { AppOverlay } from '@/components/app-overlay';
 
 const fontClasses = {
   sm: 'text-sm',
@@ -28,7 +28,7 @@ const fontClasses = {
 function MainContent() {
     const { 
         fontSize, isInitialBalanceDialogOpen, user,
-        cashTransactions, bankTransactions, isLoading
+        cashTransactions, bankTransactions
     } = useAppContext();
     const [activeTab, setActiveTab] = useState('dashboard');
     const isAdmin = user?.role === 'admin';
@@ -46,10 +46,6 @@ function MainContent() {
 
     if (!user) {
         return null; // Should be handled by the layout effect, but as a fallback
-    }
-
-    if(isLoading) {
-        return <AppLoading />;
     }
 
     const renderTabContent = (tab: string) => {
@@ -75,7 +71,6 @@ function MainContent() {
 
     return (
         <div className={cn('min-h-screen bg-background text-foreground flex', fontClasses[fontSize] || 'text-base')}>
-            <LogoutOverlayWrapper />
             {isAdmin && <InitialBalanceDialog isOpen={isInitialBalanceDialogOpen} />}
             
             <Sidebar onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}>

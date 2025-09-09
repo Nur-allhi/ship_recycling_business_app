@@ -13,7 +13,7 @@ import { useSessionManager } from './useSessionManager';
 import { useDataSyncer } from './useDataSyncer';
 import * as server from '@/lib/actions';
 import { getSession as getSessionFromCookie, login as serverLogin } from '@/app/auth/actions';
-import LogoutOverlayWrapper from '@/components/logout-overlay-wrapper';
+import { AppOverlay } from '@/components/app-overlay';
 
 type BlockingOperation = {
     isActive: boolean;
@@ -117,7 +117,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const pathname = usePathname();
     const [blockingOperation, setBlockingOperation] = useState<BlockingOperation>({ isActive: false, message: '' });
     const [isLoading, setIsLoading] = useState(true);
-    const [isInitialLoadComplete, setIsInitialLoadComplete] = useState(false);
 
     const {
         user, setUser, isAuthenticating, isLoggingOut, isOnline,
@@ -242,7 +241,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             const session = await getSessionFromCookie();
             if (!session) {
                 setUser(null);
-                setBlockingOperation({ isActive: false, message: '' });
                 return;
             }
             
@@ -294,7 +292,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
 
     const checkSessionAndLoad = useCallback(async () => {
-        setIsLoading(true);
         setBlockingOperation({ isActive: true, message: 'Verifying your session...' });
         try {
             const session = await getSessionFromCookie();
@@ -305,27 +302,23 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 await reloadData();
             } else {
                 setUser(null);
-                 setBlockingOperation({ isActive: false, message: '' });
             }
         } catch (error) {
             console.error("Error during initial session check:", error);
             setUser(null);
             handleApiError(error);
-             setBlockingOperation({ isActive: false, message: '' });
         } finally {
-            if(!isInitialLoadComplete) {
-                setIsInitialLoadComplete(true);
-            }
             setIsLoading(false);
+            setBlockingOperation({ isActive: false, message: '' });
         }
-    }, [user, setUser, reloadData, isInitialLoadComplete, setIsInitialLoadComplete, handleApiError]);
+    }, [user, setUser, reloadData, handleApiError]);
 
 
     useEffect(() => {
-        if (!isInitialLoadComplete) {
+        if (isLoading) {
           checkSessionAndLoad();
         }
-    }, [isInitialLoadComplete, checkSessionAndLoad]);
+    }, [isLoading, checkSessionAndLoad]);
 
     useEffect(() => {
         const handleOnline = () => {
@@ -348,14 +341,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }, [processSyncQueue, setIsOnline]);
     
     useEffect(() => {
-        if (isLoading || !isInitialLoadComplete) return;
+        if (isLoading) return;
         const onLoginPage = pathname === '/login';
         if (user && onLoginPage) {
             router.replace('/');
         } else if (!user && !onLoginPage) {
             router.replace('/login');
         }
-    }, [user, isLoading, pathname, router, isInitialLoadComplete]);
+    }, [user, isLoading, pathname, router]);
 
 
     const openInitialBalanceDialog = useCallback(() => setIsInitialBalanceDialogOpen(true), []);
@@ -400,7 +393,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         login: async (credentials) => {
             const result = await login(credentials);
             if (result.success) {
-                setIsInitialLoadComplete(false); // Trigger reload
+                setIsLoading(true); // Trigger reload
             }
             return result;
         },
@@ -415,16 +408,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         login, logout, reloadData, handleApiError,
         processSyncQueue, openInitialBalanceDialog, closeInitialBalanceDialog, setUser, setBlockingOperation, queueOrSync
     ]);
-
-    const showLoadingScreen = isLoading || !isInitialLoadComplete || (blockingOperation.isActive && !isLoggingOut);
     
-    if (showLoadingScreen) {
+    if (isLoading) {
         return <AppLoading message={blockingOperation.message || undefined} />;
+    }
+    
+    if (isLoggingOut || (blockingOperation.isActive && !isLoading)) {
+        return <AppOverlay message={blockingOperation.message || "Logging out..."} />;
     }
 
     return (
         <AppContext.Provider value={contextValue}>
-            <LogoutOverlayWrapper />
             <OnlineStatusIndicator />
             {children}
         </AppContext.Provider>
