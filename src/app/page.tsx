@@ -99,9 +99,9 @@ function MainContent() {
                 {isMobile && (
                     <header className="flex items-center p-2 border-b">
                          <SidebarTrigger className="ml-2">
-                            <Menu className="h-5 w-5" />
+                            <Menu className="h-6 w-6" />
                          </SidebarTrigger>
-                         <div className="ml-2">
+                         <div className="ml-4">
                             <h1 className="text-xl font-semibold leading-tight">Ha-Mim Iron Mart</h1>
                             <p className="text-xs text-muted-foreground">{currentDate}</p>
                         </div>
