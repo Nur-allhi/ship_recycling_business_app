@@ -246,6 +246,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 setUser(null);
                 setIsLoading(false);
                 setIsInitialLoadComplete(true);
+                setIsDataLoaded(true); // No data to load, so mark as loaded
                 return;
             }
             
@@ -313,6 +314,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 await reloadData();
             } else {
                 setUser(null);
+                setIsDataLoaded(true); // If no session, no data to load.
             }
         } catch (error) {
             console.error("Error during initial session check:", error);
@@ -415,10 +417,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         processSyncQueue, openInitialBalanceDialog, closeInitialBalanceDialog, setUser, setBlockingOperation, queueOrSync
     ]);
 
+    const showLoadingScreen = isLoading || !isInitialLoadComplete || (user && !isDataLoaded);
+
     return (
         <AppContext.Provider value={contextValue}>
             <OnlineStatusIndicator />
-            {(isLoading || !isInitialLoadComplete || !isDataLoaded) ? <AppLoading /> : children}
+            {showLoadingScreen ? <AppLoading /> : children}
         </AppContext.Provider>
     );
 }
