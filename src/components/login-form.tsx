@@ -11,7 +11,6 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { toast } from 'sonner';
 import { hasUsers } from '@/app/auth/actions';
 import { Loader2 } from 'lucide-react';
 import Logo from './logo';
@@ -64,7 +63,7 @@ export function LoginForm() {
 
   const onSubmit = async (data: FormData) => {
     try {
-      const result = await login(data); // Await the login call from context
+      await login(data); // Await the login call from context
       
       if (data.rememberMe) {
           localStorage.setItem('rememberedUsername', data.username);
@@ -73,7 +72,7 @@ export function LoginForm() {
       }
 
     } catch (error: any) {
-      // Error handling is done in the context's login function, so no toast here.
+      // Error handling is done in the context's login function via toast
       console.error("Login form submission error:", error);
     }
   };

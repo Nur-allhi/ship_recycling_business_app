@@ -238,7 +238,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         }
         
         try {
-            setBlockingOperation({ isActive: true, message: 'Fetching latest data...' });
             const serverData = await server.batchReadData({
                 tables: [
                     { tableName: 'categories', select: '*' }, { tableName: 'contacts', select: '*' },
@@ -275,8 +274,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             await processSyncQueue();
         } catch (error: any) {
             handleApiError(error);
-        } finally {
-            setBlockingOperation({ isActive: false, message: '' });
         }
     }, [isSyncing, user, appState, processSyncQueue, handleApiError, seedEssentialCategories]);
 
@@ -342,9 +339,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const closeInitialBalanceDialog = useCallback(() => setIsInitialBalanceDialogOpen(false), []);
     
     const contextLogin = useCallback(async (credentials: Parameters<typeof serverLogin>[0]) => {
-        setIsLoading(true);
         const result = await login(credentials);
         if (result.success) {
+            setIsLoading(true); // Show main loading screen
             try {
                 setBlockingOperation({ isActive: true, message: 'Verifying your session...' });
                 const session = await getSessionFromCookie();
@@ -361,8 +358,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 setBlockingOperation({ isActive: false, message: ''});
                 setIsLoading(false);
             }
-        } else {
-            setIsLoading(false);
         }
         return result;
     }, [login, setUser, reloadData, handleApiError]);

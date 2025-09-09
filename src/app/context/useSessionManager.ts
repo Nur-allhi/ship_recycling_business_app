@@ -47,7 +47,6 @@ export function useSessionManager() {
             const result = await serverLogin(credentials);
             if (result.success && result.session) {
                 toast.success("Login Successful", { description: "Welcome back!" });
-                // The main context will handle setting the user and redirecting.
             }
             return result;
         } catch (error) {
