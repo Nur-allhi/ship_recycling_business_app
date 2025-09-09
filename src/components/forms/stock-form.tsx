@@ -31,7 +31,7 @@ const stockSchema = z.object({
     weight: z.coerce.number().positive(),
     pricePerKg: z.coerce.number().nonnegative(),
     paymentMethod: z.enum(['cash', 'bank', 'credit'], { required_error: "Payment method is required." }),
-    description: z.string().optional(),
+    description: z.string().min(1, "Description is required."),
     bank_id: z.string().optional(),
     contact_id: z.string().optional(),
     newContact: z.string().optional(),
@@ -153,7 +153,7 @@ export function StockForm({ setDialogOpen }: StockFormProps) {
   const currentStockContactItems = stockType === 'purchase' ? vendorContactItems : clientContactItems;
 
   const steps = [
-      { name: 'Details', fields: ['date', 'stockType', 'stockItemName', 'weight', 'pricePerKg'] },
+      { name: 'Details', fields: ['date', 'stockType', 'stockItemName', 'description', 'weight', 'pricePerKg'] },
       { name: 'Payment', fields: ['paymentMethod', 'bank_id', 'contact_id', 'newContact', 'actual_amount', 'difference_reason'] },
       { name: 'Review', fields: [] }
   ];
@@ -228,6 +228,11 @@ export function StockForm({ setDialogOpen }: StockFormProps) {
                                 ) : <Controller name="stockItemName" control={control} render={({ field }) => <ResponsiveSelect onValueChange={field.onChange} value={field.value} title="Select an item" placeholder="Select item to sell" items={stockItemsForSale} />} />}
                                 {errors.stockItemName && <p className="text-sm text-destructive">{errors.stockItemName.message}</p>}
                             </div>
+                             <div className="space-y-2">
+                                <Label htmlFor="description-stock">Description</Label>
+                                <Input id="description-stock" {...register('description')} placeholder="e.g., 5-ton truck of MS Rod"/>
+                                {errors.description && <p className="text-sm text-destructive">{errors.description.message}</p>}
+                            </div>
                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div className="space-y-2"><Label>Weight (kg)</Label><Input type="number" step="0.01" {...register('weight')} placeholder="0.00"/>{errors.weight && <p className="text-sm text-destructive">{errors.weight.message}</p>}</div>
                                 <div className="space-y-2"><Label>Price per kg</Label><Input type="number" step="0.01" {...register('pricePerKg')} placeholder="0.00"/>{errors.pricePerKg && <p className="text-sm text-destructive">{errors.pricePerKg.message}</p>}</div>
@@ -288,6 +293,7 @@ export function StockForm({ setDialogOpen }: StockFormProps) {
                                     <div className="flex justify-between"><span>Date:</span><span className="font-medium">{format(formData.date, 'dd MMM, yyyy')}</span></div>
                                     <div className="flex justify-between"><span>Type:</span><span className="font-medium capitalize">{formData.stockType}</span></div>
                                     <div className="flex justify-between"><span>Item:</span><span className="font-medium">{formData.stockItemName}</span></div>
+                                    <div className="flex justify-between"><span>Description:</span><span className="font-medium">{formData.description}</span></div>
                                     <div className="flex justify-between"><span>Weight:</span><span className="font-medium">{formData.weight} kg</span></div>
                                     <div className="flex justify-between"><span>Price/kg:</span><span className="font-medium">{formatCurrency(formData.pricePerKg)}</span></div>
                                     <Separator />
@@ -298,11 +304,6 @@ export function StockForm({ setDialogOpen }: StockFormProps) {
                                     {difference !== 0 && <div className="flex justify-between"><span>Difference:</span><span className="font-medium">{formatCurrency(difference)}</span></div>}
                                 </CardContent>
                             </Card>
-                            <div className="space-y-2">
-                                <Label htmlFor="description-stock">Description (Optional)</Label>
-                                <Input id="description-stock" {...register('description')} placeholder="e.g., invoice #, delivery details"/>
-                                {errors.description && <p className="text-sm text-destructive">{errors.description.message}</p>}
-                            </div>
                         </div>
                     )}
                 </motion.div>
