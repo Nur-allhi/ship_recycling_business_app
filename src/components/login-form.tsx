@@ -16,6 +16,7 @@ import { Loader2 } from 'lucide-react';
 import Logo from './logo';
 import { Checkbox } from './ui/checkbox';
 import { useAppContext } from '@/app/context/app-context';
+import { toast } from 'sonner';
 
 
 const formSchema = z.object({
@@ -44,7 +45,7 @@ export function LoginForm() {
     checkUsers();
   }, []);
 
-  const { register, handleSubmit, setValue, formState: { errors } } = useForm<FormData>({
+  const { register, handleSubmit, setValue, formState: { errors, isSubmitting } } = useForm<FormData>({
     resolver: zodResolver(formSchema),
     defaultValues: {
         username: '',
@@ -60,15 +61,24 @@ export function LoginForm() {
       setValue('rememberMe', true);
     }
   }, [setValue]);
+  
+  const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
   const onSubmit = async (data: FormData) => {
     try {
-      await login(data); // Await the login call from context
+      const result = await login(data);
       
-      if (data.rememberMe) {
-          localStorage.setItem('rememberedUsername', data.username);
-      } else {
-          localStorage.removeItem('rememberedUsername');
+      if (result.success) {
+          toast.success("Login Successful", { description: "Welcome back!" });
+          await sleep(1000);
+
+          if (data.rememberMe) {
+              localStorage.setItem('rememberedUsername', data.username);
+          } else {
+              localStorage.removeItem('rememberedUsername');
+          }
+          
+          router.push('/');
       }
 
     } catch (error: any) {
