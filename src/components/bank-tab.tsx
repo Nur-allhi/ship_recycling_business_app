@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useState, useMemo, useEffect, useCallback } from "react"
@@ -30,11 +29,10 @@ import type { BankTransaction, MonthlySnapshot } from "@/lib/types"
 import { EditTransactionSheet } from "./edit-transaction-sheet"
 import { DeleteConfirmationDialog } from "./delete-confirmation-dialog"
 import { Checkbox } from "./ui/checkbox"
-import { format, subMonths, addMonths, startOfMonth, endOfMonth, isBefore } from "date-fns"
+import { format, subMonths, addMonths, startOfMonth, isBefore } from "date-fns"
 import { ResponsiveSelect } from "@/components/ui/responsive-select"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { Badge } from "./ui/badge"
-import * as server from "@/lib/actions";
 import { db } from "@/lib/db"
 import { motion, AnimatePresence } from "framer-motion"
 import { useLiveQuery } from "dexie-react-hooks"
@@ -46,8 +44,8 @@ type SortKey = keyof BankTransaction | 'debit' | 'credit' | null;
 type SortDirection = 'asc' | 'desc';
 
 export function BankTab() {
-  const { currency, user, banks, handleApiError, isOnline, contacts, loans } = useAppContext()
-  const bankTransactions = useLiveQuery(() => db.bank_transactions.toArray());
+  const { currency, user, banks, contacts, loans } = useAppContext()
+  const allBankTransactions = useLiveQuery(() => db.bank_transactions.toArray());
   const bankBalance = useLiveQuery(() => 
     db.bank_transactions.toArray().then(txs => 
       txs.reduce((acc, tx) => acc + (tx.type === 'deposit' ? tx.actual_amount : -tx.actual_amount), 0)
@@ -83,32 +81,14 @@ export function BankTab() {
     filter: bankFilter,
   });
 
-  const isLoading = bankTransactions === undefined || isTransactionsLoading;
+  const isLoading = allBankTransactions === undefined || isTransactionsLoading;
 
   const fetchSnapshot = useCallback(async () => {
     setIsSnapshotLoading(true);
     const localSnapshot = await db.monthly_snapshots.where('snapshot_date').equals(toYYYYMMDD(startOfMonth(currentMonth))).first();
-    
-    if (localSnapshot) {
-        setMonthlySnapshot(localSnapshot);
-    } else {
-        if (isOnline && user?.role === 'admin') {
-            try {
-                const serverSnapshot = await server.getOrCreateSnapshot(currentMonth.toISOString());
-                setMonthlySnapshot(serverSnapshot);
-                if (serverSnapshot) {
-                    await db.monthly_snapshots.put(serverSnapshot);
-                }
-            } catch(e) {
-                handleApiError(e);
-                setMonthlySnapshot(null);
-            }
-        } else {
-            setMonthlySnapshot(null);
-        }
-    }
+    setMonthlySnapshot(localSnapshot || null);
     setIsSnapshotLoading(false);
-  }, [currentMonth, handleApiError, isOnline, user?.role]);
+  }, [currentMonth]);
 
   useEffect(() => {
     fetchSnapshot();
@@ -125,7 +105,7 @@ export function BankTab() {
 
   // Calculate running balances using chronological order to prevent negative balance issues
   const transactionsWithBalances = useMemo(() => {
-    if (!chronologicalTransactions) return [];
+    if (!chronologicalTransactions || !allBankTransactions) return [];
     
     const start = startOfMonth(currentMonth);
     let openingBalance = 0;
@@ -138,16 +118,16 @@ export function BankTab() {
         }
     } else {
         // Calculate opening balance from historical transactions
-        const allBankTxs = bankTransactions || [];
-        const filteredForBalance = selectedBankId === 'all' ? allBankTxs : allBankTxs.filter(tx => tx.bank_id === selectedBankId);
-        openingBalance = filteredForBalance
+        const historicalTxs = allBankTransactions
             .filter(tx => isBefore(new Date(tx.date), start))
-            .reduce((acc, tx) => acc + (tx.type === 'deposit' ? tx.actual_amount : -tx.actual_amount), 0);
+            .filter(bankFilter); // Also filter by bank
+            
+        openingBalance = historicalTxs.reduce((acc, tx) => acc + (tx.type === 'deposit' ? tx.actual_amount : -tx.actual_amount), 0);
     }
 
     // Use chronological order for balance calculation to maintain proper sequence
     return calculateRunningBalances(chronologicalTransactions, openingBalance);
-  }, [monthlySnapshot, chronologicalTransactions, bankTransactions, selectedBankId, currentMonth]);
+  }, [monthlySnapshot, chronologicalTransactions, allBankTransactions, bankFilter, selectedBankId, currentMonth]);
 
   // Map display transactions to include balances
   const sortedTransactions = useMemo(() => {
@@ -252,10 +232,10 @@ export function BankTab() {
     if (selectedBankId === 'all') {
       return bankBalance ?? 0;
     }
-    return (bankTransactions || [])
+    return (allBankTransactions || [])
         .filter(tx => tx.bank_id === selectedBankId)
         .reduce((acc, tx) => acc + (tx.type === 'deposit' ? tx.actual_amount : -tx.actual_amount), 0);
-  }, [bankBalance, bankTransactions, selectedBankId]);
+  }, [bankBalance, allBankTransactions, selectedBankId]);
 
   const renderDesktopView = () => (
     <div className="overflow-x-auto">

@@ -98,7 +98,7 @@ export function useSortedTransactions(tableName: TransactionTable, options: UseS
     // Return the promise for useLiveQuery
     return query.toArray().then(results => {
       if (process.env.NODE_ENV === 'development') {
-        console.log(`[useSortedTransactions] Found ${results.length} transactions in ${tableName} for ${month.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}`);
+        console.log(`[useSortedTransactions] Found ${results.length} transactions in ${tableName} for ${month.toLocaleDateString('en-US', { month: 'long', 'year': 'numeric' })}`);
         if (results.length === 0) {
           // Check if there are any transactions at all in the table
           return db.table(tableName).count().then(totalCount => {
@@ -119,7 +119,7 @@ export function useSortedTransactions(tableName: TransactionTable, options: UseS
   }, [tableName, month, filter]);
 
   if (!transactions) {
-    return { isLoading: true, transactions: [] };
+    return { isLoading: true, transactions: [], chronologicalTransactions: [] };
   }
 
   // For balance calculation, always use chronological order (date ASC, created_at ASC)
@@ -142,8 +142,8 @@ export function useSortedTransactions(tableName: TransactionTable, options: UseS
     // For same-day transactions without created_at, prioritize income over expense
     // to prevent negative balance issues when starting from 0 opening balance
     if (!a.created_at && !b.created_at && 'type' in a && 'type' in b) {
-      const aIsIncome = a.type === 'income' || a.type === 'deposit';
-      const bIsIncome = b.type === 'income' || b.type === 'deposit';
+      const aIsIncome = (a as CashTransaction).type === 'income' || (a as BankTransaction).type === 'deposit';
+      const bIsIncome = (b as CashTransaction).type === 'income' || (b as BankTransaction).type === 'deposit';
       
       if (aIsIncome && !bIsIncome) return -1; // Income before expense
       if (!aIsIncome && bIsIncome) return 1;  // Expense after income
@@ -158,7 +158,7 @@ export function useSortedTransactions(tableName: TransactionTable, options: UseS
     console.log(`[useSortedTransactions] Chronological order for ${tableName}:`, chronologicalSorted.map(tx => ({
       id: tx.id.substring(0, 8),
       date: tx.date.split('T')[0],
-      type: tx.type,
+      type: (tx as any).type,
       amount: tx.actual_amount,
       created_at: tx.created_at?.split('T')[0] || 'no-created_at'
     })));
@@ -172,14 +172,14 @@ export function useSortedTransactions(tableName: TransactionTable, options: UseS
     if (sortKey === 'debit') {
       // Handle debit column for both cash and bank transactions
       if ('type' in a && 'type' in b) {
-        aValue = (a.type === 'expense' || a.type === 'withdrawal') ? a.actual_amount : 0;
-        bValue = (b.type === 'expense' || b.type === 'withdrawal') ? b.actual_amount : 0;
+        aValue = ((a as CashTransaction).type === 'expense' || (a as BankTransaction).type === 'withdrawal') ? a.actual_amount : 0;
+        bValue = ((b as CashTransaction).type === 'expense' || (b as BankTransaction).type === 'withdrawal') ? b.actual_amount : 0;
       }
     } else if (sortKey === 'credit') {
       // Handle credit column for both cash and bank transactions
       if ('type' in a && 'type' in b) {
-        aValue = (a.type === 'income' || a.type === 'deposit') ? a.actual_amount : 0;
-        bValue = (b.type === 'income' || b.type === 'deposit') ? b.actual_amount : 0;
+        aValue = ((a as CashTransaction).type === 'income' || (a as BankTransaction).type === 'deposit') ? a.actual_amount : 0;
+        bValue = ((b as CashTransaction).type === 'income' || (b as BankTransaction).type === 'deposit') ? b.actual_amount : 0;
       }
     } else if (sortKey === 'date') {
       // For date sorting, maintain chronological order for same dates
@@ -192,7 +192,7 @@ export function useSortedTransactions(tableName: TransactionTable, options: UseS
       const created_atResult = sortDirection === 'desc' 
         ? new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
         : new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
-      if (created_atResult !== 0) {
+      if (created_atResult !== 0 && !isNaN(created_atResult)) {
         return created_atResult;
       }
       // Tertiary sort by ID as final tiebreaker

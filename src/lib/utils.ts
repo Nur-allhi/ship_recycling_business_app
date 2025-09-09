@@ -17,15 +17,6 @@ export function toLocalDateString(date: Date): string {
 }
 
 /**
- * Parse a date string (YYYY-MM-DD) to a Date object in local timezone
- * This prevents timezone-related date shifting
- */
-export function parseLocalDate(dateString: string): Date {
-  const [year, month, day] = dateString.split('-').map(Number);
-  return new Date(year, month - 1, day);
-}
-
-/**
  * Convert a Date to YYYY-MM-DD string format using timezone-aware conversion
  * This ensures consistent date formatting across the application while handling timezone offsets
  */

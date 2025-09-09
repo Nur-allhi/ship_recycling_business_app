@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useState, useMemo, useEffect, useCallback } from "react"
@@ -23,11 +22,10 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetTr
 import { EditTransactionSheet } from "./edit-transaction-sheet"
 import { DeleteConfirmationDialog } from "./delete-confirmation-dialog"
 import { Checkbox } from "./ui/checkbox"
-import { format, subMonths, addMonths, startOfMonth, endOfMonth, isBefore } from "date-fns"
+import { format, subMonths, addMonths, startOfMonth, isBefore } from "date-fns"
 import { ResponsiveSelect } from "@/components/ui/responsive-select"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { Badge } from "./ui/badge"
-import * as server from "@/lib/actions";
 import { db } from "@/lib/db"
 import { motion, AnimatePresence } from "framer-motion"
 import { useLiveQuery } from "dexie-react-hooks"
@@ -39,7 +37,7 @@ type SortKey = keyof CashTransaction | 'debit' | 'credit' | null;
 type SortDirection = 'asc' | 'desc';
 
 export function CashTab() {
-  const { currency, user, banks, handleApiError, isOnline, contacts, loans } = useAppContext()
+  const { currency, user, banks, contacts, loans } = useAppContext()
   const allCashTransactions = useLiveQuery(() => db.cash_transactions.toArray());
   const cashBalance = useLiveQuery(() => 
     db.cash_transactions.toArray().then(txs => 
@@ -98,39 +96,20 @@ export function CashTab() {
   
   // Calculate running balances using chronological order to prevent negative balance issues
   const transactionsWithBalances = useMemo(() => {
-    if (!chronologicalTransactions) return [];
+    if (!chronologicalTransactions || !allCashTransactions) return [];
     
     const start = startOfMonth(currentMonth);
     let openingBalance = 0;
 
     if (monthlySnapshot) {
         openingBalance = monthlySnapshot.cash_balance;
-        console.log(`[CashTab] Using monthly snapshot opening balance: ${openingBalance}`);
     } else {
-        const historicalTxs = (allCashTransactions || [])
+        const historicalTxs = allCashTransactions
             .filter(tx => isBefore(new Date(tx.date), start));
         
         openingBalance = historicalTxs
             .reduce((acc, tx) => acc + (tx.type === 'income' ? tx.actual_amount : -tx.actual_amount), 0);
-        
-        console.log(`[CashTab] Calculated opening balance for ${format(currentMonth, 'MMMM yyyy')}:`, {
-            startOfMonth: start.toISOString().split('T')[0],
-            historicalTransactionsCount: historicalTxs.length,
-            openingBalance,
-            sampleHistoricalDates: historicalTxs.slice(0, 3).map(tx => tx.date)
-        });
-        
-        // MIGRATION HANDLING: If no historical transactions and current month has data,
-        // this suggests the opening balance should be calculated differently
-        if (historicalTxs.length === 0 && chronologicalTransactions && chronologicalTransactions.length > 0) {
-            console.warn(`[CashTab] No historical transactions found before ${start.toISOString().split('T')[0]}, but current month has ${chronologicalTransactions.length} transactions. This may indicate missing opening balance data.`);
-            
-            // For data migration: You may want to set a proper opening balance here
-            // based on your business requirements. For now, we'll continue with 0
-            // but this ensures the income-first sorting prevents negative balances.
-        }
     }
-
     // Use chronological order for balance calculation to maintain proper sequence
     return calculateRunningBalances(chronologicalTransactions, openingBalance);
   }, [monthlySnapshot, chronologicalTransactions, allCashTransactions, currentMonth]);
