@@ -241,13 +241,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             setBlockingOperation({ isActive: true, message: 'Fetching latest data...' });
             const serverData = await server.batchReadData({
                 tables: [
-                    { tableName: 'categories' }, { tableName: 'contacts' },
-                    { tableName: 'banks' }, { tableName: 'cash_transactions' },
-                    { tableName: 'bank_transactions' }, { tableName: 'stock_transactions' },
-                    { tableName: 'ap_ar_transactions' }, { tableName: 'ledger_payments' },
-                    { tableName: 'monthly_snapshots' }, { tableName: 'initial_stock' },
-                    { tableName: 'loans' }, { tableName: 'loan_payments' },
-                    { tableName: 'activity_log' },
+                    { tableName: 'categories', select: '*' }, { tableName: 'contacts', select: '*' },
+                    { tableName: 'banks', select: '*' }, { tableName: 'cash_transactions', select: '*' },
+                    { tableName: 'bank_transactions', select: '*' }, { tableName: 'stock_transactions', select: '*' },
+                    { tableName: 'ap_ar_transactions', select: '*' }, { tableName: 'ledger_payments', select: '*' },
+                    { tableName: 'monthly_snapshots', select: '*' }, { tableName: 'initial_stock', select: '*' },
+                    { tableName: 'loans', select: '*' }, { tableName: 'loan_payments', select: '*' },
+                    { tableName: 'activity_log', select: '*' },
                 ]
             });
             
@@ -289,6 +289,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 
                 if (session) {
                     setUser(session);
+                    setBlockingOperation({ isActive: true, message: 'Fetching latest data...' });
                     await reloadData();
                 } else {
                     setUser(null);
@@ -349,6 +350,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 const session = await getSessionFromCookie();
                  if (session) {
                     setUser(session);
+                    setBlockingOperation({ isActive: true, message: 'Fetching latest data...' });
                     await reloadData({ needsInitialBalance: result.needsInitialBalance });
                 } else {
                     setUser(null);
