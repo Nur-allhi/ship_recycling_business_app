@@ -17,6 +17,7 @@ import { FloatingActionButton } from '@/components/floating-action-button';
 import { AnimatePresence, motion } from 'framer-motion';
 import { SidebarProvider, Sidebar, useSidebar, SidebarTrigger } from '@/components/ui/sidebar';
 import { AppSidebar } from '@/components/app-sidebar';
+import { PanelLeft } from 'lucide-react';
 
 const fontClasses = {
   sm: 'text-sm',
@@ -31,7 +32,7 @@ function MainContent() {
     } = useAppContext();
     const [activeTab, setActiveTab] = useState('dashboard');
     const isAdmin = user?.role === 'admin';
-    const { state, setOpen } = useSidebar();
+    const { setOpen, isMobile } = useSidebar();
     const router = useRouter();
     const pathname = usePathname();
 
@@ -84,17 +85,20 @@ function MainContent() {
         <div className={cn('min-h-screen bg-background text-foreground flex', fontClasses[fontSize] || 'text-base')}>
             {isAdmin && <InitialBalanceDialog isOpen={isInitialBalanceDialogOpen} />}
             
-            <Sidebar onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}>
+            <Sidebar>
                 <AppSidebar activeTab={activeTab} setActiveTab={setActiveTab} />
             </Sidebar>
             
-            <div 
-              className={cn(
-                "flex-1 flex flex-col transition-all duration-300 ease-in-out",
-                state === 'collapsed' ? 'md:ml-12' : 'md:ml-64'
-              )}
-            >
-                <main className="flex-grow p-4 md:p-6 lg:p-8 overflow-y-auto">
+            <main className="flex-1 flex flex-col transition-all duration-300 ease-in-out md:pl-12 peer-[[data-state=expanded]]:md:pl-64">
+                {isMobile && (
+                    <header className="flex items-center p-2 border-b">
+                         <SidebarTrigger>
+                            <PanelLeft className="h-5 w-5" />
+                         </SidebarTrigger>
+                        <h1 className="text-lg font-semibold ml-2">Ha-Mim Iron Mart</h1>
+                    </header>
+                )}
+                <div className="flex-grow p-4 md:p-6 lg:p-8 overflow-y-auto">
                     <AnimatePresence mode="wait">
                         <motion.div
                             key={activeTab}
@@ -106,9 +110,9 @@ function MainContent() {
                             {renderTabContent(activeTab)}
                         </motion.div>
                     </AnimatePresence>
-                </main>
+                </div>
                 {isAdmin && <FloatingActionButton />}
-            </div>
+            </main>
         </div>
     )
 }

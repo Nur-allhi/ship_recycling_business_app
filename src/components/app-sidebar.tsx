@@ -53,11 +53,13 @@ interface AppSidebarProps {
 
 export function AppSidebar({ activeTab, setActiveTab }: AppSidebarProps) {
     const { logout } = useAppContext();
-    const { setOpen } = useSidebar();
+    const { setOpen, isMobile, setOpenMobile } = useSidebar();
 
     const handleItemClick = (tab: string) => {
         setActiveTab(tab);
-        setOpen(false);
+        if (isMobile) {
+            setOpenMobile(false);
+        }
     }
 
     return (
