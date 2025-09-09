@@ -32,7 +32,7 @@ export function DashboardTab({
 
   const totalBalance = cashBalance + bankBalance;
   
-  const isComponentLoading = isLoading;
+  const isComponentLoading = isLoading || cashBalance === undefined || bankBalance === undefined || currentStockValue === undefined;
 
   const renderValue = (value: string | number, isCurrency = true) => {
     if (isComponentLoading) {

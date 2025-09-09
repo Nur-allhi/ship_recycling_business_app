@@ -238,9 +238,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         }
         
         try {
+            setBlockingOperation({ isActive: true, message: 'Loading your ledger...' });
             const session = await getSessionFromCookie();
             if (!session) {
                 setUser(null);
+                setBlockingOperation({ isActive: false, message: '' });
                 return;
             }
             
@@ -248,6 +250,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 setUser(session);
             }
             
+            setBlockingOperation({ isActive: true, message: 'Fetching latest data...' });
             const serverData = await server.batchReadData({
                 tables: [
                     { tableName: 'categories' }, { tableName: 'contacts' },
@@ -262,6 +265,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
             const categoriesData = await seedEssentialCategories(serverData.categories as Category[]);
             
+            setBlockingOperation({ isActive: true, message: 'Organizing data...' });
             await db.transaction('rw', db.tables, async () => {
                 await clearAllData(false);
                 await db.app_state.put({ id: 1, user: session, fontSize: appState?.fontSize ?? 'base', currency: appState?.currency ?? 'BDT', showStockValue: appState?.showStockValue ?? false, lastSync: null });
@@ -283,6 +287,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             processSyncQueue();
         } catch (error: any) {
             handleApiError(error);
+        } finally {
+            setBlockingOperation({ isActive: false, message: '' });
         }
     }, [isSyncing, user, setUser, seedEssentialCategories, appState, processSyncQueue, handleApiError]);
 
