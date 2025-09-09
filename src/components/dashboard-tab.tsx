@@ -21,7 +21,7 @@ export function DashboardTab({
   cashBalance,
   bankBalance,
 }: DashboardTabProps) {
-  const { currency, showStockValue, currentStockValue, currentStockWeight, isLoading, isDataLoaded } = useAppContext()
+  const { currency, showStockValue, currentStockValue, currentStockWeight, isLoading } = useAppContext()
 
   const formatCurrency = (amount: number) => {
     if (currency === 'BDT') {
@@ -32,7 +32,7 @@ export function DashboardTab({
 
   const totalBalance = cashBalance + bankBalance;
   
-  const isComponentLoading = isLoading || !isDataLoaded;
+  const isComponentLoading = isLoading;
 
   const renderValue = (value: string | number, isCurrency = true) => {
     if (isComponentLoading) {
