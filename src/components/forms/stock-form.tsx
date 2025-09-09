@@ -183,11 +183,11 @@ export function StockForm({ setDialogOpen }: StockFormProps) {
 
   return (
     <div className="flex flex-col h-full bg-transparent">
-        <div className="p-4 sm:p-6 shrink-0">
+        <div className="p-6 shrink-0">
              <Progress value={(currentStep / (steps.length - 1)) * 100} className="w-full h-2" />
         </div>
       <form onSubmit={handleSubmit(onSubmit)} className="flex-grow flex flex-col overflow-hidden">
-        <div className="flex-grow overflow-y-auto px-4 sm:px-6 pb-16">
+        <div className="flex-grow overflow-y-auto px-6 pb-16">
             <AnimatePresence mode="wait">
                 <motion.div
                     key={currentStep}
@@ -309,7 +309,7 @@ export function StockForm({ setDialogOpen }: StockFormProps) {
             </AnimatePresence>
         </div>
 
-        <div className="shrink-0 flex justify-between p-4 sm:p-6 border-t bg-background">
+        <div className="shrink-0 flex justify-between p-6 border-t bg-background">
             <Button type="button" variant="outline" onClick={prevStep} disabled={currentStep === 0}>
                 <ArrowLeft className="mr-2 h-4 w-4" /> Previous
             </Button>

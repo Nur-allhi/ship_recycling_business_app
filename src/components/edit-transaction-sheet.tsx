@@ -158,12 +158,13 @@ export function EditTransactionSheet({ isOpen, setIsOpen, transaction, transacti
   return (
     <Sheet open={isOpen} onOpenChange={setIsOpen}>
         <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
-            <SheetHeader>
+            <SheetHeader className="p-6 pb-4">
                 <SheetTitle className="flex items-center"><Pencil className="mr-2 h-6 w-6" /> Edit Transaction</SheetTitle>
                 <SheetDescription>
                     { "Update the details of this transaction." }
                 </SheetDescription>
             </SheetHeader>
+            <div className="p-6 pt-2">
              {isStockDerivedTx && (
                 <Alert variant="default" className="mt-4 bg-yellow-50 border-yellow-200 text-yellow-800">
                   <AlertTitle>Linked Transaction</AlertTitle>
@@ -287,6 +288,7 @@ export function EditTransactionSheet({ isOpen, setIsOpen, transaction, transacti
                     Save Changes
                 </Button>
             </form>
+            </div>
         </SheetContent>
     </Sheet>
   );

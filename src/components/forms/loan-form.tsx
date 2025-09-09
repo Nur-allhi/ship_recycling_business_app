@@ -114,7 +114,7 @@ export function LoanForm({ setDialogOpen }: LoanFormProps) {
   return (
     <Card className="border-0 shadow-none overflow-y-auto pb-8">
       <form onSubmit={handleSubmit(onSubmit)}>
-        <CardContent className="space-y-4 pt-4 px-4 sm:px-6">
+        <CardContent className="space-y-4 pt-6 px-6">
             <div className="space-y-2">
                 <Label>Loan Type</Label>
                  <Controller
@@ -215,7 +215,7 @@ export function LoanForm({ setDialogOpen }: LoanFormProps) {
                 </div>
             )}
         </CardContent>
-        <CardFooter className="flex justify-end p-4 sm:p-6">
+        <CardFooter className="flex justify-end p-6">
           <Button type="submit" disabled={isSubmitting}>
             {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Record Loan
@@ -225,5 +225,3 @@ export function LoanForm({ setDialogOpen }: LoanFormProps) {
     </Card>
   );
 }
-
-    
