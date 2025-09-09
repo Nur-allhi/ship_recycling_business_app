@@ -1,301 +1,247 @@
 
--- Enable necessary extensions
-create extension if not exists "pg_net" with schema "extensions";
-create extension if not exists "pgsodium" with schema "pgsodium";
-create extension if not exists "pg_graphql" with schema "graphql";
-create extension if not exists "pg_stat_statements" with schema "extensions";
-create extension if not exists "pgcrypto" with schema "extensions";
-create extension if not exists "pgjwt" with schema "extensions";
-create extension if not 'exists' "supabase_vault" with schema "vault";
-create extension if not exists "uuid-ossp" with schema "extensions";
-
--- Create custom types
-create type "public"."transaction_type" as enum ('income', 'expense');
-create type "public"."bank_transaction_type" as enum ('deposit', 'withdrawal');
-create type "public"."stock_transaction_type" as enum ('purchase', 'sale');
-create type "public"."contact_type" as enum ('vendor', 'client', 'both');
-create type "public"."ledger_status" as enum ('unpaid', 'partially paid', 'paid');
-create type "public"."ledger_type" as enum ('payable', 'receivable', 'advance');
-create type "public"."payment_method" as enum ('cash', 'bank', 'credit');
-create type "public"."category_type" as enum ('cash', 'bank');
-create type "public"."category_direction" as enum ('credit', 'debit');
-create type "public"."loan_type" as enum ('payable', 'receivable');
-create type "public"."loan_status" as enum ('active', 'paid', 'defaulted');
+-- Enable pgsodium extension if it doesn't exist
+CREATE EXTENSION IF NOT EXISTS "pgsodium" WITH SCHEMA "pgsodium";
 
 
---
--- TABLES
---
-
--- Banks Table
-CREATE TABLE IF NOT EXISTS banks (
+-- Create the 'banks' table
+CREATE TABLE IF NOT EXISTS public.banks (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name TEXT NOT NULL,
-    created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
+    name VARCHAR(255) NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW()
 );
-ALTER TABLE banks ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Allow authenticated users to read banks" ON banks FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Allow admin users to manage banks" ON banks FOR ALL TO authenticated USING (auth.uid() IN (SELECT id FROM public.users WHERE role = 'admin')) WITH CHECK (auth.uid() IN (SELECT id FROM public.users WHERE role = 'admin'));
 
--- Categories Table
-CREATE TABLE IF NOT EXISTS categories (
+-- Create the 'contacts' table
+CREATE TABLE IF NOT EXISTS public.contacts (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name TEXT NOT NULL,
-    type category_type NOT NULL,
-    direction category_direction,
-    is_deletable BOOLEAN DEFAULT true,
-    UNIQUE(name, type)
+    name VARCHAR(255) NOT NULL,
+    type VARCHAR(50) NOT NULL, -- 'vendor', 'client', or 'both'
+    created_at TIMESTAMPTZ DEFAULT NOW()
 );
-ALTER TABLE categories ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Allow authenticated users to read categories" ON categories FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Allow admin users to manage categories" ON categories FOR ALL TO authenticated USING (auth.uid() IN (SELECT id FROM public.users WHERE role = 'admin')) WITH CHECK (auth.uid() IN (SELECT id FROM public.users WHERE role = 'admin'));
 
-
--- Contacts Table
-CREATE TABLE IF NOT EXISTS contacts (
+-- Create the 'categories' table
+CREATE TABLE IF NOT EXISTS public.categories (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name TEXT NOT NULL,
-    type contact_type NOT NULL,
-    created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
+    name VARCHAR(255) NOT NULL,
+    type VARCHAR(50), -- 'cash' or 'bank'
+    direction VARCHAR(50), -- 'credit' or 'debit'
+    is_deletable BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMPTZ DEFAULT NOW()
 );
-ALTER TABLE contacts ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Allow authenticated users to read contacts" ON contacts FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Allow admin users to manage contacts" ON contacts FOR ALL TO authenticated USING (auth.uid() IN (SELECT id FROM public.users WHERE role = 'admin')) WITH CHECK (auth.uid() IN (SELECT id FROM public.users WHERE role = 'admin'));
+CREATE UNIQUE INDEX IF NOT EXISTS unique_category_name_type ON public.categories(name, type);
 
 
--- Initial Stock Table
-CREATE TABLE IF NOT EXISTS initial_stock (
+-- Create the 'initial_stock' table
+CREATE TABLE IF NOT EXISTS public.initial_stock (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name TEXT NOT NULL,
+    name VARCHAR(255) NOT NULL,
     weight NUMERIC(10, 2) NOT NULL,
-    purchasePricePerKg NUMERIC(10, 2) NOT NULL,
-    created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
+    "purchasePricePerKg" NUMERIC(10, 2) NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW()
 );
-ALTER TABLE initial_stock ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Allow authenticated users to read initial stock" ON initial_stock FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Allow admin users to manage initial stock" ON initial_stock FOR ALL TO authenticated USING (auth.uid() IN (SELECT id FROM public.users WHERE role = 'admin')) WITH CHECK (auth.uid() IN (SELECT id FROM public.users WHERE role = 'admin'));
 
-
--- Stock Transactions Table
-CREATE TABLE IF NOT EXISTS stock_transactions (
+-- Create the 'stock_transactions' table
+CREATE TABLE IF NOT EXISTS public.stock_transactions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     date DATE NOT NULL,
-    stockItemName TEXT NOT NULL,
-    type stock_transaction_type NOT NULL,
+    "stockItemName" VARCHAR(255) NOT NULL,
+    type VARCHAR(50) NOT NULL, -- 'purchase' or 'sale'
     weight NUMERIC(10, 2) NOT NULL,
-    pricePerKg NUMERIC(10, 2) NOT NULL,
-    paymentMethod payment_method NOT NULL,
-    bank_id UUID REFERENCES banks(id),
+    "pricePerKg" NUMERIC(10, 2) NOT NULL,
+    "paymentMethod" VARCHAR(50) NOT NULL, -- 'cash', 'bank', 'credit'
+    bank_id UUID REFERENCES public.banks(id) ON DELETE SET NULL,
     description TEXT,
-    lastEdited TIMESTAMPTZ,
-    deletedAt TIMESTAMPTZ,
-    created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
-    expected_amount NUMERIC(12, 2) NOT NULL,
-    actual_amount NUMERIC(12, 2) NOT NULL,
+    "lastEdited" TIMESTAMPTZ,
+    "deletedAt" TIMESTAMPTZ,
+    expected_amount NUMERIC(12, 2),
+    actual_amount NUMERIC(12, 2),
     difference NUMERIC(12, 2),
     difference_reason TEXT,
-    contact_id UUID REFERENCES contacts(id),
-    contact_name TEXT
+    contact_id UUID REFERENCES public.contacts(id) ON DELETE SET NULL,
+    contact_name VARCHAR(255),
+    created_at TIMESTAMPTZ DEFAULT NOW()
 );
-ALTER TABLE stock_transactions ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Allow authenticated users to read stock transactions" ON stock_transactions FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Allow admin users to manage stock transactions" ON stock_transactions FOR ALL TO authenticated USING (auth.uid() IN (SELECT id FROM public.users WHERE role = 'admin')) WITH CHECK (auth.uid() IN (SELECT id FROM public.users WHERE role = 'admin'));
 
-
--- Cash Transactions Table
-CREATE TABLE IF NOT EXISTS cash_transactions (
+-- Create the 'cash_transactions' table
+CREATE TABLE IF NOT EXISTS public.cash_transactions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     date DATE NOT NULL,
-    type transaction_type NOT NULL,
-    expected_amount NUMERIC(12, 2) NOT NULL,
-    actual_amount NUMERIC(12, 2) NOT NULL,
+    type VARCHAR(50) NOT NULL, -- 'income' or 'expense'
+    description TEXT,
+    expected_amount NUMERIC(12, 2),
+    actual_amount NUMERIC(12, 2),
     difference NUMERIC(12, 2),
     difference_reason TEXT,
-    description TEXT,
-    category TEXT NOT NULL,
-    lastEdited TIMESTAMPTZ,
-    deletedAt TIMESTAMPTZ,
-    linkedStockTxId UUID REFERENCES stock_transactions(id) ON DELETE SET NULL,
-    created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
-    advance_id UUID,
-    contact_id UUID REFERENCES contacts(id)
+    category VARCHAR(255),
+    "linkedStockTxId" UUID REFERENCES public.stock_transactions(id) ON DELETE SET NULL,
+    "lastEdited" TIMESTAMPTZ,
+    "deletedAt" TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    contact_id UUID REFERENCES public.contacts(id) ON DELETE SET NULL,
+    advance_id UUID
 );
-ALTER TABLE cash_transactions ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Allow authenticated users to read cash transactions" ON cash_transactions FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Allow admin users to manage cash transactions" ON cash_transactions FOR ALL TO authenticated USING (auth.uid() IN (SELECT id FROM public.users WHERE role = 'admin')) WITH CHECK (auth.uid() IN (SELECT id FROM public.users WHERE role = 'admin'));
 
-
--- Bank Transactions Table
-CREATE TABLE IF NOT EXISTS bank_transactions (
+-- Create the 'bank_transactions' table
+CREATE TABLE IF NOT EXISTS public.bank_transactions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     date DATE NOT NULL,
-    type bank_transaction_type NOT NULL,
-    bank_id UUID REFERENCES banks(id) ON DELETE CASCADE NOT NULL,
-    expected_amount NUMERIC(12, 2) NOT NULL,
-    actual_amount NUMERIC(12, 2) NOT NULL,
+    type VARCHAR(50) NOT NULL, -- 'deposit' or 'withdrawal'
+    bank_id UUID NOT NULL REFERENCES public.banks(id) ON DELETE CASCADE,
+    description TEXT,
+    expected_amount NUMERIC(12, 2),
+    actual_amount NUMERIC(12, 2),
     difference NUMERIC(12, 2),
     difference_reason TEXT,
-    description TEXT,
-    category TEXT NOT NULL,
-    lastEdited TIMESTAMPTZ,
-    deletedAt TIMESTAMPTZ,
-    linkedStockTxId UUID REFERENCES stock_transactions(id) ON DELETE SET NULL,
-    created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
-    advance_id UUID,
-    contact_id UUID REFERENCES contacts(id)
+    category VARCHAR(255),
+    "linkedStockTxId" UUID REFERENCES public.stock_transactions(id) ON DELETE SET NULL,
+    "lastEdited" TIMESTAMPTZ,
+    "deletedAt" TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    contact_id UUID REFERENCES public.contacts(id) ON DELETE SET NULL,
+    advance_id UUID
 );
-ALTER TABLE bank_transactions ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Allow authenticated users to read bank transactions" ON bank_transactions FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Allow admin users to manage bank transactions" ON bank_transactions FOR ALL TO authenticated USING (auth.uid() IN (SELECT id FROM public.users WHERE role = 'admin')) WITH CHECK (auth.uid() IN (SELECT id FROM public.users WHERE role = 'admin'));
 
-
--- AP/AR Transactions Table
-CREATE TABLE IF NOT EXISTS ap_ar_transactions (
+-- Create the 'ap_ar_transactions' table (Accounts Payable/Receivable)
+CREATE TABLE IF NOT EXISTS public.ap_ar_transactions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     date DATE NOT NULL,
-    type ledger_type NOT NULL,
+    type VARCHAR(50) NOT NULL, -- 'payable' or 'receivable' or 'advance'
     description TEXT,
     amount NUMERIC(12, 2) NOT NULL,
     paid_amount NUMERIC(12, 2) DEFAULT 0,
-    status ledger_status NOT NULL,
-    contact_id UUID REFERENCES contacts(id) ON DELETE CASCADE,
-    contact_name TEXT,
-    deletedAt TIMESTAMPTZ,
-    created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
+    status VARCHAR(50) NOT NULL, -- 'unpaid', 'partially paid', 'paid'
+    contact_id UUID NOT NULL REFERENCES public.contacts(id) ON DELETE CASCADE,
+    contact_name VARCHAR(255),
+    "deletedAt" TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT NOW()
 );
-ALTER TABLE ap_ar_transactions ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Allow authenticated users to read ap_ar transactions" ON ap_ar_transactions FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Allow admin users to manage ap_ar transactions" ON ap_ar_transactions FOR ALL TO authenticated USING (auth.uid() IN (SELECT id FROM public.users WHERE role = 'admin')) WITH CHECK (auth.uid() IN (SELECT id FROM public.users WHERE role = 'admin'));
 
-
--- Ledger Payments Table
-CREATE TABLE IF NOT EXISTS ledger_payments (
+-- Create the 'ledger_payments' table for tracking installments
+CREATE TABLE IF NOT EXISTS public.ledger_payments (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    ap_ar_transaction_id UUID REFERENCES ap_ar_transactions(id) ON DELETE CASCADE,
+    ap_ar_transaction_id UUID NOT NULL REFERENCES public.ap_ar_transactions(id) ON DELETE CASCADE,
     amount NUMERIC(12, 2) NOT NULL,
     date DATE NOT NULL,
-    payment_method payment_method NOT NULL,
-    created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
+    payment_method VARCHAR(50), -- 'cash', 'bank'
+    created_at TIMESTAMPTZ DEFAULT NOW()
 );
-ALTER TABLE ledger_payments ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Allow authenticated users to read ledger payments" ON ledger_payments FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Allow admin users to manage ledger payments" ON ledger_payments FOR ALL TO authenticated USING (auth.uid() IN (SELECT id FROM public.users WHERE role = 'admin')) WITH CHECK (auth.uid() IN (SELECT id FROM public.users WHERE role = 'admin'));
 
+-- Create the 'activity_log' table
+CREATE TABLE IF NOT EXISTS public.activity_log (
+    id BIGSERIAL PRIMARY KEY,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    user_id UUID REFERENCES auth.users(id),
+    username TEXT,
+    description TEXT NOT NULL
+);
 
--- Loans Table
-CREATE TABLE IF NOT EXISTS loans (
+-- Create the 'monthly_snapshots' table
+CREATE TABLE IF NOT EXISTS public.monthly_snapshots (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    contact_id UUID REFERENCES contacts(id) ON DELETE CASCADE NOT NULL,
-    type loan_type NOT NULL,
+    snapshot_date DATE NOT NULL UNIQUE,
+    cash_balance NUMERIC(15, 2),
+    bank_balances JSONB,
+    stock_items JSONB,
+    total_receivables NUMERIC(15, 2),
+    total_payables NUMERIC(15, 2),
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.loans (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    contact_id UUID NOT NULL REFERENCES public.contacts(id) ON DELETE CASCADE,
+    type VARCHAR(50) NOT NULL,
     principal_amount NUMERIC(12, 2) NOT NULL,
     interest_rate NUMERIC(5, 2) DEFAULT 0,
     issue_date DATE NOT NULL,
     due_date DATE,
-    status loan_status NOT NULL,
-    created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
+    status VARCHAR(50) NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW()
 );
-ALTER TABLE loans ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Allow authenticated users to read loans" ON loans FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Allow admin users to manage loans" ON loans FOR ALL TO authenticated USING (auth.uid() IN (SELECT id FROM public.users WHERE role = 'admin')) WITH CHECK (auth.uid() IN (SELECT id FROM public.users WHERE role = 'admin'));
 
-
--- Loan Payments Table
-CREATE TABLE IF NOT EXISTS loan_payments (
+CREATE TABLE IF NOT EXISTS public.loan_payments (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    loan_id UUID REFERENCES loans(id) ON DELETE CASCADE NOT NULL,
+    loan_id UUID NOT NULL REFERENCES public.loans(id) ON DELETE CASCADE,
     payment_date DATE NOT NULL,
     amount NUMERIC(12, 2) NOT NULL,
-    linked_transaction_id UUID, -- Can be linked to cash_transactions or bank_transactions
+    linked_transaction_id UUID,
     notes TEXT,
-    created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
+    created_at TIMESTAMPTZ DEFAULT NOW()
 );
-ALTER TABLE loan_payments ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Allow authenticated users to read loan payments" ON loan_payments FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Allow admin users to manage loan payments" ON loan_payments FOR ALL TO authenticated USING (auth.uid() IN (SELECT id FROM public.users WHERE role = 'admin')) WITH CHECK (auth.uid() IN (SELECT id FROM public.users WHERE role = 'admin'));
 
 
--- Add linkedLoanId to cash and bank transactions
-ALTER TABLE cash_transactions ADD COLUMN IF NOT EXISTS linkedLoanId UUID REFERENCES loans(id) ON DELETE SET NULL;
-ALTER TABLE bank_transactions ADD COLUMN IF NOT EXISTS linkedLoanId UUID REFERENCES loans(id) ON DELETE SET NULL;
+-- Add linkedLoanId to cash and bank transactions after loans table is created
+ALTER TABLE public.cash_transactions ADD COLUMN IF NOT EXISTS "linkedLoanId" UUID REFERENCES public.loans(id) ON DELETE SET NULL;
+ALTER TABLE public.bank_transactions ADD COLUMN IF NOT EXISTS "linkedLoanId" UUID REFERENCES public.loans(id) ON DELETE SET NULL;
 
 
--- Activity Log Table
-CREATE TABLE IF NOT EXISTS activity_log (
-    id BIGSERIAL PRIMARY KEY,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    user_id UUID,
-    username TEXT,
-    description TEXT
-);
-ALTER TABLE activity_log ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Allow admin users to manage activity log" ON activity_log FOR ALL TO authenticated USING (auth.uid() IN (SELECT id FROM public.users WHERE role = 'admin')) WITH CHECK (auth.uid() IN (SELECT id FROM public.users WHERE role = 'admin'));
+-- RLS Policies
+-- Enable RLS for all tables
+ALTER TABLE public.banks ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.cash_transactions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.bank_transactions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.stock_transactions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.initial_stock ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.categories ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.contacts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.ap_ar_transactions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.ledger_payments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.activity_log ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.monthly_snapshots ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.loans ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.loan_payments ENABLE ROW LEVEL SECURITY;
 
--- Users Table (for storing roles)
-CREATE TABLE IF NOT EXISTS users (
-    id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
-    role TEXT CHECK (role IN ('admin', 'user'))
-);
-ALTER TABLE users ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Allow users to see their own role" ON users FOR SELECT TO authenticated USING (auth.uid() = id);
-CREATE POLICY "Allow admins to manage roles" ON users FOR ALL TO authenticated USING (auth.uid() IN (SELECT id FROM public.users WHERE role = 'admin')) WITH CHECK (auth.uid() IN (SELECT id FROM public.users WHERE role = 'admin'));
+-- Policies for authenticated users (assuming 'user' role is the default authenticated role)
+-- Replace 'authenticated' with your specific role if different.
+CREATE POLICY "Allow all access to authenticated users" ON public.banks FOR ALL USING (auth.role() = 'authenticated');
+CREATE POLICY "Allow all access to authenticated users" ON public.cash_transactions FOR ALL USING (auth.role() = 'authenticated');
+CREATE POLICY "Allow all access to authenticated users" ON public.bank_transactions FOR ALL USING (auth.role() = 'authenticated');
+CREATE POLICY "Allow all access to authenticated users" ON public.stock_transactions FOR ALL USING (auth.role() = 'authenticated');
+CREATE POLICY "Allow all access to authenticated users" ON public.initial_stock FOR ALL USING (auth.role() = 'authenticated');
+CREATE POLICY "Allow all access to authenticated users" ON public.categories FOR ALL USING (auth.role() = 'authenticated');
+CREATE POLICY "Allow all access to authenticated users" ON public.contacts FOR ALL USING (auth.role() = 'authenticated');
+CREATE POLICY "Allow all access to authenticated users" ON public.ap_ar_transactions FOR ALL USING (auth.role() = 'authenticated');
+CREATE POLICY "Allow all access to authenticated users" ON public.ledger_payments FOR ALL USING (auth.role() = 'authenticated');
+CREATE POLICY "Allow all access to authenticated users" ON public.activity_log FOR ALL USING (auth.role() = 'authenticated');
+CREATE POLICY "Allow all access to authenticated users" ON public.monthly_snapshots FOR ALL USING (auth.role() = 'authenticated');
+CREATE POLICY "Allow all access to authenticated users" ON public.loans FOR ALL USING (auth.role() = 'authenticated');
+CREATE POLICY "Allow all access to authenticated users" ON public.loan_payments FOR ALL USING (auth.role() = 'authenticated');
 
 
--- Function to create a user profile upon signup
-CREATE OR REPLACE FUNCTION public.handle_new_user()
-RETURNS TRIGGER AS $$
-DECLARE
-  user_role TEXT;
+CREATE OR REPLACE FUNCTION permanently_empty_recycle_bin()
+RETURNS void AS $$
 BEGIN
-  -- Check if any admin user exists
-  IF NOT EXISTS (SELECT 1 FROM public.users WHERE role = 'admin') THEN
-    user_role := 'admin';
-  ELSE
-    user_role := 'user';
-  END IF;
-
-  -- Insert into public.users
-  INSERT INTO public.users (id, role)
-  VALUES (new.id, user_role);
-
-  -- Set user metadata in auth.users
-  UPDATE auth.users
-  SET raw_user_meta_data = raw_user_meta_data || jsonb_build_object('role', user_role)
-  WHERE id = new.id;
-  
-  RETURN new;
+    DELETE FROM public.cash_transactions WHERE "deletedAt" IS NOT NULL;
+    DELETE FROM public.bank_transactions WHERE "deletedAt" IS NOT NULL;
+    DELETE FROM public.stock_transactions WHERE "deletedAt" IS NOT NULL;
+    DELETE FROM public.ap_ar_transactions WHERE "deletedAt" IS NOT NULL;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 
--- Trigger to call the function on new user creation
-CREATE OR REPLACE TRIGGER on_auth_user_created
-  AFTER INSERT ON auth.users
-  FOR EACH ROW EXECUTE PROCEDURE public.handle_new_user();
+-- Function to get the role of the current user from custom claims
+create or replace function get_my_role()
+returns text
+language sql
+stable
+as $$
+  select coalesce(current_setting('request.jwt.claims', true)::json->>'role', 'user')::text;
+$$;
+
+-- Grant execute on the function to authenticated users
+grant execute on function get_my_role() to authenticated;
 
 
--- Monthly Snapshots Table
-CREATE TABLE IF NOT EXISTS monthly_snapshots (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    snapshot_date DATE NOT NULL UNIQUE,
-    cash_balance NUMERIC(15, 2) NOT NULL,
-    bank_balances JSONB NOT NULL,
-    stock_items JSONB NOT NULL,
-    total_receivables NUMERIC(15, 2) NOT NULL,
-    total_payables NUMERIC(15, 2) NOT NULL,
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
-ALTER TABLE monthly_snapshots ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Allow authenticated users to read snapshots" ON monthly_snapshots FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Allow admin users to manage snapshots" ON monthly_snapshots FOR ALL TO authenticated USING (auth.uid() IN (SELECT id FROM public.users WHERE role = 'admin')) WITH CHECK (auth.uid() IN (SELECT id FROM public.users WHERE role = 'admin'));
-
-
--- Function to permanently delete records from recycle bin
-CREATE OR REPLACE FUNCTION permanently_empty_recycle_bin()
-RETURNS void AS $$
-BEGIN
-    DELETE FROM cash_transactions WHERE deletedAt IS NOT NULL;
-    DELETE FROM bank_transactions WHERE deletedAt IS NOT NULL;
-    DELETE FROM stock_transactions WHERE deletedAt IS NOT NULL;
-    DELETE FROM ap_ar_transactions WHERE deletedAt IS NOT NULL;
-END;
-$$ LANGUAGE plpgsql;
+-- Admin access policies (Can do anything)
+CREATE POLICY "Allow admins full access" ON public.banks FOR ALL USING (get_my_role() = 'admin');
+CREATE POLICY "Allow admins full access" ON public.cash_transactions FOR ALL USING (get_my_role() = 'admin');
+CREATE POLICY "Allow admins full access" ON public.bank_transactions FOR ALL USING (get_my_role() = 'admin');
+CREATE POLICY "Allow admins full access" ON public.stock_transactions FOR ALL USING (get_my_role() = 'admin');
+CREATE POLICY "Allow admins full access" ON public.initial_stock FOR ALL USING (get_my_role() = 'admin');
+CREATE POLICY "Allow admins full access" ON public.categories FOR ALL USING (get_my_role() = 'admin');
+CREATE POLICY "Allow admins full access" ON public.contacts FOR ALL USING (get_my_role() = 'admin');
+CREATE POLICY "Allow admins full access" ON public.ap_ar_transactions FOR ALL USING (get_my_role() = 'admin');
+CREATE POLICY "Allow admins full access" ON public.ledger_payments FOR ALL USING (get_my_role() = 'admin');
+CREATE POLICY "Allow admins full access" ON public.activity_log FOR ALL USING (get_my_role() = 'admin');
+CREATE POLICY "Allow admins full access" ON public.monthly_snapshots FOR ALL USING (get_my_role() = 'admin');
+CREATE POLICY "Allow admins full access" ON public.loans FOR ALL USING (get_my_role() = 'admin');
+CREATE POLICY "Allow admins full access" ON public.loan_payments FOR ALL USING (get_my_role() = 'admin');
