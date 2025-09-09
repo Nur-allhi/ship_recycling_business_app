@@ -2,7 +2,7 @@
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
-import type { CashTransaction, BankTransaction, StockTransaction, Loan, Contact } from '@/lib/types';
+import type { CashTransaction, BankTransaction, StockTransaction, Loan, Contact, LoanPayment } from '@/lib/types';
 import { toast } from 'sonner';
 
 // Extend the jsPDF interface to include autoTable
@@ -10,6 +10,10 @@ declare module 'jspdf' {
     interface jsPDF {
         autoTable: (options: any) => jsPDF;
     }
+}
+
+interface LoanWithPayments extends Loan {
+    payments: LoanPayment[];
 }
 
 const generateHeader = (doc: jsPDF, title: string, subtitle?: string) => {
@@ -194,12 +198,12 @@ export const generateStockLedgerPdf = (transactions: StockTransaction[], month: 
     }
 }
 
-export const generateLoanStatementPdf = (loan: Loan, contactName: string, currency: string) => {
+export const generateLoanStatementPdf = (loan: LoanWithPayments, contactName: string, currency: string) => {
     try {
         const doc = new jsPDF();
         generateHeader(doc, 'Loan Statement', contactName);
         
-        const totalPaid = loan.payments.reduce((sum, p) => sum + p.amount, 0);
+        const totalPaid = loan.payments.reduce((sum: number, p: LoanPayment) => sum + p.amount, 0);
         const outstandingBalance = loan.principal_amount - totalPaid;
 
         doc.autoTable({
@@ -218,7 +222,7 @@ export const generateLoanStatementPdf = (loan: Loan, contactName: string, curren
             bodyStyles: { fontStyle: 'bold' }
         });
 
-        const tableData = loan.payments.map(p => [
+        const tableData = loan.payments.map((p: LoanPayment) => [
             format(new Date(p.payment_date), 'dd-MM-yy'),
             p.notes || 'Payment',
             formatCurrencyForPdf(p.amount, currency)
