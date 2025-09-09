@@ -83,7 +83,7 @@ export function useDataSyncer() {
 
                         if (result.financialTx) {
                             const finTable = result.financialTx.bank_id ? 'bank_transactions' : 'cash_transactions';
-                            const finLocalId = result.financialTx.bank_id ? item.payload.localBankId : item.payload.localCashId;
+                            const finLocalId = item.payload.stockTx.paymentMethod === 'bank' ? (await db.bank_transactions.where({linkedStockTxId: item.payload.localId}).first())?.id : (await db.cash_transactions.where({linkedStockTxId: item.payload.localId}).first())?.id;
                              if(finLocalId) await db.table(finTable).where({ id: finLocalId }).modify({ id: result.financialTx.id, linkedStockTxId: result.stockTx.id });
                         }
                     } else if (item.action === 'addLoan' && result?.loan && result?.loan.id && item.payload.localId) { // addLoan

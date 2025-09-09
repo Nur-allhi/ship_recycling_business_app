@@ -75,7 +75,7 @@ export function ReceivablesList() {
                     type: 'receivable' as const,
                 };
             })
-            .filter(c => c.net_balance !== 0 || c.total_due > 0)
+            .filter(c => c.net_balance > 0 || c.total_advance > 0)
             .sort((a,b) => b.net_balance - a.net_balance);
 
     }, [ledgerTransactions, contacts]);
