@@ -12,12 +12,10 @@ import { SettingsTab } from '@/components/settings-tab';
 import { CreditTab } from '@/components/credit-tab';
 import { LoansTab } from '@/components/loans-tab';
 import { InitialBalanceDialog } from '@/components/initial-balance-dialog';
-import { AppLoading } from '@/components/app-loading';
 import { FloatingActionButton } from '@/components/floating-action-button';
 import { AnimatePresence, motion } from 'framer-motion';
 import { SidebarProvider, Sidebar, useSidebar, SidebarTrigger } from '@/components/ui/sidebar';
 import { AppSidebar } from '@/components/app-sidebar';
-import LogoutOverlayWrapper from '@/components/logout-overlay-wrapper';
 
 const fontClasses = {
   sm: 'text-sm',
@@ -71,7 +69,6 @@ function MainContent() {
 
     return (
         <div className={cn('min-h-screen bg-background text-foreground flex', fontClasses[fontSize] || 'text-base')}>
-            <LogoutOverlayWrapper />
             {isAdmin && <InitialBalanceDialog isOpen={isInitialBalanceDialogOpen} />}
             
             <Sidebar onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}>

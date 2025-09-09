@@ -13,6 +13,7 @@ import { useSessionManager } from './useSessionManager';
 import { useDataSyncer } from './useDataSyncer';
 import * as server from '@/lib/actions';
 import { getSession as getSessionFromCookie, login as serverLogin } from '@/app/auth/actions';
+import LogoutOverlayWrapper from '@/components/logout-overlay-wrapper';
 
 type BlockingOperation = {
     isActive: boolean;
@@ -238,7 +239,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         }
         
         try {
-            setBlockingOperation({ isActive: true, message: 'Loading your ledger...' });
             const session = await getSessionFromCookie();
             if (!session) {
                 setUser(null);
@@ -265,7 +265,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
             const categoriesData = await seedEssentialCategories(serverData.categories as Category[]);
             
-            setBlockingOperation({ isActive: true, message: 'Organizing data...' });
+            setBlockingOperation({ isActive: true, message: 'Organizing your data...' });
             await db.transaction('rw', db.tables, async () => {
                 await clearAllData(false);
                 await db.app_state.put({ id: 1, user: session, fontSize: appState?.fontSize ?? 'base', currency: appState?.currency ?? 'BDT', showStockValue: appState?.showStockValue ?? false, lastSync: null });
@@ -295,6 +295,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     const checkSessionAndLoad = useCallback(async () => {
         setIsLoading(true);
+        setBlockingOperation({ isActive: true, message: 'Verifying your session...' });
         try {
             const session = await getSessionFromCookie();
             if (session) {
@@ -304,11 +305,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 await reloadData();
             } else {
                 setUser(null);
+                 setBlockingOperation({ isActive: false, message: '' });
             }
         } catch (error) {
             console.error("Error during initial session check:", error);
             setUser(null);
             handleApiError(error);
+             setBlockingOperation({ isActive: false, message: '' });
         } finally {
             if(!isInitialLoadComplete) {
                 setIsInitialLoadComplete(true);
@@ -413,12 +416,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         processSyncQueue, openInitialBalanceDialog, closeInitialBalanceDialog, setUser, setBlockingOperation, queueOrSync
     ]);
 
-    if (isLoading || !isInitialLoadComplete) {
-        return <AppLoading />;
+    const showLoadingScreen = isLoading || !isInitialLoadComplete || (blockingOperation.isActive && !isLoggingOut);
+    
+    if (showLoadingScreen) {
+        return <AppLoading message={blockingOperation.message || undefined} />;
     }
 
     return (
         <AppContext.Provider value={contextValue}>
+            <LogoutOverlayWrapper />
             <OnlineStatusIndicator />
             {children}
         </AppContext.Provider>
