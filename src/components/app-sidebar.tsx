@@ -67,7 +67,7 @@ export function AppSidebar({ activeTab, setActiveTab }: AppSidebarProps) {
             <SidebarHeader>
                  <div className="flex items-center gap-3 px-2">
                     <Logo className="h-8 w-8 text-primary shrink-0" />
-                    <span className="text-lg font-semibold overflow-hidden whitespace-nowrap transition-opacity duration-200 opacity-0 group-hover:opacity-100">
+                    <span className={cn("text-lg font-semibold overflow-hidden whitespace-nowrap transition-opacity duration-200", isMobile ? "opacity-100" : "opacity-0 group-hover:opacity-100")}>
                         Ha-Mim Iron Mart
                     </span>
                 </div>
@@ -86,7 +86,7 @@ export function AppSidebar({ activeTab, setActiveTab }: AppSidebarProps) {
                                         tooltip={{children: item.label}}
                                     >
                                         <item.icon className="h-5 w-5 shrink-0"/>
-                                        <span className="whitespace-nowrap transition-opacity duration-200 opacity-0 group-hover:opacity-100">
+                                        <span className={cn("whitespace-nowrap transition-opacity duration-200", isMobile ? "opacity-100" : "opacity-0 group-hover:opacity-100")}>
                                             {item.label}
                                         </span>
                                     </SidebarMenuButton>
@@ -102,7 +102,7 @@ export function AppSidebar({ activeTab, setActiveTab }: AppSidebarProps) {
                     <SidebarMenuItem>
                         <SidebarMenuButton onClick={logout} tooltip={{children: "Logout"}}>
                             <LogOut className="h-5 w-5 shrink-0"/>
-                            <span className="whitespace-nowrap transition-opacity duration-200 opacity-0 group-hover:opacity-100">
+                            <span className={cn("whitespace-nowrap transition-opacity duration-200", isMobile ? "opacity-100" : "opacity-0 group-hover:opacity-100")}>
                                 Logout
                             </span>
                         </SidebarMenuButton>
