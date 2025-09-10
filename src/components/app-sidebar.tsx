@@ -65,9 +65,9 @@ export function AppSidebar({ activeTab, setActiveTab }: AppSidebarProps) {
     return (
         <>
             <SidebarHeader>
-                 <div className="flex items-center gap-2">
+                 <div className="flex items-center gap-3">
                     <Logo className="h-8 w-8 text-primary shrink-0" />
-                    <span className="text-lg font-semibold overflow-hidden whitespace-nowrap transition-all duration-300 ease-in-out group-data-[state=expanded]:w-auto group-data-[state=expanded]:opacity-100 group-data-[state=collapsed]:w-0 group-data-[state=collapsed]:opacity-0">
+                    <span className="text-lg font-semibold overflow-hidden whitespace-nowrap transition-all duration-300 ease-in-out group-hover/sidebar:w-auto group-hover/sidebar:opacity-100 w-0 opacity-0">
                         Ha-Mim Iron Mart
                     </span>
                 </div>
@@ -86,7 +86,7 @@ export function AppSidebar({ activeTab, setActiveTab }: AppSidebarProps) {
                                         tooltip={{children: item.label}}
                                     >
                                         <item.icon />
-                                        <span className="whitespace-nowrap transition-all duration-200 ease-in-out group-data-[state=expanded]:w-auto group-data-[state=expanded]:opacity-100 group-data-[state=collapsed]:w-0 group-data-[state=collapsed]:opacity-0">
+                                        <span className="whitespace-nowrap">
                                             {item.label}
                                         </span>
                                     </SidebarMenuButton>
@@ -102,7 +102,7 @@ export function AppSidebar({ activeTab, setActiveTab }: AppSidebarProps) {
                     <SidebarMenuItem>
                         <SidebarMenuButton onClick={logout} tooltip={{children: "Logout"}}>
                             <LogOut />
-                            <span className="whitespace-nowrap transition-all duration-200 ease-in-out group-data-[state=expanded]:w-auto group-data-[state=expanded]:opacity-100 group-data-[state=collapsed]:w-0 group-data-[state=collapsed]:opacity-0">
+                            <span className="whitespace-nowrap">
                                 Logout
                             </span>
                         </SidebarMenuButton>
@@ -112,3 +112,5 @@ export function AppSidebar({ activeTab, setActiveTab }: AppSidebarProps) {
         </>
     )
 }
+
+    
