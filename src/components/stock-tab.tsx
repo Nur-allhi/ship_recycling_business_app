@@ -467,12 +467,12 @@ export function StockTab() {
                             <div className="flex flex-wrap items-center justify-center gap-2">
                                 <Button size="sm" variant={isSelectionMode ? "secondary" : "outline"} onClick={toggleSelectionMode}>
                                     <CheckSquare className="mr-2 h-4 w-4" />
-                                    {isSelectionMode ? 'Cancel' : 'Select'}
+                                    <span className="hidden sm:inline">{isSelectionMode ? 'Cancel' : 'Select'}</span>
                                 </Button>
                                  <TooltipProvider>
                                     <Tooltip>
                                         <TooltipTrigger asChild>
-                                        <Button size="sm" variant="outline" onClick={() => setShowActions(!showActions)}>
+                                        <Button size="sm" variant="outline" onClick={() => setShowActions(!showActions)} className="px-2 sm:px-3">
                                             {showActions ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                                         </Button>
                                         </TooltipTrigger>
@@ -484,7 +484,7 @@ export function StockTab() {
                                 <TooltipProvider>
                                     <Tooltip>
                                         <TooltipTrigger asChild>
-                                            <Button size="sm" variant="outline" onClick={() => setShowStockValue(!showStockValue)}>
+                                            <Button size="sm" variant="outline" onClick={() => setShowStockValue(!showStockValue)} className="px-2 sm:px-3">
                                                 <DollarSign className="h-4 w-4" />
                                             </Button>
                                         </TooltipTrigger>
@@ -496,7 +496,7 @@ export function StockTab() {
                                 <TooltipProvider>
                                     <Tooltip>
                                         <TooltipTrigger asChild>
-                                        <Button size="sm" variant="outline" onClick={handlePrint}>
+                                        <Button size="sm" variant="outline" onClick={handlePrint} className="px-2 sm:px-3">
                                             <Printer className="h-4 w-4" />
                                         </Button>
                                         </TooltipTrigger>
@@ -507,7 +507,7 @@ export function StockTab() {
                                 </TooltipProvider>
                                 {selectedTxs.length > 0 && (
                                     <Button size="sm" variant="destructive" onClick={handleMultiDeleteClick}>
-                                        <Trash2 className="mr-2 h-4 w-4" /> ({selectedTxs.length})
+                                        <Trash2 className="mr-2 h-4 w-4" /> <span className="ml-2">({selectedTxs.length})</span>
                                     </Button>
                                 )}
                             </div>
