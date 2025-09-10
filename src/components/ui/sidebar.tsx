@@ -196,8 +196,8 @@ const Sidebar = React.forwardRef<
       <div
         ref={ref}
         className={cn(
-          "group/sidebar peer fixed inset-y-0 z-30 hidden h-full flex-col bg-sidebar transition-all duration-300 ease-in-out md:flex",
-          "w-14 hover:w-64", // Collapsed width 14 (3.5rem), expanded on hover
+          "fixed inset-y-0 z-30 hidden h-full flex-col bg-sidebar transition-all duration-300 ease-in-out md:flex",
+          "w-[var(--sidebar-width-icon)] hover:w-[var(--sidebar-width)]",
           "border-r",
           className
         )}
@@ -309,7 +309,7 @@ const SidebarGroupLabel = React.forwardRef<
       className={cn(
         "flex h-8 shrink-0 items-center rounded-md px-2 text-xs font-medium text-sidebar-foreground/70",
         "transition-opacity duration-200 ease-in-out",
-        "group-hover/sidebar:opacity-100 opacity-0",
+        "group-hover/sidebar-wrapper:opacity-100 opacity-0",
         "mt-2 first:mt-0",
         className
       )}
@@ -345,7 +345,7 @@ const SidebarMenuItem = React.forwardRef<
 SidebarMenuItem.displayName = "SidebarMenuItem"
 
 const sidebarMenuButtonVariants = cva(
-  "peer/menu-button flex w-full items-center gap-3 overflow-hidden rounded-md p-2 text-left text-sm outline-none ring-sidebar-ring transition-all duration-200 ease-in-out hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 group-has-[[data-sidebar=menu-action]]/menu-item:pr-8 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground",
+  "flex w-full items-center gap-3 overflow-hidden rounded-md p-2 text-left text-sm outline-none ring-sidebar-ring transition-all duration-200 ease-in-out hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 group-has-[[data-sidebar=menu-action]]/menu-item:pr-8 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground",
   {
     variants: {
       variant: {
@@ -390,8 +390,6 @@ const SidebarMenuButton = React.forwardRef<
     const Comp = asChild ? Slot : "button"
     const { isMobile } = useSidebar()
     
-    const [icon, ...rest] = React.Children.toArray(children);
-
     const button = (
       <Comp
         ref={ref}
@@ -399,14 +397,7 @@ const SidebarMenuButton = React.forwardRef<
         className={cn(sidebarMenuButtonVariants({ variant, size }), className)}
         {...props}
       >
-         {icon}
-        <span className={cn(
-          "w-auto transition-all duration-200",
-          "group-hover/sidebar:w-auto group-hover/sidebar:opacity-100",
-          "w-0 opacity-0"
-        )}>
-          {rest}
-        </span>
+        {children}
       </Comp>
     )
 

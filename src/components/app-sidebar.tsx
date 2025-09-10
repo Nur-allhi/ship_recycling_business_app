@@ -65,9 +65,9 @@ export function AppSidebar({ activeTab, setActiveTab }: AppSidebarProps) {
     return (
         <>
             <SidebarHeader>
-                 <div className="flex items-center gap-3">
+                 <div className="flex items-center gap-3 px-2">
                     <Logo className="h-8 w-8 text-primary shrink-0" />
-                    <span className="text-lg font-semibold overflow-hidden whitespace-nowrap transition-all duration-300 ease-in-out group-hover/sidebar:w-auto group-hover/sidebar:opacity-100 w-0 opacity-0">
+                    <span className="text-lg font-semibold overflow-hidden whitespace-nowrap transition-opacity duration-200 group-hover/sidebar-wrapper:opacity-100 opacity-0">
                         Ha-Mim Iron Mart
                     </span>
                 </div>
@@ -85,8 +85,8 @@ export function AppSidebar({ activeTab, setActiveTab }: AppSidebarProps) {
                                         isActive={activeTab === item.value}
                                         tooltip={{children: item.label}}
                                     >
-                                        <item.icon />
-                                        <span className="whitespace-nowrap">
+                                        <item.icon className="h-6 w-6 shrink-0"/>
+                                        <span className="whitespace-nowrap transition-opacity duration-200 group-hover/sidebar-wrapper:opacity-100 opacity-0">
                                             {item.label}
                                         </span>
                                     </SidebarMenuButton>
@@ -101,8 +101,8 @@ export function AppSidebar({ activeTab, setActiveTab }: AppSidebarProps) {
                 <SidebarMenu>
                     <SidebarMenuItem>
                         <SidebarMenuButton onClick={logout} tooltip={{children: "Logout"}}>
-                            <LogOut />
-                            <span className="whitespace-nowrap">
+                            <LogOut className="h-6 w-6 shrink-0"/>
+                            <span className="whitespace-nowrap transition-opacity duration-200 group-hover/sidebar-wrapper:opacity-100 opacity-0">
                                 Logout
                             </span>
                         </SidebarMenuButton>
@@ -112,5 +112,3 @@ export function AppSidebar({ activeTab, setActiveTab }: AppSidebarProps) {
         </>
     )
 }
-
-    

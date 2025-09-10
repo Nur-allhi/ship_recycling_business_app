@@ -95,18 +95,16 @@ function MainContent() {
                 <AppSidebar activeTab={activeTab} setActiveTab={setActiveTab} />
             </Sidebar>
             
-            <main className="flex-1 flex flex-col transition-all duration-300 ease-in-out md:ml-14 peer-hover/sidebar:md:ml-64">
-                {isMobile && (
-                    <header className="flex items-center p-2 border-b">
-                         <SidebarTrigger className="ml-2">
-                            <Menu className="h-6 w-6" />
-                         </SidebarTrigger>
-                         <div className="ml-4">
-                            <h1 className="text-xl font-semibold leading-tight">Ha-Mim Iron Mart</h1>
-                            <p className="text-xs text-muted-foreground">{currentDate}</p>
-                        </div>
-                    </header>
-                )}
+            <main className="flex-1 flex flex-col transition-all duration-300 ease-in-out md:ml-[var(--sidebar-width-icon)] group-hover/sidebar-wrapper:md:ml-[var(--sidebar-width)]">
+                <header className="flex items-center p-2 border-b">
+                    {isMobile && <SidebarTrigger className="ml-2">
+                        <Menu className="h-6 w-6" />
+                    </SidebarTrigger>}
+                    <div className="ml-4">
+                        <h1 className="text-xl font-semibold leading-tight">Ha-Mim Iron Mart</h1>
+                        <p className="text-xs text-muted-foreground">{currentDate}</p>
+                    </div>
+                </header>
                 <div className="flex-grow p-4 md:p-6 lg:p-8 overflow-y-auto">
                     <AnimatePresence mode="wait">
                         <motion.div
