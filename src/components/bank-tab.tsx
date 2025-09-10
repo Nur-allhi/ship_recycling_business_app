@@ -489,13 +489,13 @@ export function BankTab() {
                         View your bank account transactions. Current balance: <span className="font-bold text-primary">{isLoading ? <Loader2 className="inline-block h-4 w-4 animate-spin" /> : formatCurrency(displayBalance)}</span>
                     </CardDescription>
                 </div>
-                <div className="flex items-center flex-wrap gap-2 justify-center self-stretch sm:self-center">
+                <div className="flex w-full sm:w-auto items-center flex-wrap gap-2 justify-center">
                     <ResponsiveSelect
                         value={selectedBankId}
                         onValueChange={(value) => setSelectedBankId(value)}
                         title="Select a Bank Account"
                         placeholder="All Banks"
-                        className="min-w-[150px]"
+                        className="flex-grow sm:flex-grow-0"
                         items={bankAccountItems}
                     />
                     <div className="flex items-center gap-2 self-center justify-center sm:self-auto">
