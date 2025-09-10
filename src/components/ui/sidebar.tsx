@@ -135,7 +135,7 @@ const SidebarProvider = React.forwardRef<
               } as React.CSSProperties
             }
             className={cn(
-              "group",
+              "group/sidebar",
               className
             )}
             ref={ref}
@@ -171,7 +171,7 @@ const Sidebar = React.forwardRef<
       return (
         <Sheet open={openMobile} onOpenChange={setOpenMobile} {...props}>
           <SheetContent
-            className="w-[--sidebar-width] bg-sidebar p-0 text-sidebar-foreground [&>button]:top-2 [&>button]:right-2"
+            className="w-[var(--sidebar-width)] bg-sidebar p-0 text-sidebar-foreground [&>button]:top-2 [&>button]:right-2"
             style={
               {
                 "--sidebar-width": SIDEBAR_WIDTH_MOBILE,
@@ -297,6 +297,7 @@ const SidebarGroupLabel = React.forwardRef<
   HTMLDivElement,
   React.ComponentProps<"div"> & { asChild?: boolean }
 >(({ className, asChild = false, ...props }, ref) => {
+  const { isMobile } = useSidebar()
   const Comp = asChild ? Slot : "div"
 
   return (
@@ -305,7 +306,7 @@ const SidebarGroupLabel = React.forwardRef<
       className={cn(
         "flex h-8 shrink-0 items-center rounded-md px-2 text-xs font-medium text-sidebar-foreground/70",
         "transition-opacity duration-200",
-        "opacity-0 group-hover/sidebar:opacity-100",
+        isMobile ? "opacity-100" : "opacity-0 group-hover/sidebar:opacity-100",
         "mt-2 first:mt-0",
         className
       )}
