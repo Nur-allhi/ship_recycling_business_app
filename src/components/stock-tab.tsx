@@ -13,6 +13,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  TableFooter,
 } from "@/components/ui/table"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { ArrowUpCircle, ArrowDownCircle, Pencil, History, Trash2, CheckSquare, ChevronLeft, ChevronRight, Eye, EyeOff, ArrowUpDown, Loader2, DollarSign, Printer } from "lucide-react"
@@ -587,5 +588,3 @@ export function StockTab() {
     </>
   )
 }
-
-    
