@@ -95,7 +95,7 @@ function MainContent() {
                 <AppSidebar activeTab={activeTab} setActiveTab={setActiveTab} />
             </Sidebar>
             
-            <main className="flex-1 flex flex-col transition-all duration-300 ease-in-out md:ml-[var(--sidebar-width-icon)] group-hover/sidebar-wrapper:md:ml-[var(--sidebar-width)]">
+            <main className="flex-1 flex flex-col transition-all duration-300 ease-in-out md:ml-[var(--sidebar-width-icon)]">
                 <header className="flex items-center p-2 border-b">
                     {isMobile && <SidebarTrigger className="ml-2">
                         <Menu className="h-6 w-6" />

@@ -93,11 +93,7 @@ const SidebarProvider = React.forwardRef<
         : setOpen((open) => !open)
     }, [isMobile, setOpen, setOpenMobile])
     
-    // On desktop, we want hover to expand, not click.
-    // The `open` state is for click-based persistence if ever needed.
-    // The CSS will handle the hover state via `group-hover`.
     const state = open ? "expanded" : "collapsed"
-
 
     React.useEffect(() => {
       const handleKeyDown = (event: KeyboardEvent) => {
@@ -139,7 +135,7 @@ const SidebarProvider = React.forwardRef<
               } as React.CSSProperties
             }
             className={cn(
-              "group/sidebar-wrapper",
+              "group",
               className
             )}
             ref={ref}
@@ -202,6 +198,14 @@ const Sidebar = React.forwardRef<
           className
         )}
         data-side={side}
+        onMouseEnter={() => {
+            const main = document.querySelector('main');
+            if (main) main.style.marginLeft = 'var(--sidebar-width)';
+        }}
+        onMouseLeave={() => {
+            const main = document.querySelector('main');
+            if (main) main.style.marginLeft = 'var(--sidebar-width-icon)';
+        }}
         {...props}
       >
         {children}
@@ -309,7 +313,7 @@ const SidebarGroupLabel = React.forwardRef<
       className={cn(
         "flex h-8 shrink-0 items-center rounded-md px-2 text-xs font-medium text-sidebar-foreground/70",
         "transition-opacity duration-200 ease-in-out",
-        "group-hover/sidebar-wrapper:opacity-100 opacity-0",
+        "opacity-0 group-hover:opacity-100",
         "mt-2 first:mt-0",
         className
       )}
