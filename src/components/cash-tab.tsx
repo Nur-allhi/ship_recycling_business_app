@@ -48,7 +48,7 @@ export function CashTab() {
   const { transferFunds, deleteCashTransaction, deleteMultipleCashTransactions } = useAppActions();
   const [isTransferSheetOpen, setIsTransferSheetOpen] = useState(false)
   const [editSheetState, setEditSheetState] = useState<{isOpen: boolean, transaction: CashTransaction | null}>({ isOpen: false, transaction: null});
-  const [deleteDialogState, setDeleteDialogState] = useState<{isOpen: boolean, txToDelete: CashTransaction | null, txsToDelete: CashTransaction[] | null}>({ isOpen: false, txToDelete: null, txsToDelete: null });
+  const [deleteDialogState, setDeleteDialogState] = useState<{isOpen: boolean, txToDelete: CashTransaction | null, txsToDelete: CashTransaction[] | null}>({ isOpen: false, transaction: null, txsToDelete: null });
   const [selectedTxs, setSelectedTxs] = useState<CashTransaction[]>([]);
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [currentMonth, setCurrentMonth] = useState(new Date());
@@ -200,7 +200,8 @@ export function CashTab() {
   }
   
   const handlePrint = () => {
-    generateCashLedgerPdf(sortedTransactions, currentMonth, currency, cashBalance ?? 0);
+    const txForPdf = [...transactionsWithBalances].sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    generateCashLedgerPdf(txForPdf, currentMonth, currency, cashBalance ?? 0);
   }
 
   const renderSortArrow = (key: SortKey) => {
@@ -459,7 +460,7 @@ export function CashTab() {
             <div className="flex flex-col items-center justify-center gap-2 pt-4">
                 <div className="flex flex-wrap items-center justify-center gap-2">
                     <Button size="sm" variant={isSelectionMode ? "secondary" : "outline"} onClick={toggleSelectionMode}>
-                        <CheckSquare className="mr-2 h-4 w-4" />
+                        <CheckSquare className="h-4 w-4 sm:mr-2" />
                         <span className="hidden sm:inline">{isSelectionMode ? 'Cancel' : 'Select'}</span>
                     </Button>
                     <TooltipProvider>
@@ -547,3 +548,5 @@ export function CashTab() {
     </>
   )
 }
+
+    

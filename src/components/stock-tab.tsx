@@ -149,7 +149,8 @@ export function StockTab() {
   }
   
   const handlePrint = () => {
-    generateStockLedgerPdf(filteredByMonth, currentMonth, currency);
+    const txForPdf = [...filteredByMonth].sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    generateStockLedgerPdf(txForPdf, currentMonth, currency);
   }
 
   const { totalPurchaseWeight, totalSaleWeight, totalPurchaseValue, totalSaleValue } = useMemo(() => {
@@ -466,7 +467,7 @@ export function StockTab() {
                         {isAdmin && <div className="flex flex-col items-center justify-center gap-2 pt-4">
                             <div className="flex flex-wrap items-center justify-center gap-2">
                                 <Button size="sm" variant={isSelectionMode ? "secondary" : "outline"} onClick={toggleSelectionMode}>
-                                    <CheckSquare className="mr-2 h-4 w-4" />
+                                    <CheckSquare className="h-4 w-4 sm:mr-2" />
                                     <span className="hidden sm:inline">{isSelectionMode ? 'Cancel' : 'Select'}</span>
                                 </Button>
                                  <TooltipProvider>
@@ -588,3 +589,5 @@ export function StockTab() {
     </>
   )
 }
+
+    

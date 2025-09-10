@@ -214,7 +214,8 @@ export function BankTab() {
   
   const handlePrint = () => {
     const selectedBank = banks.find(b => b.id === selectedBankId);
-    generateBankLedgerPdf(sortedTransactions, currentMonth, currency, displayBalance, selectedBank?.name ?? 'All Banks');
+    const txForPdf = [...transactionsWithBalances].sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    generateBankLedgerPdf(txForPdf, currentMonth, currency, displayBalance, selectedBank?.name ?? 'All Banks');
   }
 
   const renderSortArrow = (key: SortKey) => {
@@ -489,7 +490,7 @@ export function BankTab() {
                         View your bank account transactions. Current balance: <span className="font-bold text-primary">{isLoading ? <Loader2 className="inline-block h-4 w-4 animate-spin" /> : formatCurrency(displayBalance)}</span>
                     </CardDescription>
                 </div>
-                <div className="flex w-full sm:w-auto items-center flex-wrap gap-2 justify-center">
+                <div className="flex w-full sm:w-auto items-center flex-wrap gap-2 justify-between sm:justify-center">
                     <ResponsiveSelect
                         value={selectedBankId}
                         onValueChange={(value) => setSelectedBankId(value)}
@@ -512,7 +513,7 @@ export function BankTab() {
              {isAdmin && <div className="flex flex-col items-center justify-center gap-2 pt-4">
                 <div className="flex flex-wrap items-center justify-center gap-2">
                     <Button size="sm" variant={isSelectionMode ? "secondary" : "outline"} onClick={toggleSelectionMode}>
-                        <CheckSquare className="mr-2 h-4 w-4" />
+                        <CheckSquare className="h-4 w-4 sm:mr-2" />
                         <span className="hidden sm:inline">{isSelectionMode ? 'Cancel' : 'Select'}</span>
                     </Button>
                     <TooltipProvider>
@@ -572,7 +573,7 @@ export function BankTab() {
                     </Sheet>
                      {selectedTxs.length > 0 && (
                         <Button size="sm" variant="destructive" onClick={handleMultiDeleteClick}>
-                            <Trash2 className="mr-2 h-4 w-4" /> <span className="ml-2">({selectedTxs.length})</span>
+                            <Trash2 className="h-4 w-4" /> <span className="ml-2">({selectedTxs.length})</span>
                         </Button>
                     )}
                 </div>
@@ -599,3 +600,5 @@ export function BankTab() {
     </>
   )
 }
+
+    
