@@ -192,20 +192,12 @@ const Sidebar = React.forwardRef<
       <div
         ref={ref}
         className={cn(
-          "fixed inset-y-0 z-30 hidden h-full flex-col bg-sidebar transition-all duration-300 ease-in-out md:flex",
-          "w-[var(--sidebar-width-icon)] hover:w-[var(--sidebar-width)]",
+          "group/sidebar fixed inset-y-0 z-30 hidden h-full flex-col bg-sidebar transition-all duration-300 ease-in-out md:flex",
+          "w-14 hover:w-64",
           "border-r",
           className
         )}
         data-side={side}
-        onMouseEnter={() => {
-            const main = document.querySelector('main');
-            if (main) main.style.marginLeft = 'var(--sidebar-width)';
-        }}
-        onMouseLeave={() => {
-            const main = document.querySelector('main');
-            if (main) main.style.marginLeft = 'var(--sidebar-width-icon)';
-        }}
         {...props}
       >
         {children}
@@ -312,8 +304,8 @@ const SidebarGroupLabel = React.forwardRef<
       ref={ref}
       className={cn(
         "flex h-8 shrink-0 items-center rounded-md px-2 text-xs font-medium text-sidebar-foreground/70",
-        "transition-opacity duration-200 ease-in-out",
-        "opacity-0 group-hover:opacity-100",
+        "transition-opacity duration-200",
+        "opacity-0 group-hover/sidebar:opacity-100",
         "mt-2 first:mt-0",
         className
       )}
