@@ -309,7 +309,7 @@ const SidebarGroupLabel = React.forwardRef<
       className={cn(
         "flex h-8 shrink-0 items-center rounded-md px-2 text-xs font-medium text-sidebar-foreground/70",
         "transition-opacity duration-200 ease-in-out",
-        "group-hover/sidebar:opacity-100 group-data-[state=collapsed]/sidebar-wrapper:opacity-0",
+        "group-hover/sidebar:opacity-100 opacity-0",
         "mt-2 first:mt-0",
         className
       )}
@@ -449,5 +449,3 @@ export {
   SidebarTrigger,
   useSidebar,
 }
-
-    
