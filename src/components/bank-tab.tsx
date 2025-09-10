@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useState, useMemo, useEffect, useCallback } from "react"
@@ -378,11 +379,11 @@ export function BankTab() {
 
   const renderMobileView = () => (
     <div className="space-y-4">
-      {isLoading ? (
+      {isLoading || isSnapshotLoading ? (
         <div className="flex justify-center items-center h-24"><Loader2 className="h-6 w-6 animate-spin" /></div>
       ) : sortedTransactions.length > 0 ? (
         <AnimatePresence initial={false}>
-          {sortedTransactions.map((tx: BankTransaction) => {
+          {sortedTransactions.map((tx: any) => {
               let description = tx.description;
               let subDescription = null;
 
@@ -598,3 +599,5 @@ export function BankTab() {
     </>
   )
 }
+
+    
