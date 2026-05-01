@@ -276,7 +276,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         } catch (error: any) {
             handleApiError(error);
         }
-    }, [isSyncing, user, appState, processSyncQueue, handleApiError, seedEssentialCategories]);
+    }, [user, appState, processSyncQueue, handleApiError, seedEssentialCategories]);
 
     useEffect(() => {
         const checkSessionAndLoad = async () => {
