@@ -1,6 +1,7 @@
 
 'use server';
 import 'server-only';
+import { SignJWT, jwtVerify } from 'jose';
 import { cookies } from 'next/headers';
 
 // This is a simplified user type for the session cookie.
@@ -12,18 +13,25 @@ export interface SessionPayload {
     accessToken: string; // JWT token
 }
 
+const secret = new TextEncoder().encode(process.env.APP_SESSION_SECRET || 'fallback-secret-at-least-32-chars-long');
+
 export async function createSession(payload: SessionPayload, rememberMe?: boolean) {
-  const sessionPayload = JSON.stringify(payload);
+  const expirationTime = rememberMe ? '30d' : '1d';
+  
+  const token = await new SignJWT(payload as any)
+    .setProtectedHeader({ alg: 'HS256' })
+    .setIssuedAt()
+    .setExpirationTime(expirationTime)
+    .sign(secret);
+
   const maxAge = rememberMe ? 60 * 60 * 24 * 30 : 60 * 60 * 24; // 30 days or 1 day
 
-  (await cookies()).set('session', sessionPayload, {
+  (await cookies()).set('session', token, {
     httpOnly: true,
-    secure: true, 
+    secure: process.env.NODE_ENV === 'production', 
     maxAge: maxAge,
     path: '/',
-    // 'none' is often required for cross-site contexts in development environments (like iframes or proxies).
-    // It requires the 'secure' attribute to be true.
-    sameSite: 'none',
+    sameSite: 'lax',
   });
 }
 
@@ -32,10 +40,12 @@ export async function getSession(): Promise<SessionPayload | null> {
   if (!sessionCookie) return null;
 
   try {
-    const session = JSON.parse(sessionCookie);
-    return session as SessionPayload;
+    const { payload } = await jwtVerify(sessionCookie, secret, {
+      algorithms: ['HS256'],
+    });
+    return payload as unknown as SessionPayload;
   } catch (e) {
-    console.error("Failed to parse session cookie", e);
+    console.error("Failed to verify session cookie", e);
     return null;
   }
 }
@@ -43,8 +53,8 @@ export async function getSession(): Promise<SessionPayload | null> {
 export async function removeSession() {
   (await cookies()).set('session', '', {
     httpOnly: true,
-    secure: true,
-    sameSite: 'none',
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
     path: '/',
     expires: new Date(0),
   });

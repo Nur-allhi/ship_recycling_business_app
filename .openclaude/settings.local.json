@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(xxd)",
+      "Bash(npx prettier:*)",
+      "Bash(npm run:*)"
+    ]
+  }
+}

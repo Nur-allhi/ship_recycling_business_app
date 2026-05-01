@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useRef, useState } from "react";
@@ -9,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { Upload, Download, AlertTriangle, FileText, Trash, UserX } from "lucide-react";
+import { Upload, Download, AlertTriangle, UserX } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -43,8 +42,10 @@ export function ExportImportTab() {
     }
   };
 
+  const [deleteConfirmation, setDeleteConfirmation] = useState("");
+
   const triggerDeleteAll = () => {
-    handleDeleteAllData();
+    handleDeleteAllData(deleteConfirmation);
   }
   
   return (
@@ -119,9 +120,20 @@ export function ExportImportTab() {
                       This action will permanently <span className="font-bold">erase all of your ledger data and all user accounts except your own</span>. This action cannot be undone.
                   </AlertDescription>
                 </Alert>
+
+                <div className="space-y-2">
+                  <Label htmlFor="delete-confirm">Type <span className="font-bold text-destructive">Confirm DELETE ALL</span> to proceed</Label>
+                  <Input 
+                    id="delete-confirm" 
+                    placeholder="Confirm DELETE ALL" 
+                    value={deleteConfirmation}
+                    onChange={(e) => setDeleteConfirmation(e.target.value)}
+                  />
+                </div>
+
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
-                    <Button variant="destructive">
+                    <Button variant="destructive" disabled={deleteConfirmation !== "Confirm DELETE ALL"}>
                       Delete All Data and Users
                     </Button>
                   </AlertDialogTrigger>
@@ -147,5 +159,3 @@ export function ExportImportTab() {
     </>
   );
 }
-
-    

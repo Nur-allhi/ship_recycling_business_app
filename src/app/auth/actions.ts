@@ -1,41 +1,20 @@
-
 'use server';
 
-import { createClient } from '@supabase/supabase-js';
 import { z } from 'zod';
 import { createSession, getSession as getSessionFromCookie, removeSession } from '@/lib/auth';
-import { cookies } from 'next/headers';
-
-// Helper function to create a Supabase client.
-const createSupabaseClient = (serviceRole = false) => {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-    if (!supabaseUrl || !supabaseAnonKey || !supabaseServiceKey) {
-        throw new Error("Supabase URL, Anon Key, or Service Role Key is missing from environment variables.");
-    }
-    
-    const supabaseKey = serviceRole ? supabaseServiceKey : supabaseAnonKey;
-
-    return createClient(supabaseUrl, supabaseKey, {
-        auth: {
-            // Prevent the server-side client from using cookies, as we're managing them manually.
-            persistSession: false,
-            autoRefreshToken: false,
-        }
-    });
-}
+import { db } from '@/lib/db/client';
+import * as schema from '@/lib/db/schema';
+import { eq, sql } from 'drizzle-orm';
+import bcrypt from 'bcryptjs';
 
 const logActivity = async (description: string) => {
     try {
         const session = await getSession();
         if (!session) return; // Don't log if no session
         
-        const supabase = createSupabaseClient(true);
-        await supabase.from('activity_log').insert({ 
+        await db.insert(schema.activityLog).values({ 
             description,
-            user_id: session.id,
+            userId: session.id,
             username: session.username, 
         });
     } catch(e) {
@@ -48,10 +27,8 @@ export async function getSession() {
 }
 
 export async function hasUsers() {
-    const supabaseAdmin = createSupabaseClient(true);
-    const { data, error } = await supabaseAdmin.auth.admin.listUsers();
-    if(error) throw new Error(error.message);
-    return data.users.length > 0;
+    const allUsers = await db.select().from(schema.users).limit(1);
+    return allUsers.length > 0;
 }
 
 const LoginInputSchema = z.object({
@@ -61,65 +38,48 @@ const LoginInputSchema = z.object({
 });
 
 export async function login(input: z.infer<typeof LoginInputSchema>) {
-    const supabase = createSupabaseClient();
     let isFirstUser = false;
     
-    let { data, error } = await supabase.auth.signInWithPassword({
-        email: input.username,
-        password: input.password,
-    });
+    let [user] = await db.select().from(schema.users).where(eq(schema.users.email, input.username)).limit(1);
     
-    if (error) {
-        if (error.message === 'Invalid login credentials') {
-             const supabaseAdmin = createSupabaseClient(true);
-             const { data: allUsers } = await supabaseAdmin.auth.admin.listUsers();
-
-             if(allUsers?.users.length === 0) {
-                isFirstUser = true;
-                const { error: createError } = await supabaseAdmin.auth.admin.createUser({
-                    email: input.username,
-                    password: input.password,
-                    email_confirm: true, 
-                    user_metadata: { role: 'admin' } 
-                });
-                if(createError) throw new Error(createError.message);
-             } else {
-                throw new Error(error.message);
-             }
-            
-            const { data: loginData, error: loginError } = await supabase.auth.signInWithPassword({
+    if (!user) {
+        const usersCount = await db.select({ count: sql<number>`count(*)` }).from(schema.users);
+        if (Number(usersCount[0].count) === 0) {
+            isFirstUser = true;
+            const hashedPassword = await bcrypt.hash(input.password, 10);
+            [user] = await db.insert(schema.users).values({
                 email: input.username,
-                password: input.password,
-            });
-            if(loginError) throw new Error(loginError.message);
-            data = loginData;
+                password: hashedPassword,
+                role: 'admin',
+            }).returning();
         } else {
-           throw new Error(error.message);
+            throw new Error("Invalid login credentials");
+        }
+    } else {
+        const passwordMatch = await bcrypt.compare(input.password, user.password);
+        if (!passwordMatch) {
+            throw new Error("Invalid login credentials");
         }
     }
     
-    if (!data.user || !data.session) {
-        throw new Error("Login failed: could not retrieve user session.");
+    if (!user) {
+        throw new Error("Login failed: could not retrieve user.");
     }
     
     const sessionPayload = {
-        id: data.user.id,
-        username: data.user.email!,
-        role: data.user.user_metadata.role || 'user',
-        accessToken: data.session.access_token,
+        id: user.id,
+        username: user.email,
+        role: user.role as 'admin' | 'user',
+        accessToken: '', // Not used in local auth
     };
     
     await createSession(sessionPayload, input.rememberMe);
 
     let needsData = false;
     if (!isFirstUser) {
-        // We use the service role key to check for data existence
-        const tempAuthedSupabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
-        const { count: cashCount, error: cashError } = await tempAuthedSupabase.from('cash_transactions').select('id', { count: 'exact', head: true });
-        if (cashError && cashError.code !== '42P01') throw cashError;
-        const { count: bankCount, error: bankError } = await tempAuthedSupabase.from('bank_transactions').select('id', { count: 'exact', head: true });
-        if (bankError && bankError.code !== '42P01') throw bankError;
-        needsData = (cashCount ?? 0) === 0 && (bankCount ?? 0) === 0;
+        const cashCountResult = await db.select({ count: sql<number>`count(*)` }).from(schema.cashTransactions);
+        const bankCountResult = await db.select({ count: sql<number>`count(*)` }).from(schema.bankTransactions);
+        needsData = Number(cashCountResult[0].count) === 0 && Number(bankCountResult[0].count) === 0;
     }
     
     if (isFirstUser) {
@@ -144,10 +104,8 @@ export async function getUsers() {
     const session = await getSession();
     if(session?.role !== 'admin') throw new Error("Only admins can view users.");
 
-    const supabase = createSupabaseClient(true);
-    const { data, error } = await supabase.auth.admin.listUsers();
-    if (error) throw new Error(error.message);
-    return data.users.map(u => ({ id: u.id, username: u.email || 'N/A', role: u.user_metadata.role || 'user' }));
+    const allUsers = await db.select().from(schema.users);
+    return allUsers.map(u => ({ id: u.id, username: u.email, role: u.role }));
 }
 
 const AddUserInputSchema = z.object({
@@ -160,16 +118,13 @@ export async function addUser(input: z.infer<typeof AddUserInputSchema>) {
     const session = await getSession();
     if(session?.role !== 'admin') throw new Error("Only admins can add users.");
 
-    const supabase = createSupabaseClient(true);
-    const { error } = await supabase.auth.admin.createUser({
+    const hashedPassword = await bcrypt.hash(input.password, 10);
+    await db.insert(schema.users).values({
         email: input.username,
-        password: input.password,
-        email_confirm: true,
-        user_metadata: { role: input.role }
+        password: hashedPassword,
+        role: input.role,
     });
-    if (error) {
-        throw new Error(error.message);
-    }
+    
     await logActivity(`Added new user: ${input.username} with role: ${input.role}`);
     return { success: true };
 }
@@ -178,9 +133,7 @@ export async function deleteUser(id: string) {
     const session = await getSession();
     if(session?.role !== 'admin') throw new Error("Only admins can delete users.");
 
-    const supabase = createSupabaseClient(true);
-    const { error } = await supabase.auth.admin.deleteUser(id);
-    if (error) throw new Error(error.message);
+    await db.delete(schema.users).where(eq(schema.users.id, id));
     
     await logActivity(`Deleted user with ID: ${id}`);
     return { success: true };

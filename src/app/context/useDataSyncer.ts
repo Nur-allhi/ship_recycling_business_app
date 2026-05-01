@@ -1,7 +1,6 @@
-
 "use client";
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
 import { db } from '@/lib/db';
 import type { SyncQueueItem } from '@/lib/db';
@@ -12,10 +11,11 @@ import { useLiveQuery } from 'dexie-react-hooks';
 export function useDataSyncer() {
     const { handleApiError, isOnline } = useSessionManager();
     const [isSyncing, setIsSyncing] = useState(false);
+    const syncLock = useRef(false);
     const syncQueueCount = useLiveQuery(() => db.sync_queue.count(), [], 0);
 
     const processSyncQueue = useCallback(async (specificItemId?: number) => {
-        if (isSyncing || !isOnline) return;
+        if (syncLock.current || !isOnline) return;
         
         let queue: SyncQueueItem[] = [];
         if (specificItemId) {
@@ -28,6 +28,8 @@ export function useDataSyncer() {
         if (queue.length === 0) {
             return;
         }
+
+        syncLock.current = true;
         setIsSyncing(true);
         if (!specificItemId) toast.info(`Syncing ${queue.length} items...`);
 
@@ -77,20 +79,23 @@ export function useDataSyncer() {
                     } else if (item.action === 'addStockTransaction' && result?.stockTx && result?.stockTx.id && item.payload.localId) { // addStockTransaction
                         await db.stock_transactions.update(item.payload.localId, { id: result.stockTx.id });
                         if (result.financialTx) {
-                            const finTable = result.financialTx.bank_id ? 'bank_transactions' : 'cash_transactions';
-                            const finLocalId = result.financialTx.bank_id ? item.payload.localBankId : item.payload.localCashId;
+                            const isBank = !!(result.financialTx.bankId);
+                            const finTable = isBank ? 'bank_transactions' : 'cash_transactions';
+                            const finLocalId = isBank ? item.payload.localBankId : item.payload.localCashId;
                              if(finLocalId) await db.table(finTable).where({ id: finLocalId }).modify({ id: result.financialTx.id, linkedStockTxId: result.stockTx.id });
                         }
                     } else if (item.action === 'addLoan' && result?.loan && result?.loan.id && item.payload.localId) { // addLoan
                         await db.loans.update(item.payload.localId, { id: result.loan.id });
                          if(result.financialTx) {
-                           const finTable = result.financialTx.bank_id ? 'bank_transactions' : 'cash_transactions';
+                           const isBank = !!(result.financialTx.bankId);
+                           const finTable = isBank ? 'bank_transactions' : 'cash_transactions';
                            if(item.payload.localFinancialId) await db.table(finTable).where({id: item.payload.localFinancialId}).modify({id: result.financialTx.id, linkedLoanId: result.loan.id});
                          }
                     } else if (item.action === 'recordLoanPayment' && result?.savedPayment && result?.savedPayment.id && item.payload.localPaymentId) { // recordLoanPayment
                         await db.loan_payments.update(item.payload.localPaymentId, { id: result.savedPayment.id });
                         if (result.financialTx && item.payload.localFinancialId) {
-                            const finTable = result.financialTx.bank_id ? 'bank_transactions' : 'cash_transactions';
+                            const isBank = !!(result.financialTx.bankId);
+                            const finTable = isBank ? 'bank_transactions' : 'cash_transactions';
                             await db.table(finTable).update(item.payload.localFinancialId, { id: result.financialTx.id });
                         }
                     }
@@ -106,6 +111,7 @@ export function useDataSyncer() {
         }
         
         setIsSyncing(false);
+        syncLock.current = false;
         if (!specificItemId) {
             if (failedItems > 0) {
                 toast.error(`${failedItems} sync operations failed. Check console for details.`);
@@ -113,7 +119,7 @@ export function useDataSyncer() {
                 if (queue.length > 0) toast.success("All items synced successfully!");
             }
         }
-    }, [isSyncing, handleApiError, isOnline]);
+    }, [isOnline, handleApiError]);
 
     const queueOrSync = useCallback(async (item: Omit<SyncQueueItem, 'timestamp' | 'id'>) => {
         const id = await db.sync_queue.add({ ...item, timestamp: Date.now() } as SyncQueueItem);
@@ -131,5 +137,3 @@ export function useDataSyncer() {
         queueOrSync,
     };
 }
-
-    

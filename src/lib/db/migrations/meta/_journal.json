@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1777617284479,
+      "tag": "0000_glamorous_gorgon",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1777617875176,
+      "tag": "0001_condemned_matthew_murdock",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1777618326243,
+      "tag": "0002_petite_triathlon",
+      "breakpoints": true
+    }
+  ]
+}
